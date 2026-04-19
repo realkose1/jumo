@@ -1,0 +1,2178 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Jumo — 한국 선수 스포츠 앱</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="ios-frame.jsx"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { transition: background 0.3s; }
+*, *::before, *::after { transition: background-color 0.25s, color 0.25s, border-color 0.25s; }
+
+:root {
+  --bg: #0b0b0d;
+  --bg2: #141418;
+  --surface: #161619;
+  --card: #1d1d20;
+  --text: #ffffff;
+  --text-70: rgba(255,255,255,0.7);
+  --text-60: rgba(255,255,255,0.6);
+  --text2: rgba(255,255,255,0.55);
+  --text3: rgba(255,255,255,0.4);
+  --text4: rgba(255,255,255,0.35);
+  --text5: rgba(255,255,255,0.25);
+  --text6: rgba(255,255,255,0.15);
+  --btn-bg: rgba(255,255,255,0.12);
+  --border: rgba(255,255,255,0.08);
+  --border2: rgba(255,255,255,0.06);
+  --ticker-bg: rgba(230,48,48,0.09);
+  --ticker-border: rgba(230,48,48,0.2);
+  --tab-bg: rgba(13,13,16,0.97);
+  --overlay-top: rgba(11,11,13,0.3);
+  --overlay-bot: rgba(11,11,13,0.95);
+  --overlay-sm: rgba(11,11,13,0.2);
+  --photo-bg: #1a1a1e;
+  --photo-mark: rgba(255,255,255,0.04);
+}
+html.light-mode {
+  --bg: #f2f2f7;
+  --bg2: #e8e8ed;
+  --surface: #ffffff;
+  --card: #f2f2f7;
+  --text: #000000;
+  --text-70: rgba(0,0,0,0.7);
+  --text-60: rgba(0,0,0,0.6);
+  --text2: rgba(0,0,0,0.55);
+  --text3: rgba(0,0,0,0.4);
+  --text4: rgba(0,0,0,0.35);
+  --text5: rgba(0,0,0,0.25);
+  --text6: rgba(0,0,0,0.12);
+  --btn-bg: rgba(0,0,0,0.08);
+  --border: rgba(0,0,0,0.09);
+  --border2: rgba(0,0,0,0.06);
+  --ticker-bg: rgba(220,30,30,0.07);
+  --ticker-border: rgba(220,30,30,0.2);
+  --tab-bg: rgba(242,242,247,0.97);
+  --overlay-top: rgba(242,242,247,0.1);
+  --overlay-bot: rgba(242,242,247,0.92);
+  --overlay-sm: rgba(242,242,247,0.15);
+  --photo-bg: #c8c8d0;
+  --photo-mark: rgba(0,0,0,0.05);
+}
+
+body {
+  background: #0a0a0c;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Noto Sans KR', system-ui, sans-serif;
+  overflow: hidden;
+  transition: background 0.3s;
+}
+html.light-mode body { background: #e5e5ea; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+@keyframes slideUp { from{transform:translateY(100%);opacity:0} to{transform:translateY(0);opacity:1} }
+@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+@keyframes ripple { 0%{transform:scale(1);opacity:0.6} 100%{transform:scale(2.5);opacity:0} }
+@keyframes ticker { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+@keyframes shimmer { 0%{opacity:0.3} 50%{opacity:0.7} 100%{opacity:0.3} }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+</style>
+</head>
+<body>
+<script type="text/babel">
+
+// Register tweaks listener immediately (before React mounts)
+window.addEventListener('message', function(e) {
+  if (e.data?.type === '__activate_edit_mode') {
+    window.__jumoSetTweaks && window.__jumoSetTweaks(true);
+  }
+  if (e.data?.type === '__deactivate_edit_mode') {
+    window.__jumoSetTweaks && window.__jumoSetTweaks(false);
+  }
+});
+window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+
+// ─── TWEAK DEFAULTS ───────────────────────────────────────────
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "homeVariant": 1,
+  "accentColor": "#e03030",
+  "showPlayerPhoto": true,
+  "liveAnimation": true
+}/*EDITMODE-END*/;
+
+// ─── API CONFIG ──────────────────────────────────────────────
+const ESPN_API = {
+  soccer: {
+    mls: 'https://site.api.espn.com/apis/site/v2/sports/soccer/usa.1/scoreboard',
+    epl: 'https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard',
+    ger: 'https://site.api.espn.com/apis/site/v2/sports/soccer/ger.1/scoreboard',
+    fra: 'https://site.api.espn.com/apis/site/v2/sports/soccer/fra.1/scoreboard',
+    ita: 'https://site.api.espn.com/apis/site/v2/sports/soccer/ita.1/scoreboard',
+    sco: 'https://site.api.espn.com/apis/site/v2/sports/soccer/sco.1/scoreboard',
+    tur: 'https://site.api.espn.com/apis/site/v2/sports/soccer/tur.1/scoreboard',
+    den: 'https://site.api.espn.com/apis/site/v2/sports/soccer/den.1/scoreboard',
+  },
+  mlb: 'https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard',
+};
+
+// Korean players mapping
+const KOREAN_PLAYERS = {
+  'Los Angeles FC': { name: '손흥민', number: 7, position: '공격수' },
+  'LAFC': { name: '손흥민', number: 7, position: '공격수' },
+  'Paris Saint-Germain': { name: '이강인', number: 19, position: '미드필더' },
+  'PSG': { name: '이강인', number: 19, position: '미드필더' },
+  'Bayern Munich': { name: '김민재', number: 3, position: '센터백' },
+  'FC Bayern München': { name: '김민재', number: 3, position: '센터백' },
+  'Bayern': { name: '김민재', number: 3, position: '센터백' },
+  'Wolves': { name: '황희찬', number: 11, position: '공격수' },
+  'Wolverhampton Wanderers': { name: '황희찬', number: 11, position: '공격수' },
+  'Midtjylland': { name: '조규성', number: 9, position: '공격수' },
+  'FC Midtjylland': { name: '조규성', number: 9, position: '공격수' },
+  'Real Zaragoza': { name: '황인범', number: 5, position: '미드필더' },
+  'Zaragoza': { name: '황인범', number: 5, position: '미드필더' },
+  'Pittsburgh Pirates': { name: '김하성', number: 4, position: '유격수' },
+  'Pirates': { name: '김하성', number: 4, position: '유격수' },
+  'San Francisco Giants': { name: '이정후', number: 51, position: '중견수' },
+  'Giants': { name: '이정후', number: 51, position: '중견수' },
+  'Los Angeles Dodgers': { name: '김혜성', number: 35, position: '내야수' },
+  'Dodgers': { name: '김혜성', number: 35, position: '내야수' },
+  'Celtic': { name: '양현준', number: 77, position: '공격수' },
+  'Celtic FC': { name: '양현준', number: 77, position: '공격수' },
+  'Besiktas': { name: '오현규', number: 19, position: '공격수' },
+  'Beşiktaş': { name: '오현규', number: 19, position: '공격수' },
+  'Besiktas JK': { name: '오현규', number: 19, position: '공격수' },
+  'Beşiktaş JK': { name: '오현규', number: 19, position: '공격수' },
+  'BJK': { name: '오현규', number: 19, position: '공격수' },
+};
+
+// ─── HELPER: Dynamic date generator ──────────────────────────
+function getRelativeDate(hoursFromNow) {
+  const date = new Date();
+  date.setHours(date.getHours() + hoursFromNow);
+  return date.toISOString();
+}
+
+function formatKRTime(date) {
+  const d = new Date(date);
+  const hours = d.getHours();
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const period = hours < 12 ? '오전' : '오후';
+  const displayHours = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
+
+  const now = new Date();
+  const isToday = d.getDate() === now.getDate() && d.getMonth() === now.getMonth();
+  const dayLabel = isToday ? '오늘' : '내일';
+
+  return `${dayLabel} ${period} ${displayHours}:${minutes} KST`;
+}
+
+function formatShortTime(date) {
+  const d = new Date(date);
+  const now = new Date();
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+
+  const isToday = d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+
+  if (isToday) {
+    return `${hours}:${minutes}`;
+  } else {
+    return `내일 ${hours}:${minutes}`;
+  }
+}
+
+// ─── DATA ────────────────────────────────────────────────────
+// Generate matches with dynamic dates (relative to current time)
+const MATCHES = (() => {
+  const baseMatches = [
+    {
+      id: 1, live: false, hoursFromNow: 2, sport: '⚽ MLS',
+      home: { name: 'LAFC', code: 'LAFC', score: null },
+      away: { name: 'San Jose', code: 'SJ', score: null },
+      koreanPlayer: { name: '손흥민', number: 7, team: 'LAFC', event: '선발 출전 예상' },
+      competition: 'MLS 정규시즌', venue: 'BMO 스타디움',
+      lineupConfirmed: true, // Lineup officially announced
+      events: [], stats: null,
+    },
+    {
+      id: 2, live: false, hoursFromNow: 5, sport: '⚽ Ligue 1',
+      home: { name: 'PSG', code: 'PSG', score: null },
+      away: { name: 'Le Havre', code: 'HAC', score: null },
+      koreanPlayer: { name: '이강인', number: 19, team: 'PSG', event: '선발 출전 예상' },
+      competition: 'Ligue 1 MD33', venue: '파르크 데 프랭스',
+      lineupConfirmed: false, // Lineup not yet announced
+      events: [], stats: null,
+    },
+    {
+      id: 3, live: false, hoursFromNow: 8, sport: '⚾ MLB',
+      home: { name: 'Pirates', code: 'PIT', score: null },
+      away: { name: 'Cubs', code: 'CHC', score: null },
+      koreanPlayer: { name: '김하성', number: 4, team: 'PIT', event: '유격수' },
+      competition: 'MLB 정규시즌', venue: 'PNC 파크',
+      events: [], stats: null,
+    },
+    {
+      id: 4, live: false, hoursFromNow: 10, sport: '⚾ MLB',
+      home: { name: 'Nationals', code: 'WSH', score: null },
+      away: { name: 'Giants', code: 'SF', score: null },
+      koreanPlayer: { name: '이정후', number: 51, team: 'SF', event: '부상으로 결장 예정' },
+      competition: 'MLB 정규시즌', venue: '내셔널스 파크',
+      events: [], stats: null,
+    },
+    {
+      id: 5, live: false, hoursFromNow: 15, sport: '⚾ MLB',
+      home: { name: 'Dodgers', code: 'LAD', score: null },
+      away: { name: 'Mets', code: 'NYM', score: null },
+      koreanPlayer: { name: '김혜성', number: 35, team: 'LAD', event: '대기' },
+      competition: 'MLB 정규시즌', venue: '다저 스타디움',
+      events: [], stats: null,
+    },
+    {
+      id: 6, live: false, hoursFromNow: 18, sport: '⚽ Bundesliga',
+      home: { name: 'Bayern', code: 'FCB', score: null },
+      away: { name: 'Heidenheim', code: 'HDH', score: null },
+      koreanPlayer: { name: '김민재', number: 3, team: 'FCB', event: '센터백 선발 예상' },
+      competition: 'Bundesliga MD30', venue: '알리안츠 아레나',
+      events: [], stats: null,
+    },
+  ];
+
+  return baseMatches.map(m => {
+    const fullDate = getRelativeDate(m.hoursFromNow);
+    return {
+      ...m,
+      fullDate,
+      time: formatShortTime(fullDate),
+      krTime: formatKRTime(fullDate),
+    };
+  });
+})();
+
+const ALL_PLAYERS = [
+  { id: 1,  name: '손흥민',  nameEn: 'Son Heung-min',   number: 7,  sport: '축구',   team: 'LAFC',       league: 'MLS',        position: '공격수',   nation: '🇰🇷', goals: 5,  assists: 3,  matches: 8,  rating: 7.8, age: 33, birth: '1992.07.08', height: '183cm' },
+  { id: 2,  name: '이강인',  nameEn: 'Lee Kang-in',     number: 19, sport: '축구',   team: 'PSG',        league: 'Ligue 1',    position: '미드필더', nation: '🇰🇷', goals: 8,  assists: 6,  matches: 32, rating: 7.3, age: 25, birth: '2001.02.19', height: '173cm' },
+  { id: 3,  name: '김민재',  nameEn: 'Kim Min-jae',     number: 3,  sport: '축구',   team: 'Bayern',     league: 'Bundesliga', position: '센터백',   nation: '🇰🇷', goals: 3,  assists: 2,  matches: 31, rating: 7.4, age: 29, birth: '1996.11.15', height: '190cm' },
+  { id: 6,  name: '황희찬',  nameEn: 'Hwang Hee-chan',  number: 11, sport: '축구',   team: 'Wolves',     league: 'EPL',        position: '공격수',   nation: '🇰🇷', goals: 8,  assists: 4,  matches: 30, rating: 6.9, age: 30, birth: '1996.01.26', height: '177cm' },
+  { id: 7,  name: '황인범',  nameEn: 'Hwang In-beom',   number: 5,  sport: '축구',   team: 'Zaragoza',   league: 'LaLiga2',    position: '미드필더', nation: '🇰🇷', goals: 4,  assists: 6,  matches: 34, rating: 7.1, age: 29, birth: '1996.09.20', height: '177cm' },
+  { id: 8,  name: '조규성',  nameEn: 'Cho Gue-sung',    number: 9,  sport: '축구',   team: 'Midtjylland',league: 'Superliga',  position: '공격수',   nation: '🇰🇷', goals: 3,  assists: 1,  matches: 18, rating: 6.7, age: 28, birth: '1998.01.25', height: '190cm' },
+  { id: 9,  name: '김하성',  nameEn: 'Kim Ha-seong',    number: 4,  sport: '야구',   team: 'Pirates',    league: 'MLB',        position: '유격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 15, rating: 0,   age: 30, birth: '1995.10.17', height: '179cm' },
+  { id: 17, name: '이정후',  nameEn: 'Lee Jung-hoo',    number: 51, sport: '야구',   team: 'Giants',     league: 'MLB',        position: '중견수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   age: 27, birth: '1998.08.20', height: '186cm' },
+  { id: 18, name: '김혜성',  nameEn: 'Kim Hye-seong',   number: 35, sport: '야구',   team: 'Dodgers',    league: 'MLB',        position: '내야수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 10, rating: 0,   age: 27, birth: '1999.01.27', height: '178cm' },
+  { id: 15, name: '안세영',  nameEn: 'An Se-young',     number: 1,  sport: '배드민턴','team': '한국 대표팀','league': '국제',    position: '여자 단식', nation: '🇰🇷', goals: 0,  assists: 0,  matches: 28, rating: 9.5, age: 24, birth: '2002.02.23', height: '168cm' },
+  { id: 19, name: '오현규',  nameEn: 'Oh Hyeon-gyu',    number: 19, sport: '축구',   team: 'Besiktas',   league: 'Super Lig',  position: '공격수',   nation: '🇰🇷', goals: 3,  assists: 1,  matches: 15, rating: 6.7, age: 24, birth: '2001.04.12', height: '181cm' },
+  { id: 20, name: '양현준',  nameEn: 'Yang Hyun-jun',   number: 77, sport: '축구',   team: 'Celtic',     league: 'SPFL',       position: '공격수',   nation: '🇰🇷', goals: 5,  assists: 4,  matches: 22, rating: 7.0, age: 22, birth: '2002.06.25', height: '172cm' },
+];
+const PLAYERS = ALL_PLAYERS.slice(0, 5);
+
+// ─── PLAYER EXTRA DATA ────────────────────────────────────────
+const PLAYER_EXTRA = {
+  1: { // 손흥민
+    form: [7.8, 8.2, 7.5, 8.5, 7.9, 8.1, 7.7],
+    recentMatches: [
+      { opp:'Galaxy',     result:'W', score:'2-1', contrib:'⚽🅰️', date:'4.19' },
+      { opp:'Seattle',    result:'D', score:'1-1', contrib:'-',    date:'4.13' },
+      { opp:'Portland',   result:'W', score:'3-0', contrib:'⚽',   date:'4.6'  },
+      { opp:'Austin',     result:'W', score:'2-1', contrib:'🅰️',  date:'3.30' },
+      { opp:'Houston',    result:'D', score:'2-2', contrib:'⚽',   date:'3.23' },
+    ],
+    career: [
+      { year:'2025–',    team:'LAFC',            league:'MLS',        flag:'🇺🇸' },
+      { year:'2015–24',  team:'Tottenham',       league:'EPL',        flag:'🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
+      { year:'2013–15',  team:'Bayer Leverkusen',league:'분데스리가', flag:'🇩🇪' },
+      { year:'2010–13',  team:'Hamburg',         league:'분데스리가', flag:'🇩🇪' },
+    ],
+    seasonStats: [['슈팅', 28, 120], ['유효슈팅', 14, 60], ['드리블 성공', 18, 80], ['키패스', 22, 100], ['공중볼 승리', 9, 60]],
+  },
+  2: { // 이강인
+    form: [7.8, 7.2, 8.5, 7.0, 9.1, 6.9, 8.0],
+    recentMatches: [
+      { opp:'Lyon',       result:'W', score:'2-0', contrib:'🅰️🅰️', date:'4.19' },
+      { opp:'Monaco',     result:'D', score:'1-1', contrib:'⚽',    date:'4.13' },
+      { opp:'Marseille',  result:'W', score:'3-1', contrib:'🅰️',  date:'4.6'  },
+      { opp:'Lille',      result:'W', score:'2-0', contrib:'-',    date:'3.30' },
+      { opp:'Nice',       result:'L', score:'0-1', contrib:'-',    date:'3.16' },
+    ],
+    career: [
+      { year:'2023–',    team:'PSG',      league:'리그앙', flag:'🇫🇷' },
+      { year:'2022–23',  team:'Mallorca', league:'라리가', flag:'🇪🇸' },
+      { year:'2019–22',  team:'Valencia', league:'라리가', flag:'🇪🇸' },
+    ],
+    seasonStats: [['패스 성공률', 88, 100], ['키패스', 78, 100], ['드리블 성공', 49, 80], ['찬스 창출', 42, 60], ['어시스트', 14, 20]],
+  },
+  3: { // 김민재
+    form: [7.5, 8.2, 7.0, 7.8, 8.4, 7.1, 7.6],
+    recentMatches: [
+      { opp:'Dortmund',   result:'W', score:'2-0', contrib:'-',  date:'4.20' },
+      { opp:'Leverkusen', result:'D', score:'1-1', contrib:'-',  date:'4.13' },
+      { opp:'Frankfurt',  result:'W', score:'3-1', contrib:'⚽', date:'4.6'  },
+      { opp:'Stuttgart',  result:'W', score:'2-0', contrib:'-',  date:'3.30' },
+      { opp:'Wolfsburg',  result:'W', score:'4-0', contrib:'-',  date:'3.16' },
+    ],
+    career: [
+      { year:'2023–',    team:'Bayern Munich', league:'분데스리가', flag:'🇩🇪' },
+      { year:'2022–23',  team:'Napoli',        league:'세리에A',   flag:'🇮🇹' },
+      { year:'2021–22',  team:'Fenerbahçe',    league:'쉬페르리그', flag:'🇹🇷' },
+    ],
+    seasonStats: [['공중볼 승리', 74, 100], ['인터셉트', 58, 80], ['클리어런스', 92, 120], ['태클 성공', 45, 60], ['패스 성공률', 91, 100]],
+  },
+};
+
+const DEFAULT_EXTRA = {
+  form: [7.0, 7.5, 6.5, 8.0, 7.2, 7.8, 7.4],
+  recentMatches: [
+    { opp:'상대팀 A', result:'W', score:'2-1', contrib:'활약', date:'4.15' },
+    { opp:'상대팀 B', result:'D', score:'1-1', contrib:'-',   date:'4.8'  },
+    { opp:'상대팀 C', result:'W', score:'3-0', contrib:'활약', date:'4.1'  },
+  ],
+  career: [{ year:'현재', team:'', league:'', flag:'🇰🇷' }],
+  seasonStats: [['출전', 70, 100], ['기여도', 75, 100]],
+};
+
+// ─── HELPERS ─────────────────────────────────────────────────
+const ACC = 'var(--acc)';
+const NUM = { fontFamily: "'Space Grotesk', monospace" };
+
+function LiveDot() {
+  return (
+    <span style={{ position:'relative', display:'inline-flex', alignItems:'center', justifyContent:'center', width:10, height:10 }}>
+      <span style={{ position:'absolute', width:10, height:10, borderRadius:'50%', background:'var(--acc)', animation:'ripple 1.4s ease-out infinite' }}/>
+      <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--acc)', position:'relative' }}/>
+    </span>
+  );
+}
+
+function TeamBadge({ code, size=36 }) {
+  const colors = { TOT:'#132257', MCI:'#6CABDD', PSG:'#003399', OL:'#FFFFFF', LAD:'#005A9C', TOR:'#134A8E', FCB:'#DC052D', BVB:'#FDE100', T1:'#C89B3C', GEN:'#EC1C24' };
+  const textColors = { MCI:'#132257', OL:'#1B3A6B', BVB:'#1B1B1B' };
+  const bg = colors[code] || '#333';
+  const tc = textColors[code] || '#fff';
+  return (
+    <div style={{ width:size, height:size, borderRadius:size*0.22, background:bg, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+      <span style={{ ...NUM, fontSize:size*0.3, fontWeight:700, color:tc, letterSpacing:-0.5 }}>{code}</span>
+    </div>
+  );
+}
+
+function PlayerPhoto({ player, style={}, tint='var(--bg)' }) {
+  const num = player.number;
+  const imageMap = { '손흥민': 'heungmin.png', '이강인': 'kangin.png', '김민재': 'minjae.png', '조규성': 'guesung.png', '황희찬': 'heechan.png', '황인범': 'inbeom.png', '김하성': 'haseong.png', '이정후': 'junghoo.png', '김혜성': 'hyeseong.png', '오현규': 'hyungyu.png', '양현준': 'hyunjun.png' };
+  const imagePath = imageMap[player.name] ? `image/${imageMap[player.name]}` : null;
+
+  return (
+    <div style={{ position:'relative', overflow:'hidden', ...style }}>
+      {imagePath ? (
+        <img src={imagePath} alt={player.name} style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'center top', display:'block', filter:'brightness(1.1) contrast(1.05)' }}/>
+      ) : (
+        <>
+          <svg width="100%" height="100%" viewBox="0 0 240 340" preserveAspectRatio="xMidYMax slice" style={{ display:'block' }}>
+            <defs>
+              <pattern id={`st${player.id}`} patternUnits="userSpaceOnUse" width="10" height="10" patternTransform="rotate(-45)">
+                <rect width="5" height="10" fill="rgba(128,128,128,0.12)"/>
+              </pattern>
+              <radialGradient id={`rg${player.id}`} cx="50%" cy="30%" r="70%">
+                <stop offset="0%" stopColor="rgba(128,128,128,0.1)"/>
+                <stop offset="100%" stopColor="rgba(0,0,0,0)"/>
+              </radialGradient>
+            </defs>
+            <rect width="240" height="340" style={{fill:"var(--photo-bg)"}}/>
+            <rect width="240" height="340" fill={`url(#st${player.id})`}/>
+            <rect width="240" height="340" fill={`url(#rg${player.id})`}/>
+            <text x="120" y="220" textAnchor="middle" fontFamily="'Space Grotesk',monospace" fontWeight="900" fontSize="160" style={{fill:"var(--photo-mark)"}} letterSpacing="-8">{num}</text>
+            <text x="120" y="300" textAnchor="middle" fontFamily="'Noto Sans KR',sans-serif" fontWeight="700" fontSize="22" style={{fill:"var(--text6)"}}>{player.nameEn.toUpperCase()}</text>
+            <ellipse cx="120" cy="155" rx="52" ry="62" style={{fill:"var(--photo-mark)"}}/>
+            <ellipse cx="120" cy="95" rx="32" ry="34" style={{fill:"var(--photo-mark)"}}/>
+            <text x="120" y="338" textAnchor="middle" fontFamily="monospace" fontSize="8" style={{fill:"var(--text6)"}} letterSpacing="1">PLAYER PHOTO</text>
+          </svg>
+          <div style={{ position:'absolute', inset:0, background:`linear-gradient(to bottom, transparent 40%, ${tint} 100%)`, pointerEvents:'none' }}/>
+        </>
+      )}
+    </div>
+  );
+}
+
+function SportTag({ sport }) {
+  const map = { '축구':'⚽', '야구':'⚾', 'e스포츠':'🎮', '양궁':'🏹', '수영':'🏊' };
+  return <span style={{ fontSize:11, fontWeight:600, color:'var(--text3)', letterSpacing:0.5, textTransform:'uppercase' }}>{sport}</span>;
+}
+
+function BackBtn({ onBack }) {
+  return (
+    <button onClick={onBack} style={{ background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:6, color:'var(--text-70)', padding:'0', marginBottom:2 }}>
+      <svg width="9" height="16" viewBox="0 0 9 16" fill="none"><path d="M7.5 1.5L2 8l5.5 6.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+      <span style={{ fontSize:14, fontWeight:500 }}>뒤로</span>
+    </button>
+  );
+}
+
+function FormBar({ vals }) {
+  const max = 10;
+  return (
+    <div style={{ display:'flex', alignItems:'flex-end', gap:4, height:48 }}>
+      {vals.map((v, i) => {
+        const isLast = i === vals.length - 1;
+        const pct = v / max;
+        const color = v >= 8 ? 'var(--acc)' : v >= 7 ? 'rgba(255,193,7,0.8)' : 'var(--text6)';
+        return (
+          <div key={i} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
+            <div style={{ fontSize:9, ...NUM, color: isLast ? 'var(--acc)' : 'var(--text5)', fontWeight: isLast ? 700 : 400 }}>{v.toFixed(1)}</div>
+            <div style={{ width:'100%', height:28, borderRadius:4, background:'var(--border)', overflow:'hidden', position:'relative' }}>
+              <div style={{ position:'absolute', bottom:0, left:0, right:0, height:`${pct*100}%`, background: isLast ? 'var(--acc)' : color, borderRadius:4, transition:'height 0.6s ease' }}/>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function RadarStat({ label, val, max }) {
+  const pct = Math.min(val/max, 1);
+  return (
+    <div style={{ marginBottom:10 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
+        <span style={{ fontSize:12, color:'var(--text3)' }}>{label}</span>
+        <span style={{ ...NUM, fontSize:12, fontWeight:700, color:'var(--text)' }}>{val}</span>
+      </div>
+      <div style={{ height:5, background:'var(--border)', borderRadius:3, overflow:'hidden' }}>
+        <div style={{ height:'100%', width:`${pct*100}%`, background:'var(--acc)', borderRadius:3, transition:'width 0.8s ease' }}/>
+      </div>
+    </div>
+  );
+}
+
+function CareerTimeline({ extra }) {
+  return (
+    <div style={{ background:'var(--surface)', borderRadius:16, padding:'16px', border:'0.5px solid var(--border)' }}>
+      <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:14 }}>커리어</div>
+      {extra.career.map((c, i) => (
+        <div key={i} style={{ display:'flex', gap:12, marginBottom: i < extra.career.length-1 ? 14 : 0 }}>
+          <div style={{ display:'flex', flexDirection:'column', alignItems:'center' }}>
+            <div style={{ width:10, height:10, borderRadius:'50%', background: i===0 ? 'var(--acc)' : 'var(--border)', flexShrink:0, marginTop:3 }}/>
+            {i < extra.career.length-1 && <div style={{ width:1, flex:1, background:'var(--border)', minHeight:24, marginTop:4 }}/>}
+          </div>
+          <div style={{ flex:1, paddingBottom: i < extra.career.length-1 ? 4 : 0 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+              <div>
+                <div style={{ fontSize:14, fontWeight:700, color:'var(--text)' }}>{c.flag} {c.team}</div>
+                <div style={{ fontSize:11, color:'var(--text4)', marginTop:2 }}>{c.league}</div>
+              </div>
+              <span style={{ fontFamily:"'Space Grotesk',monospace", fontSize:11, color:'var(--text4)', fontWeight:600 }}>{c.year}</span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── TAB BAR ─────────────────────────────────────────────────
+function TabBar({ active, onTab }) {
+  const tabs = [
+    { id:'home', label:'홈', icon: <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M3 9.5L11 2l8 7.5V20H14v-5h-6v5H3V9.5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" fill={active==='home'?'currentColor':'none'}/></svg> },
+    { id:'schedule', label:'일정', icon: <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><rect x="3" y="5" width="16" height="15" rx="3" stroke="currentColor" strokeWidth="1.8"/><path d="M7 3v4M15 3v4M3 10h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>{active==='schedule' && <circle cx="11" cy="15" r="1.5" fill="currentColor"/>}</svg> },
+    { id:'players', label:'선수', icon: <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><circle cx="11" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.8" fill={active==='players'?'currentColor':'none'}/><path d="M4 19c0-3.866 3.134-7 7-7s7 3.134 7 7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg> },
+    { id:'notif', label:'알림', icon: <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M11 2a7 7 0 00-7 7v4l-1.5 2.5h17L18 13V9a7 7 0 00-7-7z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" fill={active==='notif'?'currentColor':'none'}/><path d="M9 18.5a2 2 0 004 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg> },
+    { id:'more', label:'더보기', icon: <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><circle cx="5" cy="11" r="1.8" fill="currentColor"/><circle cx="11" cy="11" r="1.8" fill="currentColor"/><circle cx="17" cy="11" r="1.8" fill="currentColor"/></svg> },
+  ];
+  return (
+    <div style={{ display:'flex', borderTop:'0.5px solid var(--border)', background:'var(--tab-bg)', backdropFilter:'blur(20px)', WebkitBackdropFilter:'blur(20px)', paddingBottom:20, paddingTop:8 }}>
+      {tabs.map(t => (
+        <button key={t.id} onClick={() => onTab(t.id)} style={{ flex:1, background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:3, color: active===t.id ? 'var(--acc)' : 'var(--text4)', transition:'color 0.15s', padding:'4px 0' }}>
+          {t.icon}
+          <span style={{ fontSize:10, fontWeight:600, letterSpacing:0.2 }}>{t.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── SKELETON UI ──────────────────────────────────────────────
+function SkeletonHighlight() {
+  return (
+    <div style={{ position:'relative', height:260, overflow:'hidden', marginBottom:0, background:'var(--bg2)' }}>
+      <div style={{ position:'absolute', inset:0, background:'linear-gradient(90deg, var(--bg2) 0%, var(--border) 50%, var(--bg2) 100%)', backgroundSize:'200% 100%', animation:'shimmer 1.5s infinite' }}/>
+      <div style={{ position:'absolute', bottom:20, left:20, right:20, zIndex:2 }}>
+        <div style={{ width:100, height:12, background:'var(--border)', borderRadius:6, marginBottom:8, opacity:0.5 }}/>
+        <div style={{ width:'70%', height:32, background:'var(--border)', borderRadius:8, marginBottom:8, opacity:0.5 }}/>
+        <div style={{ width:'50%', height:14, background:'var(--border)', borderRadius:6, opacity:0.5 }}/>
+      </div>
+    </div>
+  );
+}
+
+function SkeletonMatchCard() {
+  return (
+    <div style={{ flexShrink:0, width:280, borderRadius:20, background:'var(--card)', border:'0.5px solid var(--border)', padding:16 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16, paddingBottom:14, borderBottom:'0.5px solid var(--border)' }}>
+        <div style={{ width:48, height:48, borderRadius:'50%', background:'var(--border)', opacity:0.5 }}/>
+        <div style={{ flex:1 }}>
+          <div style={{ width:'60%', height:14, background:'var(--border)', borderRadius:6, marginBottom:6, opacity:0.5 }}/>
+          <div style={{ width:'40%', height:12, background:'var(--border)', borderRadius:6, opacity:0.5 }}/>
+        </div>
+      </div>
+      <div style={{ marginBottom:12 }}>
+        <div style={{ width:'80%', height:16, background:'var(--border)', borderRadius:6, marginBottom:8, opacity:0.5 }}/>
+        <div style={{ width:'60%', height:12, background:'var(--border)', borderRadius:6, opacity:0.5 }}/>
+      </div>
+      <div style={{ display:'flex', justifyContent:'space-between' }}>
+        <div style={{ width:60, height:12, background:'var(--border)', borderRadius:6, opacity:0.5 }}/>
+        <div style={{ width:80, height:12, background:'var(--border)', borderRadius:6, opacity:0.5 }}/>
+      </div>
+    </div>
+  );
+}
+
+function SkeletonUpcomingMatch() {
+  return (
+    <div style={{ margin:'4px 16px', padding:'14px 0', borderTop:'0.5px solid var(--border)' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
+        <div style={{ width:38, height:40, background:'var(--border)', borderRadius:6, opacity:0.5 }}/>
+        <div style={{ flex:1 }}>
+          <div style={{ width:'70%', height:14, background:'var(--border)', borderRadius:6, marginBottom:6, opacity:0.5 }}/>
+          <div style={{ width:'50%', height:12, background:'var(--border)', borderRadius:6, opacity:0.5 }}/>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          <div style={{ width:24, height:24, borderRadius:'50%', background:'var(--border)', opacity:0.5 }}/>
+          <div style={{ width:40, height:12, background:'var(--border)', borderRadius:6, opacity:0.5 }}/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── LIVE CAROUSEL CARD ──────────────────────────────────────
+// ─── COMPONENT: Today Match Card ─────────────────────────────
+function TodayMatchCard({ m, onMatch, tweaks }) {
+  const player = ALL_PLAYERS.find(p => p.name === m.koreanPlayer?.name);
+  const isLive = m.live || m.time === 'LIVE';
+
+  // Countdown calculation
+  const [countdown, setCountdown] = React.useState('');
+
+  React.useEffect(() => {
+    if (!isLive && m.fullDate) {
+      const updateCountdown = () => {
+        const now = new Date();
+        const matchDate = new Date(m.fullDate);
+        const diff = matchDate - now;
+
+        if (diff > 0) {
+          const hours = Math.floor(diff / (1000 * 60 * 60));
+          const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+          const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+          setCountdown(`${hours}시간 ${minutes}분 ${seconds}초 뒤 시작`);
+        } else {
+          setCountdown('곧 시작');
+        }
+      };
+
+      updateCountdown();
+      const interval = setInterval(updateCountdown, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [isLive, m.fullDate]);
+
+  // Format time display
+  let timeLabel = '';
+  let timeValue = m.time || '예정';
+  if (!isLive && m.fullDate) {
+    const date = new Date(m.fullDate);
+    const now = new Date();
+    const hours = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const isToday = date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+
+    if (isToday) {
+      timeLabel = hours < 12 ? '오전' : '오후';
+    } else {
+      timeLabel = '내일';
+    }
+
+    const displayHours = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
+    timeValue = `${String(displayHours).padStart(2, '0')}:${minutes}`;
+  }
+
+  return (
+    <div onClick={() => onMatch(m)} style={{
+      flexShrink:0, width:280, borderRadius:20, overflow:'hidden', position:'relative',
+      cursor:'pointer', background:'var(--card)', border:'0.5px solid var(--border)'
+    }}>
+      <div style={{ position:'relative', zIndex:2, padding:'16px' }}>
+        {/* Korean player section - TOP */}
+        <div style={{ display:'flex', alignItems:'flex-start', gap:10, marginBottom:16, paddingBottom:14, borderBottom:'0.5px solid var(--border)' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10, flex:1, minWidth:0 }}>
+            {tweaks.showPlayerPhoto && player && (
+              <div style={{
+                width:48, height:48, borderRadius:'50%', overflow:'hidden',
+                background:'#fff', flexShrink:0,
+                boxShadow:'0 2px 6px rgba(0,0,0,0.15)'
+              }}>
+                <PlayerPhoto player={player} style={{
+                  width:'100%', height:'100%'
+                }}/>
+              </div>
+            )}
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:15, fontWeight:700, color:'var(--text)', marginBottom:3 }}>
+                🇰🇷 {m.koreanPlayer?.name}
+              </div>
+              <div style={{ fontSize:11, color:'var(--text3)' }}>
+                {m.koreanPlayer?.team} #{m.koreanPlayer?.number}
+              </div>
+            </div>
+          </div>
+
+          {/* Event info - TOP RIGHT */}
+          {m.koreanPlayer?.event && (
+            <div style={{
+              background: isLive ? 'rgba(230,48,48,0.1)' : 'var(--btn-bg)',
+              borderRadius:6, padding:'5px 8px', flexShrink:0
+            }}>
+              <span style={{ fontSize:10, fontWeight:600, color: isLive ? 'var(--acc)' : 'var(--text2)', whiteSpace:'nowrap' }}>
+                {m.koreanPlayer.event}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Time Section - PROMINENT */}
+        <div style={{ marginBottom:16 }}>
+          {isLive ? (
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <div style={{
+                display:'inline-flex', alignItems:'center', gap:6,
+                background:'var(--acc)', borderRadius:8, padding:'6px 10px',
+                boxShadow:'0 2px 8px rgba(230,48,48,0.3)'
+              }}>
+                <span style={{ position:'relative', display:'inline-flex', alignItems:'center', justifyContent:'center', width:8, height:8 }}>
+                  <span style={{ position:'absolute', width:8, height:8, borderRadius:'50%', background:'#fff', opacity:0.4, animation:'ripple 1.4s ease-out infinite' }}/>
+                  <span style={{ width:5, height:5, borderRadius:'50%', background:'#fff', position:'relative' }}/>
+                </span>
+                <span style={{ fontSize:13, fontWeight:800, color:'#fff', letterSpacing:0.5 }}>
+                  LIVE
+                </span>
+              </div>
+              {m.minute && (
+                <span style={{ fontSize:16, fontWeight:700, color:'var(--text)', letterSpacing:-0.3 }}>
+                  {m.minute}'
+                </span>
+              )}
+            </div>
+          ) : (
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <span style={{ fontSize:20, fontWeight:700, color:'var(--text)', letterSpacing:-0.3 }}>
+                {timeLabel} {timeValue}
+              </span>
+              {countdown && (
+                <div style={{
+                  background:'rgba(255,217,61,0.15)', borderRadius:6, padding:'4px 8px', flexShrink:0,
+                  border:'0.5px solid rgba(255,217,61,0.3)'
+                }}>
+                  <span style={{ fontSize:10, fontWeight:600, color:'#FFD93D', whiteSpace:'nowrap' }}>
+                    {countdown}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Teams */}
+        <div style={{ marginBottom:12 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
+            <TeamBadge code={m.home.code} size={20}/>
+            <span style={{ fontSize:15, fontWeight:600, color:'var(--text)' }}>{m.home.name}</span>
+            {isLive && (
+              <span style={{ ...NUM, fontSize:22, fontWeight:800, color:'var(--text)', marginLeft:'auto' }}>
+                {m.home.score}
+              </span>
+            )}
+          </div>
+
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <TeamBadge code={m.away.code} size={20}/>
+            <span style={{ fontSize:15, fontWeight:600, color:'var(--text-70)' }}>{m.away.name}</span>
+            {isLive && (
+              <span style={{ ...NUM, fontSize:22, fontWeight:800, color:'var(--text-70)', marginLeft:'auto' }}>
+                {m.away.score}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Competition info */}
+        <div style={{ fontSize:11, color:'var(--text4)' }}>
+          {m.sport.split(' ')[1]} · {m.competition}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LiveCarouselCard({ m, onMatch, tweaks }) {
+  const player = PLAYERS.find(p => p.name === m.koreanPlayer.name);
+  const lastEvent = m.events[m.events.length - 1];
+  return (
+    <div onClick={() => onMatch(m)} style={{ flexShrink:0, width:300, borderRadius:20, overflow:'hidden', position:'relative', cursor:'pointer', background:'var(--bg2)', border:'0.5px solid rgba(230,48,48,0.2)' }}>
+      {tweaks.showPlayerPhoto && player && (
+        <PlayerPhoto player={player} style={{ position:'absolute', right:8, bottom:8, width:'39%', height:'53%', opacity:0.85 }}/>
+      )}
+      <div style={{ position:'relative', zIndex:2, padding:'18px 18px 16px' }}>
+        {/* header */}
+        <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:14 }}>
+          <LiveDot/>
+          <span style={{ fontSize:11, fontWeight:800, color:'var(--acc)', letterSpacing:1.2 }}>LIVE {m.minute}'</span>
+          <span style={{ fontSize:10, color:'var(--text4)', marginLeft:2 }}>{m.sport.split(' ')[1]}</span>
+        </div>
+        {/* score */}
+        <div style={{ marginBottom:14 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+            <TeamBadge code={m.home.code} size={22}/>
+            <span style={{ fontSize:13, fontWeight:600, color:'var(--text)' }}>{m.home.code}</span>
+          </div>
+          <div style={{ display:'flex', alignItems:'baseline', gap:6, margin:'6px 0' }}>
+            <span style={{ ...NUM, fontSize:48, fontWeight:800, color:'var(--text)', letterSpacing:-2, lineHeight:1 }}>{m.home.score}</span>
+            <span style={{ ...NUM, fontSize:20, color:'var(--text5)', fontWeight:300 }}>:</span>
+            <span style={{ ...NUM, fontSize:48, fontWeight:800, color:'rgba(255,255,255,0.38)', letterSpacing:-2, lineHeight:1 }}>{m.away.score}</span>
+          </div>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <TeamBadge code={m.away.code} size={22}/>
+            <span style={{ fontSize:13, fontWeight:600, color:'var(--text2)' }}>{m.away.code}</span>
+          </div>
+        </div>
+        {/* Korean player */}
+        <div style={{ background:'rgba(230,48,48,0.13)', borderRadius:8, padding:'7px 10px', display:'flex', flexDirection:'column', gap:2 }}>
+          <span style={{ fontSize:12, fontWeight:700, color:'var(--acc)' }}>🇰🇷 {m.koreanPlayer.name} <span style={{ ...NUM, color:'var(--text4)', fontWeight:400 }}>#{m.koreanPlayer.number}</span></span>
+          <span style={{ fontSize:11, color:'var(--text2)' }}>{m.koreanPlayer.event}</span>
+        </div>
+        {/* last event */}
+        {lastEvent && (
+          <div style={{ marginTop:8, fontSize:11, color:'var(--text4)', display:'flex', alignItems:'center', gap:4 }}>
+            <span style={{ ...NUM, color:'var(--text6)' }}>{lastEvent.min}'</span>
+            <span>{lastEvent.text}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── SCREEN: HOME V1 — Card Stack ────────────────────────────
+function HomeV1({ onMatch, onPlayer, tweaks, liveApiMatches = [], isLoading = false }) {
+  const allMatches = [...MATCHES, ...liveApiMatches];
+  const liveMatches = allMatches.filter(m => m.live || m.time === 'LIVE');
+
+  // Filter upcoming matches to show only within 12 hours
+  const now = new Date();
+  const twelveHoursLater = new Date(now.getTime() + 12 * 60 * 60 * 1000);
+  const upcoming = allMatches
+    .filter(m => {
+      if (m.live || m.time === 'LIVE') return false;
+      if (!m.fullDate) return false; // Only show matches with valid dates
+      const matchDate = new Date(m.fullDate);
+      return matchDate >= now && matchDate <= twelveHoursLater;
+    })
+    .sort((a, b) => new Date(a.fullDate) - new Date(b.fullDate)); // Sort by soonest first
+
+  return (
+    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+      {/* Header */}
+      <div style={{ padding:'12px 20px 10px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <div>
+          <div style={{ fontSize:11, fontWeight:600, color:'var(--text4)', letterSpacing:1.5, textTransform:'uppercase', marginBottom:2 }}>JUMO</div>
+          <div style={{ fontSize:22, fontWeight:700, color:'var(--text)', letterSpacing:-0.5 }}>오늘의 경기</div>
+        </div>
+        <div style={{ display:'flex', gap:8 }}>
+          <button style={{ background:'var(--border)', border:'none', borderRadius:20, padding:'7px 14px', color:'var(--text-60)', fontSize:13, cursor:'pointer' }}>🔔</button>
+          <button style={{ background:'var(--border)', border:'none', borderRadius:20, padding:'7px 14px', color:'var(--text-60)', fontSize:13, cursor:'pointer' }}>검색</button>
+        </div>
+      </div>
+
+      {/* Live section label */}
+      <div style={{ padding:'4px 20px 8px', display:'flex', alignItems:'center', gap:8 }}>
+        <LiveDot/>
+        <span style={{ fontSize:11, fontWeight:700, color:'var(--acc)', letterSpacing:1.5, textTransform:'uppercase' }}>LIVE NOW</span>
+        <span style={{ fontSize:11, color:'var(--text4)' }}>{liveMatches.length}경기 진행 중</span>
+      </div>
+
+      {/* Live carousel */}
+      <div style={{ display:'flex', gap:10, padding:'0 16px 20px', overflowX:'auto', scrollSnapType:'x mandatory' }} className="scrollbar-hide">
+        {liveMatches.map(m => (
+          <div key={m.id} style={{ scrollSnapAlign:'start' }}>
+            <LiveCarouselCard m={m} onMatch={onMatch} tweaks={tweaks}/>
+          </div>
+        ))}
+        {/* Peek ghost */}
+        <div style={{ flexShrink:0, width:8 }}/>
+      </div>
+
+      {/* Live ticker bar */}
+      <div style={{ background:'var(--ticker-bg)', borderTop:'0.5px solid var(--ticker-border)', borderBottom:'0.5px solid var(--ticker-border)', padding:'6px 0', overflow:'hidden', marginBottom:16 }}>
+        <div style={{ display:'flex', animation:'ticker 18s linear infinite', whiteSpace:'nowrap' }}>
+          {[...Array(2)].map((_, ri) => (
+            <span key={ri} style={{ display:'inline-flex', gap:32, paddingRight:32 }}>
+              {liveMatches.map(m => (
+                <span key={m.id} style={{ display:'inline-flex', alignItems:'center', gap:8, fontSize:11, fontWeight:600, color:'var(--text-60)', letterSpacing:0.3 }}>
+                  <LiveDot/> {m.home.code} {m.home.score}–{m.away.score} {m.away.code} <span style={{ color:'var(--text4)' }}>{m.minute}'</span>
+                  <span style={{ color:'var(--acc)' }}>· 🇰🇷 {m.koreanPlayer.name}</span>
+                </span>
+              ))}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Upcoming */}
+      <div style={{ padding:'0 20px 6px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <span style={{ fontSize:16, fontWeight:700, color:'var(--text)' }}>오늘 예정</span>
+        <span style={{ fontSize:12, color:'var(--text4)', fontWeight:500 }}>전체보기</span>
+      </div>
+      {upcoming.map(m => (
+        <div key={m.id} onClick={() => onMatch(m)} style={{ margin:'0 16px 8px', background:'var(--surface)', borderRadius:14, padding:'12px 14px', cursor:'pointer', border:'0.5px solid var(--border2)' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:6 }}>
+            <span style={{ ...NUM, fontSize:12, fontWeight:700, color:'var(--text3)', flexShrink:0, width:36 }}>{m.time||'예정'}</span>
+            <div style={{ width:0.5, height:20, background:'var(--border)', flexShrink:0 }}/>
+            <div style={{ flex:1, display:'flex', alignItems:'center', gap:6, minWidth:0 }}>
+              <TeamBadge code={m.home.code} size={24}/>
+              <span style={{ fontSize:13, fontWeight:600, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>{m.home.name}</span>
+              <span style={{ fontSize:11, color:'var(--text4)', flexShrink:0 }}>vs</span>
+              <span style={{ fontSize:13, fontWeight:600, color:'var(--text2)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, textAlign:'right' }}>{m.away.name}</span>
+              <TeamBadge code={m.away.code} size={24}/>
+            </div>
+          </div>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingLeft:48 }}>
+            <span style={{ fontSize:11, color:'var(--text5)' }}>{m.sport} · {m.krTime}</span>
+            <span style={{ fontSize:11, color:'var(--acc)', fontWeight:700, flexShrink:0 }}>🇰🇷 {m.koreanPlayer.name}</span>
+          </div>
+        </div>
+      ))}
+      <div style={{ height:24 }}/>
+    </div>
+  );
+}
+
+// ─── SCREEN: HOME V2 — Editorial ─────────────────────────────
+function HomeV2({ onMatch, onPlayer, tweaks, liveApiMatches = [], isLoading = false }) {
+  // State for real-time countdown updates
+  const [currentTime, setCurrentTime] = React.useState(new Date());
+
+  // Update current time every second for countdown
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Combine static and API matches
+  const allMatches = [...MATCHES, ...liveApiMatches];
+  const liveMatches = allMatches.filter(m => m.live || m.time === 'LIVE');
+
+  // Filter upcoming matches to show only within 12 hours
+  const now = currentTime;
+  const twelveHoursLater = new Date(now.getTime() + 12 * 60 * 60 * 1000);
+  const upcoming = allMatches
+    .filter(m => {
+      if (m.live || m.time === 'LIVE') return false;
+      if (!m.fullDate) return false; // Only show matches with valid dates
+      const matchDate = new Date(m.fullDate);
+      return matchDate >= now && matchDate <= twelveHoursLater;
+    })
+    .sort((a, b) => new Date(a.fullDate) - new Date(b.fullDate)); // Sort by soonest first
+
+  // Determine highlight match based on priority
+  const getHighlightMatch = () => {
+    // Priority 1: Live match with Korean player (HIGHEST PRIORITY)
+    const liveWithKorean = allMatches.find(m =>
+      (m.live || m.time === 'LIVE') && m.koreanPlayer
+    );
+    if (liveWithKorean) {
+      console.log('🔴 LIVE MATCH FOUND:', liveWithKorean.koreanPlayer.name, '-', liveWithKorean.home.code, 'vs', liveWithKorean.away.code);
+      return { match: liveWithKorean, priority: 1 };
+    }
+
+    // Priority 2: Match with Korean player goal/assist/point
+    const matchWithGoal = allMatches.find(m =>
+      m.koreanPlayer && m.events?.some(e =>
+        e.type === 'goal' || e.type === 'assist' || e.player === m.koreanPlayer.name
+      )
+    );
+    if (matchWithGoal) return { match: matchWithGoal, priority: 2 };
+
+    // Priority 3: Match starting soon (within 1 hour)
+    const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
+    const startingSoon = allMatches.find(m => {
+      if (!m.fullDate || !m.koreanPlayer) return false;
+      const matchDate = new Date(m.fullDate);
+      return matchDate >= now && matchDate <= oneHourLater;
+    });
+    if (startingSoon) return { match: startingSoon, priority: 3 };
+
+    // Priority 4: Next upcoming match with Korean player
+    const nextMatch = upcoming.find(m => m.koreanPlayer);
+    if (nextMatch) return { match: nextMatch, priority: 4 };
+
+    return null;
+  };
+
+  const highlightData = getHighlightMatch();
+  const highlightMatch = highlightData?.match;
+  const highlightPlayer = highlightMatch ? ALL_PLAYERS.find(p => p.name === highlightMatch.koreanPlayer?.name) : null;
+
+  // Generate highlight text based on priority
+  const getHighlightText = () => {
+    if (!highlightMatch || !highlightData) return { status: '', main: '한국 선수 경기를 확인하세요', sub: '' };
+
+    const m = highlightMatch;
+    const isLive = m.live || m.time === 'LIVE';
+
+    switch (highlightData.priority) {
+      case 1: // Live match (HIGHEST PRIORITY)
+        // Check if there's a goal/assist event
+        const lastEvent = m.events?.[m.events.length - 1];
+        const hasGoalEvent = lastEvent && (lastEvent.type === 'goal' || lastEvent.type === 'assist');
+
+        if (hasGoalEvent) {
+          return {
+            status: `LIVE NOW · ${m.minute || ''}\'`,
+            main: `${m.koreanPlayer.name}\n${lastEvent.type === 'goal' ? '⚽ 골' : '🅰️ 어시스트'} — ${m.home.score}:${m.away.score}`,
+            sub: `${m.home.name} vs ${m.away.name} · ${m.competition}`
+          };
+        } else {
+          return {
+            status: `LIVE NOW · ${m.minute || ''}\'`,
+            main: `${m.koreanPlayer.name} 출전 중\n${m.home.score}:${m.away.score}`,
+            sub: `${m.home.name} vs ${m.away.name} · ${m.competition}`
+          };
+        }
+      case 2: // Goal/Assist (no longer used as separate priority)
+        const goalEvent = m.events?.[m.events.length - 1];
+        return {
+          status: `LIVE NOW · ${m.minute || ''}\'`,
+          main: `${m.koreanPlayer.name}\n${goalEvent?.type === 'goal' ? '⚽ 골' : '🅰️ 어시스트'} — ${m.home.score}:${m.away.score}`,
+          sub: `${m.home.name} vs ${m.away.name} · ${m.competition}`
+        };
+      case 3: // Starting soon
+        const diff = new Date(m.fullDate) - now;
+        const hoursLeft = Math.floor(diff / (1000 * 60 * 60));
+        const minsLeft = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const secsLeft = Math.floor((diff % (1000 * 60)) / 1000);
+
+        let timeText = '';
+        if (hoursLeft > 0) {
+          timeText = `${hoursLeft}시간 ${minsLeft}분 후 시작`;
+        } else if (minsLeft > 0) {
+          timeText = `${minsLeft}분 ${secsLeft}초 후 시작`;
+        } else if (secsLeft > 0) {
+          timeText = `${secsLeft}초 후 시작`;
+        } else {
+          timeText = '곧 시작';
+        }
+
+        const statusText3 = m.lineupConfirmed ? '선발 출전' : '출전 예정';
+        return {
+          status: timeText,
+          main: `${m.koreanPlayer.name}\n${statusText3}`,
+          sub: `${m.home.name} vs ${m.away.name} · ${m.competition}`
+        };
+      case 4: // Upcoming
+        const statusText4 = m.lineupConfirmed ? '선발 출전' : '출전 예정';
+        return {
+          status: m.krTime || m.time,
+          main: `${m.koreanPlayer.name}\n${statusText4}`,
+          sub: `${m.home.name} vs ${m.away.name} · ${m.competition}`
+        };
+    }
+  };
+
+  const highlightText = getHighlightText();
+  const heroPlayer = highlightPlayer || PLAYERS[0];
+
+  // Show skeleton on initial load
+  if (isLoading) {
+    return (
+      <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+        <SkeletonHighlight/>
+        <div style={{ padding:'16px 16px 8px' }}>
+          <div style={{ width:80, height:16, background:'var(--border)', borderRadius:6, opacity:0.5 }}/>
+        </div>
+        <div style={{ display:'flex', gap:10, padding:'8px 16px 20px', overflowX:'auto' }} className="scrollbar-hide">
+          <SkeletonMatchCard/>
+          <SkeletonMatchCard/>
+          <SkeletonMatchCard/>
+        </div>
+        <SkeletonUpcomingMatch/>
+        <SkeletonUpcomingMatch/>
+        <SkeletonUpcomingMatch/>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+      {/* Big editorial header */}
+      <div style={{ position:'relative', height:260, overflow:'hidden', marginBottom:0 }}>
+        {/* Goal background image */}
+        <div style={{ position:'absolute', inset:0 }}>
+          <img src="image/goal.jpg" alt="Goal" style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'center' }}/>
+          <div style={{ position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.7) 100%)' }}/>
+        </div>
+        {tweaks.showPlayerPhoto && (
+          <PlayerPhoto player={heroPlayer} style={{ position:'absolute', right:0, bottom:0, width:'28%', height:'70%', zIndex:1 }}/>
+        )}
+        <div style={{ position:'absolute', top:12, left:20, right:20, display:'flex', justifyContent:'space-between', alignItems:'center', zIndex:2 }}>
+          <span style={{ fontSize:15, fontWeight:900, color:'#fff', letterSpacing:2, textTransform:'uppercase' }}>JUMO</span>
+          <div style={{ display:'flex', gap:8 }}>
+            <button style={{ background:'rgba(0,0,0,0.4)', backdropFilter:'blur(10px)', border:'0.5px solid rgba(255,255,255,0.2)', borderRadius:20, padding:'6px 10px', color:'rgba(255,255,255,0.9)', fontSize:12, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+              <svg width="18" height="18" viewBox="0 0 22 22" fill="none"><path d="M11 2a7 7 0 00-7 7v4l-1.5 2.5h17L18 13V9a7 7 0 00-7-7z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" fill="none"/><path d="M9 18.5a2 2 0 004 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+            </button>
+          </div>
+        </div>
+        <div style={{ position:'absolute', bottom:20, left:20, right:20, zIndex:2 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+            {(highlightData?.priority === 1 || highlightData?.priority === 2) && <LiveDot/>}
+            <span style={{ fontSize:11, fontWeight:700, color: (highlightData?.priority === 1 || highlightData?.priority === 2) ? 'var(--acc)' : 'rgba(255,255,255,0.7)', letterSpacing:1.5 }}>{highlightText.status}</span>
+          </div>
+          <div style={{ fontSize:28, fontWeight:900, color:'#fff', lineHeight:1.1, marginBottom:8, letterSpacing:-0.5, whiteSpace:'pre-line' }}>{highlightText.main}</div>
+          <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)' }}>{highlightText.sub}</div>
+        </div>
+      </div>
+
+      {/* Today's Matches Section */}
+      <div style={{ padding:'16px 16px 8px' }}>
+        <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', letterSpacing:-0.2 }}>오늘의 경기</div>
+      </div>
+
+      {/* Today's Matches Carousel */}
+      <div ref={el => el && (el.scrollLeft = 0)} style={{ display:'flex', gap:10, padding:'8px 16px 20px', overflowX:'auto', scrollSnapType:'x mandatory' }} className="scrollbar-hide">
+        {allMatches
+          .filter(m => {
+            if (!m.koreanPlayer) return false;
+            if (m.live || m.time === 'LIVE') return true; // Include live matches
+            if (!m.fullDate) return false;
+            const matchDate = new Date(m.fullDate);
+            return matchDate >= now && matchDate <= twelveHoursLater;
+          })
+          .sort((a, b) => {
+            // Live matches first, then sort by fullDate (earliest first)
+            if ((a.live || a.time === 'LIVE') && !(b.live || b.time === 'LIVE')) return -1;
+            if (!(a.live || a.time === 'LIVE') && (b.live || b.time === 'LIVE')) return 1;
+            const dateA = a.fullDate ? new Date(a.fullDate) : new Date('2099-12-31');
+            const dateB = b.fullDate ? new Date(b.fullDate) : new Date('2099-12-31');
+            return dateA - dateB;
+          })
+          .map(m => (
+            <div key={m.id} style={{ scrollSnapAlign:'start' }}>
+              <TodayMatchCard m={m} onMatch={onMatch} tweaks={tweaks}/>
+            </div>
+          ))}
+        <div style={{ flexShrink:0, width:8 }}/>
+      </div>
+
+      {/* Upcoming matches list */}
+      {upcoming.length > 0 && (
+        <div style={{ margin:'4px 16px', padding:'14px 0', borderTop:'0.5px solid var(--border)' }}>
+          {upcoming.map(m => {
+            let timeDisplay = '—';
+            let dayLabel = '';
+
+            if (m.fullDate) {
+              const date = new Date(m.fullDate);
+              const now = new Date();
+              const hours = String(date.getHours()).padStart(2, '0');
+              const minutes = String(date.getMinutes()).padStart(2, '0');
+              const isToday = date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+
+              timeDisplay = `${hours}:${minutes}`;
+              dayLabel = isToday ? '오늘' : '내일';
+            }
+
+            const player = ALL_PLAYERS.find(p => p.name === m.koreanPlayer?.name);
+
+            return (
+              <div key={m.id} onClick={() => onMatch(m)} style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12, cursor:'pointer' }}>
+                <div style={{ ...NUM, width:38, fontSize:11, fontWeight:600, color:'var(--text3)', flexShrink:0, lineHeight:1.3, display:'flex', flexDirection:'column', alignItems:'flex-end' }}>
+                  <div style={{ fontSize:10, color:'var(--text5)' }}>{dayLabel}</div>
+                  <div>{timeDisplay}</div>
+                </div>
+                <div style={{ flex:1, display:'flex', flexDirection:'column', gap:2 }}>
+                  <div style={{ fontSize:13, fontWeight:600, color:'var(--text)' }}>{m.home.name} <span style={{ color:'var(--text4)' }}>vs</span> {m.away.name}</div>
+                  <div style={{ fontSize:11, color:'var(--text4)' }}>{m.sport.split(' ')[1]} · {m.competition}</div>
+                </div>
+                <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
+                  {player && (
+                    <div style={{ width:24, height:24, borderRadius:'50%', overflow:'hidden', background:'#fff', flexShrink:0, boxShadow:'0 1px 4px rgba(0,0,0,0.15)' }}>
+                      <PlayerPhoto player={player} style={{ width:'100%', height:'100%' }}/>
+                    </div>
+                  )}
+                  <span style={{ fontSize:11, fontWeight:600, color:'var(--text)' }}>{m.koreanPlayer?.name}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div style={{ height:24 }}/>
+    </div>
+  );
+}
+
+// ─── SCREEN: HOME V3 — Compact ───────────────────────────────
+function HomeV3({ onMatch, onPlayer, tweaks, liveApiMatches = [] }) {
+  return (
+    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+      <div style={{ padding:'12px 20px 8px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <span style={{ fontSize:20, fontWeight:900, color:'var(--text)', letterSpacing:1, textTransform:'uppercase' }}>JUMO</span>
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          <LiveDot/><span style={{ fontSize:11, fontWeight:700, color:'var(--acc)', letterSpacing:1 }}>2 LIVE</span>
+          <button style={{ background:'var(--border)', border:'none', borderRadius:16, padding:'5px 10px', color:'var(--text2)', fontSize:12, cursor:'pointer', marginLeft:8 }}>🔔</button>
+        </div>
+      </div>
+
+      {/* Section: LIVE */}
+      <div style={{ padding:'8px 16px 4px' }}>
+        <span style={{ fontSize:10, fontWeight:700, color:'var(--text4)', letterSpacing:2, textTransform:'uppercase' }}>🔴 진행 중</span>
+      </div>
+      {/* Live carousel */}
+      <div style={{ display:'flex', gap:10, padding:'8px 16px 16px', overflowX:'auto', scrollSnapType:'x mandatory' }} className="scrollbar-hide">
+        {MATCHES.filter(m=>m.live).map(m => (
+          <div key={m.id} style={{ scrollSnapAlign:'start' }}>
+            <LiveCarouselCard m={m} onMatch={onMatch} tweaks={tweaks}/>
+          </div>
+        ))}
+        <div style={{ flexShrink:0, width:8 }}/>
+      </div>
+
+      {/* Section: TODAY */}
+      <div style={{ padding:'16px 16px 4px' }}>
+        <span style={{ fontSize:10, fontWeight:700, color:'var(--text4)', letterSpacing:2, textTransform:'uppercase' }}>오늘 예정</span>
+      </div>
+      {MATCHES
+        .filter(m=>!m.live)
+        .sort((a, b) => {
+          const dateA = a.fullDate ? new Date(a.fullDate) : new Date('2099-12-31');
+          const dateB = b.fullDate ? new Date(b.fullDate) : new Date('2099-12-31');
+          return dateA - dateB;
+        })
+        .map(m => (
+        <div key={m.id} onClick={() => onMatch(m)} style={{ margin:'4px 16px', background:'var(--surface)', borderRadius:12, padding:'12px 14px', cursor:'pointer', border:'0.5px solid var(--border2)', display:'flex', alignItems:'center', gap:10 }}>
+          <span style={{ ...NUM, fontSize:12, fontWeight:600, color:'var(--text3)', width:36, flexShrink:0 }}>{m.time}</span>
+          <div style={{ width:0.5, height:28, background:'var(--border)' }}/>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:13, fontWeight:600, color:'var(--text)' }}>{m.home.code} <span style={{ color:'var(--text5)' }}>vs</span> {m.away.code}</div>
+            <div style={{ fontSize:11, color:'var(--text4)', marginTop:2 }}>{m.sport}</div>
+          </div>
+          <span style={{ fontSize:11, color:'var(--acc)', fontWeight:600 }}>🇰🇷 {m.koreanPlayer.name}</span>
+        </div>
+      ))}
+
+      <div style={{ height:24 }}/>
+    </div>
+  );
+}
+
+// ─── SCREEN: LIVE MATCH DETAIL ────────────────────────────────
+function LiveDetailScreen({ match, onBack }) {
+  const [tab, setTab] = React.useState('events');
+  const player = PLAYERS.find(p => p.name === match.koreanPlayer.name);
+  const isLive = match.live;
+  const typeColor = { goal:'var(--acc)', yellow:'#f5c518', red:'#e03030', assist:'var(--text2)' };
+
+  return (
+    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+      {/* Hero */}
+      <div style={{ position:'relative', overflow:'hidden' }}>
+        <div style={{ position:'absolute', inset:0, background:'var(--bg2)' }}/>
+        {player && (
+          <PlayerPhoto player={player} style={{ position:'absolute', right:0, top:0, bottom:0, width:'45%', opacity:0.7 }} tint="#0f0f14"/>
+        )}
+        <div style={{ position:'relative', zIndex:2, padding:'12px 20px 20px' }}>
+          <BackBtn onBack={onBack}/>
+          <div style={{ display:'flex', alignItems:'center', gap:8, margin:'12px 0 16px' }}>
+            {isLive && <><LiveDot/><span style={{ fontSize:11, fontWeight:700, color:'var(--acc)', letterSpacing:1.5 }}>LIVE</span></>}
+            <span style={{ fontSize:11, color:'var(--text3)' }}>{match.sport} · {match.competition}</span>
+          </div>
+          {/* Score block */}
+          <div style={{ display:'flex', alignItems:'center', gap:20, marginBottom:16 }}>
+            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
+              <TeamBadge code={match.home.code} size={44}/>
+              <span style={{ fontSize:12, fontWeight:600, color:'var(--text-70)' }}>{match.home.name}</span>
+            </div>
+            <div style={{ flex:1, textAlign:'center' }}>
+              {isLive ? (
+                <>
+                  <div style={{ ...NUM, fontSize:52, fontWeight:800, color:'var(--text)', letterSpacing:-3, lineHeight:1 }}>{match.home.score}<span style={{ color:'var(--text4)', fontWeight:400 }}>:</span>{match.away.score}</div>
+                  <div style={{ ...NUM, fontSize:14, color:'var(--text3)', marginTop:4, fontWeight:600 }}>{match.minute}'</div>
+                </>
+              ) : (
+                <div style={{ fontSize:14, color:'var(--text2)', fontWeight:600 }}>{match.time || match.krTime}</div>
+              )}
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
+              <TeamBadge code={match.away.code} size={44}/>
+              <span style={{ fontSize:12, fontWeight:600, color:'var(--text2)' }}>{match.away.name}</span>
+            </div>
+          </div>
+          {/* Korean player highlight */}
+          <div style={{ background:'var(--ticker-bg)', borderRadius:10, padding:'10px 14px', border:'0.5px solid rgba(230,48,48,0.25)', display:'flex', alignItems:'center', gap:10 }}>
+            <span style={{ fontSize:18 }}>🇰🇷</span>
+            <div>
+              <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>{match.koreanPlayer.name} <span style={{ ...NUM, color:'var(--text4)', fontWeight:400 }}>#{match.koreanPlayer.number}</span></div>
+              <div style={{ fontSize:11, color:'var(--acc)', fontWeight:600, marginTop:1 }}>{match.koreanPlayer.event}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display:'flex', borderBottom:'0.5px solid var(--border)', background:'var(--bg)', position:'sticky', top:0, zIndex:10 }}>
+        {['events','stats','lineups'].map(t => (
+          <button key={t} onClick={() => setTab(t)} style={{ flex:1, background:'none', border:'none', padding:'12px 0', fontSize:13, fontWeight:600, color: tab===t ? '#fff' : 'var(--text4)', cursor:'pointer', borderBottom: tab===t ? '2px solid var(--acc)' : '2px solid transparent', transition:'all 0.15s', letterSpacing:0.3 }}>
+            {{events:'이벤트', stats:'통계', lineups:'라인업'}[t]}
+          </button>
+        ))}
+      </div>
+
+      {/* Events */}
+      {tab === 'events' && (
+        <div style={{ padding:'16px' }}>
+          {isLive && (
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:16, padding:'10px 14px', background:'rgba(230,48,48,0.08)', borderRadius:10, border:'0.5px solid rgba(230,48,48,0.2)' }}>
+              <LiveDot/>
+              <span style={{ fontSize:12, color:'var(--text-60)' }}>실시간 업데이트 중</span>
+            </div>
+          )}
+          {match.events.length === 0 && (
+            <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text5)', fontSize:14 }}>아직 이벤트가 없습니다</div>
+          )}
+          {[...match.events].reverse().map((ev, i) => (
+            <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:12, marginBottom:14, padding:'10px 12px', background:'var(--surface)', borderRadius:10, border:'0.5px solid var(--border2)' }}>
+              <div style={{ ...NUM, width:28, textAlign:'center', fontSize:13, fontWeight:700, color:'var(--text3)', flexShrink:0, paddingTop:1 }}>{ev.min}'</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13, fontWeight:700, color: ev.type==='goal' ? '#fff' : 'var(--text-70)' }}>{ev.text}</div>
+                <div style={{ fontSize:11, color:'var(--text4)', marginTop:2 }}>{ev.detail}</div>
+              </div>
+              <div style={{ fontSize:18 }}>
+                {{goal:'⚽', yellow:'🟨', red:'🟥', assist:'🅰️'}[ev.type] || '•'}
+              </div>
+            </div>
+          ))}
+
+          {/* Reactions */}
+          <div style={{ marginTop:20, padding:'14px', background:'var(--surface)', borderRadius:14, border:'0.5px solid var(--border2)' }}>
+            <div style={{ fontSize:12, color:'var(--text3)', marginBottom:10, fontWeight:600 }}>응원 리액션</div>
+            <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+              {[['🔥','2.4k'],['👏','1.8k'],['💪','934'],['❤️','723'],['😮','412']].map(([em,ct]) => (
+                <button key={em} style={{ background:'var(--border)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:20, padding:'8px 14px', cursor:'pointer', display:'flex', alignItems:'center', gap:6, transition:'all 0.1s' }}>
+                  <span style={{ fontSize:16 }}>{em}</span>
+                  <span style={{ fontSize:12, color:'var(--text2)', fontWeight:600 }}>{ct}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stats */}
+      {tab === 'stats' && match.stats && (
+        <div style={{ padding:'16px' }}>
+          {[['슈팅', match.stats.shots], ['점유율 %', match.stats.possession], ['패스', match.stats.passes]].map(([label, vals]) => (
+            <div key={label} style={{ marginBottom:16 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
+                <span style={{ ...NUM, fontSize:14, fontWeight:700, color:'var(--text)' }}>{vals[0]}</span>
+                <span style={{ fontSize:12, color:'var(--text3)', fontWeight:600 }}>{label}</span>
+                <span style={{ ...NUM, fontSize:14, fontWeight:700, color:'var(--text2)' }}>{vals[1]}</span>
+              </div>
+              <div style={{ height:6, background:'var(--border)', borderRadius:3, overflow:'hidden' }}>
+                <div style={{ width:`${vals[0]/(vals[0]+vals[1])*100}%`, height:'100%', background:'var(--acc)', borderRadius:3, transition:'width 0.8s ease' }}/>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {tab === 'stats' && !match.stats && (
+        <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text5)', fontSize:14 }}>경기 시작 후 통계가 표시됩니다</div>
+      )}
+      {tab === 'lineups' && (
+        <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text5)', fontSize:14 }}>라인업 정보가 준비 중입니다</div>
+      )}
+
+      <div style={{ height:24 }}/>
+    </div>
+  );
+}
+
+// ─── SCREEN: PLAYER PROFILE ───────────────────────────────────
+function PlayerScreen({ player, onBack, onMatch }) {
+  const [tab, setTab] = React.useState('overview');
+  const [followed, setFollowed] = React.useState(true);
+  const playerMatches = MATCHES.filter(m => m.koreanPlayer.name === player.name);
+  const extra = PLAYER_EXTRA[player.id] || DEFAULT_EXTRA;
+
+  const resultColor = { W:'#2cc96d', D:'rgba(255,193,7,0.9)', L:'var(--acc)' };
+  const resultLabel = { W:'승', D:'무', L:'패' };
+
+  const statRows = player.sport === '축구' ? [
+    ['골', player.goals], ['어시스트', player.assists], ['출전', player.matches], ['평점', player.rating.toFixed(1)],
+  ] : player.sport === '야구' ? [
+    ['출전', player.matches], ['나이', player.age],
+  ] : [
+    ['출전', player.matches], ['나이', player.age],
+  ];
+
+  return (
+    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+      {/* Hero */}
+      <div style={{ position:'relative', height:320, overflow:'hidden' }}>
+        <PlayerPhoto player={player} style={{ position:'absolute', inset:0 }}/>
+        <div style={{ position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, var(--bg) 100%)' }}/>
+        <div style={{ position:'absolute', top:12, left:20, right:20, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <BackBtn onBack={onBack}/>
+          <button onClick={() => setFollowed(f=>!f)} style={{ display:'flex', alignItems:'center', gap:6, background: followed ? 'var(--acc)' : 'rgba(0,0,0,0.35)', backdropFilter:'blur(10px)', border: followed ? 'none' : '0.5px solid rgba(255,255,255,0.2)', borderRadius:20, padding:'7px 14px', color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', transition:'all 0.2s' }}>
+            {followed
+              ? <><svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5L4.5 8.5L11 1" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>팔로우 중</>
+              : <>+ 팔로우</>}
+          </button>
+        </div>
+        <div style={{ position:'absolute', bottom:0, left:0, right:0, padding:'0 20px 20px' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+            <span style={{ fontSize:11, color:'var(--acc)', fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', background:'rgba(230,48,48,0.15)', borderRadius:6, padding:'3px 8px' }}>{player.sport}</span>
+            <span style={{ fontSize:11, color:'rgba(255,255,255,0.5)', fontWeight:600 }}>{player.position}</span>
+          </div>
+          <div style={{ fontSize:36, fontWeight:900, color:'#fff', letterSpacing:-1.5, lineHeight:1, marginBottom:6, textShadow:'0 2px 12px rgba(0,0,0,0.5)' }}>
+            <span style={{ ...NUM, color:'rgba(255,255,255,0.3)', fontSize:20, marginRight:6 }}>#{player.number}</span>
+            {player.name}
+          </div>
+          <div style={{ fontSize:12, color:'rgba(255,255,255,0.55)' }}>{player.nameEn} · {player.team} · {player.league}</div>
+        </div>
+      </div>
+
+      {/* Key stats strip */}
+      <div style={{ display:'flex', margin:'0 16px 14px', background:'var(--surface)', borderRadius:16, border:'0.5px solid var(--border)' }}>
+        {statRows.map(([label, val], i, arr) => (
+          <div key={label} style={{ flex:1, textAlign:'center', padding:'14px 0', borderRight: i < arr.length-1 ? '0.5px solid var(--border)' : 'none' }}>
+            <div style={{ ...NUM, fontSize:24, fontWeight:800, color:'var(--text)', letterSpacing:-0.5, lineHeight:1 }}>{val}</div>
+            <div style={{ fontSize:10, color:'var(--text4)', marginTop:3, fontWeight:600, letterSpacing:0.3 }}>{label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display:'flex', borderBottom:'0.5px solid var(--border)', background:'var(--bg)', position:'sticky', top:0, zIndex:10 }}>
+        {[['overview','요약'], ['stats','스탯'], ['info','정보']].map(([t, label]) => (
+          <button key={t} onClick={() => setTab(t)} style={{ flex:1, background:'none', border:'none', padding:'12px 0', fontSize:13, fontWeight:600, color: tab===t ? 'var(--acc)' : 'var(--text4)', cursor:'pointer', borderBottom: tab===t ? '2px solid var(--acc)' : '2px solid transparent', transition:'all 0.15s' }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Overview tab */}
+      {tab === 'overview' && (
+        <div style={{ padding:'16px' }}>
+          {player.sport === '축구' && (
+            <>
+              <div style={{ background:'var(--surface)', borderRadius:16, padding:'16px', border:'0.5px solid var(--border)', marginBottom:12 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
+                  <div>
+                    <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:2 }}>최근 7경기 폼</div>
+                    <div style={{ fontSize:11, color:'var(--text4)' }}>평균 {(extra.form.reduce((a,b)=>a+b,0)/extra.form.length).toFixed(1)} / 10</div>
+                  </div>
+                  <div style={{ ...NUM, fontSize:26, fontWeight:800, color:'var(--acc)' }}>{extra.form[extra.form.length-1].toFixed(1)}</div>
+                </div>
+                <FormBar vals={extra.form}/>
+              </div>
+              <div style={{ background:'var(--surface)', borderRadius:16, padding:'16px', border:'0.5px solid var(--border)', marginBottom:12 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:14 }}>최근 경기 결과</div>
+                {extra.recentMatches.map((m, i) => (
+                  <div key={i} style={{ display:'flex', alignItems:'center', gap:10, marginBottom: i < extra.recentMatches.length-1 ? 12 : 0, paddingBottom: i < extra.recentMatches.length-1 ? 12 : 0, borderBottom: i < extra.recentMatches.length-1 ? '0.5px solid var(--border2)' : 'none' }}>
+                    <div style={{ width:30, height:30, borderRadius:8, background: m.result==='W'?'rgba(44,201,109,0.12)':m.result==='D'?'rgba(255,193,7,0.12)':'rgba(230,48,48,0.12)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                      <span style={{ fontSize:12, fontWeight:800, color:resultColor[m.result] }}>{resultLabel[m.result]}</span>
+                    </div>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:13, fontWeight:600, color:'var(--text)', marginBottom:1 }}>vs {m.opp}</div>
+                      <div style={{ fontSize:11, color:'var(--text4)' }}>{m.date} · {m.score}</div>
+                    </div>
+                    <span style={{ fontSize:14 }}>{m.contrib}</span>
+                  </div>
+                ))}
+              </div>
+              <CareerTimeline extra={extra}/>
+            </>
+          )}
+          {player.sport !== '축구' && (
+            <div style={{ background:'var(--surface)', borderRadius:14, padding:'14px 16px', border:'0.5px solid var(--border)', marginBottom:12 }}>
+              <div style={{ fontSize:11, color:'var(--text4)', fontWeight:700, letterSpacing:1, textTransform:'uppercase', marginBottom:12 }}>프로필</div>
+              {[['생년월일', player.birth],['나이', `${player.age}세`],['포지션', player.position],['신장', player.height],['클럽', player.team],['리그', player.league]].map(([k,v]) => (
+                <div key={k} style={{ display:'flex', justifyContent:'space-between', paddingBottom:8, marginBottom:8, borderBottom:'0.5px solid var(--border2)' }}>
+                  <span style={{ fontSize:13, color:'var(--text3)' }}>{k}</span>
+                  <span style={{ fontSize:13, fontWeight:600, color:'var(--text)' }}>{v}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Stats tab */}
+      {tab === 'stats' && (
+        <div style={{ padding:'16px' }}>
+          {player.sport === '축구' && extra.seasonStats && (
+            <div style={{ background:'var(--surface)', borderRadius:16, padding:'16px', border:'0.5px solid var(--border)' }}>
+              <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:14 }}>2024/25 시즌 스탯</div>
+              {extra.seasonStats.map(([label, val, max]) => (
+                <RadarStat key={label} label={label} val={val} max={max}/>
+              ))}
+            </div>
+          )}
+          {player.sport !== '축구' && (
+            <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text5)', fontSize:14 }}>시즌 상세 스탯 준비 중</div>
+          )}
+        </div>
+      )}
+
+      {/* Info tab */}
+      {tab === 'info' && (
+        <div style={{ padding:'16px' }}>
+          <div style={{ background:'var(--surface)', borderRadius:14, padding:'14px 16px', border:'0.5px solid var(--border)' }}>
+            <div style={{ fontSize:11, color:'var(--text4)', fontWeight:700, letterSpacing:1, textTransform:'uppercase', marginBottom:12 }}>프로필</div>
+            {[['생년월일', player.birth],['나이', `${player.age}세`],['포지션', player.position],['신장', player.height],['클럽', player.team],['리그', player.league]].map(([k,v]) => (
+              <div key={k} style={{ display:'flex', justifyContent:'space-between', paddingBottom:8, marginBottom:8, borderBottom:'0.5px solid var(--border2)' }}>
+                <span style={{ fontSize:13, color:'var(--text3)' }}>{k}</span>
+                <span style={{ fontSize:13, fontWeight:600, color:'var(--text)' }}>{v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{ height:24 }}/>
+    </div>
+  );
+}
+
+// ─── SCREEN: SCHEDULE ─────────────────────────────────────────
+function ScheduleScreen({ onMatch }) {
+  const days = ['일','월','화','수','목','금','토'];
+  const today = 19;
+  const [selDay, setSelDay] = React.useState(today);
+  const dates = Array.from({length:14}, (_,i) => today - 2 + i);
+
+  return (
+    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+      <div style={{ padding:'16px 20px 8px', fontSize:22, fontWeight:700, color:'var(--text)', letterSpacing:-0.5 }}>일정</div>
+      {/* Date strip */}
+      <div style={{ display:'flex', gap:6, padding:'8px 16px 12px', overflowX:'auto' }} className="scrollbar-hide">
+        {dates.map(d => {
+          const dayIdx = (d % 7 + 7) % 7;
+          const isSel = d === selDay;
+          const isToday = d === today;
+          return (
+            <div key={d} onClick={() => setSelDay(d)} style={{ flexShrink:0, width:44, height:60, borderRadius:12, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:2, cursor:'pointer', background: isSel ? 'var(--acc)' : isToday ? 'rgba(230,48,48,0.12)' : 'var(--border2)', border: isToday && !isSel ? '0.5px solid rgba(230,48,48,0.3)' : '0.5px solid transparent' }}>
+              <span style={{ fontSize:10, color: isSel ? 'var(--text-70)' : 'var(--text4)', fontWeight:600 }}>{days[dayIdx]}</span>
+              <span style={{ ...NUM, fontSize:18, fontWeight:800, color: isSel ? '#fff' : isToday ? 'var(--acc)' : 'var(--text-70)' }}>{d}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Match list */}
+      <div style={{ padding:'0 16px' }}>
+        {MATCHES.map(m => (
+          <div key={m.id} onClick={() => onMatch(m)} style={{ marginBottom:10, background:'var(--surface)', borderRadius:14, padding:'14px 16px', cursor:'pointer', border: m.live ? '0.5px solid rgba(230,48,48,0.25)' : '0.5px solid var(--border2)', display:'flex', alignItems:'center', gap:12 }}>
+            <div style={{ width:50, flexShrink:0, textAlign:'center' }}>
+              {m.live ? (
+                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
+                  <LiveDot/>
+                  <span style={{ ...NUM, fontSize:12, fontWeight:700, color:'var(--acc)' }}>{m.minute}'</span>
+                </div>
+              ) : (
+                <>
+                  <div style={{ ...NUM, fontSize:14, fontWeight:700, color:'var(--text-60)', lineHeight:1 }}>{m.time||'예정'}</div>
+                  <div style={{ fontSize:9, color:'var(--text5)', marginTop:2 }}>KST</div>
+                </>
+              )}
+            </div>
+            <div style={{ width:0.5, height:36, background:'var(--border)' }}/>
+            <div style={{ flex:1 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+                <TeamBadge code={m.home.code} size={24}/>
+                <span style={{ fontSize:13, fontWeight:600, color:'var(--text)' }}>{m.home.name}</span>
+                {m.live && <span style={{ ...NUM, fontSize:18, fontWeight:800, color:'var(--text)', letterSpacing:-1, marginLeft:'auto', marginRight:'auto' }}>{m.home.score}:{m.away.score}</span>}
+                {!m.live && <span style={{ fontSize:12, color:'var(--text4)', marginLeft:'auto', marginRight:'auto' }}>vs</span>}
+                <span style={{ fontSize:13, fontWeight:600, color:'var(--text2)', textAlign:'right' }}>{m.away.name}</span>
+                <TeamBadge code={m.away.code} size={24}/>
+              </div>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <span style={{ fontSize:11, color:'var(--text4)' }}>{m.sport} · {m.competition}</span>
+                <span style={{ fontSize:11, color:'var(--acc)', fontWeight:600 }}>🇰🇷 {m.koreanPlayer.name}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ height:24 }}/>
+    </div>
+  );
+}
+
+// ─── SCREEN: PLAYERS LIST ────────────────────────────────────
+function PlayersScreen({ onPlayer, onAdd, followed }) {
+  const sports = ['전체', '축구', '야구', '배드민턴'];
+  const [filter, setFilter] = React.useState('전체');
+  const followedPlayers = ALL_PLAYERS.filter(p => followed.has(p.id));
+  const filtered = filter === '전체' ? followedPlayers
+    : followedPlayers.filter(p => p.sport === filter);
+
+  return (
+    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+      <div style={{ padding:'16px 20px 8px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <div style={{ fontSize:22, fontWeight:700, color:'var(--text)', letterSpacing:-0.5 }}>선수</div>
+        <button onClick={onAdd} style={{ display:'flex', alignItems:'center', gap:6, background:'var(--acc)', border:'none', borderRadius:20, padding:'8px 16px', color:'var(--text)', fontSize:13, fontWeight:700, cursor:'pointer' }}>
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="#fff" strokeWidth="2" strokeLinecap="round"/></svg>
+          선수 추가
+        </button>
+      </div>
+      <div style={{ display:'flex', gap:8, padding:'0 16px 14px', overflowX:'auto' }} className="scrollbar-hide">
+        {sports.map(s => (
+          <button key={s} onClick={() => setFilter(s)} style={{ flexShrink:0, background: filter===s ? 'var(--acc)' : 'var(--border)', border:'none', borderRadius:20, padding:'7px 16px', color: filter===s ? '#fff' : 'var(--text2)', fontSize:13, fontWeight:600, cursor:'pointer' }}>{s}</button>
+        ))}
+      </div>
+      <div style={{ padding:'0 16px', display:'flex', flexDirection:'column', gap:10 }}>
+        {filtered.map(p => (
+          <div key={p.id} onClick={() => onPlayer(p)} style={{ background:'var(--surface)', borderRadius:16, overflow:'hidden', cursor:'pointer', border:'0.5px solid var(--border2)', display:'flex', alignItems:'stretch' }}>
+            <div style={{ width:90, height:100, flexShrink:0, background:'var(--card)', position:'relative', overflow:'hidden' }}>
+              <PlayerPhoto player={p} style={{ position:'absolute', inset:0 }} tint="var(--surface)"/>
+            </div>
+            <div style={{ flex:1, padding:'14px 16px', display:'flex', flexDirection:'column', justifyContent:'center' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+                <span style={{ fontSize:16, fontWeight:800, color:'var(--text)', letterSpacing:-0.3 }}>{p.name}</span>
+                <span style={{ fontSize:11, color:'var(--text4)', fontWeight:500 }}>{p.nameEn}</span>
+              </div>
+              <div style={{ fontSize:12, color:'var(--text3)', marginBottom:8 }}>{p.team} · {p.position}</div>
+              <div style={{ display:'flex', gap:16 }}>
+                {p.sport === '축구' && <>
+                  <div style={{ textAlign:'center' }}><div style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text)' }}>{p.goals}</div><div style={{ fontSize:10, color:'var(--text4)' }}>골</div></div>
+                  <div style={{ textAlign:'center' }}><div style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text-60)' }}>{p.assists}</div><div style={{ fontSize:10, color:'var(--text4)' }}>어시스트</div></div>
+                </>}
+                <div style={{ textAlign:'center' }}><div style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text-60)' }}>{p.matches}</div><div style={{ fontSize:10, color:'var(--text4)' }}>경기</div></div>
+                {p.rating > 0 && <div style={{ textAlign:'center' }}><div style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--acc)' }}>{p.rating.toFixed(1)}</div><div style={{ fontSize:10, color:'var(--text4)' }}>평점</div></div>}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ height:24 }}/>
+    </div>
+  );
+}
+
+// ─── SCREEN: NOTIFICATIONS ───────────────────────────────────
+function NotifScreen() {
+  const notifs = [
+    { id:1, time:'방금', icon:'⚽', title:'손흥민 골!', body:'Tottenham 1–1 Man City · 71\'', live:true },
+    { id:2, time:'38분 전', icon:'🅰️', title:'이강인 어시스트', body:'PSG 2–0 Lyon · 38\'', live:true },
+    { id:3, time:'1시간 전', icon:'🔔', title:'경기 시작 30분 전', body:'Dodgers vs Blue Jays · 류현진 선발', live:false },
+    { id:4, time:'어제', icon:'🏆', title:'T1 승리', body:'T1 2–0 Gen.G · LCK CL 스프링', live:false },
+    { id:5, time:'어제', icon:'🟨', title:'김민재 경고', body:'Bayern vs Wolfsburg · 62\'', live:false },
+  ];
+  return (
+    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+      <div style={{ padding:'16px 20px 8px', fontSize:22, fontWeight:700, color:'var(--text)', letterSpacing:-0.5 }}>알림</div>
+      <div style={{ padding:'0 16px', display:'flex', flexDirection:'column', gap:8 }}>
+        {notifs.map(n => (
+          <div key={n.id} style={{ background:'var(--surface)', borderRadius:14, padding:'14px 16px', border: n.live ? '0.5px solid rgba(230,48,48,0.25)' : '0.5px solid var(--border2)', display:'flex', alignItems:'flex-start', gap:12 }}>
+            <div style={{ width:40, height:40, borderRadius:12, background: n.live ? 'rgba(230,48,48,0.15)' : 'var(--border)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>{n.icon}</div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8, marginBottom:3 }}>
+                <span style={{ fontSize:14, fontWeight:700, color:'var(--text)' }}>{n.title}</span>
+                <span style={{ fontSize:11, color:'var(--text4)', flexShrink:0 }}>{n.time}</span>
+              </div>
+              <div style={{ fontSize:12, color:'var(--text3)', lineHeight:1.4 }}>{n.body}</div>
+              {n.live && <div style={{ display:'flex', alignItems:'center', gap:5, marginTop:6 }}><LiveDot/><span style={{ fontSize:11, fontWeight:700, color:'var(--acc)' }}>진행 중</span></div>}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ height:24 }}/>
+    </div>
+  );
+}
+
+// ─── SCREEN: ADD PLAYER ───────────────────────────────────────
+function AddPlayerScreen({ followed, onToggle, onBack }) {
+  const sports = ['전체','⚽ 축구','⚾ 야구','🏸 배드민턴'];
+  const sportMap = { '전체': null, '⚽ 축구':'축구', '⚾ 야구':'야구', '🏸 배드민턴':'배드민턴' };
+  const [filter, setFilter] = React.useState('전체');
+  const [query, setQuery] = React.useState('');
+
+  const filtered = ALL_PLAYERS.filter(p => {
+    const sportMatch = filter === '전체' ? true : p.sport === sportMap[filter];
+    const q = query.trim().toLowerCase();
+    const textMatch = !q || p.name.includes(q) || p.nameEn.toLowerCase().includes(q) || p.team.toLowerCase().includes(q);
+    return sportMatch && textMatch;
+  });
+
+  const sportIcon = { '축구':'⚽', '야구':'⚾', '배드민턴':'🏸' };
+
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', background:'var(--bg)', overflow:'hidden' }}>
+      <div style={{ padding:'12px 20px 0', flexShrink:0 }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+          <BackBtn onBack={onBack}/>
+          <button onClick={onBack} style={{ background:'var(--acc)', border:'none', borderRadius:20, padding:'8px 18px', color:'var(--text)', fontSize:13, fontWeight:700, cursor:'pointer' }}>
+            완료 {followed.size > 0 && `(${followed.size})`}
+          </button>
+        </div>
+        <div style={{ fontSize:22, fontWeight:800, color:'var(--text)', letterSpacing:-0.5, marginBottom:14 }}>선수 추가</div>
+        <div style={{ position:'relative', marginBottom:12 }}>
+          <div style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', pointerEvents:'none' }}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="var(--text4)" strokeWidth="1.6"/><path d="M10.5 10.5L14 14" stroke="var(--text4)" strokeWidth="1.6" strokeLinecap="round"/></svg>
+          </div>
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="선수 이름, 팀 검색..." style={{ width:'100%', background:'var(--card)', border:'0.5px solid var(--border)', borderRadius:12, padding:'11px 14px 11px 36px', fontSize:14, color:'var(--text)', outline:'none', boxSizing:'border-box', fontFamily:"'Noto Sans KR', sans-serif" }}/>
+          {query && <button onClick={() => setQuery('')} style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', background:'var(--text6)', border:'none', borderRadius:'50%', width:20, height:20, cursor:'pointer', color:'var(--text-60)', fontSize:11, display:'flex', alignItems:'center', justifyContent:'center', padding:0 }}>✕</button>}
+        </div>
+        <div style={{ display:'flex', gap:8, overflowX:'auto', paddingBottom:12 }} className="scrollbar-hide">
+          {sports.map(s => (
+            <button key={s} onClick={() => setFilter(s)} style={{ flexShrink:0, background: filter===s ? 'var(--acc)' : 'var(--border)', border:'none', borderRadius:20, padding:'7px 14px', color: filter===s ? '#fff' : 'var(--text2)', fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap', transition:'all 0.15s' }}>{s}</button>
+          ))}
+        </div>
+      </div>
+      <div style={{ padding:'0 20px 8px', flexShrink:0 }}>
+        <span style={{ fontSize:11, color:'var(--text4)', fontWeight:600 }}>{filtered.length}명의 선수</span>
+      </div>
+      <div style={{ flex:1, overflow:'auto', padding:'0 16px' }} className="scrollbar-hide">
+        {filtered.map(p => {
+          const isFollowed = followed.has(p.id);
+          return (
+            <div key={p.id} onClick={() => onToggle(p.id)} style={{ display:'flex', alignItems:'center', gap:12, marginBottom:8, background: isFollowed ? 'rgba(230,48,48,0.08)' : 'var(--surface)', borderRadius:16, padding:'10px 14px 10px 10px', cursor:'pointer', border: isFollowed ? '0.5px solid rgba(230,48,48,0.3)' : '0.5px solid var(--border2)', transition:'all 0.15s' }}>
+              <div style={{ width:56, height:68, borderRadius:12, overflow:'hidden', background:'var(--card)', flexShrink:0, position:'relative' }}>
+                <PlayerPhoto player={p} style={{ position:'absolute', inset:0 }} tint="var(--surface)"/>
+              </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:2 }}>
+                  <span style={{ fontSize:15, fontWeight:800, color:'var(--text)' }}>{p.name}</span>
+                  <span style={{ fontSize:10, color:'var(--text4)', fontWeight:500 }}>{p.nameEn}</span>
+                </div>
+                <div style={{ fontSize:12, color:'var(--text3)', marginBottom:5 }}>{p.team} · {p.position}</div>
+                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                  <span style={{ fontSize:11, background:'var(--border)', borderRadius:6, padding:'2px 7px', color:'var(--text2)', fontWeight:600 }}>{sportIcon[p.sport]||''} {p.sport}</span>
+                  <span style={{ fontSize:11, color:'var(--text4)' }}>{p.league}</span>
+                  {p.rating > 0 && <span style={{ fontSize:11, color:'var(--acc)', fontWeight:700, marginLeft:'auto' }}>★ {p.rating.toFixed(1)}</span>}
+                </div>
+              </div>
+              <div style={{ flexShrink:0, width:34, height:34, borderRadius:'50%', background: isFollowed ? 'var(--acc)' : 'var(--border)', display:'flex', alignItems:'center', justifyContent:'center', transition:'all 0.15s', border: isFollowed ? 'none' : '0.5px solid var(--text6)' }}>
+                {isFollowed
+                  ? <svg width="14" height="11" viewBox="0 0 14 11" fill="none"><path d="M1 5.5L5 9.5L13 1.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  : <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="var(--text-60)" strokeWidth="1.8" strokeLinecap="round"/></svg>
+                }
+              </div>
+            </div>
+          );
+        })}
+        <div style={{ height:24 }}/>
+      </div>
+    </div>
+  );
+}
+
+// ─── MORE: NOTIFICATION SETTINGS ─────────────────────────────
+function NotifSettingsScreen({ onBack }) {
+  const [s, setS] = React.useState({ matchStart:true, goal:true, assist:true, result:true, highlight:false, lineup:false, injury:true });
+  const toggle = k => setS(p => ({ ...p, [k]: !p[k] }));
+  const Toggle = ({ k }) => (
+    <button onClick={e => { e.stopPropagation(); toggle(k); }} style={{ width:44, height:26, borderRadius:13, background: s[k] ? 'var(--acc)' : 'var(--btn-bg)', border:'none', cursor:'pointer', position:'relative', transition:'background 0.2s', flexShrink:0 }}>
+      <div style={{ position:'absolute', top:3, left: s[k] ? 21 : 3, width:20, height:20, borderRadius:'50%', background:'#fff', transition:'left 0.2s', boxShadow:'0 1px 3px rgba(0,0,0,0.3)' }}/>
+    </button>
+  );
+  const rows = [
+    { k:'matchStart', label:'경기 시작 알림', sub:'경기 시작 30분 전 알림' },
+    { k:'goal', label:'골 알림', sub:'한국 선수 득점 시 즉시' },
+    { k:'assist', label:'어시스트 알림', sub:'한국 선수 도움 시 즉시' },
+    { k:'result', label:'경기 결과', sub:'경기 종료 후 최종 결과' },
+    { k:'highlight', label:'하이라이트 영상', sub:'경기 후 주요 장면 영상' },
+    { k:'lineup', label:'선발 라인업', sub:'경기 시작 1시간 전' },
+    { k:'injury', label:'부상/출장 정보', sub:'선수 컨디션 업데이트' },
+  ];
+  return (
+    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+      <div style={{ padding:'12px 20px 20px' }}>
+        <BackBtn onBack={onBack}/>
+        <div style={{ fontSize:22, fontWeight:800, color:'var(--text)', letterSpacing:-0.5, marginTop:14, marginBottom:6 }}>알림 설정</div>
+        <div style={{ fontSize:13, color:'var(--text4)', marginBottom:20 }}>팔로우 중인 선수 경기만 알림이 옵니다</div>
+        <div style={{ background:'var(--surface)', borderRadius:16, overflow:'hidden', border:'0.5px solid var(--border)' }}>
+          {rows.map((r, i) => (
+            <div key={r.k} onClick={() => toggle(r.k)} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 16px', borderBottom: i < rows.length-1 ? '0.5px solid var(--border2)' : 'none', cursor:'pointer' }}>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:14, fontWeight:600, color:'var(--text)', marginBottom:2 }}>{r.label}</div>
+                <div style={{ fontSize:12, color:'var(--text4)' }}>{r.sub}</div>
+              </div>
+              <Toggle k={r.k}/>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize:11, color:'var(--text5)', marginTop:12, lineHeight:1.6, padding:'0 4px' }}>기기 설정에서 Jumo 알림을 허용해야 알림을 받을 수 있습니다.</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── MORE: SPORT FEED SETTINGS ───────────────────────────────
+function SportFeedScreen({ onBack }) {
+  const init = [
+    { id:'soccer',    icon:'⚽', name:'축구',      sub:'EPL, 분데스리가, 리그앙', on:true },
+    { id:'baseball',  icon:'⚾', name:'야구',      sub:'MLB, KBO, NPB',          on:true },
+    { id:'badminton', icon:'🏸', name:'배드민턴',   sub:'BWF 월드투어',             on:true },
+  ];
+  const [sports, setSports] = React.useState(init);
+  const toggle = id => setSports(p => p.map(s => s.id === id ? {...s, on:!s.on} : s));
+  return (
+    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+      <div style={{ padding:'12px 20px 20px' }}>
+        <BackBtn onBack={onBack}/>
+        <div style={{ fontSize:22, fontWeight:800, color:'var(--text)', letterSpacing:-0.5, marginTop:14, marginBottom:6 }}>종목별 피드</div>
+        <div style={{ fontSize:13, color:'var(--text4)', marginBottom:20 }}>홈 피드에 표시할 종목을 선택하세요</div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+          {sports.map(s => (
+            <div key={s.id} onClick={() => toggle(s.id)} style={{ background: s.on ? 'rgba(230,48,48,0.1)' : 'var(--surface)', border: s.on ? '0.5px solid rgba(230,48,48,0.35)' : '0.5px solid var(--border)', borderRadius:16, padding:'14px', cursor:'pointer', transition:'all 0.15s', position:'relative' }}>
+              {s.on && <div style={{ position:'absolute', top:10, right:10, width:18, height:18, borderRadius:'50%', background:'var(--acc)', display:'flex', alignItems:'center', justifyContent:'center' }}><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg></div>}
+              <div style={{ fontSize:26, marginBottom:8 }}>{s.icon}</div>
+              <div style={{ fontSize:14, fontWeight:700, color:'var(--text)', marginBottom:3 }}>{s.name}</div>
+              <div style={{ fontSize:11, color:'var(--text4)', lineHeight:1.4 }}>{s.sub}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ height:24 }}/>
+      </div>
+    </div>
+  );
+}
+
+// ─── MORE: STREAMING LINKS ────────────────────────────────────
+function StreamingScreen({ onBack }) {
+  const channels = [
+    { name:'SPOTV',        sub:'EPL, 챔피언스리그, MLB', sports:['⚽','⚾'], color:'#c0392b', badge:'유료' },
+    { name:'SPOTV NOW',    sub:'온라인 스트리밍 서비스',  sports:['⚽','⚾','🏀'], color:'#c0392b', badge:'구독' },
+    { name:'Coupang Play', sub:'EPL 독점 중계',          sports:['⚽'], color:'#e04e2a', badge:'구독' },
+    { name:'TVING',        sub:'분데스리가, 리그앙',       sports:['⚽'], color:'#ff153c', badge:'구독' },
+    { name:'KBS',          sub:'올림픽, 국제대회 무료',    sports:['🏅','🏹','🏊'], color:'#1a5276', badge:'무료' },
+    { name:'MBC Sports+',  sub:'KBO 리그 중계',          sports:['⚾'], color:'#2c5282', badge:'케이블' },
+    { name:'SBS Sports',   sub:'KBO, 국제대회',          sports:['⚾','🏅'], color:'#1a365d', badge:'케이블' },
+    { name:'AfreecaTV',    sub:'e스포츠 무료 중계',       sports:['🎮'], color:'#1f6feb', badge:'무료' },
+    { name:'YouTube',      sub:'LCK 공식 채널',          sports:['🎮'], color:'#c00', badge:'무료' },
+  ];
+  const badgeBg  = { '무료':'rgba(44,196,93,0.15)',   '구독':'rgba(230,48,48,0.15)', '유료':'rgba(230,48,48,0.15)', '케이블':'var(--border)' };
+  const badgeFg  = { '무료':'#2cc96d', '구독':'var(--acc)', '유료':'var(--acc)', '케이블':'var(--text3)' };
+  return (
+    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+      <div style={{ padding:'12px 20px 20px' }}>
+        <BackBtn onBack={onBack}/>
+        <div style={{ fontSize:22, fontWeight:800, color:'var(--text)', letterSpacing:-0.5, marginTop:14, marginBottom:6 }}>스트리밍 링크</div>
+        <div style={{ fontSize:13, color:'var(--text4)', marginBottom:20 }}>한국 선수 경기를 볼 수 있는 채널</div>
+        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          {channels.map(ch => (
+            <div key={ch.name} style={{ background:'var(--surface)', borderRadius:14, padding:'13px 16px', border:'0.5px solid var(--border)', display:'flex', alignItems:'center', gap:12, cursor:'pointer' }}>
+              <div style={{ width:44, height:44, borderRadius:12, background:ch.color, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                <span style={{ fontSize:10, fontWeight:800, color:'var(--text)', letterSpacing:-0.3, textAlign:'center', padding:'0 3px' }}>{ch.name.split(' ')[0]}</span>
+              </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:3 }}>
+                  <span style={{ fontSize:14, fontWeight:700, color:'var(--text)' }}>{ch.name}</span>
+                  <span style={{ fontSize:10, fontWeight:700, color:badgeFg[ch.badge], background:badgeBg[ch.badge], borderRadius:6, padding:'2px 7px' }}>{ch.badge}</span>
+                </div>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                  <span style={{ fontSize:12, color:'var(--text3)' }}>{ch.sub}</span>
+                  <span style={{ fontSize:13, letterSpacing:1 }}>{ch.sports.join(' ')}</span>
+                </div>
+              </div>
+              <svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M1 1l5 5-5 5" stroke="var(--text6)" strokeWidth="1.8" strokeLinecap="round"/></svg>
+            </div>
+          ))}
+        </div>
+        <div style={{ height:24 }}/>
+      </div>
+    </div>
+  );
+}
+
+// ─── SCREEN: MORE (main) ─────────────────────────────────────
+function MoreScreen({ darkMode, onToggleDark }) {
+  const [sub, setSub] = React.useState(null);
+  if (sub === 'notif')      return <NotifSettingsScreen onBack={() => setSub(null)}/>;
+  if (sub === 'sports')     return <SportFeedScreen onBack={() => setSub(null)}/>;
+  if (sub === 'streaming')  return <StreamingScreen onBack={() => setSub(null)}/>;
+
+  const groups = [
+    { label:'개인화', items:[
+      { id:'sports',    icon:'🏆', color:'#e03030', title:'종목별 피드',   sub:'관심 종목 선택',         chevron:true },
+      { id:'notif',     icon:'🔔', color:'#ff9500', title:'알림 설정',     sub:'경기 시작, 이벤트 알림', chevron:true },
+      { id:'streaming', icon:'📡', color:'#1a8fe3', title:'스트리밍 링크', sub:'중계 채널 연결',         chevron:true },
+    ]},
+    { label:'일반', items:[
+      { id:'time', icon:'⏱', color:'#34c759', title:'한국 시간 자동변환', sub:'항상 KST로 표시', toggle:true, val:true },
+      { id:'dark', icon:'🌙', color:'#5856d6', title:'다크 모드', sub: darkMode ? '켜짐' : '꺼짐', toggle:true, val:darkMode, onToggle: onToggleDark },
+    ]},
+    { label:'앱 정보', items:[
+      { id:'version',  icon:'ℹ️', color:'#48484a', title:'버전 정보',     sub:'Jumo v1.0.0' },
+      { id:'feedback', icon:'💬', color:'#48484a', title:'피드백 보내기', sub:'개선 사항을 알려주세요', chevron:true },
+    ]},
+  ];
+
+  return (
+    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+      {/* Profile card */}
+      <div style={{ margin:'16px 16px 12px', background:'var(--surface)', borderRadius:18, padding:'18px', border:'0.5px solid var(--border)', display:'flex', alignItems:'center', gap:14 }}>
+        <div style={{ width:52, height:52, borderRadius:'50%', background:'linear-gradient(135deg,#e03030,#8b0000)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+          <span style={{ fontSize:24 }}>🇰🇷</span>
+        </div>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:16, fontWeight:800, color:'var(--text)', marginBottom:2 }}>한국 스포츠 팬</div>
+          <div style={{ fontSize:12, color:'var(--text3)' }}>5명 팔로우 중 · 2경기 진행 중</div>
+        </div>
+        <button style={{ background:'var(--border)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:10, padding:'7px 12px', color:'var(--text-60)', fontSize:12, fontWeight:600, cursor:'pointer' }}>편집</button>
+      </div>
+
+      {groups.map(g => (
+        <div key={g.label} style={{ marginBottom:20 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:'var(--text4)', letterSpacing:1.5, textTransform:'uppercase', padding:'0 20px', marginBottom:8 }}>{g.label}</div>
+          <div style={{ margin:'0 16px', background:'var(--surface)', borderRadius:16, overflow:'hidden', border:'0.5px solid var(--border)' }}>
+            {g.items.map((item, i) => (
+              <div key={item.id} onClick={() => { if (item.onToggle) item.onToggle(); else if (item.chevron) setSub(item.id); }} style={{ display:'flex', alignItems:'center', gap:12, padding:'13px 16px', borderBottom: i < g.items.length-1 ? '0.5px solid var(--border2)' : 'none', cursor:'pointer' }}>
+                <div style={{ width:32, height:32, borderRadius:8, background:item.color, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>{item.icon}</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:14, fontWeight:600, color:'var(--text)', marginBottom:1 }}>{item.title}</div>
+                  <div style={{ fontSize:11, color:'var(--text4)' }}>{item.sub}</div>
+                </div>
+                {item.toggle && <div style={{ width:44, height:26, borderRadius:13, background: item.val ? 'var(--acc)' : 'var(--btn-bg)', position:'relative', flexShrink:0, transition:'background 0.2s' }}><div style={{ position:'absolute', top:3, left: item.val ? 21 : 3, width:20, height:20, borderRadius:'50%', background:'#fff', transition:'left 0.2s', boxShadow:'0 1px 3px rgba(0,0,0,0.3)' }}/></div>}
+                {item.chevron && <svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M1 1l5 5-5 5" stroke="var(--text5)" strokeWidth="1.8" strokeLinecap="round"/></svg>}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      <div style={{ height:24 }}/>
+    </div>
+  );
+}
+
+// ─── MAIN APP ────────────────────────────────────────────────
+function App() {
+  const [tweaks, setTweaks] = React.useState(() => {
+    try { return { ...TWEAK_DEFAULTS, ...JSON.parse(localStorage.getItem('jumo_tweaks')||'{}') }; }
+    catch { return TWEAK_DEFAULTS; }
+  });
+  const [tab, setTab] = React.useState(() => localStorage.getItem('jumo_tab')||'home');
+  const [screen, setScreen] = React.useState('main');
+  const [selectedMatch, setSelectedMatch] = React.useState(null);
+  const [selectedPlayer, setSelectedPlayer] = React.useState(null);
+  const [followed, setFollowed] = React.useState(() => new Set([1,2,3,6,7,8,9,17,18,15]));
+  const toggleFollow = (id) => setFollowed(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const [darkMode, setDarkMode] = React.useState(true);
+  const toggleDark = () => setDarkMode(d => !d);
+  const [liveMatches, setLiveMatches] = React.useState([]);
+  const [apiLoading, setApiLoading] = React.useState(true); // Start with true for initial load
+  const [isInitialLoad, setIsInitialLoad] = React.useState(true);
+
+  // Fetch live matches from ESPN API
+  React.useEffect(() => {
+    const fetchLiveMatches = async () => {
+      setApiLoading(true);
+      try {
+        const allMatches = [];
+
+        // Fetch soccer leagues
+        for (const [league, url] of Object.entries(ESPN_API.soccer)) {
+          try {
+            const res = await fetch(url);
+            const data = await res.json();
+            if (data.events) {
+              const matches = data.events.map(e => transformESPNEvent(e, 'soccer', league));
+              allMatches.push(...matches);
+              console.log(`📡 ${league.toUpperCase()}: ${data.events.length} matches fetched`);
+            }
+          } catch (err) {
+            console.error(`❌ Failed to fetch ${league}:`, err);
+          }
+        }
+
+        // Fetch MLB
+        const mlbRes = await fetch(ESPN_API.mlb);
+        const mlbData = await mlbRes.json();
+        if (mlbData.events) {
+          const matches = mlbData.events.map(e => transformESPNEvent(e, 'mlb'));
+          allMatches.push(...matches);
+        }
+
+        // Filter for Korean players
+        const koreanMatches = allMatches.filter(m => m.koreanPlayer);
+        setLiveMatches(koreanMatches);
+
+        // Log detailed info
+        console.log('✅ API Updated:', new Date().toLocaleTimeString('ko-KR'));
+        console.log('📊 Total matches:', allMatches.length);
+        console.log('🇰🇷 Korean player matches:', koreanMatches.length);
+        koreanMatches.forEach(m => {
+          const status = m.live ? '🔴 LIVE' : '⏰ Upcoming';
+          console.log(`  ${status} ${m.koreanPlayer.name} - ${m.home.code} vs ${m.away.code} (${m.lineupConfirmed ? '✓ 라인업 확정' : '⏳ 라인업 미정'})`);
+        });
+      } catch (error) {
+        console.error('❌ Failed to fetch matches:', error);
+      } finally {
+        setApiLoading(false);
+        setIsInitialLoad(false);
+      }
+    };
+
+    fetchLiveMatches();
+    // Refresh every 60 seconds for live matches, 5 minutes for upcoming
+    const interval = setInterval(fetchLiveMatches, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const transformESPNEvent = (event, sport, league = '') => {
+    const comp = event.competitions[0];
+    const home = comp.competitors.find(c => c.homeAway === 'home') || comp.competitors[0];
+    const away = comp.competitors.find(c => c.homeAway === 'away') || comp.competitors[1];
+    const status = event.status.type.name;
+    // Check multiple live status codes
+    const isLive = status === 'STATUS_IN_PROGRESS' ||
+                   status === 'STATUS_FIRST_HALF' ||
+                   status === 'STATUS_SECOND_HALF' ||
+                   status === 'STATUS_HALFTIME' ||
+                   status === 'STATUS_EXTRA_TIME' ||
+                   status === 'STATUS_OVERTIME';
+
+    // Check for Korean players
+    let koreanPlayer = null;
+    let lineupConfirmed = false;
+    let events = [];
+    const homeTeam = home.team.displayName;
+    const awayTeam = away.team.displayName;
+    const homeAbbr = home.team.abbreviation;
+    const awayAbbr = away.team.abbreviation;
+
+    // Try multiple variations to match Korean players
+    const homeVariations = [homeTeam, homeAbbr, home.team.name, home.team.shortDisplayName].filter(Boolean);
+    const awayVariations = [awayTeam, awayAbbr, away.team.name, away.team.shortDisplayName].filter(Boolean);
+
+    // Debug: Log team names for Turkish league
+    if (league === 'tur' && isLive) {
+      console.log(`🇹🇷 TUR Live Match: ${homeTeam} (${homeAbbr}) vs ${awayTeam} (${awayAbbr})`);
+      console.log(`   Home variations:`, homeVariations);
+      console.log(`   Away variations:`, awayVariations);
+      console.log(`   Status: ${status}`);
+    }
+
+    for (const variation of homeVariations) {
+      if (KOREAN_PLAYERS[variation]) {
+        koreanPlayer = { ...KOREAN_PLAYERS[variation], team: homeAbbr };
+        console.log(`✅ Korean player found (home): ${koreanPlayer.name} in ${variation}`);
+        break;
+      }
+    }
+
+    if (!koreanPlayer) {
+      for (const variation of awayVariations) {
+        if (KOREAN_PLAYERS[variation]) {
+          koreanPlayer = { ...KOREAN_PLAYERS[variation], team: awayAbbr };
+          console.log(`✅ Korean player found (away): ${koreanPlayer.name} in ${variation}`);
+          break;
+        }
+      }
+    }
+
+    // Check lineup confirmation (if lineup data exists, it's confirmed)
+    if (comp.situation?.lastPlay || comp.details || home.linescores) {
+      lineupConfirmed = true;
+    }
+
+    // Extract events (goals, cards, etc.) from the match
+    if (comp.details) {
+      const details = comp.details;
+      if (details.redCards) {
+        details.redCards.forEach(card => {
+          events.push({ type: 'red', player: card.athlete?.displayName, min: card.clock?.displayValue, team: card.team?.abbreviation });
+        });
+      }
+      if (details.yellowCards) {
+        details.yellowCards.forEach(card => {
+          events.push({ type: 'yellow', player: card.athlete?.displayName, min: card.clock?.displayValue, team: card.team?.abbreviation });
+        });
+      }
+    }
+
+    // Check for Korean player in match events (goals, assists)
+    if (koreanPlayer && comp.situation?.lastPlay) {
+      const lastPlay = comp.situation.lastPlay;
+      if (lastPlay.text && lastPlay.text.includes(koreanPlayer.name)) {
+        if (lastPlay.scoringPlay) {
+          events.push({ type: 'goal', player: koreanPlayer.name, min: lastPlay.clock?.displayValue, team: koreanPlayer.team });
+        }
+      }
+    }
+
+    // Format time for Korean timezone
+    let timeDisplay = '';
+    if (!isLive && event.date) {
+      const date = new Date(event.date);
+      const now = new Date();
+      const tomorrow = new Date(now);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(11, 59, 59, 999);
+
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+
+      // Check if it's today or tomorrow morning
+      if (date.toDateString() === now.toDateString()) {
+        // Today: show HH:MM only
+        timeDisplay = `${hours}:${minutes}`;
+      } else if (date <= tomorrow) {
+        // Tomorrow morning (before 11:59): show MM/DD
+        timeDisplay = `${month}/${day}`;
+      } else {
+        timeDisplay = `${month}/${day}`;
+      }
+    } else if (isLive) {
+      timeDisplay = 'LIVE';
+    }
+
+    // Determine Korean player event status
+    let playerEventText = '출전 예정';
+    if (isLive && koreanPlayer) {
+      playerEventText = '출전 중';
+    } else if (lineupConfirmed && koreanPlayer) {
+      playerEventText = '선발 출전';
+    }
+
+    // Get current minute for live matches
+    let minute = '';
+    if (isLive && event.status?.displayClock) {
+      minute = event.status.displayClock;
+    }
+
+    return {
+      id: event.id,
+      live: isLive,
+      minute,
+      sport: sport === 'mlb' ? '⚾ MLB' : `⚽ ${league.toUpperCase()}`,
+      home: { name: homeTeam, code: home.team.abbreviation, score: parseInt(home.score) || 0 },
+      away: { name: awayTeam, code: away.team.abbreviation, score: parseInt(away.score) || 0 },
+      koreanPlayer: koreanPlayer ? { ...koreanPlayer, event: playerEventText } : null,
+      competition: event.competitions[0].league?.name || '',
+      venue: event.competitions[0].venue?.fullName || '',
+      time: timeDisplay,
+      fullDate: event.date,
+      krTime: formatKRTime(event.date),
+      lineupConfirmed,
+      events,
+      stats: null,
+    };
+  };
+
+  React.useEffect(() => {
+    document.documentElement.classList.toggle('light-mode', !darkMode);
+  }, [darkMode]);
+  const [showTweaks, setShowTweaks] = React.useState(false);
+
+  const updateTweaks = (k, v) => {
+    const next = { ...tweaks, [k]: v };
+    setTweaks(next);
+    localStorage.setItem('jumo_tweaks', JSON.stringify(next));
+    window.parent.postMessage({ type: '__edit_mode_set_keys', edits: next }, '*');
+  };
+
+  React.useEffect(() => {
+    window.__jumoSetTweaks = setShowTweaks;
+  }, [setShowTweaks]);
+
+  const goMatch = (m) => { setSelectedMatch(m); setScreen('match'); };
+  const goPlayer = (p) => { setSelectedPlayer(p); setScreen('player'); };
+  const goAddPlayer = () => setScreen('addplayer');
+  const goBack = () => setScreen('main');
+
+  const handleTab = (t) => { setTab(t); setScreen('main'); localStorage.setItem('jumo_tab', t); };
+
+  const HomeComponent = [HomeV1, HomeV2, HomeV3][tweaks.homeVariant] || HomeV1;
+
+  const homeVariantNames = ['카드 스택', '에디토리얼', '컴팩트'];
+
+  return (
+    <div style={{ '--acc': tweaks.accentColor, fontFamily:"'Noto Sans KR', system-ui, sans-serif", WebkitFontSmoothing:'antialiased' }}>
+      <IOSDevice dark={darkMode} width={402} height={874}>
+        <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'var(--bg)', paddingTop:59 }}>
+          {screen === 'main' && (
+            <>
+              {tab === 'home' && <HomeComponent onMatch={goMatch} onPlayer={goPlayer} tweaks={tweaks} liveApiMatches={liveMatches} isLoading={isInitialLoad && apiLoading}/>}
+              {tab === 'schedule' && <ScheduleScreen onMatch={goMatch}/>}
+              {tab === 'players' && <PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} followed={followed}/>}
+              {tab === 'notif' && <NotifScreen/>}
+              {tab === 'more' && <MoreScreen darkMode={darkMode} onToggleDark={toggleDark}/>}
+            </>
+          )}
+          {screen === 'match' && selectedMatch && (
+            <LiveDetailScreen match={selectedMatch} onBack={goBack}/>
+          )}
+          {screen === 'player' && selectedPlayer && (
+            <PlayerScreen player={selectedPlayer} onBack={goBack} onMatch={goMatch}/>
+          )}
+          {screen === 'addplayer' && (
+            <AddPlayerScreen followed={followed} onToggle={toggleFollow} onBack={goBack}/>
+          )}
+          <TabBar active={tab} onTab={handleTab}/>
+        </div>
+      </IOSDevice>
+
+      {/* Tweaks panel */}
+      {showTweaks && (
+        <div style={{ position:'fixed', bottom:24, right:24, background:'var(--card)', border:'0.5px solid var(--btn-bg)', borderRadius:20, padding:'20px', width:260, boxShadow:'0 20px 60px rgba(0,0,0,0.6)', zIndex:9999, animation:'slideUp 0.2s ease' }}>
+          <div style={{ fontSize:13, fontWeight:700, color:'var(--text2)', letterSpacing:1.5, textTransform:'uppercase', marginBottom:16 }}>Tweaks</div>
+
+          <div style={{ marginBottom:16 }}>
+            <div style={{ fontSize:12, color:'var(--text3)', marginBottom:8, fontWeight:600 }}>홈 스타일</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+              {homeVariantNames.map((name, i) => (
+                <button key={i} onClick={() => updateTweaks('homeVariant', i)} style={{ background: tweaks.homeVariant===i ? 'var(--acc)' : 'var(--border)', border:'none', borderRadius:10, padding:'10px 14px', color: tweaks.homeVariant===i ? '#fff' : 'var(--text-60)', fontSize:13, fontWeight:600, cursor:'pointer', textAlign:'left' }}>
+                  {i===0 ? '1️⃣' : i===1 ? '2️⃣' : '3️⃣'} {name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ marginBottom:16 }}>
+            <div style={{ fontSize:12, color:'var(--text3)', marginBottom:8, fontWeight:600 }}>강조 색상</div>
+            <div style={{ display:'flex', gap:8 }}>
+              {['#e03030','#0071e3','#2cc96b','#f5a623','#9b59b6'].map(c => (
+                <button key={c} onClick={() => updateTweaks('accentColor', c)} style={{ width:32, height:32, borderRadius:'50%', background:c, border: tweaks.accentColor===c ? '2.5px solid #fff' : '2.5px solid transparent', cursor:'pointer' }}/>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
+            <span style={{ fontSize:13, color:'var(--text-60)', fontWeight:600 }}>선수 사진 플레이스홀더</span>
+            <button onClick={() => updateTweaks('showPlayerPhoto', !tweaks.showPlayerPhoto)} style={{ width:40, height:24, borderRadius:12, background: tweaks.showPlayerPhoto ? 'var(--acc)' : 'var(--text6)', border:'none', cursor:'pointer', position:'relative', transition:'background 0.2s' }}>
+              <div style={{ position:'absolute', top:2, left: tweaks.showPlayerPhoto ? 18 : 2, width:20, height:20, borderRadius:'50%', background:'#fff', transition:'left 0.2s' }}/>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+<div id="root"></div>
+</body>
+</html>
