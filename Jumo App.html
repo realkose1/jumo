@@ -1921,6 +1921,15 @@ function App() {
               const matches = data.events.map(e => transformESPNEvent(e, 'soccer', league));
               allMatches.push(...matches);
               console.log(`📡 ${league.toUpperCase()}: ${data.events.length} matches fetched`);
+              // Extra logging for Scottish league
+              if (league === 'sco') {
+                console.log(`🏴󠁧󠁢󠁳󠁣󠁴󠁿 Scottish matches:`, data.events.map(e => {
+                  const comp = e.competitions[0];
+                  const home = comp.competitors.find(c => c.homeAway === 'home');
+                  const away = comp.competitors.find(c => c.homeAway === 'away');
+                  return `${home?.team.displayName} vs ${away?.team.displayName} (${e.status.type.name})`;
+                }).join(', '));
+              }
             }
           } catch (err) {
             console.error(`❌ Failed to fetch ${league}:`, err);
@@ -1987,12 +1996,14 @@ function App() {
     const homeVariations = [homeTeam, homeAbbr, home.team.name, home.team.shortDisplayName].filter(Boolean);
     const awayVariations = [awayTeam, awayAbbr, away.team.name, away.team.shortDisplayName].filter(Boolean);
 
-    // Debug: Log team names for Turkish league
-    if (league === 'tur' && isLive) {
-      console.log(`🇹🇷 TUR Live Match: ${homeTeam} (${homeAbbr}) vs ${awayTeam} (${awayAbbr})`);
+    // Debug: Log team names for Turkish and Scottish leagues
+    if ((league === 'tur' || league === 'sco') && (isLive || status === 'STATUS_SCHEDULED')) {
+      const leagueFlag = league === 'tur' ? '🇹🇷' : '🏴󠁧󠁢󠁳󠁣󠁴󠁿';
+      console.log(`${leagueFlag} ${league.toUpperCase()} Match: ${homeTeam} (${homeAbbr}) vs ${awayTeam} (${awayAbbr})`);
       console.log(`   Home variations:`, homeVariations);
       console.log(`   Away variations:`, awayVariations);
-      console.log(`   Status: ${status}`);
+      console.log(`   Status: ${status}, Live: ${isLive}`);
+      console.log(`   Date: ${event.date}`);
     }
 
     for (const variation of homeVariations) {
