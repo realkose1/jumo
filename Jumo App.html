@@ -626,7 +626,7 @@ function TodayMatchCard({ m, onMatch, tweaks }) {
 
   return (
     <div onClick={() => onMatch(m)} style={{
-      flexShrink:0, width:280, borderRadius:20, overflow:'hidden', position:'relative',
+      flexShrink:0, width:'calc(100vw - 48px)', maxWidth:280, borderRadius:20, overflow:'hidden', position:'relative',
       cursor:'pointer', background:'var(--card)', border:'0.5px solid var(--border)'
     }}>
       <div style={{ position:'relative', zIndex:2, padding:'16px' }}>
