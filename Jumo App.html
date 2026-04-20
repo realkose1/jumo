@@ -496,7 +496,20 @@ function TabBar({ active, onTab }) {
     { id:'more', label:'더보기', icon: <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><circle cx="5" cy="11" r="1.8" fill="currentColor"/><circle cx="11" cy="11" r="1.8" fill="currentColor"/><circle cx="17" cy="11" r="1.8" fill="currentColor"/></svg> },
   ];
   return (
-    <div style={{ display:'flex', borderTop:'0.5px solid var(--border)', background:'var(--tab-bg)', backdropFilter:'blur(20px)', WebkitBackdropFilter:'blur(20px)', paddingBottom:20, paddingTop:8 }}>
+    <div style={{
+      position: 'fixed',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      zIndex: 100,
+      display:'flex',
+      borderTop:'0.5px solid var(--border)',
+      background:'var(--tab-bg)',
+      backdropFilter:'blur(20px)',
+      WebkitBackdropFilter:'blur(20px)',
+      paddingBottom:20,
+      paddingTop:8
+    }}>
       {tabs.map(t => (
         <button key={t.id} onClick={() => onTab(t.id)} style={{ flex:1, background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:3, color: active===t.id ? 'var(--acc)' : 'var(--text4)', transition:'color 0.15s', padding:'4px 0' }}>
           {t.icon}
@@ -2134,7 +2147,7 @@ function App() {
   return (
     <div style={{ '--acc': tweaks.accentColor, fontFamily:"'Noto Sans KR', system-ui, sans-serif", WebkitFontSmoothing:'antialiased' }}>
       <IOSDevice dark={darkMode} width={402} height={874}>
-        <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'var(--bg)' }}>
+        <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'var(--bg)', paddingBottom:'70px' }}>
           {screen === 'main' && (
             <>
               {tab === 'home' && <HomeComponent onMatch={goMatch} onPlayer={goPlayer} tweaks={tweaks} liveApiMatches={liveMatches} isLoading={isInitialLoad && apiLoading}/>}
