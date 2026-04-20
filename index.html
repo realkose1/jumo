@@ -204,70 +204,8 @@ function formatShortTime(date) {
 
 // ─── DATA ────────────────────────────────────────────────────
 // Generate matches with dynamic dates (relative to current time)
-const MATCHES = (() => {
-  const baseMatches = [
-    {
-      id: 1, live: false, hoursFromNow: 2, sport: '⚽ MLS',
-      home: { name: 'LAFC', code: 'LAFC', score: null },
-      away: { name: 'San Jose', code: 'SJ', score: null },
-      koreanPlayer: { name: '손흥민', number: 7, team: 'LAFC', event: '선발 출전 예상' },
-      competition: 'MLS 정규시즌', venue: 'BMO 스타디움',
-      lineupConfirmed: true, // Lineup officially announced
-      events: [], stats: null,
-    },
-    {
-      id: 2, live: false, hoursFromNow: 5, sport: '⚽ Ligue 1',
-      home: { name: 'PSG', code: 'PSG', score: null },
-      away: { name: 'Le Havre', code: 'HAC', score: null },
-      koreanPlayer: { name: '이강인', number: 19, team: 'PSG', event: '선발 출전 예상' },
-      competition: 'Ligue 1 MD33', venue: '파르크 데 프랭스',
-      lineupConfirmed: false, // Lineup not yet announced
-      events: [], stats: null,
-    },
-    {
-      id: 3, live: false, hoursFromNow: 8, sport: '⚾ MLB',
-      home: { name: 'Pirates', code: 'PIT', score: null },
-      away: { name: 'Cubs', code: 'CHC', score: null },
-      koreanPlayer: { name: '김하성', number: 4, team: 'PIT', event: '유격수' },
-      competition: 'MLB 정규시즌', venue: 'PNC 파크',
-      events: [], stats: null,
-    },
-    {
-      id: 4, live: false, hoursFromNow: 10, sport: '⚾ MLB',
-      home: { name: 'Nationals', code: 'WSH', score: null },
-      away: { name: 'Giants', code: 'SF', score: null },
-      koreanPlayer: { name: '이정후', number: 51, team: 'SF', event: '부상으로 결장 예정' },
-      competition: 'MLB 정규시즌', venue: '내셔널스 파크',
-      events: [], stats: null,
-    },
-    {
-      id: 5, live: false, hoursFromNow: 15, sport: '⚾ MLB',
-      home: { name: 'Dodgers', code: 'LAD', score: null },
-      away: { name: 'Mets', code: 'NYM', score: null },
-      koreanPlayer: { name: '김혜성', number: 35, team: 'LAD', event: '대기' },
-      competition: 'MLB 정규시즌', venue: '다저 스타디움',
-      events: [], stats: null,
-    },
-    {
-      id: 6, live: false, hoursFromNow: 18, sport: '⚽ Bundesliga',
-      home: { name: 'Bayern', code: 'FCB', score: null },
-      away: { name: 'Heidenheim', code: 'HDH', score: null },
-      koreanPlayer: { name: '김민재', number: 3, team: 'FCB', event: '센터백 선발 예상' },
-      competition: 'Bundesliga MD30', venue: '알리안츠 아레나',
-      events: [], stats: null,
-    },
-  ];
-
-  return baseMatches.map(m => {
-    const fullDate = getRelativeDate(m.hoursFromNow);
-    return {
-      ...m,
-      fullDate,
-      time: formatShortTime(fullDate),
-      krTime: formatKRTime(fullDate),
-    };
-  });
-})();
+// Remove dummy data - use only API data
+const MATCHES = [];
 
 const ALL_PLAYERS = [
   { id: 1,  name: '손흥민',  nameEn: 'Son Heung-min',   number: 7,  sport: '축구',   team: 'LAFC',       league: 'MLS',        position: '공격수',   nation: '🇰🇷', goals: 5,  assists: 3,  matches: 8,  rating: 7.8, age: 33, birth: '1992.07.08', height: '183cm' },
