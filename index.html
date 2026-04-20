@@ -320,7 +320,7 @@ function PlayerPhoto({ player, style={}, tint='var(--bg)' }) {
   return (
     <div style={{ position:'relative', overflow:'hidden', ...style }}>
       {imagePath ? (
-        <img src={imagePath} alt={player.name} style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'center top', display:'block', filter:'brightness(1.1) contrast(1.05)' }}/>
+        <img src={imagePath} alt={player.name} style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition: player.name === '조규성' ? '60% top' : 'center top', display:'block', filter:'brightness(1.1) contrast(1.05)' }}/>
       ) : (
         <>
           <svg width="100%" height="100%" viewBox="0 0 240 340" preserveAspectRatio="xMidYMax slice" style={{ display:'block' }}>
@@ -517,6 +517,7 @@ function SkeletonUpcomingMatch() {
 function TodayMatchCard({ m, onMatch, tweaks }) {
   const player = ALL_PLAYERS.find(p => p.name === m.koreanPlayer?.name);
   const isLive = m.live || m.time === 'LIVE';
+  const isFinished = m.status === 'STATUS_FINAL' || m.status === 'final';
 
   // Countdown calculation
   const [countdown, setCountdown] = React.useState('');
@@ -630,6 +631,10 @@ function TodayMatchCard({ m, onMatch, tweaks }) {
                 </span>
               )}
             </div>
+          ) : isFinished ? (
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <span style={{ fontSize:11, fontWeight:600, color:'var(--text4)' }}>종료</span>
+            </div>
           ) : (
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
               <span style={{ fontSize:20, fontWeight:700, color:'var(--text)', letterSpacing:-0.3 }}>
@@ -654,7 +659,7 @@ function TodayMatchCard({ m, onMatch, tweaks }) {
           <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
             <TeamBadge code={m.home.code} size={20}/>
             <span style={{ fontSize:15, fontWeight:600, color:'var(--text)' }}>{m.home.name}</span>
-            {isLive && (
+            {(isLive || isFinished) && m.home.score !== null && m.home.score !== undefined && (
               <span style={{ ...NUM, fontSize:22, fontWeight:800, color:'var(--text)', marginLeft:'auto' }}>
                 {m.home.score}
               </span>
@@ -664,7 +669,7 @@ function TodayMatchCard({ m, onMatch, tweaks }) {
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
             <TeamBadge code={m.away.code} size={20}/>
             <span style={{ fontSize:15, fontWeight:600, color:'var(--text-70)' }}>{m.away.name}</span>
-            {isLive && (
+            {(isLive || isFinished) && m.away.score !== null && m.away.score !== undefined && (
               <span style={{ ...NUM, fontSize:22, fontWeight:800, color:'var(--text-70)', marginLeft:'auto' }}>
                 {m.away.score}
               </span>
@@ -823,6 +828,58 @@ function HomeV1({ onMatch, onPlayer, tweaks, liveApiMatches = [], isLoading = fa
   );
 }
 
+// ─── TODAY MATCHES CAROUSEL ──────────────────────────────────
+function TodayMatchesCarousel({ matches, now, startOfToday, endOfToday, twelveHoursLater, onMatch, tweaks }) {
+  const scrollRef = React.useRef(null);
+
+  // Filter and sort today's matches
+  const todayMatches = matches
+    .filter(m => {
+      if (!m.koreanPlayer) return false;
+      if (!m.fullDate) return false;
+      const matchDate = new Date(m.fullDate);
+      // Include matches from today (past and future) + next 12 hours
+      return (matchDate >= startOfToday && matchDate <= endOfToday) ||
+             (matchDate > now && matchDate <= twelveHoursLater);
+    })
+    .sort((a, b) => {
+      const dateA = new Date(a.fullDate);
+      const dateB = new Date(b.fullDate);
+      return dateA - dateB; // Sort chronologically
+    });
+
+  // Auto-scroll to first future match on mount
+  React.useEffect(() => {
+    if (!scrollRef.current || todayMatches.length === 0) return;
+
+    const firstFutureIndex = todayMatches.findIndex(m => {
+      if (m.live || m.time === 'LIVE') return true;
+      const matchDate = new Date(m.fullDate);
+      return matchDate >= now;
+    });
+
+    if (firstFutureIndex > 0) {
+      // Scroll to first future match
+      const cardWidth = 288; // 280px card + 8px gap
+      const scrollPosition = firstFutureIndex * cardWidth;
+      setTimeout(() => {
+        scrollRef.current?.scrollTo({ left: scrollPosition, behavior: 'smooth' });
+      }, 100);
+    }
+  }, [todayMatches.length]);
+
+  return (
+    <div ref={scrollRef} style={{ display:'flex', gap:10, padding:'8px 16px 20px', overflowX:'auto', scrollSnapType:'x mandatory' }} className="scrollbar-hide">
+      {todayMatches.map(m => (
+        <div key={m.id} style={{ scrollSnapAlign:'start' }}>
+          <TodayMatchCard m={m} onMatch={onMatch} tweaks={tweaks}/>
+        </div>
+      ))}
+      <div style={{ flexShrink:0, width:8 }}/>
+    </div>
+  );
+}
+
 // ─── SCREEN: HOME V2 — Editorial ─────────────────────────────
 function HomeV2({ onMatch, onPlayer, tweaks, liveApiMatches = [], isLoading = false }) {
   // State for real-time countdown updates
@@ -840,9 +897,12 @@ function HomeV2({ onMatch, onPlayer, tweaks, liveApiMatches = [], isLoading = fa
   const allMatches = [...MATCHES, ...liveApiMatches];
   const liveMatches = allMatches.filter(m => m.live || m.time === 'LIVE');
 
-  // Filter upcoming matches to show only within 12 hours
+  // Filter matches for today (including past results)
   const now = currentTime;
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+  const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
   const twelveHoursLater = new Date(now.getTime() + 12 * 60 * 60 * 1000);
+
   const upcoming = allMatches
     .filter(m => {
       if (m.live || m.time === 'LIVE') return false;
@@ -1016,30 +1076,15 @@ function HomeV2({ onMatch, onPlayer, tweaks, liveApiMatches = [], isLoading = fa
       </div>
 
       {/* Today's Matches Carousel */}
-      <div style={{ display:'flex', gap:10, padding:'8px 16px 20px', overflowX:'auto', scrollSnapType:'x mandatory' }} className="scrollbar-hide">
-        {allMatches
-          .filter(m => {
-            if (!m.koreanPlayer) return false;
-            if (m.live || m.time === 'LIVE') return true; // Include live matches
-            if (!m.fullDate) return false;
-            const matchDate = new Date(m.fullDate);
-            return matchDate >= now && matchDate <= twelveHoursLater;
-          })
-          .sort((a, b) => {
-            // Live matches first, then sort by fullDate (earliest first)
-            if ((a.live || a.time === 'LIVE') && !(b.live || b.time === 'LIVE')) return -1;
-            if (!(a.live || a.time === 'LIVE') && (b.live || b.time === 'LIVE')) return 1;
-            const dateA = a.fullDate ? new Date(a.fullDate) : new Date('2099-12-31');
-            const dateB = b.fullDate ? new Date(b.fullDate) : new Date('2099-12-31');
-            return dateA - dateB;
-          })
-          .map(m => (
-            <div key={m.id} style={{ scrollSnapAlign:'start' }}>
-              <TodayMatchCard m={m} onMatch={onMatch} tweaks={tweaks}/>
-            </div>
-          ))}
-        <div style={{ flexShrink:0, width:8 }}/>
-      </div>
+      <TodayMatchesCarousel
+        matches={allMatches}
+        now={now}
+        startOfToday={startOfToday}
+        endOfToday={endOfToday}
+        twelveHoursLater={twelveHoursLater}
+        onMatch={onMatch}
+        tweaks={tweaks}
+      />
 
       {/* Upcoming matches list */}
       {upcoming.length > 0 && (
