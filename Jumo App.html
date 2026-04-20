@@ -300,11 +300,21 @@ function LiveDot() {
   );
 }
 
-function TeamBadge({ code, size=36 }) {
+function TeamBadge({ code, size=36, logo }) {
   const colors = { TOT:'#132257', MCI:'#6CABDD', PSG:'#003399', OL:'#FFFFFF', LAD:'#005A9C', TOR:'#134A8E', FCB:'#DC052D', BVB:'#FDE100', T1:'#C89B3C', GEN:'#EC1C24' };
   const textColors = { MCI:'#132257', OL:'#1B3A6B', BVB:'#1B1B1B' };
   const bg = colors[code] || '#333';
   const tc = textColors[code] || '#fff';
+
+  // Use logo if available
+  if (logo) {
+    return (
+      <div style={{ width:size, height:size, borderRadius:size*0.22, background:'var(--surface)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, overflow:'hidden', border:'0.5px solid var(--border)' }}>
+        <img src={logo} alt={code} style={{ width:'100%', height:'100%', objectFit:'contain', padding:size*0.1 }} />
+      </div>
+    );
+  }
+
   return (
     <div style={{ width:size, height:size, borderRadius:size*0.22, background:bg, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
       <span style={{ ...NUM, fontSize:size*0.3, fontWeight:700, color:tc, letterSpacing:-0.5 }}>{code}</span>
@@ -320,7 +330,7 @@ function PlayerPhoto({ player, style={}, tint='var(--bg)' }) {
   return (
     <div style={{ position:'relative', overflow:'hidden', ...style }}>
       {imagePath ? (
-        <img src={imagePath} alt={player.name} style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition: player.name === '조규성' ? '50% top' : 'center top', display:'block', filter:'brightness(1.1) contrast(1.05)' }}/>
+        <img src={imagePath} alt={player.name} style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition: player.name === '조규성' ? '40% top' : 'center top', display:'block', filter:'brightness(1.1) contrast(1.05)' }}/>
       ) : (
         <>
           <svg width="100%" height="100%" viewBox="0 0 240 340" preserveAspectRatio="xMidYMax slice" style={{ display:'block' }}>
@@ -632,9 +642,30 @@ function TodayMatchCard({ m, onMatch, tweaks }) {
               )}
             </div>
           ) : isFinished ? (
-            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-              <span style={{ fontSize:11, fontWeight:600, color:'var(--text4)' }}>종료</span>
-            </div>
+            (() => {
+              // Determine win/loss based on Korean player's team
+              const koreanTeam = m.koreanPlayer?.team;
+              const isHomeTeam = koreanTeam === m.home.code;
+              const koreanScore = isHomeTeam ? m.home.score : m.away.score;
+              const opponentScore = isHomeTeam ? m.away.score : m.home.score;
+              const isWin = koreanScore > opponentScore;
+              const isDraw = koreanScore === opponentScore;
+
+              return (
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  <div style={{
+                    background: isWin ? 'rgba(44,201,109,0.12)' : isDraw ? 'rgba(255,193,7,0.12)' : 'rgba(230,48,48,0.12)',
+                    borderRadius:8, padding:'6px 12px',
+                    border: `0.5px solid ${isWin ? 'rgba(44,201,109,0.3)' : isDraw ? 'rgba(255,193,7,0.3)' : 'rgba(230,48,48,0.3)'}`
+                  }}>
+                    <span style={{ fontSize:13, fontWeight:800, color: isWin ? '#2CC96D' : isDraw ? '#FFB800' : 'var(--acc)' }}>
+                      {isWin ? '승리' : isDraw ? '무승부' : '패배'}
+                    </span>
+                  </div>
+                  <span style={{ fontSize:12, fontWeight:600, color:'var(--text4)' }}>경기 종료</span>
+                </div>
+              );
+            })()
           ) : (
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
               <span style={{ fontSize:20, fontWeight:700, color:'var(--text)', letterSpacing:-0.3 }}>
@@ -657,7 +688,7 @@ function TodayMatchCard({ m, onMatch, tweaks }) {
         {/* Teams */}
         <div style={{ marginBottom:12 }}>
           <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
-            <TeamBadge code={m.home.code} size={20}/>
+            <TeamBadge code={m.home.code} size={20} logo={m.home.logo}/>
             <span style={{ fontSize:15, fontWeight:600, color:'var(--text)' }}>{m.home.name}</span>
             {(isLive || isFinished) && m.home.score !== null && m.home.score !== undefined && (
               <span style={{ ...NUM, fontSize:22, fontWeight:800, color:'var(--text)', marginLeft:'auto' }}>
@@ -667,7 +698,7 @@ function TodayMatchCard({ m, onMatch, tweaks }) {
           </div>
 
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-            <TeamBadge code={m.away.code} size={20}/>
+            <TeamBadge code={m.away.code} size={20} logo={m.away.logo}/>
             <span style={{ fontSize:15, fontWeight:600, color:'var(--text-70)' }}>{m.away.name}</span>
             {(isLive || isFinished) && m.away.score !== null && m.away.score !== undefined && (
               <span style={{ ...NUM, fontSize:22, fontWeight:800, color:'var(--text-70)', marginLeft:'auto' }}>
@@ -704,7 +735,7 @@ function LiveCarouselCard({ m, onMatch, tweaks }) {
         {/* score */}
         <div style={{ marginBottom:14 }}>
           <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
-            <TeamBadge code={m.home.code} size={22}/>
+            <TeamBadge code={m.home.code} size={22} logo={m.home.logo}/>
             <span style={{ fontSize:13, fontWeight:600, color:'var(--text)' }}>{m.home.code}</span>
           </div>
           <div style={{ display:'flex', alignItems:'baseline', gap:6, margin:'6px 0' }}>
@@ -713,7 +744,7 @@ function LiveCarouselCard({ m, onMatch, tweaks }) {
             <span style={{ ...NUM, fontSize:48, fontWeight:800, color:'rgba(255,255,255,0.38)', letterSpacing:-2, lineHeight:1 }}>{m.away.score}</span>
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-            <TeamBadge code={m.away.code} size={22}/>
+            <TeamBadge code={m.away.code} size={22} logo={m.away.logo}/>
             <span style={{ fontSize:13, fontWeight:600, color:'var(--text2)' }}>{m.away.code}</span>
           </div>
         </div>
@@ -810,7 +841,7 @@ function HomeV1({ onMatch, onPlayer, tweaks, liveApiMatches = [], isLoading = fa
             <span style={{ ...NUM, fontSize:12, fontWeight:700, color:'var(--text3)', flexShrink:0, width:36 }}>{m.time||'예정'}</span>
             <div style={{ width:0.5, height:20, background:'var(--border)', flexShrink:0 }}/>
             <div style={{ flex:1, display:'flex', alignItems:'center', gap:6, minWidth:0 }}>
-              <TeamBadge code={m.home.code} size={24}/>
+              <TeamBadge code={m.home.code} size={24} logo={m.home.logo}/>
               <span style={{ fontSize:13, fontWeight:600, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>{m.home.name}</span>
               <span style={{ fontSize:11, color:'var(--text4)', flexShrink:0 }}>vs</span>
               <span style={{ fontSize:13, fontWeight:600, color:'var(--text2)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, textAlign:'right' }}>{m.away.name}</span>
@@ -1513,7 +1544,7 @@ function ScheduleScreen({ onMatch }) {
             <div style={{ width:0.5, height:36, background:'var(--border)' }}/>
             <div style={{ flex:1 }}>
               <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
-                <TeamBadge code={m.home.code} size={24}/>
+                <TeamBadge code={m.home.code} size={24} logo={m.home.logo}/>
                 <span style={{ fontSize:13, fontWeight:600, color:'var(--text)' }}>{m.home.name}</span>
                 {m.live && <span style={{ ...NUM, fontSize:18, fontWeight:800, color:'var(--text)', letterSpacing:-1, marginLeft:'auto', marginRight:'auto' }}>{m.home.score}:{m.away.score}</span>}
                 {!m.live && <span style={{ fontSize:12, color:'var(--text4)', marginLeft:'auto', marginRight:'auto' }}>vs</span>}
@@ -2081,13 +2112,17 @@ function App() {
       minute = event.status.displayClock;
     }
 
+    // Extract team logos from ESPN API
+    const homeLogo = home.team?.logo || home.team?.logos?.[0]?.href || null;
+    const awayLogo = away.team?.logo || away.team?.logos?.[0]?.href || null;
+
     return {
       id: event.id,
       live: isLive,
       minute,
       sport: sport === 'mlb' ? '⚾ MLB' : `⚽ ${league.toUpperCase()}`,
-      home: { name: homeTeam, code: home.team.abbreviation, score: parseInt(home.score) || 0 },
-      away: { name: awayTeam, code: away.team.abbreviation, score: parseInt(away.score) || 0 },
+      home: { name: homeTeam, code: home.team.abbreviation, score: parseInt(home.score) || 0, logo: homeLogo },
+      away: { name: awayTeam, code: away.team.abbreviation, score: parseInt(away.score) || 0, logo: awayLogo },
       koreanPlayer: koreanPlayer ? { ...koreanPlayer, event: playerEventText } : null,
       competition: event.competitions[0].league?.name || '',
       venue: event.competitions[0].venue?.fullName || '',
