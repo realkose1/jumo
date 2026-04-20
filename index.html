@@ -330,7 +330,7 @@ function PlayerPhoto({ player, style={}, tint='var(--bg)' }) {
   return (
     <div style={{ position:'relative', overflow:'hidden', ...style }}>
       {imagePath ? (
-        <img src={imagePath} alt={player.name} style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition: player.name === '조규성' ? '40% top' : 'center top', display:'block', filter:'brightness(1.1) contrast(1.05)' }}/>
+        <img src={imagePath} alt={player.name} style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition: player.name === '조규성' ? '30% top' : 'center top', display:'block', filter:'brightness(1.1) contrast(1.05)' }}/>
       ) : (
         <>
           <svg width="100%" height="100%" viewBox="0 0 240 340" preserveAspectRatio="xMidYMax slice" style={{ display:'block' }}>
@@ -618,100 +618,187 @@ function TodayMatchCard({ m, onMatch, tweaks }) {
           )}
         </div>
 
-        {/* Time Section - PROMINENT */}
-        <div style={{ marginBottom:16 }}>
-          {isLive ? (
-            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-              <div style={{
-                display:'inline-flex', alignItems:'center', gap:6,
-                background:'var(--acc)', borderRadius:8, padding:'6px 10px',
-                boxShadow:'0 2px 8px rgba(230,48,48,0.3)'
-              }}>
-                <span style={{ position:'relative', display:'inline-flex', alignItems:'center', justifyContent:'center', width:8, height:8 }}>
-                  <span style={{ position:'absolute', width:8, height:8, borderRadius:'50%', background:'#fff', opacity:0.4, animation:'ripple 1.4s ease-out infinite' }}/>
-                  <span style={{ width:5, height:5, borderRadius:'50%', background:'#fff', position:'relative' }}/>
-                </span>
-                <span style={{ fontSize:13, fontWeight:800, color:'#fff', letterSpacing:0.5 }}>
-                  LIVE
-                </span>
-              </div>
-              {m.minute && (
-                <span style={{ fontSize:16, fontWeight:700, color:'var(--text)', letterSpacing:-0.3 }}>
-                  {m.minute}'
-                </span>
-              )}
-            </div>
-          ) : isFinished ? (
-            (() => {
-              // Determine win/loss based on Korean player's team
-              const koreanTeam = m.koreanPlayer?.team;
-              const isHomeTeam = koreanTeam === m.home.code;
-              const koreanScore = isHomeTeam ? m.home.score : m.away.score;
-              const opponentScore = isHomeTeam ? m.away.score : m.home.score;
-              const isWin = koreanScore > opponentScore;
-              const isDraw = koreanScore === opponentScore;
+        {/* Time Section or Result Section */}
+        {isFinished ? (
+          // FINISHED MATCH - Show score and player performance
+          (() => {
+            const koreanTeam = m.koreanPlayer?.team;
+            const isHomeTeam = koreanTeam === m.home.code;
+            const koreanScore = isHomeTeam ? m.home.score : m.away.score;
+            const opponentScore = isHomeTeam ? m.away.score : m.home.score;
+            const isWin = koreanScore > opponentScore;
+            const isDraw = koreanScore === opponentScore;
+            const opponentTeam = isHomeTeam ? m.away : m.home;
 
-              return (
+            return (
+              <>
+                {/* Result badge and score */}
+                <div style={{ marginBottom:14 }}>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+                    <div style={{
+                      background: isWin ? 'rgba(44,201,109,0.12)' : isDraw ? 'rgba(255,193,7,0.12)' : 'rgba(230,48,48,0.12)',
+                      borderRadius:8, padding:'5px 10px',
+                      border: `0.5px solid ${isWin ? 'rgba(44,201,109,0.3)' : isDraw ? 'rgba(255,193,7,0.3)' : 'rgba(230,48,48,0.3)'}`
+                    }}>
+                      <span style={{ fontSize:12, fontWeight:800, color: isWin ? '#2CC96D' : isDraw ? '#FFB800' : 'var(--acc)' }}>
+                        {isWin ? '승리' : isDraw ? '무승부' : '패배'}
+                      </span>
+                    </div>
+                    <span style={{ fontSize:11, fontWeight:600, color:'var(--text4)' }}>경기 종료</span>
+                  </div>
+
+                  {/* Score display */}
+                  <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:8, flex:1 }}>
+                      <TeamBadge code={koreanTeam} size={28} logo={isHomeTeam ? m.home.logo : m.away.logo}/>
+                      <span style={{ fontSize:13, fontWeight:600, color:'var(--text)' }}>{koreanTeam}</span>
+                    </div>
+                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      <span style={{ ...NUM, fontSize:28, fontWeight:800, color:'var(--text)', letterSpacing:-1 }}>
+                        {koreanScore}
+                      </span>
+                      <span style={{ ...NUM, fontSize:18, color:'var(--text5)', fontWeight:300 }}>:</span>
+                      <span style={{ ...NUM, fontSize:28, fontWeight:800, color:'var(--text3)', letterSpacing:-1 }}>
+                        {opponentScore}
+                      </span>
+                    </div>
+                    <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, justifyContent:'flex-end' }}>
+                      <span style={{ fontSize:13, fontWeight:600, color:'var(--text3)' }}>{opponentTeam.code}</span>
+                      <TeamBadge code={opponentTeam.code} size={28} logo={opponentTeam.logo}/>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Player performance stats */}
+                {m.koreanPlayer && (
+                  <div style={{
+                    background:'var(--surface)', borderRadius:10, padding:'10px 12px',
+                    border:'0.5px solid var(--border)', marginBottom:12
+                  }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:'var(--text4)', letterSpacing:0.5, marginBottom:8, textTransform:'uppercase' }}>
+                      선수 활약
+                    </div>
+                    <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
+                      {/* Goals */}
+                      {m.koreanPlayer.goals !== undefined && (
+                        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                          <span style={{ fontSize:16 }}>⚽</span>
+                          <span style={{ fontSize:13, fontWeight:600, color:'var(--text)' }}>{m.koreanPlayer.goals}</span>
+                          <span style={{ fontSize:11, color:'var(--text4)' }}>골</span>
+                        </div>
+                      )}
+                      {/* Assists */}
+                      {m.koreanPlayer.assists !== undefined && (
+                        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                          <span style={{ fontSize:16 }}>🎯</span>
+                          <span style={{ fontSize:13, fontWeight:600, color:'var(--text)' }}>{m.koreanPlayer.assists}</span>
+                          <span style={{ fontSize:11, color:'var(--text4)' }}>도움</span>
+                        </div>
+                      )}
+                      {/* Rating */}
+                      {m.koreanPlayer.rating !== undefined && (
+                        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                          <span style={{ fontSize:16 }}>⭐</span>
+                          <span style={{ fontSize:13, fontWeight:600, color:'var(--text)' }}>{m.koreanPlayer.rating}</span>
+                          <span style={{ fontSize:11, color:'var(--text4)' }}>평점</span>
+                        </div>
+                      )}
+                      {/* Minutes played */}
+                      {m.koreanPlayer.minutesPlayed !== undefined && (
+                        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                          <span style={{ fontSize:16 }}>⏱️</span>
+                          <span style={{ fontSize:13, fontWeight:600, color:'var(--text)' }}>{m.koreanPlayer.minutesPlayed}'</span>
+                          <span style={{ fontSize:11, color:'var(--text4)' }}>출전</span>
+                        </div>
+                      )}
+                      {/* If no stats available, show generic message */}
+                      {!m.koreanPlayer.goals && !m.koreanPlayer.assists && !m.koreanPlayer.rating && !m.koreanPlayer.minutesPlayed && (
+                        <span style={{ fontSize:11, color:'var(--text4)' }}>상세 스탯 집계 중</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Competition info */}
+                <div style={{ fontSize:11, color:'var(--text4)' }}>
+                  {m.sport.split(' ')[1]} · {m.competition}
+                </div>
+              </>
+            );
+          })()
+        ) : (
+          // UPCOMING or LIVE MATCH - Show time and teams
+          <>
+            <div style={{ marginBottom:16 }}>
+              {isLive ? (
                 <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                   <div style={{
-                    background: isWin ? 'rgba(44,201,109,0.12)' : isDraw ? 'rgba(255,193,7,0.12)' : 'rgba(230,48,48,0.12)',
-                    borderRadius:8, padding:'6px 12px',
-                    border: `0.5px solid ${isWin ? 'rgba(44,201,109,0.3)' : isDraw ? 'rgba(255,193,7,0.3)' : 'rgba(230,48,48,0.3)'}`
+                    display:'inline-flex', alignItems:'center', gap:6,
+                    background:'var(--acc)', borderRadius:8, padding:'6px 10px',
+                    boxShadow:'0 2px 8px rgba(230,48,48,0.3)'
                   }}>
-                    <span style={{ fontSize:13, fontWeight:800, color: isWin ? '#2CC96D' : isDraw ? '#FFB800' : 'var(--acc)' }}>
-                      {isWin ? '승리' : isDraw ? '무승부' : '패배'}
+                    <span style={{ position:'relative', display:'inline-flex', alignItems:'center', justifyContent:'center', width:8, height:8 }}>
+                      <span style={{ position:'absolute', width:8, height:8, borderRadius:'50%', background:'#fff', opacity:0.4, animation:'ripple 1.4s ease-out infinite' }}/>
+                      <span style={{ width:5, height:5, borderRadius:'50%', background:'#fff', position:'relative' }}/>
+                    </span>
+                    <span style={{ fontSize:13, fontWeight:800, color:'#fff', letterSpacing:0.5 }}>
+                      LIVE
                     </span>
                   </div>
-                  <span style={{ fontSize:12, fontWeight:600, color:'var(--text4)' }}>경기 종료</span>
+                  {m.minute && (
+                    <span style={{ fontSize:16, fontWeight:700, color:'var(--text)', letterSpacing:-0.3 }}>
+                      {m.minute}'
+                    </span>
+                  )}
                 </div>
-              );
-            })()
-          ) : (
-            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-              <span style={{ fontSize:20, fontWeight:700, color:'var(--text)', letterSpacing:-0.3 }}>
-                {timeLabel} {timeValue}
-              </span>
-              {countdown && (
-                <div style={{
-                  background:'rgba(255,217,61,0.15)', borderRadius:6, padding:'4px 8px', flexShrink:0,
-                  border:'0.5px solid rgba(255,217,61,0.3)'
-                }}>
-                  <span style={{ fontSize:10, fontWeight:600, color:'#FFD93D', whiteSpace:'nowrap' }}>
-                    {countdown}
+              ) : (
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  <span style={{ fontSize:20, fontWeight:700, color:'var(--text)', letterSpacing:-0.3 }}>
+                    {timeLabel} {timeValue}
                   </span>
+                  {countdown && (
+                    <div style={{
+                      background:'rgba(255,217,61,0.15)', borderRadius:6, padding:'4px 8px', flexShrink:0,
+                      border:'0.5px solid rgba(255,217,61,0.3)'
+                    }}>
+                      <span style={{ fontSize:10, fontWeight:600, color:'#FFD93D', whiteSpace:'nowrap' }}>
+                        {countdown}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          )}
-        </div>
 
-        {/* Teams */}
-        <div style={{ marginBottom:12 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
-            <TeamBadge code={m.home.code} size={20} logo={m.home.logo}/>
-            <span style={{ fontSize:15, fontWeight:600, color:'var(--text)' }}>{m.home.name}</span>
-            {(isLive || isFinished) && m.home.score !== null && m.home.score !== undefined && (
-              <span style={{ ...NUM, fontSize:22, fontWeight:800, color:'var(--text)', marginLeft:'auto' }}>
-                {m.home.score}
-              </span>
-            )}
-          </div>
+            {/* Teams */}
+            <div style={{ marginBottom:12 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
+                <TeamBadge code={m.home.code} size={20} logo={m.home.logo}/>
+                <span style={{ fontSize:15, fontWeight:600, color:'var(--text)' }}>{m.home.name}</span>
+                {isLive && m.home.score !== null && m.home.score !== undefined && (
+                  <span style={{ ...NUM, fontSize:22, fontWeight:800, color:'var(--text)', marginLeft:'auto' }}>
+                    {m.home.score}
+                  </span>
+                )}
+              </div>
 
-          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-            <TeamBadge code={m.away.code} size={20} logo={m.away.logo}/>
-            <span style={{ fontSize:15, fontWeight:600, color:'var(--text-70)' }}>{m.away.name}</span>
-            {(isLive || isFinished) && m.away.score !== null && m.away.score !== undefined && (
-              <span style={{ ...NUM, fontSize:22, fontWeight:800, color:'var(--text-70)', marginLeft:'auto' }}>
-                {m.away.score}
-              </span>
-            )}
-          </div>
-        </div>
+              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                <TeamBadge code={m.away.code} size={20} logo={m.away.logo}/>
+                <span style={{ fontSize:15, fontWeight:600, color:'var(--text-70)' }}>{m.away.name}</span>
+                {isLive && m.away.score !== null && m.away.score !== undefined && (
+                  <span style={{ ...NUM, fontSize:22, fontWeight:800, color:'var(--text-70)', marginLeft:'auto' }}>
+                    {m.away.score}
+                  </span>
+                )}
+              </div>
+            </div>
 
-        {/* Competition info */}
-        <div style={{ fontSize:11, color:'var(--text4)' }}>
-          {m.sport.split(' ')[1]} · {m.competition}
-        </div>
+            {/* Competition info */}
+            <div style={{ fontSize:11, color:'var(--text4)' }}>
+              {m.sport.split(' ')[1]} · {m.competition}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -2098,12 +2185,49 @@ function App() {
       timeDisplay = 'LIVE';
     }
 
-    // Determine Korean player event status
+    // Determine Korean player event status and extract stats
     let playerEventText = '출전 예정';
-    if (isLive && koreanPlayer) {
-      playerEventText = '출전 중';
-    } else if (lineupConfirmed && koreanPlayer) {
-      playerEventText = '선발 출전';
+    let playerStats = { goals: undefined, assists: undefined, rating: undefined, minutesPlayed: undefined };
+
+    if (koreanPlayer) {
+      // Try to find Korean player in rosters/statistics
+      const homeRoster = home.athletes || home.roster || [];
+      const awayRoster = away.athletes || away.roster || [];
+      const allAthletes = [...homeRoster, ...awayRoster];
+
+      const koreanAthlete = allAthletes.find(athlete => {
+        const name = athlete.athlete?.displayName || athlete.displayName || '';
+        return name.includes(koreanPlayer.name) || koreanPlayer.name.includes(name.split(' ').pop());
+      });
+
+      if (koreanAthlete) {
+        const athleteStats = koreanAthlete.statistics || koreanAthlete.stats || [];
+
+        // Extract goals
+        const goals = athleteStats.find(s => s.name === 'goals' || s.abbreviation === 'G');
+        if (goals) playerStats.goals = parseInt(goals.value) || 0;
+
+        // Extract assists
+        const assists = athleteStats.find(s => s.name === 'assists' || s.abbreviation === 'A');
+        if (assists) playerStats.assists = parseInt(assists.value) || 0;
+
+        // Extract rating (if available)
+        const rating = athleteStats.find(s => s.name === 'rating' || s.name === 'playerRating');
+        if (rating) playerStats.rating = parseFloat(rating.value).toFixed(1);
+
+        // Extract minutes played
+        const minutes = athleteStats.find(s => s.name === 'minutesPlayed' || s.abbreviation === 'MIN');
+        if (minutes) playerStats.minutesPlayed = parseInt(minutes.value) || 0;
+      }
+
+      // Set event text
+      if (isLive) {
+        playerEventText = '출전 중';
+      } else if (lineupConfirmed) {
+        playerEventText = '선발 출전';
+      } else if (status === 'STATUS_FINAL' || status === 'STATUS_END_PERIOD') {
+        playerEventText = playerStats.minutesPlayed ? `${playerStats.minutesPlayed}분 출전` : '출전 완료';
+      }
     }
 
     // Get current minute for live matches
@@ -2123,7 +2247,7 @@ function App() {
       sport: sport === 'mlb' ? '⚾ MLB' : `⚽ ${league.toUpperCase()}`,
       home: { name: homeTeam, code: home.team.abbreviation, score: parseInt(home.score) || 0, logo: homeLogo },
       away: { name: awayTeam, code: away.team.abbreviation, score: parseInt(away.score) || 0, logo: awayLogo },
-      koreanPlayer: koreanPlayer ? { ...koreanPlayer, event: playerEventText } : null,
+      koreanPlayer: koreanPlayer ? { ...koreanPlayer, event: playerEventText, ...playerStats } : null,
       competition: event.competitions[0].league?.name || '',
       venue: event.competitions[0].venue?.fullName || '',
       time: timeDisplay,
