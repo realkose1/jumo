@@ -1204,49 +1204,119 @@ function HomeV2({ onMatch, onPlayer, tweaks, liveApiMatches = [], isLoading = fa
         tweaks={tweaks}
       />
 
-      {/* Upcoming matches list */}
-      {upcoming.length > 0 && (
-        <div style={{ margin:'4px 16px', padding:'14px 0', borderTop:'0.5px solid var(--border)' }}>
-          {upcoming.map(m => {
-            let timeDisplay = '—';
-            let dayLabel = '';
+      {/* Today's matches list (finished + upcoming) */}
+      {(() => {
+        // Combine finished and upcoming matches from today
+        const todayFinishedAndUpcoming = allMatches
+          .filter(m => {
+            if (!m.koreanPlayer || !m.fullDate) return false;
+            const matchDate = new Date(m.fullDate);
+            // Include finished matches from today and upcoming matches
+            const isFinished = m.status === 'STATUS_FINAL' || m.status === 'final' || m.status === 'STATUS_END_PERIOD' || m.status === 'STATUS_FINAL_PEN';
+            const isToday = matchDate >= startOfToday && matchDate <= endOfToday;
+            const isUpcoming = matchDate > now && matchDate <= twelveHoursLater;
 
-            if (m.fullDate) {
-              const date = new Date(m.fullDate);
-              const now = new Date();
-              const hours = String(date.getHours()).padStart(2, '0');
-              const minutes = String(date.getMinutes()).padStart(2, '0');
-              const isToday = date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+            return (isFinished && isToday) || isUpcoming;
+          })
+          .sort((a, b) => {
+            const dateA = new Date(a.fullDate);
+            const dateB = new Date(b.fullDate);
+            return dateA - dateB;
+          });
 
-              timeDisplay = `${hours}:${minutes}`;
-              dayLabel = isToday ? '오늘' : '내일';
-            }
+        if (todayFinishedAndUpcoming.length === 0) return null;
 
-            const player = ALL_PLAYERS.find(p => p.name === m.koreanPlayer?.name);
+        return (
+          <div style={{ margin:'4px 16px', padding:'14px 0', borderTop:'0.5px solid var(--border)' }}>
+            {todayFinishedAndUpcoming.map(m => {
+              const isFinished = m.status === 'STATUS_FINAL' || m.status === 'final' || m.status === 'STATUS_END_PERIOD' || m.status === 'STATUS_FINAL_PEN';
+              const player = ALL_PLAYERS.find(p => p.name === m.koreanPlayer?.name);
 
-            return (
-              <div key={m.id} onClick={() => onMatch(m)} style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12, cursor:'pointer' }}>
-                <div style={{ ...NUM, width:38, fontSize:11, fontWeight:600, color:'var(--text3)', flexShrink:0, lineHeight:1.3, display:'flex', flexDirection:'column', alignItems:'flex-end' }}>
-                  <div style={{ fontSize:10, color:'var(--text5)' }}>{dayLabel}</div>
-                  <div>{timeDisplay}</div>
-                </div>
-                <div style={{ flex:1, display:'flex', flexDirection:'column', gap:2 }}>
-                  <div style={{ fontSize:13, fontWeight:600, color:'var(--text)' }}>{m.home.name} <span style={{ color:'var(--text4)' }}>vs</span> {m.away.name}</div>
-                  <div style={{ fontSize:11, color:'var(--text4)' }}>{m.sport.split(' ')[1]} · {m.competition}</div>
-                </div>
-                <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
-                  {player && (
-                    <div style={{ width:24, height:24, borderRadius:'50%', overflow:'hidden', background:'#fff', flexShrink:0, boxShadow:'0 1px 4px rgba(0,0,0,0.15)' }}>
-                      <PlayerPhoto player={player} style={{ width:'100%', height:'100%' }}/>
+              if (isFinished) {
+                // FINISHED MATCH DISPLAY
+                const koreanTeam = m.koreanPlayer?.team;
+                const isHomeTeam = koreanTeam === m.home.code;
+                const koreanScore = isHomeTeam ? m.home.score : m.away.score;
+                const opponentScore = isHomeTeam ? m.away.score : m.home.score;
+                const isWin = koreanScore > opponentScore;
+                const isDraw = koreanScore === opponentScore;
+
+                return (
+                  <div key={m.id} onClick={() => onMatch(m)} style={{ display:'flex', alignItems:'center', gap:12, marginBottom:17, cursor:'pointer' }}>
+                    <div style={{ width:42, fontSize:11, fontWeight:700, color:'var(--text4)', flexShrink:0, textAlign:'center' }}>
+                      <div style={{
+                        background: isWin ? 'rgba(44,201,109,0.15)' : isDraw ? 'rgba(255,193,7,0.15)' : 'rgba(230,48,48,0.15)',
+                        borderRadius:6, padding:'4px 6px',
+                        border: `0.5px solid ${isWin ? 'rgba(44,201,109,0.3)' : isDraw ? 'rgba(255,193,7,0.3)' : 'rgba(230,48,48,0.3)'}`
+                      }}>
+                        <div style={{ fontSize:9, color: isWin ? '#2CC96D' : isDraw ? '#FFB800' : 'var(--acc)', fontWeight:800 }}>
+                          {isWin ? '승' : isDraw ? '무' : '패'}
+                        </div>
+                        <div style={{ ...NUM, fontSize:13, fontWeight:800, color:'var(--text)', marginTop:2 }}>
+                          {koreanScore}:{opponentScore}
+                        </div>
+                      </div>
                     </div>
-                  )}
-                  <span style={{ fontSize:11, fontWeight:600, color:'var(--text)' }}>{m.koreanPlayer?.name}</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+                    <div style={{ flex:1, display:'flex', flexDirection:'column', gap:3 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                        <TeamBadge code={m.home.code} size={18} logo={m.home.logo}/>
+                        <span style={{ fontSize:13, fontWeight:600, color:'var(--text)' }}>{m.home.name}</span>
+                      </div>
+                      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                        <TeamBadge code={m.away.code} size={18} logo={m.away.logo}/>
+                        <span style={{ fontSize:13, fontWeight:600, color:'var(--text3)' }}>{m.away.name}</span>
+                      </div>
+                    </div>
+                    <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
+                      {player && (
+                        <div style={{ width:24, height:24, borderRadius:'50%', overflow:'hidden', background:'#fff', flexShrink:0, boxShadow:'0 1px 4px rgba(0,0,0,0.15)' }}>
+                          <PlayerPhoto player={player} style={{ width:'100%', height:'100%' }}/>
+                        </div>
+                      )}
+                      <span style={{ fontSize:11, fontWeight:600, color:'var(--text)' }}>{m.koreanPlayer?.name}</span>
+                    </div>
+                  </div>
+                );
+              } else {
+                // UPCOMING MATCH DISPLAY
+                let timeDisplay = '—';
+                let dayLabel = '';
+
+                if (m.fullDate) {
+                  const date = new Date(m.fullDate);
+                  const hours = String(date.getHours()).padStart(2, '0');
+                  const minutes = String(date.getMinutes()).padStart(2, '0');
+                  const isToday = date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+
+                  timeDisplay = `${hours}:${minutes}`;
+                  dayLabel = isToday ? '오늘' : '내일';
+                }
+
+                return (
+                  <div key={m.id} onClick={() => onMatch(m)} style={{ display:'flex', alignItems:'center', gap:12, marginBottom:17, cursor:'pointer' }}>
+                    <div style={{ ...NUM, width:38, fontSize:11, fontWeight:600, color:'var(--text3)', flexShrink:0, lineHeight:1.3, display:'flex', flexDirection:'column', alignItems:'flex-end' }}>
+                      <div style={{ fontSize:10, color:'var(--text5)' }}>{dayLabel}</div>
+                      <div>{timeDisplay}</div>
+                    </div>
+                    <div style={{ flex:1, display:'flex', flexDirection:'column', gap:2 }}>
+                      <div style={{ fontSize:13, fontWeight:600, color:'var(--text)' }}>{m.home.name} <span style={{ color:'var(--text4)' }}>vs</span> {m.away.name}</div>
+                      <div style={{ fontSize:11, color:'var(--text4)' }}>{m.competition}</div>
+                    </div>
+                    <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
+                      {player && (
+                        <div style={{ width:24, height:24, borderRadius:'50%', overflow:'hidden', background:'#fff', flexShrink:0, boxShadow:'0 1px 4px rgba(0,0,0,0.15)' }}>
+                          <PlayerPhoto player={player} style={{ width:'100%', height:'100%' }}/>
+                        </div>
+                      )}
+                      <span style={{ fontSize:11, fontWeight:600, color:'var(--text)' }}>{m.koreanPlayer?.name}</span>
+                    </div>
+                  </div>
+                );
+              }
+            })}
+          </div>
+        );
+      })()}
 
       <div style={{ height:24 }}/>
     </div>
