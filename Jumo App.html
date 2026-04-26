@@ -698,6 +698,7 @@ function TodayMatchCard({ m, onMatch, tweaks }) {
                         {statPills.map((s, i) => (
                           <span key={i} style={{
                             fontSize:11, fontWeight:700, padding:'4px 9px', borderRadius:8,
+                            display:'inline-flex', alignItems:'center', lineHeight:1,
                             background: s.accent ? 'rgba(245,196,0,0.15)' : 'var(--btn-bg)',
                             color: s.accent ? 'var(--acc)' : 'var(--text2)',
                             border: s.accent ? '0.5px solid rgba(245,196,0,0.3)' : '0.5px solid var(--border)',
@@ -1113,7 +1114,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
   const highlightData = getHighlightMatch();
   const highlightMatch = highlightData?.match;
   const highlightPlayer = highlightMatch ? ALL_PLAYERS.find(p => p.name === highlightMatch.koreanPlayer?.name) : null;
-
+  const heroPlayer = highlightPlayer;
   // Generate highlight text based on priority
   const getHighlightText = () => {
     if (!highlightMatch || !highlightData) return { status: '', main: '한국 선수 경기를 확인하세요', sub: '' };
@@ -1143,7 +1144,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
       case 4: // Finished match
         return { status: '경기 종료', main: '', sub: '' };
       case 5: // Upcoming
-        const statusText5 = m.lineupConfirmed ? '선발 출전' : '출전 예정';
+        const statusText5 = m.lineupConfirmed ? '선발 출전' : '출전 예상';
         return {
           status: m.krTime || m.time,
           main: `${m.koreanPlayer.name}\n${statusText5}`,
@@ -1242,14 +1243,15 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
 
       {/* ── FINISHED MATCH HIGHLIGHT CARD ── */}
       {isFinishedHighlight ? (
-        <div onClick={() => highlightMatch && onMatch(highlightMatch)} style={{ position:'relative', height:320, overflow:'hidden', cursor:'pointer' }}>
-          {/* Background: news image only */}
+        <div onClick={() => highlightMatch && onMatch(highlightMatch)} style={{ position:'relative', height:320, overflow:'hidden', cursor:'pointer', background:'#111' }}>
+          {/* Background */}
           {hlBgImg
-            ? <img src={hlBgImg} style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'center top' }} alt=""/>
-            : <div style={{ position:'absolute', inset:0, background:'linear-gradient(135deg,#1a2330,#0b0f14)' }}/>
+            ? <img src={hlBgImg} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }}/>
+            : <div style={{ position:'absolute', inset:0, background:'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)' }}>
+                {highlightMatch?.home?.logo && <img src={highlightMatch.home.logo} alt="" style={{ position:'absolute', right:-30, top:'50%', transform:'translateY(-50%)', width:200, height:200, objectFit:'contain', opacity:0.08, filter:'blur(2px)' }}/>}
+              </div>
           }
-          {/* Gradient overlay */}
-          <div style={{ position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.1) 30%, rgba(0,0,0,0.6) 70%, rgba(0,0,0,0.92) 100%)' }}/>
+          <div style={{ position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.45) 60%, rgba(0,0,0,0.88) 100%)' }}/>
 
           {/* Top bar */}
           <div style={{ position:'absolute', top:12, left:20, right:20, display:'flex', justifyContent:'space-between', alignItems:'center', zIndex:2 }}>
@@ -1286,29 +1288,52 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
 
           {/* Bottom: player performance + CTA */}
           <div style={{ position:'absolute', bottom:16, left:20, right:20, zIndex:2 }}>
-            <div style={{ fontSize:22, fontWeight:900, color:'#fff', letterSpacing:-0.5, marginBottom:10, textShadow:'0 1px 8px rgba(0,0,0,0.6)' }}>
-              🇰🇷 {finishedHeadline.main}
-            </div>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.6)' }}>{finishedHeadline.sub}</div>
-              <div style={{ ...LG.base, borderRadius:20, padding:'7px 14px', display:'flex', alignItems:'center', gap:4 }}>
-                <span style={{ fontSize:12, fontWeight:700, color:'#fff' }}>하이라이트 보기</span>
-                <span style={{ fontSize:12, color:'rgba(255,255,255,0.7)' }}>›</span>
-              </div>
-            </div>
+            {(() => {
+              const kp = highlightMatch.koreanPlayer;
+              const eventsGoals = (highlightMatch.events||[]).filter(e=>e.type==='goal'&&e.player===kp.name).length;
+              const eventsAssists = (highlightMatch.events||[]).filter(e=>e.type==='assist'&&e.player===kp.name).length;
+              const goals = (kp.matchGoals != null && kp.matchGoals > 0) ? kp.matchGoals : eventsGoals;
+              const assists = (kp.matchAssists != null && kp.matchAssists > 0) ? kp.matchAssists : eventsAssists;
+              const statParts = [];
+              if (goals > 0) statParts.push(`${goals}골`);
+              if (assists > 0) statParts.push(`${assists}도움`);
+              const ev = kp.event || '';
+              const mins = kp.minutesPlayed;
+              const minText = (ev === '풀타임' || mins >= 90) ? '풀타임 출전'
+                : ev.includes('분') ? ev
+                : mins > 0 ? `${mins}분 출전`
+                : ev === '출전 완료' ? '출전 완료'
+                : '출전';
+              statParts.push(minText);
+              const ytQuery = encodeURIComponent(`${highlightMatch.competition} ${highlightMatch.home.name} vs ${highlightMatch.away.name} ${kp.name} 주요장면`);
+              return (
+                <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between' }}>
+                  <div>
+                    <div style={{ fontSize:22, fontWeight:900, color:'#fff', letterSpacing:-0.5, textShadow:'0 1px 8px rgba(0,0,0,0.6)', marginBottom:4 }}>
+                      🇰🇷 {kp.name}
+                    </div>
+                    <div style={{ fontSize:18, color:'rgba(255,255,255,0.9)', fontWeight:700, letterSpacing:-0.3 }}>{statParts.join(' · ')}</div>
+                  </div>
+                  <div onClick={e => { e.stopPropagation(); window.open(`https://www.youtube.com/results?search_query=${ytQuery}`, '_blank'); }} style={{ ...LG.base, borderRadius:20, padding:'7px 14px', display:'flex', alignItems:'center', gap:4, flexShrink:0, cursor:'pointer' }}>
+                    <span style={{ fontSize:12, fontWeight:700, color:'#fff' }}>하이라이트 보기</span>
+                    <span style={{ fontSize:12, color:'rgba(255,255,255,0.7)' }}>›</span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
 
       ) : (
-      <div style={{ position:'relative', height:260, overflow:'hidden', marginBottom:0 }}>
-        {/* News background image only */}
-        <div style={{ position:'absolute', inset:0 }}>
-          {hlBgImg
-            ? <img src={hlBgImg} alt="" style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'center' }}/>
-            : <div style={{ width:'100%', height:'100%', background:'linear-gradient(135deg,#122033,#0b0f14)' }}/>
-          }
-          <div style={{ position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.7) 100%)' }}/>
-        </div>
+      <div style={{ position:'relative', height:260, overflow:'hidden', marginBottom:0, background:'#111' }}>
+        {/* Background */}
+        {hlBgImg
+          ? <img src={hlBgImg} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }}/>
+          : <div style={{ position:'absolute', inset:0, background:'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)' }}>
+              {highlightMatch?.home?.logo && <img src={highlightMatch.home.logo} alt="" style={{ position:'absolute', right:-30, top:'50%', transform:'translateY(-50%)', width:200, height:200, objectFit:'contain', opacity:0.08, filter:'blur(2px)' }}/>}
+            </div>
+        }
+        <div style={{ position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.65) 100%)' }}/>
         <div style={{ position:'absolute', top:12, left:20, right:20, display:'flex', justifyContent:'space-between', alignItems:'center', zIndex:2 }}>
           <span style={{ fontSize:15, fontWeight:900, color:'#fff', letterSpacing:2, textTransform:'uppercase' }}>JUMO</span>
           <div style={{ display:'flex', gap:8 }}>
@@ -1996,54 +2021,70 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false }) {
         ) : (
           selectedDateMatches.map(m => {
             const isFinished = m.status === 'STATUS_FINAL' || m.status === 'STATUS_FULL_TIME' || m.status === 'final' || m.status === 'STATUS_END_PERIOD' || m.status === 'STATUS_FINAL_PEN';
+            const kp = m.koreanPlayer;
+            const leagueName = m.competition || m.sport || '';
+            const labelParts = [kp.name];
+            if (isFinished || m.live) {
+              const ev = kp.event || '';
+              if (ev) labelParts.push(ev);
+              const goals = (m.events||[]).filter(e=>e.type==='goal'&&e.player===kp.name).length;
+              const assists = (m.events||[]).filter(e=>e.type==='assist'&&e.player===kp.name).length;
+              if (goals > 0) labelParts.push(`${goals}골`);
+              if (assists > 0) labelParts.push(`${assists}도움`);
+            }
 
             return (
-              <div key={m.id} onClick={() => onMatch(m)} style={{ marginBottom:10, background:'var(--surface)', borderRadius:14, padding:'14px 16px', cursor:'pointer', border: m.live ? '0.5px solid rgba(230,48,48,0.25)' : '0.5px solid var(--border2)', display:'flex', alignItems:'center', gap:12 }}>
-                <div style={{ width:40, flexShrink:0, textAlign:'center' }}>
-                  {m.live ? (
-                    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
-                      <LiveDot/>
-                      <span style={{ ...NUM, fontSize:11, fontWeight:700, color:'var(--acc)', whiteSpace:'nowrap' }}>{m.minute}'</span>
-                    </div>
-                  ) : isFinished ? (
-                    <div style={{ fontSize:9, fontWeight:700, color:'var(--text5)', whiteSpace:'nowrap' }}>종료</div>
-                  ) : (
-                    <>
-                      <div style={{ ...NUM, fontSize:13, fontWeight:700, color:'var(--text-60)', lineHeight:1, whiteSpace:'nowrap' }}>{m.time||'예정'}</div>
-                      <div style={{ fontSize:9, color:'var(--text5)', marginTop:2 }}>KST</div>
-                    </>
+              <React.Fragment key={m.id}>
+                {/* Label above card */}
+                <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:5, paddingLeft:2 }}>
+                  {m.competitionLogo
+                    ? <img src={m.competitionLogo} style={{ width:12, height:12, objectFit:'contain', opacity:0.55, flexShrink:0 }} alt=""/>
+                    : <span style={{ fontSize:10, flexShrink:0 }}>{m.sport?.includes('MLB')||m.sport?.includes('⚾') ? '⚾' : '⚽'}</span>
+                  }
+                  <span style={{ fontSize:11, color:'var(--text4)' }}>{leagueName.replace(/^[⚽⚾🏀🎾]\s*/,'')}</span>
+                  <span style={{ fontSize:11, color:'var(--text5)' }}>/</span>
+                  <span style={{ fontSize:11, color:'var(--acc)', fontWeight:700 }}>{labelParts[0]}</span>
+                  {labelParts.length > 1 && (
+                    <span style={{ fontSize:11, color:'var(--text)', fontWeight:500 }}>{' · ' + labelParts.slice(1).join(' · ')}</span>
                   )}
                 </div>
-                <div style={{ width:0.5, height:36, background:'var(--border)' }}/>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
-                    {(() => {
-                      const koreanTeam = m.koreanPlayer?.team;
-                      const homeIsKorean = koreanTeam === m.home.code;
-                      const awayIsKorean = koreanTeam === m.away.code;
-                      return (<>
-                        <span style={{ fontSize:12, fontWeight:600, color: homeIsKorean ? 'var(--acc)' : 'var(--text)', flex:1, textAlign:'right' }}>{m.home.name}</span>
-                        <TeamBadge code={m.home.code} size={22} logo={m.home.logo}/>
-                        <span style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text)', letterSpacing:-0.5, whiteSpace:'nowrap', flexShrink:0, minWidth:48, textAlign:'center' }}>
-                          {(m.live || isFinished) ? `${m.home.score} - ${m.away.score}` : m.time || '예정'}
-                        </span>
-                        <TeamBadge code={m.away.code} size={22} logo={m.away.logo}/>
-                        <span style={{ fontSize:12, fontWeight:600, color: awayIsKorean ? 'var(--acc)' : 'var(--text)', flex:1, textAlign:'left' }}>{m.away.name}</span>
-                      </>);
-                    })()}
+                <div onClick={() => onMatch(m)} style={{ marginBottom:14, background:'var(--surface)', borderRadius:14, padding:'14px 16px', cursor:'pointer', border: m.live ? '0.5px solid rgba(230,48,48,0.25)' : '0.5px solid var(--border2)', display:'flex', alignItems:'center', gap:12 }}>
+              <div style={{ width:40, flexShrink:0, textAlign:'center' }}>
+                {m.live ? (
+                  <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
+                    <LiveDot/>
+                    <span style={{ ...NUM, fontSize:11, fontWeight:700, color:'var(--acc)', whiteSpace:'nowrap' }}>{m.minute}'</span>
                   </div>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-                      {m.competitionLogo
-                        ? <img src={m.competitionLogo} style={{ width:14, height:14, objectFit:'contain', opacity:0.7 }} alt=""/>
-                        : <span style={{ fontSize:11 }}>{m.sport?.includes('MLB') || m.sport?.includes('⚾') ? '⚾' : '⚽'}</span>
-                      }
-                      <span style={{ fontSize:11, color:'var(--text4)', maxWidth:100, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.competition || m.sport}</span>
-                    </div>
-                    <span style={{ fontSize:11, color:'var(--acc)', fontWeight:600, whiteSpace:'nowrap' }}>🇰🇷 {m.koreanPlayer.name}</span>
-                  </div>
+                ) : isFinished ? (
+                  <div style={{ fontSize:9, fontWeight:700, color:'var(--text5)', whiteSpace:'nowrap' }}>종료</div>
+                ) : (
+                  <>
+                    <div style={{ ...NUM, fontSize:13, fontWeight:700, color:'var(--text-60)', lineHeight:1, whiteSpace:'nowrap' }}>{m.time||'예정'}</div>
+                    <div style={{ fontSize:9, color:'var(--text5)', marginTop:2 }}>KST</div>
+                  </>
+                )}
+              </div>
+              <div style={{ width:0.5, height:36, background:'var(--border)' }}/>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                  {(() => {
+                    const koreanTeam = m.koreanPlayer?.team;
+                    const homeIsKorean = koreanTeam === m.home.code;
+                    const awayIsKorean = koreanTeam === m.away.code;
+                    return (<>
+                      <span style={{ fontSize:12, fontWeight:600, color: homeIsKorean ? 'var(--acc)' : 'var(--text)', flex:1, textAlign:'right' }}>{m.home.name}</span>
+                      <TeamBadge code={m.home.code} size={22} logo={m.home.logo}/>
+                      <span style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text)', letterSpacing:-0.5, whiteSpace:'nowrap', flexShrink:0, minWidth:48, textAlign:'center' }}>
+                        {(m.live || isFinished) ? `${m.home.score} - ${m.away.score}` : m.time || '예정'}
+                      </span>
+                      <TeamBadge code={m.away.code} size={22} logo={m.away.logo}/>
+                      <span style={{ fontSize:12, fontWeight:600, color: awayIsKorean ? 'var(--acc)' : 'var(--text)', flex:1, textAlign:'left' }}>{m.away.name}</span>
+                    </>);
+                  })()}
                 </div>
               </div>
+            </div>
+              </React.Fragment>
             );
           })
         )}
@@ -2186,38 +2227,11 @@ function extractSource(description) {
 }
 
 function NewsImage({ url, fallbackPlayer }) {
-  const [imgUrl, setImgUrl] = React.useState(newsImageCache[url] || null);
-  const [state, setState] = React.useState(newsImageCache[url] ? 'loaded' : 'loading');
-
-  React.useEffect(() => {
-    if (newsImageCache[url]) { setImgUrl(newsImageCache[url]); setState('loaded'); return; }
-    fetch(`http://localhost:8002/news-image?url=${encodeURIComponent(url)}`)
-      .then(r => r.json())
-      .then(d => {
-        if (d.image && !d.image.startsWith('data:')) {
-          newsImageCache[url] = d.image;
-          setImgUrl(d.image);
-          setState('loaded');
-        } else {
-          newsImageCache[url] = null;
-          setState('error');
-        }
-      })
-      .catch(() => setState('error'));
-  }, [url]);
-
-  if (state === 'loading') return (
-    <div style={{ width:'100%', height:'100%', background:'linear-gradient(90deg, var(--border) 25%, var(--surface) 50%, var(--border) 75%)', backgroundSize:'200% 100%', animation:'shimmer 1.4s infinite' }}/>
+  return (
+    <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', background:'var(--border)' }}>
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" opacity="0.35"><rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" strokeWidth="1.5"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"/><path d="M3 15l5-4 4 3 3-2.5L21 15" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
+    </div>
   );
-  if (state === 'error' || !imgUrl) {
-    const playerImg = fallbackPlayer ? NEWS_PLAYER_IMG[fallbackPlayer] : null;
-    return playerImg ? (
-      <img src={playerImg} alt={fallbackPlayer} style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'50% 15%' }}/>
-    ) : (
-      <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:26, background:'var(--border)' }}>⚽</div>
-    );
-  }
-  return <img src={imgUrl} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} onError={() => setState('error')}/>;
 }
 
 function timeAgo(dateStr) {
@@ -2816,9 +2830,9 @@ function App() {
 
             let matchGoals = 0, matchAssists = 0, minutesIn = null, minutesOff = null, started = false;
 
-            // Check starter status from rosters
+            // Check starter status from rosters (ESPN uses roster.roster, not roster.entries)
             for (const roster of (data.rosters || [])) {
-              for (const entry of (roster.entries || [])) {
+              for (const entry of (roster.roster || roster.entries || [])) {
                 const n = entry.athlete?.displayName || '';
                 if (nameMatch(n, nameEn)) { started = entry.starter === true; }
               }
@@ -2826,11 +2840,11 @@ function App() {
 
             // Parse key events
             for (const ke of keyEvents) {
-              const type = ke.type?.type;
+              const type = ke.type?.type || '';
               const text = ke.text || '';
               const min = parseInt(ke.clock?.displayValue) || null;
 
-              if (type === 'goal') {
+              if (type.startsWith('goal')) {
                 // Scorer: text after first period until next period or "with"
                 const scorerMatch = text.match(/\.\s*([^(]+)\s*\(/);
                 if (scorerMatch && nameMatch(scorerMatch[1].trim(), nameEn)) matchGoals++;
@@ -3181,7 +3195,7 @@ function App() {
     }
 
     // Determine Korean player event status and extract stats
-    let playerEventText = '출전 예정';
+    let playerEventText = '출전 예상';
     let playerStats = { goals: undefined, assists: undefined, rating: undefined, minutesPlayed: undefined };
 
     if (koreanPlayer) {
@@ -3277,7 +3291,7 @@ function App() {
       } else if (lineupConfirmed) {
         playerEventText = '선발 출전';
       } else {
-        playerEventText = '출전 예정';
+        playerEventText = '출전 예상';
       }
     }
 
