@@ -93,6 +93,7 @@ html.light-mode body { background: #e5e5ea; }
 @keyframes slideUp { from{transform:translateY(100%);opacity:0} to{transform:translateY(0);opacity:1} }
 @keyframes fadeIn { from{opacity:0} to{opacity:1} }
 @keyframes ripple { 0%{transform:scale(1);opacity:0.6} 100%{transform:scale(2.5);opacity:0} }
+@keyframes spin { to { transform: rotate(360deg); } }
 @keyframes ticker { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
 @keyframes shimmer { 0%{opacity:0.3} 50%{opacity:0.7} 100%{opacity:0.3} }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
@@ -116,10 +117,23 @@ window.parent.postMessage({ type: '__edit_mode_available' }, '*');
 // ─── TWEAK DEFAULTS ───────────────────────────────────────────
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "homeVariant": 1,
-  "accentColor": "#e03030",
+  "accentColor": "#f5c400",
   "showPlayerPhoto": true,
   "liveAnimation": true
 }/*EDITMODE-END*/;
+
+// ─── LIQUID GLASS ────────────────────────────────────────────
+const LG = {
+  base: {
+    background: 'rgba(255,255,255,0.10)',
+    backdropFilter: 'blur(40px) saturate(200%)',
+    WebkitBackdropFilter: 'blur(40px) saturate(200%)',
+    border: '0.5px solid rgba(255,255,255,0.22)',
+    boxShadow: '0 4px 24px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -0.5px 0 rgba(0,0,0,0.08)',
+  },
+  circle: { width:36, height:36, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', flexShrink:0, padding:0, border:'none' },
+  pill:   { borderRadius:20, padding:'7px 14px', display:'flex', alignItems:'center', gap:6, cursor:'pointer', border:'none' },
+};
 
 // ─── API CONFIG ──────────────────────────────────────────────
 const ESPN_API = {
@@ -372,9 +386,8 @@ function SportTag({ sport }) {
 
 function BackBtn({ onBack }) {
   return (
-    <button onClick={onBack} style={{ background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:6, color:'var(--text-70)', padding:'0', marginBottom:2 }}>
-      <svg width="9" height="16" viewBox="0 0 9 16" fill="none"><path d="M7.5 1.5L2 8l5.5 6.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-      <span style={{ fontSize:14, fontWeight:500 }}>뒤로</span>
+    <button onClick={onBack} style={{ ...LG.base, ...LG.circle, color:'rgba(255,255,255,0.85)' }}>
+      <svg width="9" height="15" viewBox="0 0 9 15" fill="none"><path d="M7 1.5L2 7.5L7 13.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
     </button>
   );
 }
@@ -446,7 +459,7 @@ function TabBar({ active, onTab }) {
     { id:'home', label:'홈', icon: <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M3 9.5L11 2l8 7.5V20H14v-5h-6v5H3V9.5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" fill={active==='home'?'currentColor':'none'}/></svg> },
     { id:'schedule', label:'일정', icon: <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><rect x="3" y="5" width="16" height="15" rx="3" stroke="currentColor" strokeWidth="1.8"/><path d="M7 3v4M15 3v4M3 10h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>{active==='schedule' && <circle cx="11" cy="15" r="1.5" fill="currentColor"/>}</svg> },
     { id:'players', label:'선수', icon: <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><circle cx="11" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.8" fill={active==='players'?'currentColor':'none'}/><path d="M4 19c0-3.866 3.134-7 7-7s7 3.134 7 7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg> },
-    { id:'notif', label:'알림', icon: <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M11 2a7 7 0 00-7 7v4l-1.5 2.5h17L18 13V9a7 7 0 00-7-7z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" fill={active==='notif'?'currentColor':'none'}/><path d="M9 18.5a2 2 0 004 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg> },
+    { id:'news', label:'뉴스', icon: <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><rect x="2" y="4" width="18" height="14" rx="2.5" stroke="currentColor" strokeWidth="1.8" fill={active==='news'?'currentColor':'none'}/><path d="M6 8.5h10M6 12h7" stroke={active==='news'?'var(--bg)':'currentColor'} strokeWidth="1.6" strokeLinecap="round"/></svg> },
     { id:'more', label:'더보기', icon: <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><circle cx="5" cy="11" r="1.8" fill="currentColor"/><circle cx="11" cy="11" r="1.8" fill="currentColor"/><circle cx="17" cy="11" r="1.8" fill="currentColor"/></svg> },
   ];
   return (
@@ -653,40 +666,70 @@ function TodayMatchCard({ m, onMatch, tweaks }) {
             const isDraw = koreanScore === opponentScore;
             const opponentTeam = isHomeTeam ? m.away : m.home;
 
+            const kp = m.koreanPlayer;
+            const isMLB = (m.sport||'').includes('MLB') || (m.sport||'').includes('⚾');
+            const matchGoals = m.events?.filter(e => e.type==='goal' && e.player===kp.name).length || 0;
+            const matchAssists = m.events?.filter(e => e.type==='assist' && e.player===kp.name).length || 0;
+            // 골/도움이 있으면 무조건 출전한 것
+            const didPlay = kp.event !== '미출전' || matchGoals > 0 || matchAssists > 0;
+
+            // Build stat pills
+            const statPills = [];
+            if (!isMLB && didPlay) {
+              if (kp.minutesPlayed >= 90) statPills.push({ label:'풀타임', accent:false });
+              else if (kp.minutesPlayed > 0) statPills.push({ label:`${kp.minutesPlayed}분`, accent:false });
+              if (matchGoals > 0) statPills.push({ label:`⚽ ${matchGoals}골`, accent:true });
+              if (matchAssists > 0) statPills.push({ label:`🅰️ ${matchAssists}도움`, accent:true });
+              if (kp.rating) statPills.push({ label:`★ ${kp.rating}`, accent:false });
+            } else if (isMLB && didPlay) {
+              if (kp.hits !== undefined) statPills.push({ label:`${kp.hits}안타`, accent: kp.hits > 0 });
+              if (kp.homeRuns > 0) statPills.push({ label:`${kp.homeRuns}홈런`, accent:true });
+              if (kp.rbi > 0) statPills.push({ label:`${kp.rbi}타점`, accent:false });
+              if (kp.avg) statPills.push({ label:`타율 ${kp.avg}`, accent:false });
+            }
+
             return (
               <>
-                {/* Time - show "종료" */}
-                <div style={{ marginBottom:16 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                    <span style={{ fontSize:20, fontWeight:700, color:'var(--text)', letterSpacing:-0.3 }}>
-                      종료
-                    </span>
-                  </div>
+                {/* Player performance summary */}
+                <div style={{ marginBottom:14 }}>
+                  {didPlay ? (
+                    statPills.length > 0 ? (
+                      <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
+                        {statPills.map((s, i) => (
+                          <span key={i} style={{
+                            fontSize:11, fontWeight:700, padding:'4px 9px', borderRadius:8,
+                            background: s.accent ? 'rgba(245,196,0,0.15)' : 'var(--btn-bg)',
+                            color: s.accent ? 'var(--acc)' : 'var(--text2)',
+                            border: s.accent ? '0.5px solid rgba(245,196,0,0.3)' : '0.5px solid var(--border)',
+                          }}>{s.label}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span style={{ fontSize:13, color:'var(--text3)', fontWeight:600 }}>출전 완료</span>
+                    )
+                  ) : (
+                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                      <span style={{ fontSize:13, fontWeight:700, color:'var(--text4)' }}>미출전</span>
+                      <span style={{ fontSize:11, color:'var(--text5)' }}>· 엔트리 제외 또는 부상</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Teams with scores */}
                 <div style={{ marginBottom:12 }}>
                   <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
                     <TeamBadge code={m.home.code} size={20} logo={m.home.logo}/>
-                    <span style={{ fontSize:15, fontWeight:600, color:'var(--text)' }}>{m.home.name}</span>
-                    <span style={{ ...NUM, fontSize:22, fontWeight:800, color:'var(--text)', marginLeft:'auto' }}>
-                      {m.home.score}
-                    </span>
+                    <span style={{ fontSize:14, fontWeight:600, color:'var(--text)' }}>{m.home.name}</span>
+                    <span style={{ ...NUM, fontSize:22, fontWeight:800, color:'var(--text)', marginLeft:'auto' }}>{m.home.score}</span>
                   </div>
-
                   <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                     <TeamBadge code={m.away.code} size={20} logo={m.away.logo}/>
-                    <span style={{ fontSize:15, fontWeight:600, color:'var(--text-70)' }}>{m.away.name}</span>
-                    <span style={{ ...NUM, fontSize:22, fontWeight:800, color:'var(--text-70)', marginLeft:'auto' }}>
-                      {m.away.score}
-                    </span>
+                    <span style={{ fontSize:14, fontWeight:600, color:'var(--text-70)' }}>{m.away.name}</span>
+                    <span style={{ ...NUM, fontSize:22, fontWeight:800, color:'var(--text-70)', marginLeft:'auto' }}>{m.away.score}</span>
                   </div>
                 </div>
 
-                {/* Competition info */}
-                <div style={{ fontSize:11, color:'var(--text4)' }}>
-                  {m.competition}
-                </div>
+                <div style={{ fontSize:11, color:'var(--text4)' }}>{m.competition}</div>
               </>
             );
           })()
@@ -702,10 +745,10 @@ function TodayMatchCard({ m, onMatch, tweaks }) {
                     boxShadow:'0 2px 8px rgba(230,48,48,0.3)'
                   }}>
                     <span style={{ position:'relative', display:'inline-flex', alignItems:'center', justifyContent:'center', width:8, height:8 }}>
-                      <span style={{ position:'absolute', width:8, height:8, borderRadius:'50%', background:'#fff', opacity:0.4, animation:'ripple 1.4s ease-out infinite' }}/>
-                      <span style={{ width:5, height:5, borderRadius:'50%', background:'#fff', position:'relative' }}/>
+                      <span style={{ position:'absolute', width:8, height:8, borderRadius:'50%', background:'#000', opacity:0.4, animation:'ripple 1.4s ease-out infinite' }}/>
+                      <span style={{ width:5, height:5, borderRadius:'50%', background:'#000', position:'relative' }}/>
                     </span>
-                    <span style={{ fontSize:13, fontWeight:800, color:'#fff', letterSpacing:0.5 }}>
+                    <span style={{ fontSize:13, fontWeight:800, color:'#000', letterSpacing:0.5 }}>
                       LIVE
                     </span>
                   </div>
@@ -817,7 +860,7 @@ function LiveCarouselCard({ m, onMatch, tweaks }) {
 }
 
 // ─── SCREEN: HOME V1 — Card Stack ────────────────────────────
-function HomeV1({ onMatch, onPlayer, tweaks, liveApiMatches = [], isLoading = false }) {
+function HomeV1({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoading = false }) {
   const allMatches = [...MATCHES, ...liveApiMatches];
   const liveMatches = allMatches.filter(m => m.live || m.time === 'LIVE');
 
@@ -841,6 +884,9 @@ function HomeV1({ onMatch, onPlayer, tweaks, liveApiMatches = [], isLoading = fa
           <div style={{ fontSize:11, fontWeight:600, color:'var(--text4)', letterSpacing:1.5, textTransform:'uppercase', marginBottom:2 }}>JUMO</div>
           <div style={{ fontSize:22, fontWeight:700, color:'var(--text)', letterSpacing:-0.5 }}>오늘의 경기</div>
         </div>
+        <button onClick={onNotif} style={{ ...LG.base, ...LG.circle, color:'rgba(255,255,255,0.85)' }}>
+          <svg width="18" height="18" viewBox="0 0 22 22" fill="none"><path d="M11 2a7 7 0 00-7 7v4l-1.5 2.5h17L18 13V9a7 7 0 00-7-7z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/><path d="M9 18.5a2 2 0 004 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+        </button>
       </div>
 
       {/* Live section label */}
@@ -967,9 +1013,10 @@ function TodayMatchesCarousel({ matches, now, startOfToday, endOfToday, twelveHo
 }
 
 // ─── SCREEN: HOME V2 — Editorial ─────────────────────────────
-function HomeV2({ onMatch, onPlayer, tweaks, liveApiMatches = [], isLoading = false }) {
+function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoading = false }) {
   // State for real-time countdown updates
   const [currentTime, setCurrentTime] = React.useState(new Date());
+  const [hlBgImg, setHlBgImg] = React.useState(null);
 
   // Update current time every second for countdown
   React.useEffect(() => {
@@ -989,6 +1036,8 @@ function HomeV2({ onMatch, onPlayer, tweaks, liveApiMatches = [], isLoading = fa
   const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
   const twelveHoursLater = new Date(now.getTime() + 12 * 60 * 60 * 1000);
 
+  const isFinalStatus = (status) => ['STATUS_FINAL','STATUS_FULL_TIME','final','STATUS_END_PERIOD','STATUS_FINAL_PEN'].includes(status);
+
   const upcoming = allMatches
     .filter(m => {
       if (m.live || m.time === 'LIVE') return false;
@@ -998,6 +1047,28 @@ function HomeV2({ onMatch, onPlayer, tweaks, liveApiMatches = [], isLoading = fa
     })
     .sort((a, b) => new Date(a.fullDate) - new Date(b.fullDate)); // Sort by soonest first
 
+  const finishedWithKorean = allMatches
+    .filter(m => isFinalStatus(m.status) && m.koreanPlayer && m.koreanPlayer.event !== '미출전')
+    .sort((a, b) => new Date(b.fullDate || 0) - new Date(a.fullDate || 0));
+
+  const finishedTodayWithKorean = allMatches
+    .filter(m => {
+      if (!isFinalStatus(m.status) || !m.koreanPlayer || !m.fullDate) return false;
+      if (m.koreanPlayer.event === '미출전') return false;
+      const matchDate = new Date(m.fullDate);
+      return matchDate >= startOfToday && matchDate <= now;
+    })
+    .sort((a, b) => new Date(b.fullDate || 0) - new Date(a.fullDate || 0));
+
+  const upcomingTodayWithKorean = allMatches
+    .filter(m => {
+      if (m.live || m.time === 'LIVE' || !m.koreanPlayer || !m.fullDate) return false;
+      if (isFinalStatus(m.status)) return false;
+      const matchDate = new Date(m.fullDate);
+      return matchDate > now && matchDate <= endOfToday;
+    })
+    .sort((a, b) => new Date(a.fullDate || 0) - new Date(b.fullDate || 0));
+
   // Determine highlight match based on priority
   const getHighlightMatch = () => {
     // Priority 1: Live match with Korean player (HIGHEST PRIORITY)
@@ -1005,30 +1076,36 @@ function HomeV2({ onMatch, onPlayer, tweaks, liveApiMatches = [], isLoading = fa
       (m.live || m.time === 'LIVE') && m.koreanPlayer
     );
     if (liveWithKorean) {
-      console.log('🔴 LIVE MATCH FOUND:', liveWithKorean.koreanPlayer.name, '-', liveWithKorean.home.code, 'vs', liveWithKorean.away.code);
       return { match: liveWithKorean, priority: 1 };
     }
 
-    // Priority 2: Match with Korean player goal/assist/point
-    const matchWithGoal = allMatches.find(m =>
-      m.koreanPlayer && m.events?.some(e =>
-        e.type === 'goal' || e.type === 'assist' || e.player === m.koreanPlayer.name
-      )
-    );
-    if (matchWithGoal) return { match: matchWithGoal, priority: 2 };
+    // Priority 2/3: Compare today's finished vs today's upcoming and pick the closer one.
+    const closestFinishedToday = finishedTodayWithKorean[0];
+    const closestUpcomingToday = upcomingTodayWithKorean[0];
 
-    // Priority 3: Match starting soon (within 1 hour)
-    const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
-    const startingSoon = allMatches.find(m => {
-      if (!m.fullDate || !m.koreanPlayer) return false;
-      const matchDate = new Date(m.fullDate);
-      return matchDate >= now && matchDate <= oneHourLater;
-    });
-    if (startingSoon) return { match: startingSoon, priority: 3 };
+    if (closestFinishedToday && closestUpcomingToday) {
+      const finishedAgo = now - new Date(closestFinishedToday.fullDate || 0);
+      const upcomingIn = new Date(closestUpcomingToday.fullDate || 0) - now;
+      if (finishedAgo <= upcomingIn) return { match: closestFinishedToday, priority: 4 };
+      return { match: closestUpcomingToday, priority: 5 };
+    }
+    if (closestFinishedToday) return { match: closestFinishedToday, priority: 4 };
+    if (closestUpcomingToday) return { match: closestUpcomingToday, priority: 5 };
 
-    // Priority 4: Next upcoming match with Korean player
-    const nextMatch = upcoming.find(m => m.koreanPlayer);
-    if (nextMatch) return { match: nextMatch, priority: 4 };
+    // Fallback: Compare latest finished vs next upcoming in all available matches.
+    const recentFinished = finishedWithKorean[0];
+    const nextMatch = allMatches
+      .filter(m => m.koreanPlayer && m.fullDate && !isFinalStatus(m.status) && !(m.live || m.time === 'LIVE'))
+      .sort((a, b) => new Date(a.fullDate || 0) - new Date(b.fullDate || 0))[0];
+
+    if (recentFinished && nextMatch) {
+      const finishedAgo = now - new Date(recentFinished.fullDate || 0);
+      const upcomingIn = new Date(nextMatch.fullDate || 0) - now;
+      if (finishedAgo <= upcomingIn) return { match: recentFinished, priority: 4 };
+      return { match: nextMatch, priority: 5 };
+    }
+    if (recentFinished) return { match: recentFinished, priority: 4 };
+    if (nextMatch) return { match: nextMatch, priority: 5 };
 
     return null;
   };
@@ -1063,41 +1140,13 @@ function HomeV2({ onMatch, onPlayer, tweaks, liveApiMatches = [], isLoading = fa
             sub: `${m.home.name} vs ${m.away.name} · ${m.competition}`
           };
         }
-      case 2: // Goal/Assist (no longer used as separate priority)
-        const goalEvent = m.events?.[m.events.length - 1];
-        return {
-          status: `LIVE NOW · ${m.minute || ''}\'`,
-          main: `${m.koreanPlayer.name}\n${goalEvent?.type === 'goal' ? '⚽ 골' : '🅰️ 어시스트'} — ${m.home.score}:${m.away.score}`,
-          sub: `${m.home.name} vs ${m.away.name} · ${m.competition}`
-        };
-      case 3: // Starting soon
-        const diff = new Date(m.fullDate) - now;
-        const hoursLeft = Math.floor(diff / (1000 * 60 * 60));
-        const minsLeft = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        const secsLeft = Math.floor((diff % (1000 * 60)) / 1000);
-
-        let timeText = '';
-        if (hoursLeft > 0) {
-          timeText = `${hoursLeft}시간 ${minsLeft}분 후 시작`;
-        } else if (minsLeft > 0) {
-          timeText = `${minsLeft}분 ${secsLeft}초 후 시작`;
-        } else if (secsLeft > 0) {
-          timeText = `${secsLeft}초 후 시작`;
-        } else {
-          timeText = '곧 시작';
-        }
-
-        const statusText3 = m.lineupConfirmed ? '선발 출전' : '출전 예정';
-        return {
-          status: timeText,
-          main: `${m.koreanPlayer.name}\n${statusText3}`,
-          sub: `${m.home.name} vs ${m.away.name} · ${m.competition}`
-        };
-      case 4: // Upcoming
-        const statusText4 = m.lineupConfirmed ? '선발 출전' : '출전 예정';
+      case 4: // Finished match
+        return { status: '경기 종료', main: '', sub: '' };
+      case 5: // Upcoming
+        const statusText5 = m.lineupConfirmed ? '선발 출전' : '출전 예정';
         return {
           status: m.krTime || m.time,
-          main: `${m.koreanPlayer.name}\n${statusText4}`,
+          main: `${m.koreanPlayer.name}\n${statusText5}`,
           sub: `${m.home.name} vs ${m.away.name} · ${m.competition}`
         };
     }
@@ -1105,6 +1154,61 @@ function HomeV2({ onMatch, onPlayer, tweaks, liveApiMatches = [], isLoading = fa
 
   const highlightText = getHighlightText();
   const heroPlayer = highlightPlayer || PLAYERS[0];
+
+  // Build finished match headline helper
+  const buildFinishedHeadline = (m) => {
+    if (!m?.koreanPlayer) return { main: '', sub: '' };
+    const kp = m.koreanPlayer;
+    const name = kp.name;
+    const matchGoals = m.events?.filter(e => e.type === 'goal' && e.player === name).length || 0;
+    const matchAssists = m.events?.filter(e => e.type === 'assist' && e.player === name).length || 0;
+    const mins = kp.minutesPlayed;
+    const isMLB = (m.sport||'').includes('MLB') || (m.sport||'').includes('⚾');
+
+    let main = name;
+    if (isMLB) {
+      const parts = [];
+      if (kp.hits > 0) parts.push(`${kp.hits}안타`);
+      if (kp.homeRuns > 0) parts.push(`${kp.homeRuns}홈런`);
+      if (kp.rbi > 0) parts.push(`${kp.rbi}타점`);
+      main = parts.length > 0 ? `${name} ${parts.join(' ')}` : `${name} 출전`;
+    } else {
+      const parts = [];
+      if (matchGoals > 0) parts.push(`${matchGoals}골`);
+      if (matchAssists > 0) parts.push(`${matchAssists}도움`);
+      main = parts.length > 0 ? `${name} ${parts.join(' ')}` : `${name} ${mins >= 90 ? '풀타임 활약' : mins > 0 ? `${mins}분 출전` : '출전'}`;
+    }
+
+    const homeWin = m.home.score > m.away.score;
+    const draw = m.home.score === m.away.score;
+    const resultText = draw ? '무승부' : homeWin ? `${m.home.name} 승` : `${m.away.name} 승`;
+    const scoreText = `${m.home.score}-${m.away.score}`;
+    const minsText = !isMLB && mins >= 90 ? '선발 풀타임' : !isMLB && mins > 0 ? `${mins}분 출전` : '';
+    const sub = [minsText, `${m.home.name} ${scoreText} ${m.away.name}`, resultText].filter(Boolean).join(' · ');
+
+    return { main, sub };
+  };
+
+  const isFinishedHighlight = highlightData?.priority === 4;
+  const finishedHeadline = isFinishedHighlight ? buildFinishedHeadline(highlightMatch) : null;
+
+  // Fetch news background image — MUST be before any early return (Rules of Hooks)
+  React.useEffect(() => {
+    if (!isFinishedHighlight || !heroPlayer) { setHlBgImg(null); return; }
+    fetch(`http://localhost:8002/naver-news?query=${encodeURIComponent(heroPlayer.name)}&display=5&sort=date`)
+      .then(r => r.json())
+      .then(async data => {
+        for (const item of (data.items || [])) {
+          const url = item.originallink || item.link;
+          try {
+            const imgRes = await fetch(`http://localhost:8002/news-image?url=${encodeURIComponent(url)}`);
+            const imgData = await imgRes.json();
+            if (imgData.image) { setHlBgImg(imgData.image); return; }
+          } catch(e) {}
+        }
+      })
+      .catch(() => {});
+  }, [isFinishedHighlight, heroPlayer?.id]);
 
   // Show skeleton on initial load
   if (isLoading) {
@@ -1128,7 +1232,67 @@ function HomeV2({ onMatch, onPlayer, tweaks, liveApiMatches = [], isLoading = fa
 
   return (
     <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
-      {/* Big editorial header */}
+
+      {/* ── FINISHED MATCH HIGHLIGHT CARD ── */}
+      {isFinishedHighlight ? (
+        <div onClick={() => highlightMatch && onMatch(highlightMatch)} style={{ position:'relative', height:320, overflow:'hidden', cursor:'pointer' }}>
+          {/* Background: news image or player photo */}
+          {hlBgImg
+            ? <img src={hlBgImg} style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'center top' }} alt=""/>
+            : <PlayerPhoto player={heroPlayer} style={{ position:'absolute', inset:0, width:'100%', height:'100%' }} tint="transparent"/>
+          }
+          {/* Gradient overlay */}
+          <div style={{ position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.1) 30%, rgba(0,0,0,0.6) 70%, rgba(0,0,0,0.92) 100%)' }}/>
+
+          {/* Top bar */}
+          <div style={{ position:'absolute', top:12, left:20, right:20, display:'flex', justifyContent:'space-between', alignItems:'center', zIndex:2 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <span style={{ fontSize:15, fontWeight:900, color:'#fff', letterSpacing:2, textTransform:'uppercase' }}>JUMO</span>
+              {highlightMatch?.competition && (
+                <div style={{ background:'rgba(255,255,255,0.18)', backdropFilter:'blur(8px)', borderRadius:8, padding:'3px 8px' }}>
+                  <span style={{ fontSize:11, fontWeight:700, color:'#fff', letterSpacing:0.5 }}>{highlightMatch.competition}</span>
+                </div>
+              )}
+            </div>
+            <button onClick={e => { e.stopPropagation(); onNotif(); }} style={{ ...LG.base, ...LG.circle, color:'rgba(255,255,255,0.85)' }}>
+              <svg width="18" height="18" viewBox="0 0 22 22" fill="none"><path d="M11 2a7 7 0 00-7 7v4l-1.5 2.5h17L18 13V9a7 7 0 00-7-7z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" fill="none"/><path d="M9 18.5a2 2 0 004 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+            </button>
+          </div>
+
+          {/* Score center */}
+          <div style={{ position:'absolute', top:'50%', left:20, right:20, transform:'translateY(-60%)', zIndex:2, display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
+            <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
+              <TeamBadge code={highlightMatch.home.code} size={44} logo={highlightMatch.home.logo}/>
+              <span style={{ fontSize:11, color:'rgba(255,255,255,0.7)', fontWeight:600, textAlign:'center' }}>{highlightMatch.home.name}</span>
+            </div>
+            <div style={{ textAlign:'center' }}>
+              <div style={{ ...NUM, fontSize:52, fontWeight:900, color:'#fff', letterSpacing:-3, lineHeight:1, textShadow:'0 2px 12px rgba(0,0,0,0.5)' }}>
+                {highlightMatch.home.score}<span style={{ color:'rgba(255,255,255,0.4)', fontWeight:300 }}>:</span>{highlightMatch.away.score}
+              </div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:4, letterSpacing:1 }}>종료</div>
+            </div>
+            <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
+              <TeamBadge code={highlightMatch.away.code} size={44} logo={highlightMatch.away.logo}/>
+              <span style={{ fontSize:11, color:'rgba(255,255,255,0.7)', fontWeight:600, textAlign:'center' }}>{highlightMatch.away.name}</span>
+            </div>
+          </div>
+
+          {/* Bottom: player performance + CTA */}
+          <div style={{ position:'absolute', bottom:16, left:20, right:20, zIndex:2 }}>
+            <div style={{ fontSize:22, fontWeight:900, color:'#fff', letterSpacing:-0.5, marginBottom:10, textShadow:'0 1px 8px rgba(0,0,0,0.6)' }}>
+              🇰🇷 {finishedHeadline.main}
+            </div>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <div style={{ fontSize:12, color:'rgba(255,255,255,0.6)' }}>{finishedHeadline.sub}</div>
+              <div style={{ ...LG.base, borderRadius:20, padding:'7px 14px', display:'flex', alignItems:'center', gap:4 }}>
+                <span style={{ fontSize:12, fontWeight:700, color:'#fff' }}>하이라이트 보기</span>
+                <span style={{ fontSize:12, color:'rgba(255,255,255,0.7)' }}>›</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      ) : (
       <div style={{ position:'relative', height:260, overflow:'hidden', marginBottom:0 }}>
         {/* Goal background image */}
         <div style={{ position:'absolute', inset:0 }}>
@@ -1141,20 +1305,21 @@ function HomeV2({ onMatch, onPlayer, tweaks, liveApiMatches = [], isLoading = fa
         <div style={{ position:'absolute', top:12, left:20, right:20, display:'flex', justifyContent:'space-between', alignItems:'center', zIndex:2 }}>
           <span style={{ fontSize:15, fontWeight:900, color:'#fff', letterSpacing:2, textTransform:'uppercase' }}>JUMO</span>
           <div style={{ display:'flex', gap:8 }}>
-            <button style={{ background:'rgba(0,0,0,0.4)', backdropFilter:'blur(10px)', border:'0.5px solid rgba(255,255,255,0.2)', borderRadius:20, padding:'6px 10px', color:'rgba(255,255,255,0.9)', fontSize:12, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <button onClick={onNotif} style={{ ...LG.base, ...LG.circle, color:'rgba(255,255,255,0.85)' }}>
               <svg width="18" height="18" viewBox="0 0 22 22" fill="none"><path d="M11 2a7 7 0 00-7 7v4l-1.5 2.5h17L18 13V9a7 7 0 00-7-7z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" fill="none"/><path d="M9 18.5a2 2 0 004 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
             </button>
           </div>
         </div>
         <div style={{ position:'absolute', bottom:20, left:20, right:20, zIndex:2 }}>
           <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
-            {(highlightData?.priority === 1 || highlightData?.priority === 2) && <LiveDot/>}
-            <span style={{ fontSize:11, fontWeight:700, color: (highlightData?.priority === 1 || highlightData?.priority === 2) ? 'var(--acc)' : 'rgba(255,255,255,0.7)', letterSpacing:1.5 }}>{highlightText.status}</span>
+            {highlightData?.priority === 1 && <LiveDot/>}
+            <span style={{ fontSize:11, fontWeight:700, color: highlightData?.priority === 1 ? 'var(--acc)' : 'rgba(255,255,255,0.7)', letterSpacing:1.5 }}>{highlightText.status}</span>
           </div>
           <div style={{ fontSize:28, fontWeight:900, color:'#fff', lineHeight:1.1, marginBottom:8, letterSpacing:-0.5, whiteSpace:'pre-line' }}>{highlightText.main}</div>
           <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)' }}>{highlightText.sub}</div>
         </div>
       </div>
+      )}
 
       {/* Today's Matches Section */}
       <div style={{ padding:'16px 16px 8px' }}>
@@ -1299,14 +1464,16 @@ function HomeV2({ onMatch, onPlayer, tweaks, liveApiMatches = [], isLoading = fa
 }
 
 // ─── SCREEN: HOME V3 — Compact ───────────────────────────────
-function HomeV3({ onMatch, onPlayer, tweaks, liveApiMatches = [] }) {
+function HomeV3({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [] }) {
   return (
     <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
       <div style={{ padding:'12px 20px 8px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         <span style={{ fontSize:20, fontWeight:900, color:'var(--text)', letterSpacing:1, textTransform:'uppercase' }}>JUMO</span>
         <div style={{ display:'flex', alignItems:'center', gap:6 }}>
           <LiveDot/><span style={{ fontSize:11, fontWeight:700, color:'var(--acc)', letterSpacing:1 }}>2 LIVE</span>
-          <button style={{ background:'var(--border)', border:'none', borderRadius:16, padding:'5px 10px', color:'var(--text2)', fontSize:12, cursor:'pointer', marginLeft:8 }}>🔔</button>
+          <button onClick={onNotif} style={{ ...LG.base, ...LG.circle, color:'rgba(255,255,255,0.85)', marginLeft:4 }}>
+            <svg width="16" height="16" viewBox="0 0 22 22" fill="none"><path d="M11 2a7 7 0 00-7 7v4l-1.5 2.5h17L18 13V9a7 7 0 00-7-7z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/><path d="M9 18.5a2 2 0 004 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+          </button>
         </div>
       </div>
 
@@ -1408,11 +1575,7 @@ function LiveDetailScreen({ match, onBack }) {
   return (
     <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
       {/* Hero */}
-      <div style={{ position:'relative', overflow:'hidden' }}>
-        <div style={{ position:'absolute', inset:0, background:'var(--bg2)' }}/>
-        {player && (
-          <PlayerPhoto player={player} style={{ position:'absolute', right:0, top:0, bottom:0, width:'45%', opacity:0.7 }} tint="#0f0f14"/>
-        )}
+      <div style={{ position:'relative', overflow:'hidden', background:'var(--bg2)' }}>
         <div style={{ position:'relative', zIndex:2, padding:'12px 20px 20px' }}>
           <BackBtn onBack={onBack}/>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, margin:'12px 0 16px' }}>
@@ -1433,12 +1596,12 @@ function LiveDetailScreen({ match, onBack }) {
             )}
           </div>
           {/* Score block */}
-          <div style={{ display:'flex', alignItems:'center', gap:20, marginBottom:16 }}>
-            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
+          <div style={{ display:'flex', alignItems:'center', marginBottom:16 }}>
+            <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
               <TeamBadge code={match.home.code} size={44} logo={match.home.logo}/>
-              <span style={{ fontSize:12, fontWeight:600, color:'var(--text-70)' }}>{match.home.name}</span>
+              <span style={{ fontSize:12, fontWeight:600, color:'var(--text-70)', textAlign:'center' }}>{match.home.name}</span>
             </div>
-            <div style={{ flex:1, textAlign:'center' }}>
+            <div style={{ width:100, flexShrink:0, textAlign:'center' }}>
               {isLive ? (
                 <>
                   <div style={{ ...NUM, fontSize:52, fontWeight:800, color:'var(--text)', letterSpacing:-3, lineHeight:1 }}>{match.home.score}<span style={{ color:'var(--text4)', fontWeight:400 }}>:</span>{match.away.score}</div>
@@ -1467,18 +1630,23 @@ function LiveDetailScreen({ match, onBack }) {
                 </>
               )}
             </div>
-            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
+            <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
               <TeamBadge code={match.away.code} size={44} logo={match.away.logo}/>
-              <span style={{ fontSize:12, fontWeight:600, color:'var(--text2)' }}>{match.away.name}</span>
+              <span style={{ fontSize:12, fontWeight:600, color:'var(--text2)', textAlign:'center' }}>{match.away.name}</span>
             </div>
           </div>
           {/* Korean player highlight */}
           <div style={{ background:'var(--ticker-bg)', borderRadius:10, padding:'10px 14px', border:'0.5px solid rgba(230,48,48,0.25)', display:'flex', alignItems:'center', gap:10 }}>
             <span style={{ fontSize:18 }}>🇰🇷</span>
-            <div>
+            <div style={{ flex:1 }}>
               <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>{match.koreanPlayer.name} <span style={{ ...NUM, color:'var(--text4)', fontWeight:400 }}>#{match.koreanPlayer.number}</span></div>
               <div style={{ fontSize:11, color:'var(--text3)', fontWeight:500, marginTop:1 }}>{match.koreanPlayer.team}</div>
             </div>
+            {player && (
+              <div style={{ width:44, height:44, borderRadius:'50%', overflow:'hidden', flexShrink:0, border:'2px solid var(--acc)', background:'var(--surface)' }}>
+                <PlayerPhoto player={player} style={{ width:'100%', height:'100%' }} tint="var(--surface)"/>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1604,9 +1772,9 @@ function PlayerScreen({ player, onBack, onMatch }) {
         <div style={{ position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, var(--bg) 100%)' }}/>
         <div style={{ position:'absolute', top:12, left:20, right:20, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <BackBtn onBack={onBack}/>
-          <button onClick={() => setFollowed(f=>!f)} style={{ display:'flex', alignItems:'center', gap:6, background: followed ? 'var(--acc)' : 'rgba(0,0,0,0.35)', backdropFilter:'blur(10px)', border: followed ? 'none' : '0.5px solid rgba(255,255,255,0.2)', borderRadius:20, padding:'7px 14px', color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', transition:'all 0.2s' }}>
+          <button onClick={() => setFollowed(f=>!f)} style={{ display:'flex', alignItems:'center', gap:6, background: followed ? 'var(--acc)' : 'rgba(0,0,0,0.35)', backdropFilter:'blur(10px)', border: followed ? 'none' : '0.5px solid rgba(255,255,255,0.2)', borderRadius:20, padding:'7px 14px', color: followed ? '#000' : '#fff', fontSize:13, fontWeight:700, cursor:'pointer', transition:'all 0.2s' }}>
             {followed
-              ? <><svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5L4.5 8.5L11 1" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>팔로우 중</>
+              ? <><svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5L4.5 8.5L11 1" stroke="#000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>팔로우 중</>
               : <>+ 팔로우</>}
           </button>
         </div>
@@ -1727,33 +1895,45 @@ function PlayerScreen({ player, onBack, onMatch }) {
 }
 
 // ─── SCREEN: SCHEDULE ─────────────────────────────────────────
-function ScheduleScreen({ onMatch, liveApiMatches = [] }) {
+function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false }) {
   const days = ['일','월','화','수','목','금','토'];
   const now = new Date();
 
-  // Generate dates: today ±3 days
+  // Generate dates: today ±7 days
   const datesList = [];
-  for (let i = -3; i <= 3; i++) {
+  for (let i = -7; i <= 7; i++) {
     const date = new Date(now);
     date.setDate(date.getDate() + i);
     datesList.push(date);
   }
 
   const [selDate, setSelDate] = React.useState(now.toDateString());
+  const stripRef = React.useRef(null);
+  const todayRef = React.useRef(null);
 
-  // Filter matches for selected date and within ±3 days range
-  const threeDaysAgo = new Date(now);
-  threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-  threeDaysAgo.setHours(0, 0, 0, 0);
+  // Scroll today's cell to center on mount
+  React.useEffect(() => {
+    if (stripRef.current && todayRef.current) {
+      const strip = stripRef.current;
+      const cell = todayRef.current;
+      const offset = cell.offsetLeft - (strip.clientWidth / 2) + (cell.offsetWidth / 2);
+      strip.scrollLeft = offset;
+    }
+  }, []);
 
-  const threeDaysLater = new Date(now);
-  threeDaysLater.setDate(threeDaysLater.getDate() + 3);
-  threeDaysLater.setHours(23, 59, 59, 999);
+  // Filter matches for selected date and within ±7 days range
+  const sevenDaysAgo = new Date(now);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  sevenDaysAgo.setHours(0, 0, 0, 0);
+
+  const sevenDaysLater = new Date(now);
+  sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
+  sevenDaysLater.setHours(23, 59, 59, 999);
 
   const allMatches = liveApiMatches.filter(m => {
     if (!m.fullDate || !m.koreanPlayer) return false;
     const matchDate = new Date(m.fullDate);
-    return matchDate >= threeDaysAgo && matchDate <= threeDaysLater;
+    return matchDate >= sevenDaysAgo && matchDate <= sevenDaysLater;
   });
 
   const selectedDateMatches = allMatches.filter(m => {
@@ -1761,17 +1941,13 @@ function ScheduleScreen({ onMatch, liveApiMatches = [] }) {
     return matchDate.toDateString() === selDate;
   });
 
-  // Get label for date (3일전, 2일전, 어제, 오늘, 내일, 2일후, 3일후)
+  // Get label for date
   const getDateLabel = (date) => {
-    const dayDiff = Math.floor((date - now) / (1000 * 60 * 60 * 24));
-    if (dayDiff === 0) return '오늘';
-    if (dayDiff === -1) return '어제';
-    if (dayDiff === 1) return '내일';
-    if (dayDiff === -2) return '2일전';
-    if (dayDiff === -3) return '3일전';
-    if (dayDiff === 2) return '2일후';
-    if (dayDiff === 3) return '3일후';
-    return `${dayDiff > 0 ? '+' : ''}${dayDiff}일`;
+    const diff = Math.round((new Date(date.getFullYear(), date.getMonth(), date.getDate()) - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / (1000 * 60 * 60 * 24));
+    if (diff === 0) return '오늘';
+    if (diff === -1) return '어제';
+    if (diff === 1) return '내일';
+    return diff < 0 ? `${-diff}일전` : `${diff}일후`;
   };
 
   return (
@@ -1779,7 +1955,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [] }) {
       <div style={{ padding:'16px 20px 8px', fontSize:22, fontWeight:700, color:'var(--text)', letterSpacing:-0.5 }}>일정</div>
 
       {/* Date strip */}
-      <div style={{ display:'flex', gap:6, padding:'8px 16px 12px', overflowX:'auto' }} className="scrollbar-hide">
+      <div ref={stripRef} style={{ display:'flex', gap:6, padding:'8px 16px 12px', overflowX:'auto' }} className="scrollbar-hide">
         {datesList.map(date => {
           const dayIdx = date.getDay();
           const dateStr = date.toDateString();
@@ -1788,10 +1964,10 @@ function ScheduleScreen({ onMatch, liveApiMatches = [] }) {
           const label = getDateLabel(date);
 
           return (
-            <div key={dateStr} onClick={() => setSelDate(dateStr)} style={{ flexShrink:0, minWidth:64, height:72, borderRadius:12, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:3, cursor:'pointer', background: isSel ? 'var(--acc)' : isToday ? 'rgba(230,48,48,0.12)' : 'var(--border2)', border: isToday && !isSel ? '0.5px solid rgba(230,48,48,0.3)' : '0.5px solid transparent', padding:'8px 6px' }}>
-              <span style={{ fontSize:9, color: isSel ? 'rgba(255,255,255,0.7)' : 'var(--text5)', fontWeight:600, letterSpacing:0.3 }}>{label}</span>
-              <span style={{ ...NUM, fontSize:22, fontWeight:800, color: isSel ? '#fff' : isToday ? 'var(--acc)' : 'var(--text-70)', lineHeight:1 }}>{date.getDate()}</span>
-              <span style={{ fontSize:10, color: isSel ? 'rgba(255,255,255,0.6)' : 'var(--text4)', fontWeight:600 }}>{days[dayIdx]}</span>
+            <div key={dateStr} ref={isToday ? todayRef : null} onClick={() => setSelDate(dateStr)} style={{ flexShrink:0, minWidth:64, height:72, borderRadius:12, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:3, cursor:'pointer', background: isSel ? 'var(--acc)' : isToday ? 'rgba(245,196,0,0.12)' : 'var(--border2)', border: isToday && !isSel ? '0.5px solid rgba(245,196,0,0.4)' : '0.5px solid transparent', padding:'8px 6px' }}>
+              <span style={{ fontSize:9, color: isSel ? 'rgba(0,0,0,0.6)' : 'var(--text5)', fontWeight:600, letterSpacing:0.3 }}>{label}</span>
+              <span style={{ ...NUM, fontSize:22, fontWeight:800, color: isSel ? '#000' : isToday ? 'var(--acc)' : 'var(--text-70)', lineHeight:1 }}>{date.getDate()}</span>
+              <span style={{ fontSize:10, color: isSel ? 'rgba(0,0,0,0.5)' : 'var(--text4)', fontWeight:600 }}>{days[dayIdx]}</span>
             </div>
           );
         })}
@@ -1799,7 +1975,12 @@ function ScheduleScreen({ onMatch, liveApiMatches = [] }) {
 
       {/* Match list */}
       <div style={{ padding:'0 16px' }}>
-        {selectedDateMatches.length === 0 ? (
+        {isLoading ? (
+          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'80px 20px', gap:16 }}>
+            <div style={{ width:36, height:36, borderRadius:'50%', border:'3px solid var(--border)', borderTopColor:'var(--acc)', animation:'spin 0.8s linear infinite' }}/>
+            <div style={{ fontSize:13, color:'var(--text4)', fontWeight:600 }}>일정을 불러오는 중입니다...</div>
+          </div>
+        ) : selectedDateMatches.length === 0 ? (
           <div style={{ textAlign:'center', padding:'60px 20px', color:'var(--text4)' }}>
             <div style={{ fontSize:48, marginBottom:16 }}>📅</div>
             <div style={{ fontSize:15, fontWeight:600, marginBottom:6 }}>경기가 없습니다</div>
@@ -1811,34 +1992,48 @@ function ScheduleScreen({ onMatch, liveApiMatches = [] }) {
 
             return (
               <div key={m.id} onClick={() => onMatch(m)} style={{ marginBottom:10, background:'var(--surface)', borderRadius:14, padding:'14px 16px', cursor:'pointer', border: m.live ? '0.5px solid rgba(230,48,48,0.25)' : '0.5px solid var(--border2)', display:'flex', alignItems:'center', gap:12 }}>
-                <div style={{ width:50, flexShrink:0, textAlign:'center' }}>
+                <div style={{ width:40, flexShrink:0, textAlign:'center' }}>
                   {m.live ? (
                     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
                       <LiveDot/>
-                      <span style={{ ...NUM, fontSize:12, fontWeight:700, color:'var(--acc)' }}>{m.minute}'</span>
+                      <span style={{ ...NUM, fontSize:11, fontWeight:700, color:'var(--acc)', whiteSpace:'nowrap' }}>{m.minute}'</span>
                     </div>
                   ) : isFinished ? (
-                    <div style={{ fontSize:10, fontWeight:700, color:'var(--text5)', textAlign:'center' }}>종료</div>
+                    <div style={{ fontSize:9, fontWeight:700, color:'var(--text5)', whiteSpace:'nowrap' }}>종료</div>
                   ) : (
                     <>
-                      <div style={{ ...NUM, fontSize:14, fontWeight:700, color:'var(--text-60)', lineHeight:1 }}>{m.time||'예정'}</div>
+                      <div style={{ ...NUM, fontSize:13, fontWeight:700, color:'var(--text-60)', lineHeight:1, whiteSpace:'nowrap' }}>{m.time||'예정'}</div>
                       <div style={{ fontSize:9, color:'var(--text5)', marginTop:2 }}>KST</div>
                     </>
                   )}
                 </div>
                 <div style={{ width:0.5, height:36, background:'var(--border)' }}/>
-                <div style={{ flex:1 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
-                    <TeamBadge code={m.home.code} size={24} logo={m.home.logo}/>
-                    <span style={{ fontSize:13, fontWeight:600, color:'var(--text)' }}>{m.home.name}</span>
-                    {(m.live || isFinished) && <span style={{ ...NUM, fontSize:18, fontWeight:800, color:'var(--text)', letterSpacing:-1, marginLeft:'auto', marginRight:'auto' }}>{m.home.score} - {m.away.score}</span>}
-                    {!m.live && !isFinished && <span style={{ fontSize:12, color:'var(--text4)', marginLeft:'auto', marginRight:'auto' }}>vs</span>}
-                    <span style={{ fontSize:13, fontWeight:600, color:'var(--text2)', textAlign:'right' }}>{m.away.name}</span>
-                    <TeamBadge code={m.away.code} size={24} logo={m.away.logo}/>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
+                    {(() => {
+                      const koreanTeam = m.koreanPlayer?.team;
+                      const homeIsKorean = koreanTeam === m.home.code;
+                      const awayIsKorean = koreanTeam === m.away.code;
+                      return (<>
+                        <span style={{ fontSize:12, fontWeight:600, color: homeIsKorean ? 'var(--acc)' : 'var(--text)', flex:1, textAlign:'right' }}>{m.home.name}</span>
+                        <TeamBadge code={m.home.code} size={22} logo={m.home.logo}/>
+                        <span style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text)', letterSpacing:-0.5, whiteSpace:'nowrap', flexShrink:0, minWidth:48, textAlign:'center' }}>
+                          {(m.live || isFinished) ? `${m.home.score} - ${m.away.score}` : m.time || '예정'}
+                        </span>
+                        <TeamBadge code={m.away.code} size={22} logo={m.away.logo}/>
+                        <span style={{ fontSize:12, fontWeight:600, color: awayIsKorean ? 'var(--acc)' : 'var(--text)', flex:1, textAlign:'left' }}>{m.away.name}</span>
+                      </>);
+                    })()}
                   </div>
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                    <span style={{ fontSize:11, color:'var(--text4)' }}>{m.sport}</span>
-                    <span style={{ fontSize:11, color:'var(--acc)', fontWeight:600 }}>🇰🇷 {m.koreanPlayer.name}</span>
+                    <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                      {m.competitionLogo
+                        ? <img src={m.competitionLogo} style={{ width:14, height:14, objectFit:'contain', opacity:0.7 }} alt=""/>
+                        : <span style={{ fontSize:11 }}>{m.sport?.includes('MLB') || m.sport?.includes('⚾') ? '⚾' : '⚽'}</span>
+                      }
+                      <span style={{ fontSize:11, color:'var(--text4)', maxWidth:100, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.competition || m.sport}</span>
+                    </div>
+                    <span style={{ fontSize:11, color:'var(--acc)', fontWeight:600, whiteSpace:'nowrap' }}>🇰🇷 {m.koreanPlayer.name}</span>
                   </div>
                 </div>
               </div>
@@ -1863,14 +2058,14 @@ function PlayersScreen({ onPlayer, onAdd, followed }) {
     <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
       <div style={{ padding:'16px 20px 8px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         <div style={{ fontSize:22, fontWeight:700, color:'var(--text)', letterSpacing:-0.5 }}>선수</div>
-        <button onClick={onAdd} style={{ display:'flex', alignItems:'center', gap:6, background:'var(--acc)', border:'none', borderRadius:20, padding:'8px 16px', color:'var(--text)', fontSize:13, fontWeight:700, cursor:'pointer' }}>
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="#fff" strokeWidth="2" strokeLinecap="round"/></svg>
+        <button onClick={onAdd} style={{ display:'flex', alignItems:'center', gap:6, background:'var(--acc)', border:'none', borderRadius:20, padding:'8px 16px', color:'#000', fontSize:13, fontWeight:700, cursor:'pointer' }}>
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="#000" strokeWidth="2" strokeLinecap="round"/></svg>
           선수 추가
         </button>
       </div>
       <div style={{ display:'flex', gap:8, padding:'0 16px 14px', overflowX:'auto' }} className="scrollbar-hide">
         {sports.map(s => (
-          <button key={s} onClick={() => setFilter(s)} style={{ flexShrink:0, background: filter===s ? 'var(--acc)' : 'var(--border)', border:'none', borderRadius:20, padding:'7px 16px', color: filter===s ? '#fff' : 'var(--text2)', fontSize:13, fontWeight:600, cursor:'pointer' }}>{s}</button>
+          <button key={s} onClick={() => setFilter(s)} style={{ flexShrink:0, background: filter===s ? 'var(--acc)' : 'var(--border)', border:'none', borderRadius:20, padding:'7px 16px', color: filter===s ? '#000' : 'var(--text2)', fontSize:13, fontWeight:600, cursor:'pointer' }}>{s}</button>
         ))}
       </div>
       <div style={{ padding:'0 16px', display:'flex', flexDirection:'column', gap:10 }}>
@@ -1914,7 +2109,6 @@ function NotifScreen({ notifications }) {
   ];
   return (
     <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
-      <div style={{ padding:'16px 20px 8px', fontSize:22, fontWeight:700, color:'var(--text)', letterSpacing:-0.5 }}>알림</div>
       {notifs.length === 0 ? (
         <div style={{ textAlign:'center', padding:'60px 20px', color:'var(--text4)' }}>
           <div style={{ fontSize:48, marginBottom:16 }}>🔔</div>
@@ -1939,6 +2133,292 @@ function NotifScreen({ notifications }) {
         </div>
       )}
       <div style={{ height:24 }}/>
+    </div>
+  );
+}
+
+// ─── SCREEN: NEWS ─────────────────────────────────────────────
+const NEWS_PLAYERS = [
+  { label:'손흥민', query:'손흥민' },
+  { label:'이강인', query:'이강인' },
+  { label:'김민재', query:'김민재' },
+  { label:'황희찬', query:'황희찬' },
+  { label:'김하성', query:'김하성' },
+  { label:'이정후', query:'이정후' },
+  { label:'조규성', query:'조규성' },
+  { label:'양현준', query:'양현준' },
+  { label:'오현규', query:'오현규' },
+];
+
+const newsImageCache = {};
+
+const NEWS_PLAYER_IMG = {
+  '손흥민': 'image/heungmin.png', '이강인': 'image/kangin.png',
+  '김민재': 'image/minjae.png',   '황희찬': 'image/heechan.png',
+  '황인범': 'image/inbeom.png',   '조규성': 'image/guesung.png',
+  '김하성': 'image/haseong.png',  '이정후': 'image/junghoo.png',
+  '김혜성': 'image/hyeseong.png', '오현규': 'image/hyungyu.png',
+  '양현준': 'image/hyunjun.png',
+};
+
+function detectPlayerName(text) {
+  for (const name of Object.keys(NEWS_PLAYER_IMG)) {
+    if (text && text.includes(name)) return name;
+  }
+  return null;
+}
+
+function extractSource(description) {
+  if (!description) return '';
+  const tmp = document.createElement('div');
+  tmp.innerHTML = description;
+  const firstLi = tmp.querySelector('li');
+  if (!firstLi) return '';
+  const parts = firstLi.textContent.split('　　');
+  return parts[1]?.trim() || '';
+}
+
+function NewsImage({ url, fallbackPlayer }) {
+  const [imgUrl, setImgUrl] = React.useState(newsImageCache[url] || null);
+  const [state, setState] = React.useState(newsImageCache[url] ? 'loaded' : 'loading');
+
+  React.useEffect(() => {
+    if (newsImageCache[url]) { setImgUrl(newsImageCache[url]); setState('loaded'); return; }
+    fetch(`http://localhost:8002/news-image?url=${encodeURIComponent(url)}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.image && !d.image.startsWith('data:')) {
+          newsImageCache[url] = d.image;
+          setImgUrl(d.image);
+          setState('loaded');
+        } else {
+          newsImageCache[url] = null;
+          setState('error');
+        }
+      })
+      .catch(() => setState('error'));
+  }, [url]);
+
+  if (state === 'loading') return (
+    <div style={{ width:'100%', height:'100%', background:'linear-gradient(90deg, var(--border) 25%, var(--surface) 50%, var(--border) 75%)', backgroundSize:'200% 100%', animation:'shimmer 1.4s infinite' }}/>
+  );
+  if (state === 'error' || !imgUrl) {
+    const playerImg = fallbackPlayer ? NEWS_PLAYER_IMG[fallbackPlayer] : null;
+    return playerImg ? (
+      <img src={playerImg} alt={fallbackPlayer} style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'50% 15%' }}/>
+    ) : (
+      <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:26, background:'var(--border)' }}>⚽</div>
+    );
+  }
+  return <img src={imgUrl} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} onError={() => setState('error')}/>;
+}
+
+function timeAgo(dateStr) {
+  const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+  if (diff < 60) return '방금';
+  if (diff < 3600) return Math.floor(diff/60) + '분 전';
+  if (diff < 86400) return Math.floor(diff/3600) + '시간 전';
+  return Math.floor(diff/86400) + '일 전';
+}
+
+function stripHtml(str) {
+  return str ? str.replace(/<[^>]*>/g, '').replace(/&quot;/g,'"').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>') : '';
+}
+
+function NewsScreen({ sportFeeds }) {
+  const NEWS_CATEGORIES = ['전체', '해외축구', 'MLB', '기타'];
+  const [category, setCategory] = React.useState('전체');
+  const [articles, setArticles] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState(null);
+
+  const MATCH_KEYWORDS = ['골','득점','어시스트','선발','출전','해트트릭','스코어','승리','패배','무승부','결승골','동점골','멀티골','풀타임','선제골','교체','활약','경기 결과','경기 일정','다음 경기','홈경기','원정경기','vs ','대 '];
+  const EXCLUDE_KEYWORDS = ['부고','연봉','협회','가이드라인','노동','라커룸','칼럼','장인상','별세','타계','사망','인터뷰','은퇴','이적설','몸값','연봉협상','스타랭킹','순위표'];
+  const PLAYER_NAMES = NEWS_PLAYERS.map(p => p.label);
+  const SOCCER_PLAYERS = ['손흥민','이강인','김민재','황희찬','조규성','양현준','오현규'];
+  const MLB_PLAYERS = ['김하성','이정후','김혜성','류현진'];
+
+  const enabledSportTypes = React.useMemo(() => {
+    const set = new Set();
+    if (sportFeeds?.soccer) set.add('soccer');
+    if (sportFeeds?.baseball) set.add('baseball');
+    if (sportFeeds?.badminton) {
+      set.add('other');
+    }
+    return set;
+  }, [sportFeeds]);
+
+  const detectCategory = (article) => {
+    const haystack = `${article.title} ${article.description} ${article.source || ''}`;
+    if (SOCCER_PLAYERS.some(name => haystack.includes(name))) return { category:'해외축구', sportType:'soccer' };
+    if (MLB_PLAYERS.some(name => haystack.includes(name))) return { category:'MLB', sportType:'baseball' };
+    return { category:'기타', sportType:'other' };
+  };
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setArticles([]);
+
+    const fetchAllPlayerNews = async () => {
+      try {
+        const responses = await Promise.all(
+          NEWS_PLAYERS.map(player =>
+            fetch(`http://localhost:8002/naver-news?query=${encodeURIComponent(player.query)}`)
+              .then(r => r.json())
+              .then(data => (data.items || []).map(item => ({
+                title: stripHtml(item.title),
+                link: item.originallink || item.link,
+                naverLink: item.link,
+                pubDate: item.pubDate,
+                description: stripHtml(item.description),
+                player: player.label,
+                source: (() => {
+                  try { return new URL(item.originallink || item.link).hostname; }
+                  catch { return ''; }
+                })(),
+              })))
+              .catch(() => [])
+          )
+        );
+
+        const merged = responses.flat();
+        const filtered = merged.filter(item => {
+          const haystack = `${item.title} ${item.description}`;
+          if (EXCLUDE_KEYWORDS.some(kw => haystack.includes(kw))) return false;
+          if (!PLAYER_NAMES.some(name => haystack.includes(name))) return false;
+          return MATCH_KEYWORDS.some(kw => haystack.includes(kw));
+        });
+
+        const unique = Array.from(
+          new Map(filtered.map(item => [`${item.title}|${item.link}`, item])).values()
+        ).sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+
+        if (!cancelled) {
+          setArticles(unique.slice(0, 40).map(item => {
+            const meta = detectCategory(item);
+            return { ...item, category: meta.category, sportType: meta.sportType };
+          }));
+        }
+      } catch {
+        if (!cancelled) setError('프록시 서버에 연결할 수 없습니다');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    fetchAllPlayerNews();
+    return () => { cancelled = true; };
+  }, []);
+
+  const allowedArticles = articles.filter(a => enabledSportTypes.has(a.sportType));
+  const visibleArticles = category === '전체'
+    ? allowedArticles
+    : allowedArticles.filter(a => a.category === category);
+
+  const enabledCategories = React.useMemo(() => {
+    const categories = ['전체'];
+    if (sportFeeds?.soccer) categories.push('해외축구');
+    if (sportFeeds?.baseball) categories.push('MLB');
+    if (sportFeeds?.badminton) {
+      categories.push('기타');
+    }
+    return categories;
+  }, [sportFeeds]);
+
+  React.useEffect(() => {
+    if (!enabledCategories.includes(category)) {
+      setCategory('전체');
+    }
+  }, [enabledCategories, category]);
+
+  return (
+    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+      <div style={{ padding:'16px 20px 12px', fontSize:22, fontWeight:700, color:'var(--text)', letterSpacing:-0.5 }}>뉴스</div>
+
+      <div style={{ display:'flex', gap:8, overflowX:'auto', padding:'0 16px 14px' }} className="scrollbar-hide">
+        {NEWS_CATEGORIES.filter(c => enabledCategories.includes(c)).map(c => (
+          <button
+            key={c}
+            onClick={() => setCategory(c)}
+            style={{
+              flexShrink:0,
+              background: category === c ? 'var(--acc)' : 'var(--border)',
+              border:'none',
+              borderRadius:20,
+              padding:'7px 16px',
+              fontSize:13,
+              fontWeight:600,
+              color: category === c ? '#000' : 'var(--text2)',
+              cursor:'pointer',
+              whiteSpace:'nowrap',
+            }}
+          >
+            {c}
+          </button>
+        ))}
+      </div>
+
+      {/* Articles */}
+      <div style={{ padding:'0 16px', display:'flex', flexDirection:'column', gap:12 }}>
+        {loading && Array.from({length:5}).map((_, i) => (
+          <div key={i} style={{ background:'var(--surface)', borderRadius:18, overflow:'hidden', border:'0.5px solid var(--border2)', display:'flex', height:130 }}>
+            <div style={{ width:120, flexShrink:0, background:'var(--border)' }}/>
+            <div style={{ flex:1, padding:'18px 16px' }}>
+              <div style={{ height:14, borderRadius:7, background:'var(--border)', marginBottom:10, width:'90%' }}/>
+              <div style={{ height:14, borderRadius:7, background:'var(--border)', marginBottom:10, width:'70%' }}/>
+              <div style={{ height:12, borderRadius:6, background:'var(--border)', marginBottom:14, width:'50%' }}/>
+              <div style={{ height:11, borderRadius:5, background:'var(--border)', width:'35%' }}/>
+            </div>
+          </div>
+        ))}
+
+        {!loading && error && (
+          <div style={{ textAlign:'center', padding:'48px 20px', color:'var(--text4)' }}>
+            <div style={{ fontSize:40, marginBottom:12 }}>📡</div>
+            <div style={{ fontSize:14, fontWeight:600, marginBottom:4 }}>{error}</div>
+            <div style={{ fontSize:12 }}>잠시 후 다시 시도해주세요</div>
+          </div>
+        )}
+
+        {!loading && !error && visibleArticles.length === 0 && (
+          <div style={{ textAlign:'center', padding:'48px 20px', color:'var(--text4)' }}>
+            <div style={{ fontSize:40, marginBottom:12 }}>📰</div>
+            <div style={{ fontSize:14, fontWeight:600 }}>뉴스가 없습니다</div>
+          </div>
+        )}
+
+        {visibleArticles.map((a, i) => {
+          const fallbackPlayer = detectPlayerName(`${a.title} ${a.description}`) || a.player || null;
+          const source = (() => { try { return new URL(a.link).hostname.replace('www.','').replace('m.','').split('.')[0]; } catch { return ''; } })();
+          return (
+            <a key={i} href={a.naverLink || a.link} target="_blank" rel="noopener noreferrer" style={{ textDecoration:'none' }}>
+              <div style={{ background:'var(--surface)', borderRadius:18, border:'0.5px solid var(--border2)', display:'flex', overflow:'hidden', minHeight:130 }}>
+                <div style={{ width:120, flexShrink:0, position:'relative', overflow:'hidden' }}>
+                  <NewsImage url={a.link} fallbackPlayer={fallbackPlayer}/>
+                </div>
+                <div style={{ flex:1, padding:'16px 16px', display:'flex', flexDirection:'column', justifyContent:'space-between', minWidth:0 }}>
+                  <div style={{ fontSize:14, fontWeight:700, color:'var(--text)', lineHeight:1.5, display:'-webkit-box', WebkitLineClamp:3, WebkitBoxOrient:'vertical', overflow:'hidden' }}>
+                    {a.title}
+                  </div>
+                  {a.description && (
+                    <div style={{ fontSize:12, color:'var(--text4)', lineHeight:1.4, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden', marginTop:6 }}>
+                      {a.description}
+                    </div>
+                  )}
+                  <div style={{ display:'flex', gap:5, alignItems:'center', marginTop:8 }}>
+                    {source && <span style={{ fontSize:11, color:'var(--acc)', fontWeight:700 }}>{source}</span>}
+                    {source && <span style={{ fontSize:10, color:'var(--text5)' }}>·</span>}
+                    <span style={{ fontSize:11, color:'var(--text4)' }}>{timeAgo(a.pubDate)}</span>
+                  </div>
+                </div>
+              </div>
+            </a>
+          );
+        })}
+        <div style={{ height:20 }}/>
+      </div>
     </div>
   );
 }
@@ -1978,7 +2458,7 @@ function AddPlayerScreen({ followed, onToggle, onBack }) {
         </div>
         <div style={{ display:'flex', gap:8, overflowX:'auto', paddingBottom:12 }} className="scrollbar-hide">
           {sports.map(s => (
-            <button key={s} onClick={() => setFilter(s)} style={{ flexShrink:0, background: filter===s ? 'var(--acc)' : 'var(--border)', border:'none', borderRadius:20, padding:'7px 14px', color: filter===s ? '#fff' : 'var(--text2)', fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap', transition:'all 0.15s' }}>{s}</button>
+            <button key={s} onClick={() => setFilter(s)} style={{ flexShrink:0, background: filter===s ? 'var(--acc)' : 'var(--border)', border:'none', borderRadius:20, padding:'7px 14px', color: filter===s ? '#000' : 'var(--text2)', fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap', transition:'all 0.15s' }}>{s}</button>
           ))}
         </div>
       </div>
@@ -1989,7 +2469,7 @@ function AddPlayerScreen({ followed, onToggle, onBack }) {
         {filtered.map(p => {
           const isFollowed = followed.has(p.id);
           return (
-            <div key={p.id} onClick={() => onToggle(p.id)} style={{ display:'flex', alignItems:'center', gap:12, marginBottom:8, background: isFollowed ? 'rgba(230,48,48,0.08)' : 'var(--surface)', borderRadius:16, padding:'10px 14px 10px 10px', cursor:'pointer', border: isFollowed ? '0.5px solid rgba(230,48,48,0.3)' : '0.5px solid var(--border2)', transition:'all 0.15s' }}>
+            <div key={p.id} onClick={() => onToggle(p.id)} style={{ display:'flex', alignItems:'center', gap:12, marginBottom:8, background: isFollowed ? 'rgba(245,196,0,0.10)' : 'var(--surface)', borderRadius:16, padding:'10px 14px 10px 10px', cursor:'pointer', border: isFollowed ? '0.5px solid rgba(245,196,0,0.45)' : '0.5px solid var(--border2)', transition:'all 0.15s' }}>
               <div style={{ width:56, height:68, borderRadius:12, overflow:'hidden', background:'var(--card)', flexShrink:0, position:'relative' }}>
                 <PlayerPhoto player={p} style={{ position:'absolute', inset:0 }} tint="var(--surface)"/>
               </div>
@@ -2007,7 +2487,7 @@ function AddPlayerScreen({ followed, onToggle, onBack }) {
               </div>
               <div style={{ flexShrink:0, width:34, height:34, borderRadius:'50%', background: isFollowed ? 'var(--acc)' : 'var(--border)', display:'flex', alignItems:'center', justifyContent:'center', transition:'all 0.15s', border: isFollowed ? 'none' : '0.5px solid var(--text6)' }}>
                 {isFollowed
-                  ? <svg width="14" height="11" viewBox="0 0 14 11" fill="none"><path d="M1 5.5L5 9.5L13 1.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  ? <svg width="14" height="11" viewBox="0 0 14 11" fill="none"><path d="M1 5.5L5 9.5L13 1.5" stroke="#000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                   : <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="var(--text-60)" strokeWidth="1.8" strokeLinecap="round"/></svg>
                 }
               </div>
@@ -2062,14 +2542,14 @@ function NotifSettingsScreen({ onBack }) {
 }
 
 // ─── MORE: SPORT FEED SETTINGS ───────────────────────────────
-function SportFeedScreen({ onBack }) {
-  const init = [
+function SportFeedScreen({ onBack, sportFeeds, onToggleSportFeed }) {
+  const sports = [
     { id:'soccer',    icon:'⚽', name:'축구',      sub:'EPL, 분데스리가, 리그앙', on:true },
     { id:'baseball',  icon:'⚾', name:'야구',      sub:'MLB, KBO, NPB',          on:true },
     { id:'badminton', icon:'🏸', name:'배드민턴',   sub:'BWF 월드투어',             on:true },
   ];
-  const [sports, setSports] = React.useState(init);
-  const toggle = id => setSports(p => p.map(s => s.id === id ? {...s, on:!s.on} : s));
+  const isOn = (id) => sportFeeds?.[id] !== false;
+  const toggle = (id) => onToggleSportFeed?.(id);
   return (
     <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
       <div style={{ padding:'12px 20px 20px' }}>
@@ -2078,8 +2558,8 @@ function SportFeedScreen({ onBack }) {
         <div style={{ fontSize:13, color:'var(--text4)', marginBottom:20 }}>홈 피드에 표시할 종목을 선택하세요</div>
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
           {sports.map(s => (
-            <div key={s.id} onClick={() => toggle(s.id)} style={{ background: s.on ? 'rgba(230,48,48,0.1)' : 'var(--surface)', border: s.on ? '0.5px solid rgba(230,48,48,0.35)' : '0.5px solid var(--border)', borderRadius:16, padding:'14px', cursor:'pointer', transition:'all 0.15s', position:'relative' }}>
-              {s.on && <div style={{ position:'absolute', top:10, right:10, width:18, height:18, borderRadius:'50%', background:'var(--acc)', display:'flex', alignItems:'center', justifyContent:'center' }}><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg></div>}
+            <div key={s.id} onClick={() => toggle(s.id)} style={{ background: isOn(s.id) ? 'rgba(230,48,48,0.1)' : 'var(--surface)', border: isOn(s.id) ? '0.5px solid rgba(230,48,48,0.35)' : '0.5px solid var(--border)', borderRadius:16, padding:'14px', cursor:'pointer', transition:'all 0.15s', position:'relative' }}>
+              {isOn(s.id) && <div style={{ position:'absolute', top:10, right:10, width:18, height:18, borderRadius:'50%', background:'var(--acc)', display:'flex', alignItems:'center', justifyContent:'center' }}><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#000" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg></div>}
               <div style={{ fontSize:26, marginBottom:8 }}>{s.icon}</div>
               <div style={{ fontSize:14, fontWeight:700, color:'var(--text)', marginBottom:3 }}>{s.name}</div>
               <div style={{ fontSize:11, color:'var(--text4)', lineHeight:1.4 }}>{s.sub}</div>
@@ -2140,10 +2620,10 @@ function StreamingScreen({ onBack }) {
 }
 
 // ─── SCREEN: MORE (main) ─────────────────────────────────────
-function MoreScreen({ darkMode, onToggleDark }) {
+function MoreScreen({ darkMode, onToggleDark, sportFeeds, onToggleSportFeed }) {
   const [sub, setSub] = React.useState(null);
   if (sub === 'notif')      return <NotifSettingsScreen onBack={() => setSub(null)}/>;
-  if (sub === 'sports')     return <SportFeedScreen onBack={() => setSub(null)}/>;
+  if (sub === 'sports')     return <SportFeedScreen onBack={() => setSub(null)} sportFeeds={sportFeeds} onToggleSportFeed={onToggleSportFeed}/>;
   if (sub === 'streaming')  return <StreamingScreen onBack={() => setSub(null)}/>;
 
   const groups = [
@@ -2205,7 +2685,7 @@ function App() {
     try { return { ...TWEAK_DEFAULTS, ...JSON.parse(localStorage.getItem('jumo_tweaks')||'{}') }; }
     catch { return TWEAK_DEFAULTS; }
   });
-  const [tab, setTab] = React.useState(() => localStorage.getItem('jumo_tab')||'home');
+  const [tab, setTab] = React.useState(() => { const t = localStorage.getItem('jumo_tab'); return (t === 'notif' || !t) ? 'home' : t; });
   const [screen, setScreen] = React.useState('main');
   const [selectedMatch, setSelectedMatch] = React.useState(null);
   const [selectedPlayer, setSelectedPlayer] = React.useState(null);
@@ -2213,6 +2693,20 @@ function App() {
   const toggleFollow = (id) => setFollowed(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const [darkMode, setDarkMode] = React.useState(true);
   const toggleDark = () => setDarkMode(d => !d);
+  const [sportFeeds, setSportFeeds] = React.useState(() => {
+    try {
+      return { soccer:true, baseball:true, badminton:true, ...JSON.parse(localStorage.getItem('jumo_sport_feeds') || '{}') };
+    } catch {
+      return { soccer:true, baseball:true, badminton:true };
+    }
+  });
+  const toggleSportFeed = (id) => {
+    setSportFeeds(prev => {
+      const next = { ...prev, [id]: !prev[id] };
+      localStorage.setItem('jumo_sport_feeds', JSON.stringify(next));
+      return next;
+    });
+  };
   const [liveMatches, setLiveMatches] = React.useState([]);
   const [apiLoading, setApiLoading] = React.useState(true); // Start with true for initial load
   const [isInitialLoad, setIsInitialLoad] = React.useState(true);
@@ -2251,10 +2745,18 @@ function App() {
       try {
         const allMatches = [];
 
-        // Fetch soccer leagues
+        // Build ±7 day date range string for ESPN API (YYYYMMDD-YYYYMMDD)
+        const pad = n => String(n).padStart(2, '0');
+        const fmtDate = d => `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
+        const today = new Date();
+        const from = new Date(today); from.setDate(today.getDate() - 7);
+        const to   = new Date(today); to.setDate(today.getDate() + 7);
+        const dateRange = `${fmtDate(from)}-${fmtDate(to)}`;
+
+        // Fetch soccer leagues with date range
         for (const [league, url] of Object.entries(ESPN_API.soccer)) {
           try {
-            const res = await fetch(url);
+            const res = await fetch(`${url}?dates=${dateRange}&limit=100`);
             const data = await res.json();
             if (data.events) {
               const matches = data.events.map(e => transformESPNEvent(e, 'soccer', league));
@@ -2265,8 +2767,8 @@ function App() {
           }
         }
 
-        // Fetch MLB
-        const mlbRes = await fetch(ESPN_API.mlb);
+        // Fetch MLB with date range
+        const mlbRes = await fetch(`${ESPN_API.mlb}?dates=${dateRange}&limit=200`);
         const mlbData = await mlbRes.json();
         if (mlbData.events) {
           const matches = mlbData.events.map(e => transformESPNEvent(e, 'mlb'));
@@ -2275,46 +2777,152 @@ function App() {
 
         // Filter for Korean players
         const koreanMatches = allMatches.filter(m => m.koreanPlayer);
-        setLiveMatches(koreanMatches);
 
-        // Update ALL_PLAYERS with latest season stats from API
-        // ESPN API provides season cumulative stats, not per-match stats
-        koreanMatches.forEach(match => {
-          if (match.koreanPlayer) {
-            const playerIndex = ALL_PLAYERS.findIndex(p =>
-              p.nameEn === match.koreanPlayer.nameEn ||
-              p.name === match.koreanPlayer.name
-            );
+        // Fetch ESPN summary for finished Korean soccer matches to get real player stats
+        const LEAGUE_PATHS = { mls:'usa.1', epl:'eng.1', ger:'ger.1', fra:'fra.1', ita:'ita.1', sco:'sco.1', tur:'tur.1', den:'den.1', ned:'ned.1', bel:'bel.1' };
+        const FINAL_ST = ['STATUS_FINAL','STATUS_FULL_TIME','STATUS_END_PERIOD','STATUS_FINAL_PEN','final'];
+        const soccerFinished = koreanMatches.filter(m => m.leagueKey && LEAGUE_PATHS[m.leagueKey] && FINAL_ST.includes(m.status));
 
-            if (playerIndex !== -1) {
-              // Update season stats if available from ESPN
-              if (match.koreanPlayer.goals !== undefined && match.koreanPlayer.goals > 0) {
-                ALL_PLAYERS[playerIndex].goals = match.koreanPlayer.goals;
-              }
-              if (match.koreanPlayer.assists !== undefined && match.koreanPlayer.assists > 0) {
-                ALL_PLAYERS[playerIndex].assists = match.koreanPlayer.assists;
-              }
-              if (match.koreanPlayer.rating !== undefined && match.koreanPlayer.rating > 0) {
-                ALL_PLAYERS[playerIndex].rating = parseFloat(match.koreanPlayer.rating);
-              }
+        const nameMatch = (espnName, nameEn) => {
+          const a = espnName.toLowerCase().replace(/[-\s]/g,'');
+          const b = nameEn.toLowerCase().replace(/[-\s]/g,'');
+          return a.includes(b) || b.includes(a) || a === b;
+        };
 
-              // For MLB stats
-              if (match.koreanPlayer.hits !== undefined) {
-                ALL_PLAYERS[playerIndex].hits = match.koreanPlayer.hits;
-              }
-              if (match.koreanPlayer.avg !== undefined) {
-                ALL_PLAYERS[playerIndex].avg = match.koreanPlayer.avg;
-              }
-              if (match.koreanPlayer.homeRuns !== undefined) {
-                ALL_PLAYERS[playerIndex].homeRuns = match.koreanPlayer.homeRuns;
-              }
-              if (match.koreanPlayer.rbi !== undefined) {
-                ALL_PLAYERS[playerIndex].rbi = match.koreanPlayer.rbi;
-              }
+        if (soccerFinished.length > 0) {
+          const summaries = await Promise.allSettled(
+            soccerFinished.map(m =>
+              fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${LEAGUE_PATHS[m.leagueKey]}/summary?event=${m.id}`)
+                .then(r => r.json()).then(d => ({ id: m.id, data: d })).catch(() => null)
+            )
+          );
 
-              console.log(`📊 Updated ${match.koreanPlayer.name}: G:${match.koreanPlayer.goals} A:${match.koreanPlayer.assists}`);
+          summaries.forEach(result => {
+            if (result.status !== 'fulfilled' || !result.value) return;
+            const { id, data } = result.value;
+            const idx = koreanMatches.findIndex(m => m.id === id);
+            if (idx === -1) return;
+
+            const m = koreanMatches[idx];
+            const nameEn = m.koreanPlayer.nameEn;
+            const keyEvents = data.keyEvents || [];
+
+            let matchGoals = 0, matchAssists = 0, minutesIn = null, minutesOff = null, started = false;
+
+            // Check starter status from rosters
+            for (const roster of (data.rosters || [])) {
+              for (const entry of (roster.entries || [])) {
+                const n = entry.athlete?.displayName || '';
+                if (nameMatch(n, nameEn)) { started = entry.starter === true; }
+              }
             }
+
+            // Parse key events
+            for (const ke of keyEvents) {
+              const type = ke.type?.type;
+              const text = ke.text || '';
+              const min = parseInt(ke.clock?.displayValue) || null;
+
+              if (type === 'goal') {
+                // Scorer: text after first period until next period or "with"
+                const scorerMatch = text.match(/\.\s*([^(]+)\s*\(/);
+                if (scorerMatch && nameMatch(scorerMatch[1].trim(), nameEn)) matchGoals++;
+                // Assist: "Assisted by X"
+                const assistMatch = text.match(/[Aa]ssisted by ([^.]+)/);
+                if (assistMatch && nameMatch(assistMatch[1].trim(), nameEn)) matchAssists++;
+              }
+
+              if (type === 'substitution' && text.includes('replaces')) {
+                const parts = text.split('replaces');
+                const comesOn = (parts[0] || '').split('.').pop().trim();
+                const goesOff = (parts[1] || '').trim().replace(/\.$/, '');
+                if (nameMatch(goesOff, nameEn)) minutesOff = min;
+                if (nameMatch(comesOn, nameEn)) minutesIn = min;
+              }
+            }
+
+            const didPlay = started || minutesIn !== null || matchGoals > 0 || matchAssists > 0;
+            let minutesPlayed = 0;
+            if (started) minutesPlayed = minutesOff !== null ? minutesOff : 90;
+            else if (minutesIn !== null) minutesPlayed = (minutesOff || 90) - minutesIn;
+
+            const newEvent = !didPlay ? '미출전'
+              : minutesPlayed >= 90 ? '풀타임'
+              : minutesPlayed > 0 ? `${minutesPlayed}분 출전`
+              : '출전 완료';
+
+            const newEvents = [
+              ...(m.events || []),
+              ...Array.from({length: matchGoals}, () => ({ type:'goal', player: m.koreanPlayer.name })),
+              ...Array.from({length: matchAssists}, () => ({ type:'assist', player: m.koreanPlayer.name })),
+            ];
+
+            koreanMatches[idx] = {
+              ...m,
+              events: newEvents,
+              koreanPlayer: { ...m.koreanPlayer, event: newEvent, minutesPlayed, matchGoals, matchAssists },
+            };
+          });
+        }
+
+        setLiveMatches([...koreanMatches]);
+
+        // Stabilize player metrics by aggregating per player:
+        // - Counting stats use max (avoid dropping due to partial match payloads)
+        // - Rating/AVG use the most recent match payload
+        const playerMetrics = new Map();
+
+        koreanMatches.forEach(match => {
+          if (!match.koreanPlayer) return;
+
+          const playerIndex = ALL_PLAYERS.findIndex(p =>
+            p.nameEn === match.koreanPlayer.nameEn ||
+            p.name === match.koreanPlayer.name
+          );
+          if (playerIndex === -1) return;
+
+          const current = playerMetrics.get(playerIndex) || {
+            goals: Number(ALL_PLAYERS[playerIndex].goals) || 0,
+            assists: Number(ALL_PLAYERS[playerIndex].assists) || 0,
+            hits: Number(ALL_PLAYERS[playerIndex].hits) || 0,
+            homeRuns: Number(ALL_PLAYERS[playerIndex].homeRuns) || 0,
+            rbi: Number(ALL_PLAYERS[playerIndex].rbi) || 0,
+            rating: Number(ALL_PLAYERS[playerIndex].rating) || 0,
+            avg: ALL_PLAYERS[playerIndex].avg,
+            latestTs: 0,
+          };
+
+          const ts = match.fullDate ? new Date(match.fullDate).getTime() : 0;
+          const kp = match.koreanPlayer;
+
+          if (kp.goals !== undefined && kp.goals !== null) current.goals = Math.max(current.goals, Number(kp.goals) || 0);
+          if (kp.assists !== undefined && kp.assists !== null) current.assists = Math.max(current.assists, Number(kp.assists) || 0);
+          if (kp.hits !== undefined && kp.hits !== null) current.hits = Math.max(current.hits, Number(kp.hits) || 0);
+          if (kp.homeRuns !== undefined && kp.homeRuns !== null) current.homeRuns = Math.max(current.homeRuns, Number(kp.homeRuns) || 0);
+          if (kp.rbi !== undefined && kp.rbi !== null) current.rbi = Math.max(current.rbi, Number(kp.rbi) || 0);
+
+          if (ts >= current.latestTs) {
+            if (kp.rating !== undefined && kp.rating !== null && kp.rating !== '') {
+              const parsedRating = parseFloat(kp.rating);
+              if (!Number.isNaN(parsedRating)) current.rating = parsedRating;
+            }
+            if (kp.avg !== undefined && kp.avg !== null && kp.avg !== '') {
+              current.avg = kp.avg;
+            }
+            current.latestTs = ts;
           }
+
+          playerMetrics.set(playerIndex, current);
+        });
+
+        playerMetrics.forEach((metrics, playerIndex) => {
+          ALL_PLAYERS[playerIndex].goals = metrics.goals;
+          ALL_PLAYERS[playerIndex].assists = metrics.assists;
+          ALL_PLAYERS[playerIndex].hits = metrics.hits;
+          ALL_PLAYERS[playerIndex].homeRuns = metrics.homeRuns;
+          ALL_PLAYERS[playerIndex].rbi = metrics.rbi;
+          ALL_PLAYERS[playerIndex].rating = metrics.rating;
+          if (metrics.avg !== undefined) ALL_PLAYERS[playerIndex].avg = metrics.avg;
         });
 
         console.log(`✅ ${new Date().toLocaleTimeString('ko-KR')} | 한국 선수 경기: ${koreanMatches.length}개`);
@@ -2580,12 +3188,13 @@ function App() {
         return name.includes(koreanPlayer.name) || koreanPlayer.name.includes(name.split(' ').pop());
       });
 
+      let didPlay = false;
+
       if (koreanAthlete) {
         const athleteStats = koreanAthlete.statistics || koreanAthlete.stats || [];
 
         // For soccer: Extract season stats from athlete.statistics
         if (sport === 'soccer') {
-          // Goals (season total)
           const goals = athleteStats.find(s =>
             s.name === 'goals' ||
             s.abbreviation === 'G' ||
@@ -2593,7 +3202,6 @@ function App() {
           );
           if (goals) playerStats.goals = parseInt(goals.displayValue || goals.value) || 0;
 
-          // Assists (season total)
           const assists = athleteStats.find(s =>
             s.name === 'assists' ||
             s.abbreviation === 'A' ||
@@ -2601,7 +3209,6 @@ function App() {
           );
           if (assists) playerStats.assists = parseInt(assists.displayValue || assists.value) || 0;
 
-          // Rating (match rating)
           const rating = athleteStats.find(s =>
             s.name === 'rating' ||
             s.name === 'playerRating' ||
@@ -2609,19 +3216,26 @@ function App() {
           );
           if (rating) playerStats.rating = parseFloat(rating.displayValue || rating.value).toFixed(1);
 
-          // Minutes played (this match)
           const minutes = athleteStats.find(s =>
             s.name === 'minutesPlayed' ||
             s.abbreviation === 'MIN' ||
             s.displayName === 'Minutes Played'
           );
-          if (minutes) playerStats.minutesPlayed = parseInt(minutes.displayValue || minutes.value) || 0;
+          if (minutes) {
+            playerStats.minutesPlayed = parseInt(minutes.displayValue || minutes.value) || 0;
+            didPlay = playerStats.minutesPlayed > 0;
+          }
         }
 
-        // For MLB: Extract batting stats
+        // For MLB: Extract batting stats — presence of at-bat stats means player batted
         if (sport === 'mlb') {
+          const atBats = athleteStats.find(s => s.abbreviation === 'AB' || s.name === 'atBats');
           const hits = athleteStats.find(s => s.abbreviation === 'H' || s.name === 'hits');
-          if (hits) playerStats.hits = parseInt(hits.displayValue || hits.value) || 0;
+          if (hits !== undefined) {
+            playerStats.hits = parseInt(hits?.displayValue || hits?.value) || 0;
+            didPlay = true;
+          }
+          if (atBats !== undefined) didPlay = true;
 
           const avg = athleteStats.find(s => s.abbreviation === 'AVG' || s.name === 'avg');
           if (avg) playerStats.avg = parseFloat(avg.displayValue || avg.value).toFixed(3);
@@ -2635,14 +3249,27 @@ function App() {
       }
 
       // Set event text
+      const isFinished = status === 'STATUS_FINAL' || status === 'STATUS_FULL_TIME' || status === 'STATUS_END_PERIOD' || status === 'STATUS_FINAL_PEN';
       if (isLive) {
         playerEventText = '출전 중';
-      } else if (status === 'STATUS_FINAL' || status === 'STATUS_FULL_TIME' || status === 'STATUS_END_PERIOD' || status === 'STATUS_FINAL_PEN') {
-        playerEventText = playerStats.minutesPlayed ? `${playerStats.minutesPlayed}분 출전` : '출전 완료';
+      } else if (isFinished) {
+        if (!koreanAthlete || !didPlay) {
+          playerEventText = '미출전';
+        } else if (playerStats.minutesPlayed > 0) {
+          playerEventText = `${playerStats.minutesPlayed}분 출전`;
+        } else {
+          playerEventText = '출전 완료';
+        }
+        // 이벤트(골/도움)가 있으면 실제 출전 — '미출전' 덮어쓰기
+        if (koreanPlayer) {
+          const hasEvent = events.some(e => e.player === koreanPlayer.name);
+          if (hasEvent && playerEventText === '미출전') {
+            playerEventText = '출전 완료';
+          }
+        }
       } else if (lineupConfirmed) {
         playerEventText = '선발 출전';
       } else {
-        // Before 1 hour of match start, show "출전 예정"
         playerEventText = '출전 예정';
       }
     }
@@ -2662,10 +3289,12 @@ function App() {
       live: isLive,
       minute,
       sport: sport === 'mlb' ? '⚾ MLB' : `⚽ ${league.toUpperCase()}`,
+      leagueKey: league,
       home: { name: homeTeam, code: home.team.abbreviation, score: parseInt(home.score) || 0, logo: homeLogo },
       away: { name: awayTeam, code: away.team.abbreviation, score: parseInt(away.score) || 0, logo: awayLogo },
       koreanPlayer: koreanPlayer ? { ...koreanPlayer, event: playerEventText, ...playerStats } : null,
       competition: event.competitions[0].league?.name || '',
+      competitionLogo: event.competitions[0].league?.logos?.[0]?.href || null,
       venue: event.competitions[0].venue?.fullName || '',
       time: timeDisplay,
       fullDate: event.date,
@@ -2673,7 +3302,7 @@ function App() {
       lineupConfirmed,
       events,
       stats: null,
-      status: status, // Add status from ESPN API
+      status: status,
     };
   };
 
@@ -2696,6 +3325,7 @@ function App() {
   const goMatch = (m) => { setSelectedMatch(m); setScreen('match'); };
   const goPlayer = (p) => { setSelectedPlayer(p); setScreen('player'); };
   const goAddPlayer = () => setScreen('addplayer');
+  const goNotif = () => setScreen('notif');
   const goBack = () => setScreen('main');
 
   const handleTab = (t) => { setTab(t); setScreen('main'); localStorage.setItem('jumo_tab', t); };
@@ -2710,11 +3340,11 @@ function App() {
         <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'var(--bg)', paddingBottom:'70px' }}>
           {screen === 'main' && (
             <>
-              {tab === 'home' && <HomeComponent onMatch={goMatch} onPlayer={goPlayer} tweaks={tweaks} liveApiMatches={liveMatches} isLoading={isInitialLoad && apiLoading}/>}
-              {tab === 'schedule' && <ScheduleScreen onMatch={goMatch} liveApiMatches={liveMatches}/>}
+              {tab === 'home' && <HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} tweaks={tweaks} liveApiMatches={liveMatches} isLoading={isInitialLoad && apiLoading}/>}
+              {tab === 'schedule' && <ScheduleScreen onMatch={goMatch} liveApiMatches={liveMatches} isLoading={apiLoading}/>}
               {tab === 'players' && <PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} followed={followed}/>}
-              {tab === 'notif' && <NotifScreen notifications={notifications}/>}
-              {tab === 'more' && <MoreScreen darkMode={darkMode} onToggleDark={toggleDark}/>}
+              {tab === 'news' && <NewsScreen sportFeeds={sportFeeds}/>}
+              {tab === 'more' && <MoreScreen darkMode={darkMode} onToggleDark={toggleDark} sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed}/>}
             </>
           )}
           {screen === 'match' && selectedMatch && (
@@ -2725,6 +3355,17 @@ function App() {
           )}
           {screen === 'addplayer' && (
             <AddPlayerScreen followed={followed} onToggle={toggleFollow} onBack={goBack}/>
+          )}
+          {screen === 'notif' && (
+            <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+              <div style={{ padding:'12px 20px 8px', display:'flex', alignItems:'center', gap:10 }}>
+                <button onClick={goBack} style={{ ...LG.base, ...LG.circle, color:'rgba(255,255,255,0.85)' }}>
+                  <svg width="10" height="17" viewBox="0 0 10 17" fill="none"><path d="M8.5 1.5L1.5 8.5l7 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </button>
+                <div style={{ fontSize:22, fontWeight:700, color:'var(--text)', letterSpacing:-0.5 }}>알림</div>
+              </div>
+              <NotifScreen notifications={notifications}/>
+            </div>
           )}
           <TabBar active={tab} onTab={handleTab}/>
         </div>
@@ -2739,7 +3380,7 @@ function App() {
             <div style={{ fontSize:12, color:'var(--text3)', marginBottom:8, fontWeight:600 }}>홈 스타일</div>
             <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
               {homeVariantNames.map((name, i) => (
-                <button key={i} onClick={() => updateTweaks('homeVariant', i)} style={{ background: tweaks.homeVariant===i ? 'var(--acc)' : 'var(--border)', border:'none', borderRadius:10, padding:'10px 14px', color: tweaks.homeVariant===i ? '#fff' : 'var(--text-60)', fontSize:13, fontWeight:600, cursor:'pointer', textAlign:'left' }}>
+                <button key={i} onClick={() => updateTweaks('homeVariant', i)} style={{ background: tweaks.homeVariant===i ? 'var(--acc)' : 'var(--border)', border:'none', borderRadius:10, padding:'10px 14px', color: tweaks.homeVariant===i ? '#000' : 'var(--text-60)', fontSize:13, fontWeight:600, cursor:'pointer', textAlign:'left' }}>
                   {i===0 ? '1️⃣' : i===1 ? '2️⃣' : '3️⃣'} {name}
                 </button>
               ))}
@@ -2767,7 +3408,11 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+try {
+  ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+} catch(e) {
+  document.getElementById('root').innerHTML = '<div style="color:red;padding:20px;font-family:monospace;font-size:12px;white-space:pre-wrap">렌더링 에러:\n' + e.message + '\n\n' + e.stack + '</div>';
+}
 </script>
 <div id="root"></div>
 </body>
