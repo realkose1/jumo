@@ -1153,7 +1153,6 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
   };
 
   const highlightText = getHighlightText();
-  const heroPlayer = highlightPlayer || PLAYERS[0];
 
   // Build finished match headline helper
   const buildFinishedHeadline = (m) => {
@@ -1194,8 +1193,12 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
 
   // Fetch news background image — MUST be before any early return (Rules of Hooks)
   React.useEffect(() => {
-    if (!isFinishedHighlight || !heroPlayer) { setHlBgImg(null); return; }
-    fetch(`http://localhost:8002/naver-news?query=${encodeURIComponent(heroPlayer.name)}&display=5&sort=date`)
+    const playerName = highlightMatch?.koreanPlayer?.name;
+    if (!playerName) { setHlBgImg(null); return; }
+
+    let cancelled = false;
+    setHlBgImg(null);
+    fetch(`http://localhost:8002/naver-news?query=${encodeURIComponent(playerName)}&display=6&sort=date`)
       .then(r => r.json())
       .then(async data => {
         for (const item of (data.items || [])) {
@@ -1203,12 +1206,16 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
           try {
             const imgRes = await fetch(`http://localhost:8002/news-image?url=${encodeURIComponent(url)}`);
             const imgData = await imgRes.json();
-            if (imgData.image) { setHlBgImg(imgData.image); return; }
+            if (imgData.image && !imgData.image.startsWith('data:') && !cancelled) {
+              setHlBgImg(imgData.image);
+              return;
+            }
           } catch(e) {}
         }
       })
       .catch(() => {});
-  }, [isFinishedHighlight, heroPlayer?.id]);
+    return () => { cancelled = true; };
+  }, [highlightMatch?.id, highlightMatch?.koreanPlayer?.name]);
 
   // Show skeleton on initial load
   if (isLoading) {
@@ -1236,10 +1243,10 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
       {/* ── FINISHED MATCH HIGHLIGHT CARD ── */}
       {isFinishedHighlight ? (
         <div onClick={() => highlightMatch && onMatch(highlightMatch)} style={{ position:'relative', height:320, overflow:'hidden', cursor:'pointer' }}>
-          {/* Background: news image or player photo */}
+          {/* Background: news image only */}
           {hlBgImg
             ? <img src={hlBgImg} style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'center top' }} alt=""/>
-            : <PlayerPhoto player={heroPlayer} style={{ position:'absolute', inset:0, width:'100%', height:'100%' }} tint="transparent"/>
+            : <div style={{ position:'absolute', inset:0, background:'linear-gradient(135deg,#1a2330,#0b0f14)' }}/>
           }
           {/* Gradient overlay */}
           <div style={{ position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.1) 30%, rgba(0,0,0,0.6) 70%, rgba(0,0,0,0.92) 100%)' }}/>
@@ -1294,14 +1301,14 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
 
       ) : (
       <div style={{ position:'relative', height:260, overflow:'hidden', marginBottom:0 }}>
-        {/* Goal background image */}
+        {/* News background image only */}
         <div style={{ position:'absolute', inset:0 }}>
-          <img src="image/goal.jpg" alt="Goal" style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'center' }}/>
+          {hlBgImg
+            ? <img src={hlBgImg} alt="" style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'center' }}/>
+            : <div style={{ width:'100%', height:'100%', background:'linear-gradient(135deg,#122033,#0b0f14)' }}/>
+          }
           <div style={{ position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.7) 100%)' }}/>
         </div>
-        {tweaks.showPlayerPhoto && (
-          <PlayerPhoto player={heroPlayer} style={{ position:'absolute', right:0, bottom:0, width:'28%', height:'70%', zIndex:1 }}/>
-        )}
         <div style={{ position:'absolute', top:12, left:20, right:20, display:'flex', justifyContent:'space-between', alignItems:'center', zIndex:2 }}>
           <span style={{ fontSize:15, fontWeight:900, color:'#fff', letterSpacing:2, textTransform:'uppercase' }}>JUMO</span>
           <div style={{ display:'flex', gap:8 }}>
