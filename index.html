@@ -225,20 +225,20 @@ const MATCHES = [];
 
 const ALL_PLAYERS = [
   // 축구 - 유럽리그 (2025-26 시즌)
-  { id: 1,  name: '손흥민',  nameEn: 'Son Heung-min',   number: 7,  sport: '축구',   team: 'LAFC',       league: 'MLS',        position: '공격수',   nation: '🇰🇷', goals: 8,  assists: 6,  matches: 10, rating: 7.9, age: 33, birth: '1992.07.08', height: '183cm' },
-  { id: 2,  name: '이강인',  nameEn: 'Lee Kang-in',     number: 19, sport: '축구',   team: 'PSG',        league: 'Ligue 1',    position: '미드필더', nation: '🇰🇷', goals: 9,  assists: 11, matches: 33, rating: 7.5, age: 25, birth: '2001.02.19', height: '173cm' },
-  { id: 3,  name: '김민재',  nameEn: 'Kim Min-jae',     number: 3,  sport: '축구',   team: 'Bayern',     league: 'Bundesliga', position: '센터백',   nation: '🇰🇷', goals: 4,  assists: 2,  matches: 32, rating: 7.6, age: 29, birth: '1996.11.15', height: '190cm' },
-  { id: 6,  name: '황희찬',  nameEn: 'Hwang Hee-chan',  number: 11, sport: '축구',   team: 'Wolves',     league: 'EPL',        position: '공격수',   nation: '🇰🇷', goals: 10, assists: 5,  matches: 33, rating: 7.1, age: 30, birth: '1996.01.26', height: '177cm' },
-  { id: 7,  name: '황인범',  nameEn: 'Hwang In-beom',   number: 5,  sport: '축구',   team: 'Feyenoord',  league: 'Eredivisie', position: '미드필더', nation: '🇰🇷', goals: 5,  assists: 7,  matches: 31, rating: 7.2, age: 29, birth: '1996.09.20', height: '177cm' },
-  { id: 8,  name: '조규성',  nameEn: 'Cho Gue-sung',    number: 9,  sport: '축구',   team: 'Midtjylland',league: 'Superliga',  position: '공격수',   nation: '🇰🇷', goals: 6,  assists: 2,  matches: 28, rating: 6.9, age: 28, birth: '1998.01.25', height: '190cm' },
-  { id: 19, name: '오현규',  nameEn: 'Oh Hyeon-gyu',    number: 19, sport: '축구',   team: 'Besiktas',   league: 'Süper Lig',  position: '공격수',   nation: '🇰🇷', goals: 8,  assists: 3,  matches: 29, rating: 7.0, age: 24, birth: '2001.04.12', height: '181cm' },
-  { id: 20, name: '양현준',  nameEn: 'Yang Hyun-jun',   number: 77, sport: '축구',   team: 'Celtic',     league: 'SPFL',       position: '공격수',   nation: '🇰🇷', goals: 7,  assists: 6,  matches: 30, rating: 7.1, age: 22, birth: '2002.06.25', height: '172cm' },
-  { id: 21, name: '백승호',  nameEn: 'Paik Seung-ho',   number: 22, sport: '축구',   team: 'Jeonbuk',    league: 'K League 1', position: '미드필더', nation: '🇰🇷', goals: 4,  assists: 5,  matches: 8,  rating: 7.0, age: 28, birth: '1997.03.17', height: '183cm' },
+  { id: 1,  name: '손흥민',  nameEn: 'Son Heung-min',   number: 7,  sport: '축구',   team: 'LAFC',       league: 'MLS',        position: '공격수',   nation: '🇰🇷', goals: 8,  assists: 6,  matches: 10, rating: 7.9, age: 33, birth: '1992.07.08', height: '183cm', espnLeague: 'usa.1',  espnId: 149945 },
+  { id: 2,  name: '이강인',  nameEn: 'Lee Kang-in',     number: 19, sport: '축구',   team: 'PSG',        league: 'Ligue 1',    position: '미드필더', nation: '🇰🇷', goals: 9,  assists: 11, matches: 33, rating: 7.5, age: 25, birth: '2001.02.19', height: '173cm', espnLeague: 'fra.1',  espnId: 274197 },
+  { id: 3,  name: '김민재',  nameEn: 'Kim Min-jae',     number: 3,  sport: '축구',   team: 'Bayern',     league: 'Bundesliga', position: '센터백',   nation: '🇰🇷', goals: 4,  assists: 2,  matches: 32, rating: 7.6, age: 29, birth: '1996.11.15', height: '190cm', espnLeague: 'ger.1',  espnId: 157688 },
+  { id: 6,  name: '황희찬',  nameEn: 'Hwang Hee-chan',  number: 11, sport: '축구',   team: 'Wolves',     league: 'EPL',        position: '공격수',   nation: '🇰🇷', goals: 10, assists: 5,  matches: 33, rating: 7.1, age: 30, birth: '1996.01.26', height: '177cm', espnLeague: 'eng.1',  espnId: 237224 },
+  { id: 7,  name: '황인범',  nameEn: 'Hwang In-beom',   number: 5,  sport: '축구',   team: 'Feyenoord',  league: 'Eredivisie', position: '미드필더', nation: '🇰🇷', goals: 5,  assists: 7,  matches: 31, rating: 7.2, age: 29, birth: '1996.09.20', height: '177cm', espnLeague: 'ned.1',  espnId: 280061 },
+  { id: 8,  name: '조규성',  nameEn: 'Cho Gue-sung',    number: 9,  sport: '축구',   team: 'Midtjylland',league: 'Superliga',  position: '공격수',   nation: '🇰🇷', goals: 6,  assists: 2,  matches: 28, rating: 6.9, age: 28, birth: '1998.01.25', height: '190cm', espnLeague: 'den.1',  espnId: 303464 },
+  { id: 19, name: '오현규',  nameEn: 'Oh Hyeon-gyu',    number: 19, sport: '축구',   team: 'Besiktas',   league: 'Süper Lig',  position: '공격수',   nation: '🇰🇷', goals: 8,  assists: 3,  matches: 29, rating: 7.0, age: 24, birth: '2001.04.12', height: '181cm', espnLeague: 'tur.1',  espnId: 302434 },
+  { id: 20, name: '양현준',  nameEn: 'Yang Hyun-jun',   number: 77, sport: '축구',   team: 'Celtic',     league: 'SPFL',       position: '공격수',   nation: '🇰🇷', goals: 7,  assists: 6,  matches: 30, rating: 7.1, age: 22, birth: '2002.06.25', height: '172cm', espnLeague: 'sco.1',  espnId: 350711 },
+  { id: 21, name: '백승호',  nameEn: 'Paik Seung-ho',   number: 22, sport: '축구',   team: 'Jeonbuk',    league: 'K League 1', position: '미드필더', nation: '🇰🇷', goals: 4,  assists: 5,  matches: 8,  rating: 7.0, age: 28, birth: '1997.03.17', height: '183cm', espnLeague: 'kor.1' },
 
   // 야구 - MLB (2026 시즌)
-  { id: 9,  name: '김하성',  nameEn: 'Kim Ha-seong',    number: 4,  sport: '야구',   team: 'Pirates',    league: 'MLB',        position: '유격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 18, rating: 0,   age: 30, birth: '1995.10.17', height: '179cm' },
-  { id: 17, name: '이정후',  nameEn: 'Lee Jung-hoo',    number: 51, sport: '야구',   team: 'Giants',     league: 'MLB',        position: '중견수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 15, rating: 0,   age: 27, birth: '1998.08.20', height: '186cm' },
-  { id: 18, name: '김혜성',  nameEn: 'Kim Hye-seong',   number: 25, sport: '야구',   team: 'Dodgers',    league: 'MLB',        position: '유격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 16, rating: 0,   age: 27, birth: '1999.01.27', height: '178cm' },
+  { id: 9,  name: '김하성',  nameEn: 'Kim Ha-seong',    number: 4,  sport: '야구',   team: 'Pirates',    league: 'MLB',        position: '유격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 18, rating: 0,   age: 30, birth: '1995.10.17', height: '179cm', mlbId: 628406 },
+  { id: 17, name: '이정후',  nameEn: 'Lee Jung-hoo',    number: 51, sport: '야구',   team: 'Giants',     league: 'MLB',        position: '중견수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 15, rating: 0,   age: 27, birth: '1998.08.20', height: '186cm', mlbId: 673490 },
+  { id: 18, name: '김혜성',  nameEn: 'Kim Hye-seong',   number: 25, sport: '야구',   team: 'Dodgers',    league: 'MLB',        position: '유격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 16, rating: 0,   age: 27, birth: '1999.01.27', height: '178cm', mlbId: 700514 },
 
   // 배드민턴
   { id: 15, name: '안세영',  nameEn: 'An Se-young',     number: 1,  sport: '배드민턴','team': '한국 대표팀','league': '국제',    position: '여자 단식', nation: '🇰🇷', goals: 0,  assists: 0,  matches: 32, rating: 9.6, age: 24, birth: '2002.02.23', height: '168cm' },
@@ -1070,43 +1070,31 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
     })
     .sort((a, b) => new Date(a.fullDate || 0) - new Date(b.fullDate || 0));
 
-  // Determine highlight match based on priority
+  // Determine highlight match: live > closest to now (finished vs upcoming)
   const getHighlightMatch = () => {
-    // Priority 1: Live match with Korean player (HIGHEST PRIORITY)
-    const liveWithKorean = allMatches.find(m =>
-      (m.live || m.time === 'LIVE') && m.koreanPlayer
-    );
-    if (liveWithKorean) {
-      return { match: liveWithKorean, priority: 1 };
-    }
+    // Priority 1: Live match with Korean player
+    const liveWithKorean = allMatches.find(m => (m.live || m.time === 'LIVE') && m.koreanPlayer);
+    if (liveWithKorean) return { match: liveWithKorean, priority: 1 };
 
-    // Priority 2/3: Compare today's finished vs today's upcoming and pick the closer one.
-    const closestFinishedToday = finishedTodayWithKorean[0];
-    const closestUpcomingToday = upcomingTodayWithKorean[0];
+    // Most recent finished match with Korean player
+    const recentFinished = allMatches
+      .filter(m => isFinalStatus(m.status) && m.koreanPlayer && m.koreanPlayer.event !== '미출전' && m.fullDate)
+      .sort((a, b) => new Date(b.fullDate) - new Date(a.fullDate))[0];
 
-    if (closestFinishedToday && closestUpcomingToday) {
-      const finishedAgo = now - new Date(closestFinishedToday.fullDate || 0);
-      const upcomingIn = new Date(closestUpcomingToday.fullDate || 0) - now;
-      if (finishedAgo <= upcomingIn) return { match: closestFinishedToday, priority: 4 };
-      return { match: closestUpcomingToday, priority: 5 };
-    }
-    if (closestFinishedToday) return { match: closestFinishedToday, priority: 4 };
-    if (closestUpcomingToday) return { match: closestUpcomingToday, priority: 5 };
+    // Next upcoming match with Korean player
+    const nextUpcoming = allMatches
+      .filter(m => m.koreanPlayer && m.fullDate && !isFinalStatus(m.status) && !(m.live || m.time === 'LIVE') && new Date(m.fullDate) > now)
+      .sort((a, b) => new Date(a.fullDate) - new Date(b.fullDate))[0];
 
-    // Fallback: Compare latest finished vs next upcoming in all available matches.
-    const recentFinished = finishedWithKorean[0];
-    const nextMatch = allMatches
-      .filter(m => m.koreanPlayer && m.fullDate && !isFinalStatus(m.status) && !(m.live || m.time === 'LIVE'))
-      .sort((a, b) => new Date(a.fullDate || 0) - new Date(b.fullDate || 0))[0];
-
-    if (recentFinished && nextMatch) {
-      const finishedAgo = now - new Date(recentFinished.fullDate || 0);
-      const upcomingIn = new Date(nextMatch.fullDate || 0) - now;
-      if (finishedAgo <= upcomingIn) return { match: recentFinished, priority: 4 };
-      return { match: nextMatch, priority: 5 };
+    if (recentFinished && nextUpcoming) {
+      const finishedAgo = now - new Date(recentFinished.fullDate);
+      const upcomingIn = new Date(nextUpcoming.fullDate) - now;
+      return finishedAgo <= upcomingIn
+        ? { match: recentFinished, priority: 4 }
+        : { match: nextUpcoming, priority: 5 };
     }
     if (recentFinished) return { match: recentFinished, priority: 4 };
-    if (nextMatch) return { match: nextMatch, priority: 5 };
+    if (nextUpcoming) return { match: nextUpcoming, priority: 5 };
 
     return null;
   };
@@ -1246,7 +1234,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
         <div onClick={() => highlightMatch && onMatch(highlightMatch)} style={{ position:'relative', height:320, overflow:'hidden', cursor:'pointer', background:'#111' }}>
           {/* Background */}
           {hlBgImg
-            ? <img src={hlBgImg} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }}/>
+            ? <img src={hlBgImg} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'50% 20%' }}/>
             : <div style={{ position:'absolute', inset:0, background:'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)' }}>
                 {highlightMatch?.home?.logo && <img src={highlightMatch.home.logo} alt="" style={{ position:'absolute', right:-30, top:'50%', transform:'translateY(-50%)', width:200, height:200, objectFit:'contain', opacity:0.08, filter:'blur(2px)' }}/>}
               </div>
@@ -1328,7 +1316,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
       <div style={{ position:'relative', height:260, overflow:'hidden', marginBottom:0, background:'#111' }}>
         {/* Background */}
         {hlBgImg
-          ? <img src={hlBgImg} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }}/>
+          ? <img src={hlBgImg} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'50% 20%' }}/>
           : <div style={{ position:'absolute', inset:0, background:'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)' }}>
               {highlightMatch?.home?.logo && <img src={highlightMatch.home.logo} alt="" style={{ position:'absolute', right:-30, top:'50%', transform:'translateY(-50%)', width:200, height:200, objectFit:'contain', opacity:0.08, filter:'blur(2px)' }}/>}
             </div>
@@ -1376,17 +1364,16 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
         const daysUntilSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
         const endOfThisWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilSunday, 23, 59, 59);
 
-        // Get all matches: finished from today + upcoming until Sunday
+        // Show today + tomorrow matches only, deduplicated
+        const endOfTomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2, 0, 0, 0) - 1;
+        const seenIds = new Set();
         const thisWeekMatches = allMatches
           .filter(m => {
             if (!m.koreanPlayer || !m.fullDate) return false;
+            if (seenIds.has(m.id)) return false;
+            seenIds.add(m.id);
             const matchDate = new Date(m.fullDate);
-            const isFinished = m.status === 'STATUS_FINAL' || m.status === 'STATUS_FULL_TIME' || m.status === 'final' || m.status === 'STATUS_END_PERIOD' || m.status === 'STATUS_FINAL_PEN';
-            const isToday = matchDate >= startOfToday && matchDate <= endOfToday;
-            const isUpcomingThisWeek = matchDate > now && matchDate <= endOfThisWeek;
-
-            // Include: finished matches from today OR upcoming matches until Sunday
-            return (isFinished && isToday) || isUpcomingThisWeek;
+            return matchDate >= startOfToday && matchDate <= endOfTomorrow;
           })
           .sort((a, b) => {
             const dateA = new Date(a.fullDate);
@@ -1412,21 +1399,16 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
                 const isDraw = koreanScore === opponentScore;
 
                 return (
-                  <div key={m.id} onClick={() => onMatch(m)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', marginBottom:0, cursor:'pointer', borderBottom:'0.5px solid var(--border)' }}>
-                    {/* Home team - LEFT */}
+                  <div key={m.id} onClick={() => onMatch(m)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', cursor:'pointer', borderBottom:'0.5px solid var(--border)' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, justifyContent:'flex-end', minWidth:0 }}>
                       <span style={{ fontSize:14, fontWeight:600, color:'var(--text)', textAlign:'right' }}>{m.home.name}</span>
                       <TeamBadge code={m.home.code} size={24} logo={m.home.logo}/>
                     </div>
-
-                    {/* Score - CENTER */}
                     <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0, padding:'0 16px' }}>
                       <span style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text)' }}>{m.home.score}</span>
                       <span style={{ fontSize:14, color:'var(--text5)' }}>-</span>
                       <span style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text)' }}>{m.away.score}</span>
                     </div>
-
-                    {/* Away team - RIGHT */}
                     <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, minWidth:0 }}>
                       <TeamBadge code={m.away.code} size={24} logo={m.away.logo}/>
                       <span style={{ fontSize:14, fontWeight:600, color:'var(--text)' }}>{m.away.name}</span>
@@ -1464,20 +1446,15 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
                 }
 
                 return (
-                  <div key={m.id} onClick={() => onMatch(m)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', marginBottom:0, cursor:'pointer', borderBottom:'0.5px solid var(--border)' }}>
-                    {/* Home team - LEFT */}
+                  <div key={m.id} onClick={() => onMatch(m)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', cursor:'pointer', borderBottom:'0.5px solid var(--border)' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, justifyContent:'flex-end', minWidth:0 }}>
                       <span style={{ fontSize:14, fontWeight:600, color:'var(--text)', textAlign:'right' }}>{m.home.name}</span>
                       <TeamBadge code={m.home.code} size={24} logo={m.home.logo}/>
                     </div>
-
-                    {/* Time - CENTER */}
                     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, flexShrink:0, padding:'0 16px' }}>
                       <span style={{ fontSize:10, color:'var(--text5)' }}>{dayLabel}</span>
                       <span style={{ ...NUM, fontSize:13, fontWeight:700, color:'var(--text3)' }}>{timeDisplay}</span>
                     </div>
-
-                    {/* Away team - RIGHT */}
                     <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, minWidth:0 }}>
                       <TeamBadge code={m.away.code} size={24} logo={m.away.logo}/>
                       <span style={{ fontSize:14, fontWeight:600, color:'var(--text)' }}>{m.away.name}</span>
@@ -1779,17 +1756,111 @@ function LiveDetailScreen({ match, onBack }) {
 }
 
 // ─── SCREEN: PLAYER PROFILE ───────────────────────────────────
-function PlayerScreen({ player, onBack, onMatch }) {
+function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache = {} }) {
   const [tab, setTab] = React.useState('overview');
   const [followed, setFollowed] = React.useState(true);
-  const playerMatches = MATCHES.filter(m => m.koreanPlayer.name === player.name);
+  const [liveStats, setLiveStats] = React.useState(() => statsCache[player.id] || null);
+  const [statsLoading, setStatsLoading] = React.useState(!statsCache[player.id]);
   const extra = PLAYER_EXTRA[player.id] || DEFAULT_EXTRA;
+
+  // Fetch real stats on mount
+  React.useEffect(() => {
+    let cancelled = false;
+    setStatsLoading(true);
+
+    const fetchStats = async () => {
+      try {
+        if (player.sport === '야구' && player.mlbId) {
+          const res = await fetch(`http://localhost:8002/mlb-stats?id=${player.mlbId}`);
+          const data = await res.json();
+          const stat = data?.stats?.[0]?.splits?.[0]?.stat;
+          if (stat && !cancelled) {
+            setLiveStats({
+              matches: stat.gamesPlayed || 0,
+              hits: stat.hits || 0,
+              homeRuns: stat.homeRuns || 0,
+              rbi: stat.rbi || 0,
+              avg: stat.avg || '.000',
+              obp: stat.obp || '.000',
+              ops: stat.ops || '.000',
+            });
+          }
+        } else if (player.sport === '축구' && player.espnLeague && player.espnId) {
+          const res = await fetch(`http://localhost:8002/espn-player-stats?league=${player.espnLeague}&id=${player.espnId}`);
+          const data = await res.json();
+          const cats = data?.splits?.categories || [];
+          if (cats.length > 0 && !cancelled) {
+            const allStats = cats.flatMap(c => c.stats || []);
+            const get = (...names) => {
+              for (const n of names) {
+                const s = allStats.find(s => s.name === n);
+                if (s) return parseFloat(s.value) || 0;
+              }
+              return 0;
+            };
+            setLiveStats({
+              matches:       get('appearances'),
+              starts:        get('starts'),
+              goals:         get('totalGoals'),
+              assists:       get('goalAssists'),
+              yellowCards:   get('yellowCards'),
+              redCards:      get('redCards'),
+              minutes:       get('minutes'),
+              shotsTotal:    get('totalShots'),
+              shotsOn:       get('shotsOnTarget'),
+              keyPasses:     get('shotAssists'),
+              tackles:       get('totalTackles'),
+              interceptions: get('interceptions'),
+            });
+          }
+        }
+      } catch(e) {}
+      if (!cancelled) setStatsLoading(false);
+    };
+
+    fetchStats();
+    return () => { cancelled = true; };
+  }, [player.id]);
+
+  // Recent matches from live API data
+  const recentLiveMatches = React.useMemo(() => {
+    return liveApiMatches
+      .filter(m => m.koreanPlayer?.name === player.name && (
+        m.status === 'STATUS_FINAL' || m.status === 'STATUS_FULL_TIME' ||
+        m.status === 'final' || m.status === 'STATUS_END_PERIOD' || m.status === 'STATUS_FINAL_PEN'
+      ))
+      .sort((a, b) => new Date(b.fullDate || 0) - new Date(a.fullDate || 0))
+      .slice(0, 5)
+      .map(m => {
+        const kp = m.koreanPlayer;
+        const isHome = kp.team === m.home.code;
+        const myScore = isHome ? m.home.score : m.away.score;
+        const theirScore = isHome ? m.away.score : m.home.score;
+        const opp = isHome ? m.away.name : m.home.name;
+        const result = myScore > theirScore ? 'W' : myScore < theirScore ? 'L' : 'D';
+        const goals = (m.events||[]).filter(e => e.type?.startsWith('goal') && e.player === player.name).length;
+        const assists = (m.events||[]).filter(e => e.type === 'assist' && e.player === player.name).length;
+        const contrib = player.sport === '야구'
+          ? (kp.hits > 0 ? `${kp.hits}안타` : '-')
+          : [goals > 0 && `${goals}골`, assists > 0 && `${assists}도움`].filter(Boolean).join(' ') || '-';
+        const d = new Date(m.fullDate);
+        const date = `${d.getMonth()+1}.${d.getDate()}`;
+        return { opp, result, score:`${myScore}-${theirScore}`, contrib, date };
+      });
+  }, [liveApiMatches, player.name]);
 
   const resultColor = { W:'#2cc96d', D:'rgba(255,193,7,0.9)', L:'var(--acc)' };
   const resultLabel = { W:'승', D:'무', L:'패' };
 
+  const goals   = liveStats?.goals   ?? player.goals;
+  const assists = liveStats?.assists ?? player.assists;
+  const matches = liveStats?.matches ?? player.matches;
+  const rating  = liveStats?.rating  ?? player.rating.toFixed(1);
+
   const statRows = player.sport === '축구' ? [
-    ['골', player.goals], ['어시스트', player.assists], ['출전', player.matches], ['평점', player.rating.toFixed(1)],
+    ['골', goals], ['어시스트', assists], ['출전', matches], ['평점', rating],
+  ] : player.sport === '야구' && liveStats ? [
+    ['출전', liveStats.matches], ['안타', liveStats.hits], ['홈런', liveStats.homeRuns], ['타율', liveStats.avg],
   ] : player.sport === '야구' ? [
     ['출전', player.matches], ['나이', player.age],
   ] : [
@@ -1858,9 +1929,12 @@ function PlayerScreen({ player, onBack, onMatch }) {
                 <FormBar vals={extra.form}/>
               </div>
               <div style={{ background:'var(--surface)', borderRadius:16, padding:'16px', border:'0.5px solid var(--border)', marginBottom:12 }}>
-                <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:14 }}>최근 경기 결과</div>
-                {extra.recentMatches.map((m, i) => (
-                  <div key={i} style={{ display:'flex', alignItems:'center', gap:10, marginBottom: i < extra.recentMatches.length-1 ? 12 : 0, paddingBottom: i < extra.recentMatches.length-1 ? 12 : 0, borderBottom: i < extra.recentMatches.length-1 ? '0.5px solid var(--border2)' : 'none' }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>최근 경기 결과</div>
+                  {recentLiveMatches.length > 0 && <span style={{ fontSize:10, color:'var(--acc)', fontWeight:700 }}>LIVE</span>}
+                </div>
+                {(recentLiveMatches.length > 0 ? recentLiveMatches : extra.recentMatches).map((m, i, arr) => (
+                  <div key={i} style={{ display:'flex', alignItems:'center', gap:10, marginBottom: i < arr.length-1 ? 12 : 0, paddingBottom: i < arr.length-1 ? 12 : 0, borderBottom: i < arr.length-1 ? '0.5px solid var(--border2)' : 'none' }}>
                     <div style={{ width:30, height:30, borderRadius:8, background: m.result==='W'?'rgba(44,201,109,0.12)':m.result==='D'?'rgba(255,193,7,0.12)':'rgba(230,48,48,0.12)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
                       <span style={{ fontSize:12, fontWeight:800, color:resultColor[m.result] }}>{resultLabel[m.result]}</span>
                     </div>
@@ -1892,16 +1966,64 @@ function PlayerScreen({ player, onBack, onMatch }) {
       {/* Stats tab */}
       {tab === 'stats' && (
         <div style={{ padding:'16px' }}>
-          {player.sport === '축구' && extra.seasonStats && (
+          {statsLoading ? (
+            <div style={{ display:'flex', justifyContent:'center', padding:'48px 0' }}>
+              <div style={{ width:28, height:28, borderRadius:'50%', border:'3px solid var(--border)', borderTopColor:'var(--acc)', animation:'spin 0.8s linear infinite' }}/>
+            </div>
+          ) : player.sport === '축구' && liveStats ? (
+            <div style={{ background:'var(--surface)', borderRadius:16, padding:'16px', border:'0.5px solid var(--border)' }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>2025 시즌 스탯</div>
+                <span style={{ fontSize:10, color:'var(--acc)', fontWeight:700 }}>LIVE</span>
+              </div>
+              {[
+                ['출전', liveStats.matches, '경기'],
+                ['골', liveStats.goals, '골'],
+                ['어시스트', liveStats.assists, '개'],
+                ['평점', liveStats.rating, '/ 10'],
+                ['슈팅', liveStats.shotsTotal, '개'],
+                ['유효슈팅', liveStats.shotsOn, '개'],
+                ['키패스', liveStats.keyPasses, '개'],
+                ['드리블 성공', liveStats.dribbles, '회'],
+                ['태클', liveStats.tackles, '회'],
+                ['경고', liveStats.yellowCards, '회'],
+              ].map(([label, val, unit]) => (
+                <div key={label} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:10, marginBottom:10, borderBottom:'0.5px solid var(--border2)' }}>
+                  <span style={{ fontSize:13, color:'var(--text3)' }}>{label}</span>
+                  <span style={{ fontSize:14, fontWeight:700, color:'var(--text)' }}>{val} <span style={{ fontSize:11, color:'var(--text4)', fontWeight:400 }}>{unit}</span></span>
+                </div>
+              ))}
+            </div>
+          ) : player.sport === '야구' && liveStats ? (
+            <div style={{ background:'var(--surface)', borderRadius:16, padding:'16px', border:'0.5px solid var(--border)' }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>2025 시즌 스탯</div>
+                <span style={{ fontSize:10, color:'var(--acc)', fontWeight:700 }}>LIVE</span>
+              </div>
+              {[
+                ['출전', liveStats.matches, '경기'],
+                ['안타', liveStats.hits, '개'],
+                ['홈런', liveStats.homeRuns, '개'],
+                ['타점', liveStats.rbi, '점'],
+                ['타율', liveStats.avg, ''],
+                ['출루율', liveStats.obp, ''],
+                ['OPS', liveStats.ops, ''],
+              ].map(([label, val, unit]) => (
+                <div key={label} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:10, marginBottom:10, borderBottom:'0.5px solid var(--border2)' }}>
+                  <span style={{ fontSize:13, color:'var(--text3)' }}>{label}</span>
+                  <span style={{ fontSize:14, fontWeight:700, color:'var(--text)' }}>{val}{unit && <span style={{ fontSize:11, color:'var(--text4)', fontWeight:400 }}> {unit}</span>}</span>
+                </div>
+              ))}
+            </div>
+          ) : player.sport === '축구' && extra.seasonStats ? (
             <div style={{ background:'var(--surface)', borderRadius:16, padding:'16px', border:'0.5px solid var(--border)' }}>
               <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:14 }}>2024/25 시즌 스탯</div>
               {extra.seasonStats.map(([label, val, max]) => (
                 <RadarStat key={label} label={label} val={val} max={max}/>
               ))}
             </div>
-          )}
-          {player.sport !== '축구' && (
-            <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text5)', fontSize:14 }}>시즌 상세 스탯 준비 중</div>
+          ) : (
+            <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text5)', fontSize:14 }}>스탯을 불러올 수 없습니다</div>
           )}
         </div>
       )}
@@ -2033,6 +2155,10 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false }) {
               if (assists > 0) labelParts.push(`${assists}도움`);
             }
 
+            const koreanTeam = kp.team;
+            const homeIsKorean = koreanTeam === m.home.code;
+            const awayIsKorean = koreanTeam === m.away.code;
+
             return (
               <React.Fragment key={m.id}>
                 {/* Label above card */}
@@ -2047,13 +2173,39 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false }) {
                   {labelParts.length > 1 && (
                     <span style={{ fontSize:11, color:'var(--text)', fontWeight:500 }}>{' · ' + labelParts.slice(1).join(' · ')}</span>
                   )}
+                  {isFinished && <span style={{ marginLeft:'auto', fontSize:10, fontWeight:600, color:'var(--text4)', flexShrink:0 }}>종료</span>}
                 </div>
-                <div onClick={() => onMatch(m)} style={{ marginBottom:14, background:'var(--surface)', borderRadius:14, padding:'14px 16px', cursor:'pointer', border: m.live ? '0.5px solid rgba(230,48,48,0.25)' : '0.5px solid var(--border2)', display:'flex', alignItems:'center', gap:12 }}>
-              <div style={{ width:40, flexShrink:0, textAlign:'center' }}>
-                {m.live ? (
-                  <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
-                    <LiveDot/>
-                    <span style={{ ...NUM, fontSize:11, fontWeight:700, color:'var(--acc)', whiteSpace:'nowrap' }}>{m.minute}'</span>
+                <div onClick={() => onMatch(m)} style={{ marginBottom:14, background:'var(--surface)', borderRadius:14, padding:'12px 16px', cursor:'pointer', border: m.live ? '0.5px solid rgba(230,48,48,0.25)' : '0.5px solid var(--border2)' }}>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+                    {/* Home */}
+                    <div style={{ display:'flex', alignItems:'center', gap:6, flex:1, justifyContent:'flex-end' }}>
+                      <span style={{ fontSize:13, fontWeight:600, color: homeIsKorean ? 'var(--acc)' : 'var(--text)', textAlign:'right', lineHeight:1.3 }}>{m.home.name}</span>
+                      <TeamBadge code={m.home.code} size={24} logo={m.home.logo}/>
+                    </div>
+                    {/* Center: score or time */}
+                    <div style={{ width:64, flexShrink:0, textAlign:'center' }}>
+                      {m.live ? (
+                        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:1 }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                            <LiveDot/>
+                            <span style={{ ...NUM, fontSize:15, fontWeight:800, color:'var(--text)' }}>{m.home.score}-{m.away.score}</span>
+                          </div>
+                          <span style={{ fontSize:9, fontWeight:700, color:'var(--acc)' }}>{m.minute}'</span>
+                        </div>
+                      ) : isFinished ? (
+                        <span style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text)' }}>{m.home.score}-{m.away.score}</span>
+                      ) : (
+                        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:1 }}>
+                          <span style={{ ...NUM, fontSize:14, fontWeight:700, color:'var(--text-60)' }}>{m.time||'예정'}</span>
+                          <span style={{ fontSize:9, color:'var(--text5)' }}>KST</span>
+                        </div>
+                      )}
+                    </div>
+                    {/* Away */}
+                    <div style={{ display:'flex', alignItems:'center', gap:6, flex:1 }}>
+                      <TeamBadge code={m.away.code} size={24} logo={m.away.logo}/>
+                      <span style={{ fontSize:13, fontWeight:600, color: awayIsKorean ? 'var(--acc)' : 'var(--text)', lineHeight:1.3 }}>{m.away.name}</span>
+                    </div>
                   </div>
                 ) : isFinished ? (
                   <div style={{ fontSize:9, fontWeight:700, color:'var(--text5)', whiteSpace:'nowrap' }}>종료</div>
@@ -2082,8 +2234,6 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false }) {
                     </>);
                   })()}
                 </div>
-              </div>
-            </div>
               </React.Fragment>
             );
           })
@@ -2095,7 +2245,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false }) {
 }
 
 // ─── SCREEN: PLAYERS LIST ────────────────────────────────────
-function PlayersScreen({ onPlayer, onAdd, followed }) {
+function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {} }) {
   const sports = ['전체', '축구', '야구', '배드민턴'];
   const [filter, setFilter] = React.useState('전체');
   const followedPlayers = ALL_PLAYERS.filter(p => followed.has(p.id));
@@ -2128,14 +2278,27 @@ function PlayersScreen({ onPlayer, onAdd, followed }) {
                 <span style={{ fontSize:11, color:'var(--text4)', fontWeight:500 }}>{p.nameEn}</span>
               </div>
               <div style={{ fontSize:12, color:'var(--text3)', marginBottom:8 }}>{p.team} · {p.position}</div>
-              <div style={{ display:'flex', gap:16 }}>
-                {p.sport === '축구' && <>
-                  <div style={{ textAlign:'center' }}><div style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text)' }}>{p.goals}</div><div style={{ fontSize:10, color:'var(--text4)' }}>골</div></div>
-                  <div style={{ textAlign:'center' }}><div style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text-60)' }}>{p.assists}</div><div style={{ fontSize:10, color:'var(--text4)' }}>어시스트</div></div>
-                </>}
-                <div style={{ textAlign:'center' }}><div style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text-60)' }}>{p.matches}</div><div style={{ fontSize:10, color:'var(--text4)' }}>경기</div></div>
-                {p.rating > 0 && <div style={{ textAlign:'center' }}><div style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--acc)' }}>{p.rating.toFixed(1)}</div><div style={{ fontSize:10, color:'var(--text4)' }}>평점</div></div>}
-              </div>
+              {(() => {
+                const s = statsCache[p.id];
+                const goals   = s?.goals   ?? p.goals;
+                const assists = s?.assists ?? p.assists;
+                const matches = s?.matches ?? p.matches;
+                return (
+                  <div style={{ display:'flex', gap:16 }}>
+                    {p.sport === '축구' && <>
+                      <div style={{ textAlign:'center' }}><div style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text)' }}>{goals}</div><div style={{ fontSize:10, color:'var(--text4)' }}>골</div></div>
+                      <div style={{ textAlign:'center' }}><div style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text-60)' }}>{assists}</div><div style={{ fontSize:10, color:'var(--text4)' }}>어시스트</div></div>
+                    </>}
+                    {p.sport === '야구' && s && <>
+                      <div style={{ textAlign:'center' }}><div style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text)' }}>{s.homeRuns}</div><div style={{ fontSize:10, color:'var(--text4)' }}>홈런</div></div>
+                      <div style={{ textAlign:'center' }}><div style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text-60)' }}>{s.hits}</div><div style={{ fontSize:10, color:'var(--text4)' }}>안타</div></div>
+                    </>}
+                    <div style={{ textAlign:'center' }}><div style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text-60)' }}>{matches}</div><div style={{ fontSize:10, color:'var(--text4)' }}>경기</div></div>
+                    {p.sport === '야구' && s && <div style={{ textAlign:'center' }}><div style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--acc)' }}>{s.avg}</div><div style={{ fontSize:10, color:'var(--text4)' }}>타율</div></div>}
+                    {p.sport !== '야구' && p.rating > 0 && <div style={{ textAlign:'center' }}><div style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--acc)' }}>{p.rating.toFixed(1)}</div><div style={{ fontSize:10, color:'var(--text4)' }}>평점</div></div>}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         ))}
@@ -2732,6 +2895,38 @@ function App() {
   const [apiLoading, setApiLoading] = React.useState(true); // Start with true for initial load
   const [isInitialLoad, setIsInitialLoad] = React.useState(true);
   const [notifications, setNotifications] = React.useState([]);
+  const [playerStatsCache, setPlayerStatsCache] = React.useState({});
+
+  React.useEffect(() => {
+    const parseESPN = (data) => {
+      const cats = data?.splits?.categories || [];
+      if (!cats.length) return null;
+      const allStats = cats.flatMap(c => c.stats || []);
+      const get = (...names) => { for (const n of names) { const s = allStats.find(s => s.name === n); if (s) return parseFloat(s.value)||0; } return 0; };
+      return { goals: get('totalGoals'), assists: get('goalAssists'), matches: get('appearances'), shotsTotal: get('totalShots'), shotsOn: get('shotsOnTarget'), keyPasses: get('shotAssists'), tackles: get('totalTackles'), interceptions: get('interceptions'), yellowCards: get('yellowCards'), redCards: get('redCards'), minutes: get('minutes'), starts: get('starts') };
+    };
+    const parseMLB = (data) => {
+      const stat = data?.stats?.[0]?.splits?.[0]?.stat;
+      if (!stat) return null;
+      return { matches: stat.gamesPlayed, hits: stat.hits, homeRuns: stat.homeRuns, rbi: stat.rbi, avg: stat.avg, obp: stat.obp, ops: stat.ops };
+    };
+    const cache = {};
+    Promise.all(ALL_PLAYERS.map(async p => {
+      try {
+        if (p.sport === '축구' && p.espnLeague && p.espnId) {
+          const res = await fetch(`http://localhost:8002/espn-player-stats?league=${p.espnLeague}&id=${p.espnId}`);
+          const data = await res.json();
+          const stats = parseESPN(data);
+          if (stats) cache[p.id] = stats;
+        } else if (p.sport === '야구' && p.mlbId) {
+          const res = await fetch(`http://localhost:8002/mlb-stats?id=${p.mlbId}`);
+          const data = await res.json();
+          const stats = parseMLB(data);
+          if (stats) cache[p.id] = stats;
+        }
+      } catch(e) {}
+    })).then(() => setPlayerStatsCache({...cache}));
+  }, []);
 
   // Dynamic device dimensions based on viewport
   const [deviceDimensions, setDeviceDimensions] = React.useState(() => {
@@ -3181,15 +3376,7 @@ function App() {
       const minutes = String(date.getMinutes()).padStart(2, '0');
 
       // Check if it's today or tomorrow morning
-      if (date.toDateString() === now.toDateString()) {
-        // Today: show HH:MM only
-        timeDisplay = `${hours}:${minutes}`;
-      } else if (date <= tomorrow) {
-        // Tomorrow morning (before 11:59): show MM/DD
-        timeDisplay = `${month}/${day}`;
-      } else {
-        timeDisplay = `${month}/${day}`;
-      }
+      timeDisplay = `${hours}:${minutes}`;
     } else if (isLive) {
       timeDisplay = 'LIVE';
     }
@@ -3363,7 +3550,7 @@ function App() {
             <>
               {tab === 'home' && <HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} tweaks={tweaks} liveApiMatches={liveMatches} isLoading={isInitialLoad && apiLoading}/>}
               {tab === 'schedule' && <ScheduleScreen onMatch={goMatch} liveApiMatches={liveMatches} isLoading={apiLoading}/>}
-              {tab === 'players' && <PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} followed={followed}/>}
+              {tab === 'players' && <PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} followed={followed} statsCache={playerStatsCache}/>}
               {tab === 'news' && <NewsScreen sportFeeds={sportFeeds}/>}
               {tab === 'more' && <MoreScreen darkMode={darkMode} onToggleDark={toggleDark} sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed}/>}
             </>
@@ -3372,7 +3559,7 @@ function App() {
             <LiveDetailScreen match={selectedMatch} onBack={goBack}/>
           )}
           {screen === 'player' && selectedPlayer && (
-            <PlayerScreen player={selectedPlayer} onBack={goBack} onMatch={goMatch}/>
+            <PlayerScreen player={selectedPlayer} onBack={goBack} onMatch={goMatch} liveApiMatches={liveMatches} statsCache={playerStatsCache}/>
           )}
           {screen === 'addplayer' && (
             <AddPlayerScreen followed={followed} onToggle={toggleFollow} onBack={goBack}/>
