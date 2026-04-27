@@ -97,6 +97,65 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ESPN player stats proxy: /espn-player-stats?league=fra.1&id=274197
+  if (reqUrl.pathname === '/espn-player-stats') {
+    const league = reqUrl.searchParams.get('league');
+    const id     = reqUrl.searchParams.get('id');
+    if (!league || !id) { res.writeHead(400); res.end('{}'); return; }
+
+    const fetchType = (type) => new Promise((resolve, reject) => {
+      const r = https.request({
+        hostname: 'sports.core.api.espn.com',
+        path: `/v2/sports/soccer/leagues/${league}/seasons/2025/types/${type}/athletes/${id}/statistics`,
+        method: 'GET',
+        headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' },
+      }, coreRes => {
+        let body = '';
+        coreRes.on('data', c => body += c);
+        coreRes.on('end', () => resolve(body));
+      });
+      r.on('error', reject);
+      r.setTimeout(8000, () => { r.destroy(); reject(new Error('timeout')); });
+      r.end();
+    });
+
+    try {
+      // Try type 2 (regular season for most European leagues), fall back to type 1 (MLS etc.)
+      let body = await fetchType(2);
+      let parsed = JSON.parse(body);
+      if (!parsed?.splits?.categories?.length) {
+        body = await fetchType(1);
+        parsed = JSON.parse(body);
+      }
+      res.setHeader('Content-Type', 'application/json');
+      res.writeHead(200);
+      res.end(JSON.stringify(parsed));
+    } catch(e) {
+      res.writeHead(200); res.end('{}');
+    }
+    return;
+  }
+
+  // MLB Stats API proxy: /mlb-stats?id=628406
+  if (reqUrl.pathname === '/mlb-stats') {
+    const mlbId = reqUrl.searchParams.get('id');
+    if (!mlbId) { res.writeHead(400); res.end('{}'); return; }
+    const mlbReq = https.request({
+      hostname: 'statsapi.mlb.com',
+      path: `/api/v1/people/${mlbId}/stats?stats=season&season=2025&group=hitting`,
+      method: 'GET',
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    }, mlbRes => {
+      let body = '';
+      mlbRes.on('data', c => body += c);
+      mlbRes.on('end', () => { res.setHeader('Content-Type','application/json'); res.writeHead(mlbRes.statusCode); res.end(body); });
+    });
+    mlbReq.on('error', () => { res.writeHead(500); res.end('{}'); });
+    mlbReq.setTimeout(8000, () => { mlbReq.destroy(); res.writeHead(500); res.end('{}'); });
+    mlbReq.end();
+    return;
+  }
+
   if (req.url.startsWith('/api/')) {
     const apiPath = req.url.replace('/api', '');
     const options = {
