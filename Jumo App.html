@@ -1359,13 +1359,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
 
       {/* This week's matches list (finished today + upcoming until Sunday) */}
       {(() => {
-        // Calculate this week's Sunday
-        const dayOfWeek = now.getDay(); // 0 (Sunday) to 6 (Saturday)
-        const daysUntilSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
-        const endOfThisWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilSunday, 23, 59, 59);
-
-        // Show today + tomorrow matches only, deduplicated
-        const endOfTomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2, 0, 0, 0) - 1;
+        // Show today's matches + upcoming within 12 hours, deduplicated
         const seenIds = new Set();
         const thisWeekMatches = allMatches
           .filter(m => {
@@ -1373,7 +1367,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
             if (seenIds.has(m.id)) return false;
             seenIds.add(m.id);
             const matchDate = new Date(m.fullDate);
-            return matchDate >= startOfToday && matchDate <= endOfTomorrow;
+            return matchDate >= startOfToday && matchDate <= twelveHoursLater;
           })
           .sort((a, b) => {
             const dateA = new Date(a.fullDate);
