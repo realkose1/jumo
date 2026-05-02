@@ -1187,13 +1187,13 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
 
     let cancelled = false;
     setHlBgImg(null);
-    fetch(`http://localhost:8002/naver-news?query=${encodeURIComponent(playerName)}&display=6&sort=date`)
+    fetch(`/api/naver-news?query=${encodeURIComponent(playerName)}&display=6&sort=date`)
       .then(r => r.json())
       .then(async data => {
         for (const item of (data.items || [])) {
           const url = item.originallink || item.link;
           try {
-            const imgRes = await fetch(`http://localhost:8002/news-image?url=${encodeURIComponent(url)}`);
+            const imgRes = await fetch(`/api/news-image?url=${encodeURIComponent(url)}`);
             const imgData = await imgRes.json();
             if (imgData.image && !imgData.image.startsWith('data:') && !cancelled) {
               setHlBgImg(imgData.image);
@@ -1771,7 +1771,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
     const fetchStats = async () => {
       try {
         if (player.sport === '야구' && player.mlbId) {
-          const res = await fetch(`http://localhost:8002/mlb-stats?id=${player.mlbId}`);
+          const res = await fetch(`/api/mlb-stats?id=${player.mlbId}`);
           const data = await res.json();
           const stat = data?.stats?.[0]?.splits?.[0]?.stat;
           if (stat && !cancelled) {
@@ -1786,7 +1786,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
             });
           }
         } else if (player.sport === '축구' && player.espnLeague && player.espnId) {
-          const res = await fetch(`http://localhost:8002/espn-player-stats?league=${player.espnLeague}&id=${player.espnId}`);
+          const res = await fetch(`/api/espn-player-stats?league=${player.espnLeague}&id=${player.espnId}`);
           const data = await res.json();
           const cats = data?.splits?.categories || [];
           if (cats.length > 0 && !cancelled) {
@@ -2423,7 +2423,7 @@ function NewsScreen({ sportFeeds }) {
       try {
         const responses = await Promise.all(
           NEWS_PLAYERS.map(player =>
-            fetch(`http://localhost:8002/naver-news?query=${encodeURIComponent(player.query)}`)
+            fetch(`/api/naver-news?query=${encodeURIComponent(player.query)}`)
               .then(r => r.json())
               .then(data => (data.items || []).map(item => ({
                 title: stripHtml(item.title),
@@ -2888,12 +2888,12 @@ function App() {
     Promise.all(ALL_PLAYERS.map(async p => {
       try {
         if (p.sport === '축구' && p.espnLeague && p.espnId) {
-          const res = await fetch(`http://localhost:8002/espn-player-stats?league=${p.espnLeague}&id=${p.espnId}`);
+          const res = await fetch(`/api/espn-player-stats?league=${p.espnLeague}&id=${p.espnId}`);
           const data = await res.json();
           const stats = parseESPN(data);
           if (stats) cache[p.id] = stats;
         } else if (p.sport === '야구' && p.mlbId) {
-          const res = await fetch(`http://localhost:8002/mlb-stats?id=${p.mlbId}`);
+          const res = await fetch(`/api/mlb-stats?id=${p.mlbId}`);
           const data = await res.json();
           const stats = parseMLB(data);
           if (stats) cache[p.id] = stats;
