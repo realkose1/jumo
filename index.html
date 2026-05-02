@@ -3434,7 +3434,15 @@ function App() {
       // Set event text
       const isFinished = status === 'STATUS_FINAL' || status === 'STATUS_FULL_TIME' || status === 'STATUS_END_PERIOD' || status === 'STATUS_FINAL_PEN';
       if (isLive) {
-        playerEventText = '출전 중';
+        const isStarter = koreanAthlete?.starter === true;
+        const hasMinutes = playerStats.minutesPlayed && playerStats.minutesPlayed > 0;
+        if (isStarter || hasMinutes || didPlay) {
+          playerEventText = '출전 중';
+        } else if (koreanAthlete) {
+          playerEventText = '벤치';
+        } else {
+          playerEventText = '출전 예상';
+        }
       } else if (isFinished) {
         if (!koreanAthlete || !didPlay) {
           playerEventText = '미출전';
