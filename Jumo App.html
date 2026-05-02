@@ -24,6 +24,8 @@ html, body {
 body {
   background: #0b0b0d;
   min-height: 100vh;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 *, *::before, *::after { transition: background-color 0.25s, color 0.25s, border-color 0.25s; }
 
@@ -2897,22 +2899,27 @@ function App() {
   }, []);
 
   // Dynamic device dimensions based on viewport
+  const getSafeAreaInsets = () => {
+    const style = getComputedStyle(document.documentElement);
+    const top = parseFloat(style.getPropertyValue('padding-top')) || 0;
+    const bottom = parseFloat(style.getPropertyValue('padding-bottom')) || 0;
+    return { top, bottom };
+  };
+
   const [deviceDimensions, setDeviceDimensions] = React.useState(() => {
     const vw = window.innerWidth;
-    const vh = window.innerHeight;
-
-    // Use viewport width, capped at 430px max for larger screens
+    const insets = getSafeAreaInsets();
+    const vh = window.innerHeight - insets.top - insets.bottom;
     const width = Math.min(vw, 430);
-    // Maintain 16:9-ish aspect ratio, or use full viewport height
     const height = Math.min(vh, width * 2.17);
-
     return { width, height };
   });
 
   React.useEffect(() => {
     const handleResize = () => {
       const vw = window.innerWidth;
-      const vh = window.innerHeight;
+      const insets = getSafeAreaInsets();
+      const vh = window.innerHeight - insets.top - insets.bottom;
       const width = Math.min(vw, 430);
       const height = Math.min(vh, width * 2.17);
       setDeviceDimensions({ width, height });
