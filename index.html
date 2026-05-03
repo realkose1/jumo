@@ -2179,10 +2179,12 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false }) {
     return matchDate >= sevenDaysAgo && matchDate <= sevenDaysLater;
   });
 
-  const selectedDateMatches = allMatches.filter(m => {
-    const matchDate = new Date(m.fullDate);
-    return matchDate.toDateString() === selDate;
-  });
+  const selectedDateMatches = allMatches
+    .filter(m => {
+      const matchDate = new Date(m.fullDate);
+      return matchDate.toDateString() === selDate;
+    })
+    .sort((a, b) => new Date(a.fullDate) - new Date(b.fullDate));
 
   // Get label for date
   const getDateLabel = (date) => {
@@ -3371,6 +3373,13 @@ function App() {
   }, [liveMatches]);
 
   const transformSofascoreEvent = (event) => {
+    // Skip women's / youth competitions (check tournament name only, not category)
+    const tourneyName = (event.tournament?.name || '').toLowerCase();
+    const homeTeamRaw = (event.homeTeam?.name || '').toLowerCase();
+    const awayTeamRaw = (event.awayTeam?.name || '').toLowerCase();
+    const WOMEN_MARKERS = ['women', 'frauen', 'féminin', 'femenin', 'dames', 'ladies', ' w ', '(w)'];
+    if (WOMEN_MARKERS.some(k => tourneyName.includes(k) || homeTeamRaw.includes(k) || awayTeamRaw.includes(k))) return null;
+
     const homeTeamName = event.homeTeam?.name || '';
     const awayTeamName = event.awayTeam?.name || '';
     const homeShort = event.homeTeam?.shortName || event.homeTeam?.nameCode || homeTeamName.slice(0,3).toUpperCase();
