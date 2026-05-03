@@ -1199,7 +1199,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
           };
         } else {
           const ev = m.koreanPlayer.event || '';
-          const evLabel = ev === '교체 출전 중' ? '교체 출전 중' : ev === '교체 아웃' ? '교체 아웃' : ev === '벤치' ? '벤치 대기' : '출전 중';
+          const evLabel = ev === '교체 출전 중' ? '교체 출전 중' : ev === '교체 아웃' ? '교체 아웃' : ev === '벤치' ? '벤치 대기' : ev === '미출전' ? '미출전 (결장)' : ev === '출전 예상' ? '출전 여부 확인 중' : '출전 중';
           return {
             status: `LIVE NOW · ${hlLiveMinute || m.minute || ''}\'`,
             main: `${m.koreanPlayer.name} ${evLabel}`,
@@ -3196,8 +3196,26 @@ function App() {
           return true;
         });
 
+        // For soccer: drop ESPN matches that Sofascore already covers (same teams + same date).
+        // Sofascore has lineup data; ESPN scoreboard does not.
+        const sfSoccerKeys = new Set(
+          uniqueMatches
+            .filter(m => m.source === 'sofascore')
+            .map(m => {
+              const d = m.fullDate ? new Date(m.fullDate).toDateString() : '';
+              return `${m.home.name}|${m.away.name}|${d}`;
+            })
+        );
+        const dedupedMatches = uniqueMatches.filter(m => {
+          if (m.source === 'sofascore') return true;
+          if ((m.sport || '').includes('MLB')) return true; // keep MLB from ESPN
+          const d = m.fullDate ? new Date(m.fullDate).toDateString() : '';
+          const key = `${m.home.name}|${m.away.name}|${d}`;
+          return !sfSoccerKeys.has(key); // drop ESPN soccer if Sofascore covers it
+        });
+
         // Filter for Korean players
-        const koreanMatches = uniqueMatches.filter(m => m.koreanPlayer);
+        const koreanMatches = dedupedMatches.filter(m => m.koreanPlayer);
 
         // ── nameMatch helper ───────────────────────────────────────────────
         const nameMatch = (sfName, nameEn) => {
@@ -3263,8 +3281,10 @@ function App() {
             let newEvent, minutesPlayed = 0;
 
             if (isLive) {
+              const lineupAvailable = linePlayers.length > 0;
               const onPitch = (started && minutesOff === null) || (minutesIn !== null && minutesOff === null);
-              if (!foundInRoster) newEvent = '출전 예상';
+              if (!foundInRoster && lineupAvailable) newEvent = '미출전';
+              else if (!foundInRoster) newEvent = '출전 예상';
               else if (onPitch) newEvent = minutesIn !== null ? '교체 출전 중' : '출전 중';
               else if (started && minutesOff !== null) newEvent = '교체 아웃';
               else newEvent = '벤치';
