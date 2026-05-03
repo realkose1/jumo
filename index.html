@@ -1698,16 +1698,29 @@ function LiveDetailScreen({ match, onBack }) {
   const isFinished = match.status === 'STATUS_FINAL' || match.status === 'STATUS_FULL_TIME' || match.status === 'final' || match.status === 'STATUS_END_PERIOD' || match.status === 'STATUS_FINAL_PEN';
   const [lineupsData, setLineupsData] = React.useState(null);
   const [lineupsLoading, setLineupsLoading] = React.useState(false);
+  const [statsData, setStatsData] = React.useState(null);
+  const [statsLoading, setStatsLoading] = React.useState(false);
+
+  const isSoccerMatch = !((match.sport||'').includes('MLB') || (match.sport||'').includes('⚾'));
 
   React.useEffect(() => {
     if (tab !== 'lineups' || lineupsData || !(isFinished || isLive)) return;
-    const isSoccer = !((match.sport||'').includes('MLB') || (match.sport||'').includes('⚾'));
-    if (!isSoccer) return;
+    if (!isSoccerMatch) return;
     setLineupsLoading(true);
     fetch(`https://api.sofascore.com/api/v1/event/${match.id}/lineups`, { referrerPolicy:'no-referrer' })
       .then(r => r.ok ? r.json() : null)
       .then(data => { setLineupsData(data); setLineupsLoading(false); })
       .catch(() => { setLineupsLoading(false); });
+  }, [tab, match.id, isFinished, isLive]);
+
+  React.useEffect(() => {
+    if (tab !== 'stats' || statsData || !(isFinished || isLive)) return;
+    if (!isSoccerMatch) return;
+    setStatsLoading(true);
+    fetch(`https://api.sofascore.com/api/v1/event/${match.id}/statistics`, { referrerPolicy:'no-referrer' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { setStatsData(data); setStatsLoading(false); })
+      .catch(() => { setStatsLoading(false); });
   }, [tab, match.id, isFinished, isLive]);
   const typeColor = { goal:'var(--acc)', yellow:'#f5c518', red:'#e03030', assist:'var(--text2)' };
 
@@ -1910,25 +1923,90 @@ function LiveDetailScreen({ match, onBack }) {
       )}
 
       {/* Stats */}
-      {tab === 'stats' && match.stats && (
-        <div style={{ padding:'16px' }}>
-          {[['슈팅', match.stats.shots], ['점유율 %', match.stats.possession], ['패스', match.stats.passes]].map(([label, vals]) => (
-            <div key={label} style={{ marginBottom:16 }}>
-              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
-                <span style={{ ...NUM, fontSize:14, fontWeight:700, color:'var(--text)' }}>{vals[0]}</span>
-                <span style={{ fontSize:12, color:'var(--text3)', fontWeight:600 }}>{label}</span>
-                <span style={{ ...NUM, fontSize:14, fontWeight:700, color:'var(--text2)' }}>{vals[1]}</span>
+      {tab === 'stats' && (() => {
+        if (statsLoading) {
+          return <div style={{ display:'flex', justifyContent:'center', padding:'48px 0' }}><div style={{ width:24, height:24, borderRadius:'50%', border:'2.5px solid var(--border)', borderTopColor:'var(--acc)', animation:'spin 0.8s linear infinite' }}/></div>;
+        }
+        const all = statsData?.statistics?.find(s => s.period === 'ALL');
+        const groups = all?.groups || [];
+        if (groups.length === 0) {
+          return <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text5)', fontSize:14 }}>통계가 없습니다</div>;
+        }
+        const STAT_LABELS = {
+          'Ball possession':'점유율',
+          'Expected goals':'기대득점 (xG)',
+          'Big chances':'결정적 기회',
+          'Big chances scored':'결정적 기회 골',
+          'Big chances missed':'결정적 기회 놓침',
+          'Total shots':'전체 슈팅',
+          'Shots on target':'유효 슈팅',
+          'Shots off target':'유효 외 슈팅',
+          'Blocked shots':'블록된 슈팅',
+          'Corner kicks':'코너킥',
+          'Offsides':'오프사이드',
+          'Fouls':'파울',
+          'Yellow cards':'옐로우카드',
+          'Red cards':'레드카드',
+          'Free kicks':'프리킥',
+          'Throw-ins':'스로인',
+          'Goal kicks':'골킥',
+          'Passes':'전체 패스',
+          'Accurate passes':'정확한 패스',
+          'Long balls':'롱볼',
+          'Crosses':'크로스',
+          'Dribbles':'드리블',
+          'Possession lost':'볼 소유 상실',
+          'Duels won':'경합 승리',
+          'Aerials won':'공중볼 승리',
+          'Tackles':'태클',
+          'Interceptions':'인터셉트',
+          'Clearances':'클리어',
+          'Goalkeeper saves':'선방',
+          'Total saves':'선방',
+          'Group':'그룹',
+        };
+        const GROUP_LABELS = {
+          'Match overview':'개요',
+          'Shots':'슈팅',
+          'Attack':'공격',
+          'Passes':'패스',
+          'Duels':'경합',
+          'Defending':'수비',
+          'Goalkeeping':'골키퍼',
+        };
+        const renderRow = (it, i) => {
+          const label = STAT_LABELS[it.name] || it.name;
+          const homeStr = String(it.home ?? '');
+          const awayStr = String(it.away ?? '');
+          const homeVal = parseFloat(homeStr);
+          const awayVal = parseFloat(awayStr);
+          const total = (isFinite(homeVal) ? homeVal : 0) + (isFinite(awayVal) ? awayVal : 0);
+          const homePct = total > 0 ? (homeVal / total) * 100 : 50;
+          return (
+            <div key={i} style={{ marginBottom:14 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:5 }}>
+                <span style={{ ...NUM, fontSize:13, fontWeight:700, color:'var(--text)', minWidth:50 }}>{homeStr}</span>
+                <span style={{ fontSize:11, color:'var(--text3)', fontWeight:600 }}>{label}</span>
+                <span style={{ ...NUM, fontSize:13, fontWeight:700, color:'var(--text2)', minWidth:50, textAlign:'right' }}>{awayStr}</span>
               </div>
-              <div style={{ height:6, background:'var(--border)', borderRadius:3, overflow:'hidden' }}>
-                <div style={{ width:`${vals[0]/(vals[0]+vals[1])*100}%`, height:'100%', background:'var(--acc)', borderRadius:3, transition:'width 0.8s ease' }}/>
+              <div style={{ display:'flex', height:5, gap:2, background:'transparent' }}>
+                <div style={{ width:`${homePct}%`, height:'100%', background:'var(--acc)', borderRadius:3, transition:'width 0.6s ease' }}/>
+                <div style={{ flex:1, height:'100%', background:'var(--border)', borderRadius:3 }}/>
               </div>
             </div>
-          ))}
-        </div>
-      )}
-      {tab === 'stats' && !match.stats && (
-        <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text5)', fontSize:14 }}>경기 시작 후 통계가 표시됩니다</div>
-      )}
+          );
+        };
+        return (
+          <div style={{ padding:'16px' }}>
+            {groups.map((g, gi) => (
+              <div key={gi} style={{ marginBottom:18 }}>
+                <div style={{ fontSize:11, fontWeight:700, color:'var(--text4)', letterSpacing:1, textTransform:'uppercase', marginBottom:10 }}>{GROUP_LABELS[g.groupName] || g.groupName}</div>
+                {(g.statisticsItems || []).map(renderRow)}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
       {tab === 'lineups' && (() => {
         if (lineupsLoading) {
           return <div style={{ display:'flex', justifyContent:'center', padding:'48px 0' }}><div style={{ width:24, height:24, borderRadius:'50%', border:'2.5px solid var(--border)', borderTopColor:'var(--acc)', animation:'spin 0.8s linear infinite' }}/></div>;
