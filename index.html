@@ -2877,7 +2877,20 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
 }
 
 // ─── SCREEN: PLAYERS LIST ────────────────────────────────────
-function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading = false, onRefresh, scrollTopKey = 0 }) {
+function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading = false, onRefresh, scrollTopKey = 0, liveApiMatches = [] }) {
+  // Build a map: player name → team logo URL (from any cached match)
+  const teamLogoByPlayer = React.useMemo(() => {
+    const map = {};
+    for (const m of liveApiMatches) {
+      const kp = m.koreanPlayer;
+      if (!kp || map[kp.name]) continue;
+      const koreanIsHome = kp.team === m.home.code;
+      const logo = koreanIsHome ? m.home.logo : m.away.logo;
+      if (logo) map[kp.name] = logo;
+    }
+    return map;
+  }, [liveApiMatches]);
+
   const sports = ['전체', '축구', '야구', '배드민턴'];
   const [filter, setFilter] = React.useState('전체');
   const followedPlayers = ALL_PLAYERS.filter(p => followed.has(p.id));
@@ -2932,42 +2945,56 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
       </div>
       <div style={{ padding:'0 16px', display:'flex', flexDirection:'column', gap:10 }}>
         {(() => {
-          const renderCard = p => (
-          <div key={p.id} onClick={() => onPlayer(p)} style={{ background:'var(--surface)', borderRadius:16, overflow:'hidden', cursor:'pointer', border:'0.5px solid var(--border2)', display:'flex', alignItems:'stretch' }}>
-            <div style={{ width:90, height:100, flexShrink:0, background:'var(--card)', position:'relative', overflow:'hidden' }}>
-              <PlayerPhoto player={p} style={{ position:'absolute', inset:0 }} tint="var(--surface)"/>
-            </div>
-            <div style={{ flex:1, padding:'14px 16px', display:'flex', flexDirection:'column', justifyContent:'center' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
-                <span style={{ fontSize:16, fontWeight:800, color:'var(--text)', letterSpacing:-0.3 }}>{p.name}</span>
-                <span style={{ fontSize:11, color:'var(--text4)', fontWeight:500 }}>{p.nameEn}</span>
-              </div>
-              <div style={{ fontSize:12, color:'var(--text3)', marginBottom:8 }}>{p.team} · {p.position}</div>
-              {(() => {
-                const s = statsCache[p.id];
-                // For soccer, prefer manual (all-comps) values; ESPN only returns league stats
-                const goals   = p.sport === '야구' ? (s?.goals   ?? p.goals  ) : p.goals;
-                const assists = p.sport === '야구' ? (s?.assists ?? p.assists) : p.assists;
-                const matches = p.sport === '야구' ? (s?.matches ?? p.matches) : p.matches;
-                return (
-                  <div style={{ display:'flex', gap:16 }}>
-                    {p.sport === '축구' && <>
-                      <div style={{ textAlign:'center' }}><div style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text)' }}>{goals}</div><div style={{ fontSize:10, color:'var(--text4)' }}>골</div></div>
-                      <div style={{ textAlign:'center' }}><div style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text-60)' }}>{assists}</div><div style={{ fontSize:10, color:'var(--text4)' }}>어시스트</div></div>
-                    </>}
-                    {p.sport === '야구' && s && <>
-                      <div style={{ textAlign:'center' }}><div style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text)' }}>{s.homeRuns}</div><div style={{ fontSize:10, color:'var(--text4)' }}>홈런</div></div>
-                      <div style={{ textAlign:'center' }}><div style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text-60)' }}>{s.hits}</div><div style={{ fontSize:10, color:'var(--text4)' }}>안타</div></div>
-                    </>}
-                    <div style={{ textAlign:'center' }}><div style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text-60)' }}>{matches}</div><div style={{ fontSize:10, color:'var(--text4)' }}>경기</div></div>
-                    {p.sport === '야구' && s && <div style={{ textAlign:'center' }}><div style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--acc)' }}>{s.avg}</div><div style={{ fontSize:10, color:'var(--text4)' }}>타율</div></div>}
-                    {p.sport !== '야구' && p.rating > 0 && <div style={{ textAlign:'center' }}><div style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--acc)' }}>{p.rating.toFixed(1)}</div><div style={{ fontSize:10, color:'var(--text4)' }}>평점</div></div>}
+          const renderCard = p => {
+            const teamLogo = teamLogoByPlayer[p.name];
+            const s = statsCache[p.id];
+            const goals   = p.sport === '야구' ? (s?.goals   ?? p.goals  ) : p.goals;
+            const assists = p.sport === '야구' ? (s?.assists ?? p.assists) : p.assists;
+            const matches = p.sport === '야구' ? (s?.matches ?? p.matches) : p.matches;
+            const stats = [];
+            if (p.sport === '축구') {
+              stats.push({ k:'골',   v:goals,   accent: goals > 0 });
+              stats.push({ k:'도움', v:assists, accent: false });
+              stats.push({ k:'경기', v:matches, accent: false });
+            } else if (p.sport === '야구' && s) {
+              stats.push({ k:'홈런', v:s.homeRuns, accent: s.homeRuns > 0 });
+              stats.push({ k:'안타', v:s.hits, accent: false });
+              if (s.avg) stats.push({ k:'타율', v:s.avg, accent: true });
+            } else {
+              stats.push({ k:'경기', v:matches, accent: false });
+            }
+            return (
+              <div key={p.id} onClick={() => onPlayer(p)} style={{ background:'var(--surface)', borderRadius:16, overflow:'hidden', cursor:'pointer', border:'0.5px solid var(--border2)', display:'flex', alignItems:'stretch' }}>
+                <div style={{ width:90, height:100, flexShrink:0, background:'var(--card)', position:'relative', overflow:'hidden' }}>
+                  <PlayerPhoto player={p} style={{ position:'absolute', inset:0 }} tint="var(--surface)"/>
+                </div>
+                <div style={{ flex:1, padding:'12px 14px', display:'flex', flexDirection:'column', justifyContent:'space-between', minWidth:0 }}>
+                  {/* Top: name + team logo on right */}
+                  <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:8 }}>
+                    <div style={{ minWidth:0, flex:1 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:2, flexWrap:'wrap' }}>
+                        <span style={{ fontSize:16, fontWeight:800, color:'var(--text)', letterSpacing:-0.3 }}>{p.name}</span>
+                        <span style={{ fontSize:10, color:'var(--text5)', fontWeight:500 }}>{p.nameEn}</span>
+                      </div>
+                      <div style={{ fontSize:11, color:'var(--text3)' }}>{p.team} · {p.position}</div>
+                    </div>
+                    {teamLogo && (
+                      <img src={teamLogo} alt={p.team} style={{ width:24, height:24, objectFit:'contain', flexShrink:0, marginTop:1 }}/>
+                    )}
                   </div>
-                );
-              })()}
-            </div>
-          </div>
-          );
+                  {/* Bottom-right stats */}
+                  <div style={{ display:'flex', gap:14, justifyContent:'flex-end', alignItems:'flex-end', marginTop:6 }}>
+                    {stats.map((st, i) => (
+                      <div key={i} style={{ textAlign:'center' }}>
+                        <div style={{ ...NUM, fontSize:15, fontWeight:800, color: st.accent ? 'var(--acc)' : 'var(--text)' }}>{st.v}</div>
+                        <div style={{ fontSize:9, color:'var(--text4)', marginTop:1 }}>{st.k}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          };
           if (isLoading) return Array.from({length:5}).map((_,i) => <SkeletonPlayerCard key={i}/>);
           if (filter !== '전체') return filtered.map(renderCard);
           // Grouped rendering for 전체
@@ -4516,7 +4543,7 @@ function App() {
             <>
               <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} tweaks={tweaks} liveApiMatches={liveMatches} isLoading={isInitialLoad && apiLoading} scrollTopKey={tabScrollKeys.home} onRefresh={fetchLiveMatches} unreadCount={unreadCount}/></div>
               <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} liveApiMatches={liveMatches} isLoading={apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
-              <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} followed={followed} statsCache={playerStatsCache} isLoading={apiLoading} onRefresh={fetchLiveMatches} scrollTopKey={tabScrollKeys.players}/></div>
+              <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} followed={followed} statsCache={playerStatsCache} isLoading={apiLoading} onRefresh={fetchLiveMatches} scrollTopKey={tabScrollKeys.players} liveApiMatches={liveMatches}/></div>
               <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news}/></div>
               <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen darkMode={darkMode} onToggleDark={toggleDark} sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed}/></div>
             </>
