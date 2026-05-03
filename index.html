@@ -1836,21 +1836,9 @@ function LiveDetailScreen({ match, onBack }) {
                   <div style={{ fontSize:12, color:'var(--text4)', marginTop:4, fontWeight:600 }}>종료</div>
                 </>
               ) : (
-                <>
-                  <div style={{ fontSize:20, fontWeight:700, color:'var(--text)', letterSpacing:-0.3 }}>
-                    {timeLabel} {timeValue}
-                  </div>
-                  {countdown && (
-                    <div style={{
-                      background:'rgba(255,217,61,0.15)', borderRadius:6, padding:'4px 8px',
-                      border:'0.5px solid rgba(255,217,61,0.3)', display:'inline-flex', alignItems:'center', justifyContent:'center', marginTop:6
-                    }}>
-                      <span style={{ fontSize:10, fontWeight:600, color:'#FFD93D', whiteSpace:'nowrap', lineHeight:1 }}>
-                        {countdown}
-                      </span>
-                    </div>
-                  )}
-                </>
+                <div style={{ fontSize:20, fontWeight:700, color:'var(--text)', letterSpacing:-0.3 }}>
+                  {timeLabel} {timeValue}
+                </div>
               )}
             </div>
             <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
@@ -1858,6 +1846,13 @@ function LiveDetailScreen({ match, onBack }) {
               <span style={{ fontSize:12, fontWeight:600, color:'var(--text2)', textAlign:'center' }}>{match.away.name}</span>
             </div>
           </div>
+          {!isLive && !isFinished && countdown && (
+            <div style={{ display:'flex', justifyContent:'center', marginTop:-8, marginBottom:14 }}>
+              <div style={{ background:'rgba(255,217,61,0.15)', borderRadius:6, padding:'4px 8px', border:'0.5px solid rgba(255,217,61,0.3)' }}>
+                <span style={{ fontSize:10, fontWeight:600, color:'#FFD93D', whiteSpace:'nowrap', lineHeight:1 }}>{countdown}</span>
+              </div>
+            </div>
+          )}
           {/* Korean player highlight */}
           <div style={{ background:'rgba(245,196,0,0.08)', borderRadius:10, padding:'10px 14px', border:'0.5px solid rgba(245,196,0,0.3)', display:'flex', alignItems:'center', gap:10 }}>
             <span style={{ fontSize:18 }}>🇰🇷</span>
