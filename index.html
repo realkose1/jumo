@@ -2426,6 +2426,14 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
   const resultColor = { W:'#2cc96d', D:'rgba(255,193,7,0.9)', L:'var(--acc)' };
   const resultLabel = { W:'승', D:'무', L:'패' };
 
+  // Next upcoming match for this player
+  const upcomingMatch = React.useMemo(() => {
+    const now = Date.now();
+    return liveApiMatches
+      .filter(m => m.koreanPlayer?.name === player.name && !m.live && m.fullDate && new Date(m.fullDate).getTime() > now)
+      .sort((a, b) => new Date(a.fullDate) - new Date(b.fullDate))[0];
+  }, [liveApiMatches, player.name]);
+
   const goals   = player.sport === '야구' ? (liveStats?.goals   ?? player.goals  ) : player.goals;
   const assists = player.sport === '야구' ? (liveStats?.assists ?? player.assists) : player.assists;
   const matches = player.sport === '야구' ? (liveStats?.matches ?? player.matches) : player.matches;
@@ -2532,6 +2540,40 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
                   </div>
                 ))}
               </div>
+              {upcomingMatch && (() => {
+                const kp = upcomingMatch.koreanPlayer;
+                const isHome = kp.team === upcomingMatch.home.code;
+                const opp = isHome ? upcomingMatch.away : upcomingMatch.home;
+                const date = new Date(upcomingMatch.fullDate);
+                const now = new Date();
+                const isToday = date.toDateString() === now.toDateString();
+                const tomorrow = new Date(now); tomorrow.setDate(now.getDate()+1);
+                const isTomorrow = date.toDateString() === tomorrow.toDateString();
+                const dateLabel = isToday ? '오늘' : isTomorrow ? '내일' : `${date.getMonth()+1}.${date.getDate()}`;
+                const hh = String(date.getHours()).padStart(2,'0');
+                const mm = String(date.getMinutes()).padStart(2,'0');
+                const diff = Math.max(0, date.getTime() - now.getTime());
+                const days = Math.floor(diff / 86400000);
+                const hours = Math.floor((diff % 86400000) / 3600000);
+                const mins = Math.floor((diff % 3600000) / 60000);
+                const tilStart = days > 0 ? `${days}일 ${hours}시간 뒤` : hours > 0 ? `${hours}시간 ${mins}분 뒤` : `${mins}분 뒤`;
+                return (
+                  <div onClick={() => onMatch && onMatch(upcomingMatch)} style={{ background:'var(--surface)', borderRadius:16, padding:'16px', border:'0.5px solid var(--border)', marginBottom:12, cursor: onMatch ? 'pointer' : 'default' }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:14 }}>다음 예정 경기</div>
+                    <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                      <TeamBadge code={opp.code} size={36} logo={opp.logo}/>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:14, fontWeight:700, color:'var(--text)', marginBottom:2 }}>{isHome ? 'vs' : '@'} {opp.name}</div>
+                        <div style={{ fontSize:11, color:'var(--text4)' }}>{upcomingMatch.competition}</div>
+                      </div>
+                      <div style={{ textAlign:'right', flexShrink:0 }}>
+                        <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>{dateLabel} {hh}:{mm}</div>
+                        <div style={{ fontSize:10, fontWeight:600, color:'var(--acc)', marginTop:3 }}>{tilStart}</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
               <CareerTimeline extra={extra}/>
             </>
           )}
