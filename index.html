@@ -284,6 +284,65 @@ const ALL_PLAYERS = [
 const PLAYERS = ALL_PLAYERS.slice(0, 5);
 
 // ─── PLAYER EXTRA DATA ────────────────────────────────────────
+// Per-competition stats for 2025-26 season
+const PLAYER_COMP_STATS = {
+  1: [ // 손흥민
+    { name:'MLS 정규리그',     icon:'🇺🇸', goals:0, assists:0, matches:8 },
+    { name:'CONCACAF 챔피언스컵', icon:'🏆', goals:2, assists:0, matches:7 },
+    { name:'2026 MLS 시즌',     icon:'⚽', goals:0, assists:6, matches:9 },
+  ],
+  2: [ // 이강인
+    { name:'리그앙',     icon:'🇫🇷', goals:3, assists:4, matches:25 },
+    { name:'챔피언스리그', icon:'🏆', goals:0, assists:0, matches:10 },
+    { name:'기타 (슈퍼컵·인터컨)', icon:'🏅', goals:1, assists:1, matches:2 },
+  ],
+  3: [ // 김민재
+    { name:'분데스리가',   icon:'🇩🇪', goals:1, assists:1, matches:24 },
+    { name:'DFB-포칼',    icon:'🏆', goals:0, assists:0, matches:3 },
+    { name:'챔피언스리그', icon:'🏆', goals:0, assists:0, matches:7 },
+    { name:'슈퍼컵',       icon:'🏅', goals:0, assists:0, matches:1 },
+  ],
+  6: [ // 황희찬
+    { name:'프리미어리그', icon:'🇬🇧', goals:2, assists:1, matches:23 },
+    { name:'FA컵',        icon:'🏆', goals:1, assists:0, matches:2 },
+    { name:'EFL컵',       icon:'🏆', goals:0, assists:0, matches:2 },
+  ],
+  7: [ // 황인범
+    { name:'에레디비시',   icon:'🇳🇱', goals:1, assists:3, matches:17 },
+    { name:'KNVB 컵',     icon:'🏆', goals:0, assists:0, matches:1 },
+    { name:'유로파리그',   icon:'🏆', goals:0, assists:1, matches:6 },
+  ],
+  8: [ // 조규성
+    { name:'덴마크 수페르리가', icon:'🇩🇰', goals:3, assists:1, matches:23 },
+    { name:'덴마크 컵',         icon:'🏆', goals:2, assists:0, matches:6 },
+    { name:'유로파리그',         icon:'🏆', goals:2, assists:0, matches:9 },
+  ],
+  19: [ // 오현규
+    { name:'쉬페르리그', icon:'🇹🇷', goals:6, assists:1, matches:11 },
+    { name:'터키 컵',     icon:'🏆', goals:2, assists:0, matches:2 },
+  ],
+  20: [ // 양현준
+    { name:'스코티시 프리미어십', icon:'🏴󠁧󠁢󠁳󠁣󠁴󠁿', goals:7, assists:1, matches:27 },
+    { name:'스코티시 컵',         icon:'🏆', goals:0, assists:0, matches:3 },
+    { name:'스코티시 리그컵',      icon:'🏆', goals:1, assists:0, matches:3 },
+    { name:'챔피언스리그',         icon:'🏆', goals:0, assists:0, matches:2 },
+    { name:'유로파리그',           icon:'🏆', goals:1, assists:1, matches:7 },
+  ],
+  21: [ // 백승호
+    { name:'챔피언십', icon:'🏴󠁧󠁢󠁥󠁮󠁧󠁿', goals:4, assists:4, matches:42 },
+  ],
+  22: [ // 배준호
+    { name:'챔피언십', icon:'🏴󠁧󠁢󠁥󠁮󠁧󠁿', goals:2, assists:3, matches:42 },
+    { name:'FA컵',     icon:'🏆', goals:1, assists:0, matches:2 },
+    { name:'EFL컵',    icon:'🏆', goals:0, assists:0, matches:1 },
+  ],
+  23: [ // 엄지성
+    { name:'챔피언십', icon:'🏴󠁧󠁢󠁥󠁮󠁧󠁿', goals:2, assists:4, matches:44 },
+    { name:'FA컵',     icon:'🏆', goals:1, assists:0, matches:1 },
+    { name:'EFL컵',    icon:'🏆', goals:0, assists:0, matches:3 },
+  ],
+};
+
 const PLAYER_EXTRA = {
   1: { // 손흥민
     form: [7.8, 8.2, 7.5, 8.5, 7.9, 8.1, 7.7],
@@ -2384,7 +2443,19 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
     <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
       {/* Hero */}
       <div style={{ position:'relative', height:320, overflow:'hidden' }}>
-        <PlayerPhoto player={player} style={{ position:'absolute', inset:0 }}/>
+        {(() => {
+          const LANDSCAPE = {
+            '손흥민':'heungmin.jpg','이강인':'kangin.png','김민재':'minjae.jpeg',
+            '조규성':'guesung.jpeg','황희찬':'heechan.jpeg','황인범':'inbeom.png',
+            '김하성':'haseong.jpeg','이정후':'junghoo.jpeg','김혜성':'hyesung.jpeg',
+            '오현규':'hyeongyu.jpeg','양현준':'hyunjun.jpeg',
+            '백승호':'seungho.png','배준호':'junho.jpeg','엄지성':'jisung.jpeg',
+          };
+          const file = LANDSCAPE[player.name];
+          return file
+            ? <img src={`image/landscape/${file}`} alt={player.name} style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'50% 25%' }}/>
+            : <PlayerPhoto player={player} style={{ position:'absolute', inset:0 }}/>;
+        })()}
         <div style={{ position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, var(--bg) 100%)' }}/>
         <div style={{ position:'absolute', top:12, left:20, right:20, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <BackBtn onBack={onBack}/>
@@ -2483,30 +2554,51 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
             <div style={{ display:'flex', justifyContent:'center', padding:'48px 0' }}>
               <div style={{ width:28, height:28, borderRadius:'50%', border:'3px solid var(--border)', borderTopColor:'var(--acc)', animation:'spin 0.8s linear infinite' }}/>
             </div>
-          ) : player.sport === '축구' && liveStats ? (
-            <div style={{ background:'var(--surface)', borderRadius:16, padding:'16px', border:'0.5px solid var(--border)' }}>
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
-                <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>2025 시즌 스탯</div>
-                <span style={{ fontSize:10, color:'var(--acc)', fontWeight:700 }}>LIVE</span>
+          ) : player.sport === '축구' && PLAYER_COMP_STATS[player.id] ? (
+            <>
+              <div style={{ background:'var(--surface)', borderRadius:16, padding:'14px 16px', border:'0.5px solid var(--border)', marginBottom:12 }}>
+                <div style={{ fontSize:11, fontWeight:700, color:'var(--text4)', letterSpacing:1, textTransform:'uppercase', marginBottom:10 }}>2025-26 시즌 합계</div>
+                <div style={{ display:'flex', justifyContent:'space-around', textAlign:'center' }}>
+                  {(() => {
+                    const total = PLAYER_COMP_STATS[player.id].reduce((acc,c)=>({goals:acc.goals+c.goals, assists:acc.assists+c.assists, matches:acc.matches+c.matches}),{goals:0,assists:0,matches:0});
+                    return [['골',total.goals],['도움',total.assists],['경기',total.matches]].map(([k,v]) => (
+                      <div key={k}><div style={{ ...NUM, fontSize:22, fontWeight:800, color:'var(--text)' }}>{v}</div><div style={{ fontSize:10, color:'var(--text4)', marginTop:2 }}>{k}</div></div>
+                    ));
+                  })()}
+                </div>
               </div>
-              {[
-                ['출전', liveStats.matches, '경기'],
-                ['골', liveStats.goals, '골'],
-                ['어시스트', liveStats.assists, '개'],
-                ['평점', liveStats.rating, '/ 10'],
-                ['슈팅', liveStats.shotsTotal, '개'],
-                ['유효슈팅', liveStats.shotsOn, '개'],
-                ['키패스', liveStats.keyPasses, '개'],
-                ['드리블 성공', liveStats.dribbles, '회'],
-                ['태클', liveStats.tackles, '회'],
-                ['경고', liveStats.yellowCards, '회'],
-              ].map(([label, val, unit]) => (
-                <div key={label} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:10, marginBottom:10, borderBottom:'0.5px solid var(--border2)' }}>
-                  <span style={{ fontSize:13, color:'var(--text3)' }}>{label}</span>
-                  <span style={{ fontSize:14, fontWeight:700, color:'var(--text)' }}>{val} <span style={{ fontSize:11, color:'var(--text4)', fontWeight:400 }}>{unit}</span></span>
+              {PLAYER_COMP_STATS[player.id].map((c, i) => (
+                <div key={i} style={{ background:'var(--surface)', borderRadius:14, padding:'12px 16px', border:'0.5px solid var(--border2)', marginBottom:8, display:'flex', alignItems:'center', gap:12 }}>
+                  <span style={{ fontSize:18 }}>{c.icon}</span>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.name}</div>
+                    <div style={{ fontSize:11, color:'var(--text4)', marginTop:2 }}>{c.matches}경기</div>
+                  </div>
+                  <div style={{ display:'flex', gap:14, textAlign:'center', flexShrink:0 }}>
+                    <div><div style={{ ...NUM, fontSize:15, fontWeight:800, color:c.goals>0?'var(--acc)':'var(--text)' }}>{c.goals}</div><div style={{ fontSize:9, color:'var(--text4)' }}>골</div></div>
+                    <div><div style={{ ...NUM, fontSize:15, fontWeight:800, color:c.assists>0?'var(--acc)':'var(--text-60)' }}>{c.assists}</div><div style={{ fontSize:9, color:'var(--text4)' }}>도움</div></div>
+                  </div>
                 </div>
               ))}
-            </div>
+              {liveStats && (
+                <div style={{ background:'var(--surface)', borderRadius:16, padding:'14px 16px', border:'0.5px solid var(--border)', marginTop:12 }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:'var(--text4)', letterSpacing:1, textTransform:'uppercase', marginBottom:10 }}>리그 디테일 (ESPN)</div>
+                  {[
+                    ['평점', liveStats.rating, '/ 10'],
+                    ['슈팅', liveStats.shotsTotal, '개'],
+                    ['유효슈팅', liveStats.shotsOn, '개'],
+                    ['키패스', liveStats.keyPasses, '개'],
+                    ['태클', liveStats.tackles, '회'],
+                    ['경고', liveStats.yellowCards, '회'],
+                  ].filter(([,v]) => v != null).map(([label, val, unit]) => (
+                    <div key={label} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:8, marginBottom:8, borderBottom:'0.5px solid var(--border2)' }}>
+                      <span style={{ fontSize:12, color:'var(--text3)' }}>{label}</span>
+                      <span style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>{val} <span style={{ fontSize:10, color:'var(--text4)', fontWeight:400 }}>{unit}</span></span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           ) : player.sport === '야구' && liveStats ? (
             <div style={{ background:'var(--surface)', borderRadius:16, padding:'16px', border:'0.5px solid var(--border)' }}>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
@@ -3552,8 +3644,19 @@ function App() {
   const [screen, setScreen] = React.useState('main');
   const [selectedMatch, setSelectedMatch] = React.useState(null);
   const [selectedPlayer, setSelectedPlayer] = React.useState(null);
-  const [followed, setFollowed] = React.useState(() => new Set([1,2,3,6,7,8,9,17,18,15]));
-  const toggleFollow = (id) => setFollowed(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const [followed, setFollowed] = React.useState(() => {
+    try {
+      const v = localStorage.getItem('jumo_followed');
+      if (v) return new Set(JSON.parse(v));
+    } catch {}
+    return new Set([1,2,3,6,7,8,9,17,18,15]);
+  });
+  const toggleFollow = (id) => setFollowed(prev => {
+    const n = new Set(prev);
+    n.has(id) ? n.delete(id) : n.add(id);
+    try { localStorage.setItem('jumo_followed', JSON.stringify([...n])); } catch {}
+    return n;
+  });
   const [darkMode, setDarkMode] = React.useState(true);
   const toggleDark = () => setDarkMode(d => !d);
   const [sportFeeds, setSportFeeds] = React.useState(() => {
