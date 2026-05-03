@@ -1137,8 +1137,8 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
 
   // Determine highlight match: live > closest to now (finished vs upcoming)
   const getHighlightMatch = () => {
-    // Priority 1: Live match with Korean player
-    const liveWithKorean = allMatches.find(m => (m.live || m.time === 'LIVE') && m.koreanPlayer);
+    // Priority 1: Live match with Korean player who is actually playing (not absent)
+    const liveWithKorean = allMatches.find(m => (m.live || m.time === 'LIVE') && m.koreanPlayer && m.koreanPlayer.event !== '미출전');
     if (liveWithKorean) return { match: liveWithKorean, priority: 1 };
 
     // Most recent finished match with Korean player
