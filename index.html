@@ -1974,21 +1974,30 @@ function LiveDetailScreen({ match, onBack }) {
               }
 
               const isKoreanEvent = involvedNames.some(nameMatchesKorean);
+              const isHighlight = !isKoreanEvent && (
+                inc.incidentType === 'goal' ||
+                inc.incidentType === 'varDecision' ||
+                inc.incidentType === 'inGamePenalty' ||
+                (inc.incidentType === 'card' && (inc.incidentClass === 'red' || inc.incidentClass === 'yellowRed'))
+              );
+              // Korean: yellow. Highlight (goals/PK/red cards): light purple. Default: none.
+              const accentColor = isKoreanEvent ? 'var(--acc)' : isHighlight ? PUR : null;
+              const accentBg = isKoreanEvent ? 'rgba(245,196,0,0.12)' : isHighlight ? PUR_BG : 'var(--surface)';
+              const accentBd = isKoreanEvent ? '0.5px solid rgba(245,196,0,0.4)' : isHighlight ? `0.5px solid ${PUR_BD}` : '0.5px solid var(--border2)';
 
               return (
                 <div key={i} style={{
                   display:'flex', alignItems:'flex-start', gap:10, marginBottom:8, padding:'10px 12px',
-                  background: isKoreanEvent ? PUR_BG : 'var(--surface)', borderRadius:10,
-                  border: isKoreanEvent ? `0.5px solid ${PUR_BD}` : '0.5px solid var(--border2)',
+                  background: accentBg, borderRadius:10, border: accentBd,
                 }}>
-                  <div style={{ ...NUM, width:38, textAlign:'center', fontSize:12, fontWeight:700, color: isKoreanEvent ? PUR : 'var(--text3)', flexShrink:0, paddingTop:2 }}>{formatTime(inc)}</div>
+                  <div style={{ ...NUM, width:38, textAlign:'center', fontSize:12, fontWeight:700, color: accentColor || 'var(--text3)', flexShrink:0, paddingTop:2 }}>{formatTime(inc)}</div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                       {teamLogo
                         ? <img src={teamLogo} alt={teamCode} style={{ width:14, height:14, objectFit:'contain', flexShrink:0 }}/>
                         : <span style={{ fontSize:9, fontWeight:700, color:'var(--text5)', background:'var(--border)', padding:'1px 5px', borderRadius:4 }}>{teamCode}</span>
                       }
-                      <span style={{ fontSize:13, fontWeight:700, color: isKoreanEvent ? PUR : 'var(--text)' }}>{title}</span>
+                      <span style={{ fontSize:13, fontWeight:700, color: accentColor || 'var(--text)' }}>{title}</span>
                     </div>
                     {detail && <div style={{ fontSize:11, color:'var(--text4)', marginTop:3 }}>{detail}</div>}
                   </div>
