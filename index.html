@@ -2402,17 +2402,21 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
     return () => { cancelled = true; };
   }, [player.id]);
 
+  // Helper: does this match include the current player among its Korean players?
+  const matchHasPlayer = (m) => (m.koreanPlayers || [m.koreanPlayer]).some(kp => kp?.name === player.name);
+  const playerKpInMatch = (m) => (m.koreanPlayers || [m.koreanPlayer]).find(kp => kp?.name === player.name) || m.koreanPlayer;
+
   // Recent matches from live API data
   const recentLiveMatches = React.useMemo(() => {
     return liveApiMatches
-      .filter(m => m.koreanPlayer?.name === player.name && (
+      .filter(m => matchHasPlayer(m) && (
         m.status === 'STATUS_FINAL' || m.status === 'STATUS_FULL_TIME' ||
         m.status === 'final' || m.status === 'STATUS_END_PERIOD' || m.status === 'STATUS_FINAL_PEN'
       ))
       .sort((a, b) => new Date(b.fullDate || 0) - new Date(a.fullDate || 0))
       .slice(0, 5)
       .map(m => {
-        const kp = m.koreanPlayer;
+        const kp = playerKpInMatch(m);
         const isHome = kp.team === m.home.code;
         const myScore = isHome ? m.home.score : m.away.score;
         const theirScore = isHome ? m.away.score : m.home.score;
@@ -2436,7 +2440,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
   const upcomingMatch = React.useMemo(() => {
     const now = Date.now();
     return liveApiMatches
-      .filter(m => m.koreanPlayer?.name === player.name && !m.live && m.fullDate && new Date(m.fullDate).getTime() > now)
+      .filter(m => matchHasPlayer(m) && !m.live && m.fullDate && new Date(m.fullDate).getTime() > now)
       .sort((a, b) => new Date(a.fullDate) - new Date(b.fullDate))[0];
   }, [liveApiMatches, player.name]);
 
@@ -2547,7 +2551,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
                 ))}
               </div>
               {upcomingMatch && (() => {
-                const kp = upcomingMatch.koreanPlayer;
+                const kp = playerKpInMatch(upcomingMatch);
                 const isHome = kp.team === upcomingMatch.home.code;
                 const opp = isHome ? upcomingMatch.away : upcomingMatch.home;
                 const date = new Date(upcomingMatch.fullDate);
