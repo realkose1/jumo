@@ -2177,7 +2177,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
 }
 
 // ─── SCREEN: SCHEDULE ─────────────────────────────────────────
-function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRefresh }) {
+function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRefresh, isActive = false }) {
   const days = ['일','월','화','수','목','금','토'];
   const now = new Date();
 
@@ -2220,15 +2220,15 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
     setPullY(0);
   };
 
-  // Scroll today's cell to center on mount
+  // Scroll today's cell to center whenever tab becomes active
   React.useEffect(() => {
-    if (stripRef.current && todayRef.current) {
-      const strip = stripRef.current;
-      const cell = todayRef.current;
-      const offset = cell.offsetLeft - (strip.clientWidth / 2) + (cell.offsetWidth / 2);
-      strip.scrollLeft = offset;
-    }
-  }, []);
+    if (!isActive) return;
+    const strip = stripRef.current;
+    const cell = todayRef.current;
+    if (!strip || !cell) return;
+    const offset = cell.offsetLeft - (strip.clientWidth / 2) + (cell.offsetWidth / 2);
+    strip.scrollLeft = offset;
+  }, [isActive]);
 
   // Filter matches for selected date and within ±7 days range
   const sevenDaysAgo = new Date(now);
@@ -3967,7 +3967,7 @@ function App() {
           {screen === 'main' && (
             <>
               <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} tweaks={tweaks} liveApiMatches={liveMatches} isLoading={isInitialLoad && apiLoading}/></div>
-              <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} liveApiMatches={liveMatches} isLoading={apiLoading} onRefresh={fetchLiveMatches}/></div>
+              <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} liveApiMatches={liveMatches} isLoading={apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'}/></div>
               <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} followed={followed} statsCache={playerStatsCache} isLoading={apiLoading} onRefresh={fetchLiveMatches}/></div>
               <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds}/></div>
               <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen darkMode={darkMode} onToggleDark={toggleDark} sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed}/></div>
