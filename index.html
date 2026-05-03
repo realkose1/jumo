@@ -2809,9 +2809,8 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
         ))}
       </div>
       <div style={{ padding:'0 16px', display:'flex', flexDirection:'column', gap:10 }}>
-        {isLoading ? (
-          Array.from({length:5}).map((_,i) => <SkeletonPlayerCard key={i}/>)
-        ) : filtered.map(p => (
+        {(() => {
+          const renderCard = p => (
           <div key={p.id} onClick={() => onPlayer(p)} style={{ background:'var(--surface)', borderRadius:16, overflow:'hidden', cursor:'pointer', border:'0.5px solid var(--border2)', display:'flex', alignItems:'stretch' }}>
             <div style={{ width:90, height:100, flexShrink:0, background:'var(--card)', position:'relative', overflow:'hidden' }}>
               <PlayerPhoto player={p} style={{ position:'absolute', inset:0 }} tint="var(--surface)"/>
@@ -2845,7 +2844,27 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
               })()}
             </div>
           </div>
-        ))}
+          );
+          if (isLoading) return Array.from({length:5}).map((_,i) => <SkeletonPlayerCard key={i}/>);
+          if (filter !== '전체') return filtered.map(renderCard);
+          // Grouped rendering for 전체
+          const SPORT_ORDER = ['축구','야구','배드민턴'];
+          const SPORT_ICON = { '축구':'⚽', '야구':'⚾', '배드민턴':'🏸' };
+          const grouped = {};
+          for (const p of filtered) {
+            (grouped[p.sport] = grouped[p.sport] || []).push(p);
+          }
+          return SPORT_ORDER.filter(s => grouped[s]?.length).map(sport => (
+            <React.Fragment key={sport}>
+              <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:6, marginBottom:-2, paddingLeft:2 }}>
+                <span style={{ fontSize:14 }}>{SPORT_ICON[sport]}</span>
+                <span style={{ fontSize:11, fontWeight:700, color:'var(--text3)', letterSpacing:1, textTransform:'uppercase' }}>{sport}</span>
+                <span style={{ fontSize:10, color:'var(--text5)', fontWeight:600 }}>{grouped[sport].length}명</span>
+              </div>
+              {grouped[sport].map(renderCard)}
+            </React.Fragment>
+          ));
+        })()}
       </div>
       <div style={{ height:24 }}/>
     </div>
