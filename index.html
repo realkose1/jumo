@@ -1199,7 +1199,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
           };
         } else {
           const ev = m.koreanPlayer.event || '';
-          const evLabel = ev === '교체 출전 중' ? '교체 출전 중' : ev === '교체 아웃' ? '교체 아웃' : ev === '벤치' ? '벤치 대기' : ev === '미출전' ? '미출전 (결장)' : ev === '출전 예상' ? '출전 여부 확인 중' : '출전 중';
+          const evLabel = ev === '교체 출전 중' ? '교체 출전 중' : ev === '교체 아웃' ? '교체 아웃' : ev === '벤치' ? '벤치 대기' : ev === '미출전' ? '결장' : ev === '출전 예상' ? '출전 여부 확인 중' : '출전 중';
           return {
             status: `LIVE NOW · ${hlLiveMinute || m.minute || ''}\'`,
             main: `${m.koreanPlayer.name} ${evLabel}`,
