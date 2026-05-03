@@ -1974,6 +1974,7 @@ function LiveDetailScreen({ match, onBack }) {
           'Defending':'수비',
           'Goalkeeping':'골키퍼',
         };
+        const koreanIsAway = match.koreanPlayer?.team === match.away.code && match.koreanPlayer?.team !== match.home.code;
         const renderRow = (it, i) => {
           const label = STAT_LABELS[it.name] || it.name;
           const homeStr = String(it.home ?? '');
@@ -1982,16 +1983,26 @@ function LiveDetailScreen({ match, onBack }) {
           const awayVal = parseFloat(awayStr);
           const total = (isFinite(homeVal) ? homeVal : 0) + (isFinite(awayVal) ? awayVal : 0);
           const homePct = total > 0 ? (homeVal / total) * 100 : 50;
+          const awayPct = total > 0 ? (awayVal / total) * 100 : 50;
           return (
             <div key={i} style={{ marginBottom:14 }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:5 }}>
-                <span style={{ ...NUM, fontSize:13, fontWeight:700, color:'var(--text)', minWidth:50 }}>{homeStr}</span>
+                <span style={{ ...NUM, fontSize:13, fontWeight:700, color: koreanIsAway ? 'var(--text2)' : 'var(--acc)', minWidth:50 }}>{homeStr}</span>
                 <span style={{ fontSize:11, color:'var(--text3)', fontWeight:600 }}>{label}</span>
-                <span style={{ ...NUM, fontSize:13, fontWeight:700, color:'var(--text2)', minWidth:50, textAlign:'right' }}>{awayStr}</span>
+                <span style={{ ...NUM, fontSize:13, fontWeight:700, color: koreanIsAway ? 'var(--acc)' : 'var(--text2)', minWidth:50, textAlign:'right' }}>{awayStr}</span>
               </div>
               <div style={{ display:'flex', height:5, gap:2, background:'transparent' }}>
-                <div style={{ width:`${homePct}%`, height:'100%', background:'var(--acc)', borderRadius:3, transition:'width 0.6s ease' }}/>
-                <div style={{ flex:1, height:'100%', background:'var(--border)', borderRadius:3 }}/>
+                {koreanIsAway ? (
+                  <>
+                    <div style={{ flex:1, height:'100%', background:'var(--border)', borderRadius:3 }}/>
+                    <div style={{ width:`${awayPct}%`, height:'100%', background:'var(--acc)', borderRadius:3, transition:'width 0.6s ease' }}/>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ width:`${homePct}%`, height:'100%', background:'var(--acc)', borderRadius:3, transition:'width 0.6s ease' }}/>
+                    <div style={{ flex:1, height:'100%', background:'var(--border)', borderRadius:3 }}/>
+                  </>
+                )}
               </div>
             </div>
           );
