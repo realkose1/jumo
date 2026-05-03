@@ -1265,36 +1265,11 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
     '김하성': 'haseong.jpeg', '이정후': 'junghoo.jpeg', '김혜성': 'hyesung.jpeg',
     '오현규': 'hyeongyu.jpeg', '양현준': 'hyunjun.jpeg',
   };
-  const tryImgLoad = (src) => new Promise(resolve => {
-    const img = new Image(); img.onload = () => resolve(src); img.onerror = () => resolve(null); img.src = src;
-  });
   React.useEffect(() => {
     const playerName = highlightMatch?.koreanPlayer?.name;
-    if (!playerName) { setHlBgImg(null); return; }
-    // Set landscape image immediately as baseline
     const landscapeFile = LANDSCAPE_MAP[playerName];
-    const landscapeSrc = landscapeFile ? `image/landscape/${landscapeFile}` : null;
-    if (landscapeSrc) setHlBgImg(landscapeSrc);
-    else setHlBgImg(null);
-    // Then try to upgrade to a news image in the background
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await fetch(`/api/naver-news?query=${encodeURIComponent(playerName)}&display=6&sort=date`).then(r => r.ok ? r.json() : null);
-        for (const item of (data?.items || [])) {
-          const url = item.originallink || item.link;
-          try {
-            const imgData = await fetch(`/api/news-image?url=${encodeURIComponent(url)}`).then(r => r.json());
-            if (imgData.image && !imgData.image.startsWith('data:')) {
-              if (!cancelled) setHlBgImg(imgData.image);
-              return;
-            }
-          } catch(e) {}
-        }
-      } catch(e) {}
-    })();
-    return () => { cancelled = true; };
-  }, [highlightMatch?.id, highlightMatch?.koreanPlayer?.name]);
+    setHlBgImg(landscapeFile ? `image/landscape/${landscapeFile}` : null);
+  }, [highlightMatch?.koreanPlayer?.name]);
 
   // Real-time minute for highlight live match
   React.useEffect(() => {
@@ -1339,7 +1314,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
         <div onClick={() => highlightMatch && onMatch(highlightMatch)} style={{ position:'relative', height:320, overflow:'hidden', cursor:'pointer', background:'#111' }}>
           {/* Background */}
           {hlBgImg
-            ? <img src={hlBgImg} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'50% 20%' }}/>
+            ? <img key={hlBgImg} src={hlBgImg} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'50% 20%', animation:'fadeIn 0.7s ease' }}/>
             : <div style={{ position:'absolute', inset:0, background:'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)' }}>
                 {highlightMatch?.home?.logo && <img src={highlightMatch.home.logo} alt="" style={{ position:'absolute', right:-30, top:'50%', transform:'translateY(-50%)', width:200, height:200, objectFit:'contain', opacity:0.08, filter:'blur(2px)' }}/>}
               </div>
@@ -1421,7 +1396,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
       <div onClick={() => highlightMatch && onMatch(highlightMatch)} style={{ position:'relative', height:260, overflow:'hidden', marginBottom:0, background:'#111', cursor: highlightMatch ? 'pointer' : 'default' }}>
         {/* Background */}
         {hlBgImg
-          ? <img src={hlBgImg} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'50% 20%' }}/>
+          ? <img key={hlBgImg} src={hlBgImg} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'50% 20%', animation:'fadeIn 0.7s ease' }}/>
           : <div style={{ position:'absolute', inset:0, background:'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)' }}>
               {highlightMatch?.home?.logo && <img src={highlightMatch.home.logo} alt="" style={{ position:'absolute', right:-30, top:'50%', transform:'translateY(-50%)', width:200, height:200, objectFit:'contain', opacity:0.08, filter:'blur(2px)' }}/>}
             </div>
