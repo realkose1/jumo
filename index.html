@@ -2478,7 +2478,8 @@ function NewsImage({ url, fallbackPlayer }) {
     fetch(`/api/news-image?url=${encodeURIComponent(url)}`)
       .then(r => r.ok ? r.json() : null)
       .then(d => {
-        const src = d?.image || null;
+        const raw = d?.image || null;
+        const src = raw ? raw.replace(/^http:\/\//, 'https://') : null;
         newsImageCache[url] = src || '';
         setImgSrc(src);
         setLoading(false);
