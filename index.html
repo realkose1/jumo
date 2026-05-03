@@ -2857,33 +2857,41 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
               if (s.length > 10) return s.slice(0, 9) + '…';
               return s;
             })();
-            const labelParts = [kp.name];
+            const koreans = m.koreanPlayers || [kp];
+            const koreanNames = koreans.map(k => k.name).join(' · ');
+            const labelParts = [];
             if (isFinished || m.live) {
-              const ev = kp.event || '';
-              if (ev) labelParts.push(ev);
-              const goals = (m.events||[]).filter(e=>e.type==='goal'&&e.player===kp.name).length;
-              const assists = (m.events||[]).filter(e=>e.type==='assist'&&e.player===kp.name).length;
-              if (goals > 0) labelParts.push(`${goals}골`);
-              if (assists > 0) labelParts.push(`${assists}도움`);
+              // Show events aggregated across all Korean players
+              koreans.forEach(k => {
+                const goals = (m.events||[]).filter(e=>e.type==='goal'&&e.player===k.name).length;
+                const assists = (m.events||[]).filter(e=>e.type==='assist'&&e.player===k.name).length;
+                if (goals > 0) labelParts.push(`${k.name} ${goals}골`);
+                if (assists > 0) labelParts.push(`${k.name} ${assists}도움`);
+              });
+              if (labelParts.length === 0 && kp.event) labelParts.push(kp.event);
             }
 
-            const koreanTeam = kp.team;
-            const homeIsKorean = koreanTeam === m.home.code;
-            const awayIsKorean = koreanTeam === m.away.code;
+            const homeHasKorean = koreans.some(k => k.team === m.home.code);
+            const awayHasKorean = koreans.some(k => k.team === m.away.code);
+            const homeIsKorean = homeHasKorean;
+            const awayIsKorean = awayHasKorean;
 
             return (
               <React.Fragment key={m.id}>
                 {/* Label above card */}
-                <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:5, paddingLeft:2 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:5, paddingLeft:2, flexWrap:'wrap' }}>
                   {m.competitionLogo
                     ? <img src={m.competitionLogo} style={{ width:12, height:12, objectFit:'contain', opacity:0.55, flexShrink:0 }} alt=""/>
                     : <span style={{ fontSize:10, flexShrink:0 }}>{m.sport?.includes('MLB')||m.sport?.includes('⚾') ? '⚾' : '⚽'}</span>
                   }
                   <span style={{ fontSize:11, color:'var(--text4)' }}>{leagueName}</span>
                   <span style={{ fontSize:11, color:'var(--text5)' }}>/</span>
-                  <span style={{ fontSize:11, color:'var(--acc)', fontWeight:700 }}>{labelParts[0]}</span>
-                  {labelParts.length > 1 && (
-                    <span style={{ fontSize:11, color:'var(--text)', fontWeight:500 }}>{' · ' + labelParts.slice(1).join(' · ')}</span>
+                  <span style={{ fontSize:11, color:'var(--acc)', fontWeight:700 }}>{koreanNames}</span>
+                  {m.isKoreanDerby && (
+                    <span style={{ fontSize:9, fontWeight:800, color:'#000', background:'linear-gradient(90deg, var(--acc), #ff8a3d)', borderRadius:4, padding:'2px 5px', letterSpacing:0.3, lineHeight:1 }}>🇰🇷 더비</span>
+                  )}
+                  {labelParts.length > 0 && (
+                    <span style={{ fontSize:11, color:'var(--text)', fontWeight:500 }}>{' · ' + labelParts.join(' · ')}</span>
                   )}
                   {isFinished && <span style={{ marginLeft:'auto', fontSize:10, fontWeight:600, color:'var(--text4)', flexShrink:0 }}>종료</span>}
                 </div>
