@@ -1661,6 +1661,35 @@ function HomeV3({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [] }) {
 function LiveDetailScreen({ match, onBack }) {
   const [tab, setTab] = React.useState('events');
   const [countdown, setCountdown] = React.useState('');
+  const [reactions, setReactions] = React.useState({});
+  const [myReactions, setMyReactions] = React.useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(`jumo_react_${match.id}`) || '[]')); }
+    catch { return new Set(); }
+  });
+  const REACTION_EMOJIS = ['🔥','👏','💪','❤️','😮'];
+
+  React.useEffect(() => {
+    const fetchReactions = async () => {
+      const { data } = await SB.from('match_reactions').select('emoji, count').eq('match_id', String(match.id));
+      const map = {};
+      (data || []).forEach(r => { map[r.emoji] = r.count; });
+      setReactions(map);
+    };
+    fetchReactions();
+  }, [match.id]);
+
+  const handleReaction = async (emoji) => {
+    if (myReactions.has(emoji)) return;
+    setReactions(r => ({ ...r, [emoji]: (r[emoji] || 0) + 1 }));
+    const next = new Set(myReactions); next.add(emoji);
+    setMyReactions(next);
+    try { localStorage.setItem(`jumo_react_${match.id}`, JSON.stringify([...next])); } catch {}
+    const { data, error } = await SB.rpc('increment_reaction', { p_match_id: String(match.id), p_emoji: emoji });
+    if (!error && typeof data === 'number') {
+      setReactions(r => ({ ...r, [emoji]: data }));
+    }
+  };
+
   const player = ALL_PLAYERS.find(p => p.name === match.koreanPlayer.name);
   const isLive = match.live;
   const isFinished = match.status === 'STATUS_FINAL' || match.status === 'STATUS_FULL_TIME' || match.status === 'final' || match.status === 'STATUS_END_PERIOD' || match.status === 'STATUS_FINAL_PEN';
@@ -1843,12 +1872,23 @@ function LiveDetailScreen({ match, onBack }) {
           <div style={{ marginTop:20, padding:'14px', background:'var(--surface)', borderRadius:14, border:'0.5px solid var(--border2)' }}>
             <div style={{ fontSize:12, color:'var(--text3)', marginBottom:10, fontWeight:600 }}>응원 리액션</div>
             <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
-              {[['🔥','2.4k'],['👏','1.8k'],['💪','934'],['❤️','723'],['😮','412']].map(([em,ct]) => (
-                <button key={em} style={{ background:'var(--border)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:20, padding:'8px 14px', cursor:'pointer', display:'flex', alignItems:'center', gap:6, transition:'all 0.1s' }}>
-                  <span style={{ fontSize:16 }}>{em}</span>
-                  <span style={{ fontSize:12, color:'var(--text2)', fontWeight:600 }}>{ct}</span>
-                </button>
-              ))}
+              {REACTION_EMOJIS.map(em => {
+                const ct = reactions[em] || 0;
+                const reacted = myReactions.has(em);
+                const display = ct >= 1000 ? (ct/1000).toFixed(1) + 'k' : String(ct);
+                return (
+                  <button key={em} onClick={() => handleReaction(em)} disabled={reacted} style={{
+                    background: reacted ? 'rgba(245,196,0,0.15)' : 'var(--border)',
+                    border: reacted ? '0.5px solid rgba(245,196,0,0.4)' : '0.5px solid rgba(255,255,255,0.1)',
+                    borderRadius:20, padding:'8px 14px', cursor: reacted ? 'default' : 'pointer',
+                    display:'flex', alignItems:'center', gap:6, transition:'all 0.15s',
+                    opacity: reacted ? 1 : undefined,
+                  }}>
+                    <span style={{ fontSize:16 }}>{em}</span>
+                    <span style={{ fontSize:12, color: reacted ? 'var(--acc)' : 'var(--text2)', fontWeight:600 }}>{display}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
