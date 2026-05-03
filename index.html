@@ -1450,11 +1450,33 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
 
         if (thisWeekMatches.length === 0) return null;
 
+        const todayStr = now.toDateString();
+        const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1);
+        const tomorrowStr = tomorrow.toDateString();
+        const getDateLabel = d => {
+          const s = new Date(d).toDateString();
+          if (s === todayStr) return '오늘';
+          if (s === tomorrowStr) return '내일';
+          const dd = new Date(d);
+          return `${dd.getMonth()+1}/${dd.getDate()}`;
+        };
+        let lastDateLabel = null;
+
         return (
           <div style={{ margin:'4px 16px', padding:'14px 0', borderTop:'0.5px solid var(--border)' }}>
             {thisWeekMatches.map(m => {
               const isFinished = m.status === 'STATUS_FINAL' || m.status === 'STATUS_FULL_TIME' || m.status === 'final' || m.status === 'STATUS_END_PERIOD' || m.status === 'STATUS_FINAL_PEN';
+              const isLiveMatch = m.live || m.time === 'LIVE';
+              const thisDateLabel = isLiveMatch ? '오늘' : getDateLabel(m.fullDate);
+              const showHeader = !isLiveMatch && thisDateLabel !== lastDateLabel;
+              if (showHeader) lastDateLabel = thisDateLabel;
               const player = ALL_PLAYERS.find(p => p.name === m.koreanPlayer?.name);
+
+              const header = showHeader ? (
+                <div key={`hdr-${thisDateLabel}`} style={{ padding:'16px 0 6px', fontSize:11, fontWeight:700, color:'var(--text4)', letterSpacing:1.2, textTransform:'uppercase' }}>
+                  {thisDateLabel}
+                </div>
+              ) : null;
 
               if (isFinished) {
                 // FINISHED MATCH DISPLAY
@@ -1466,7 +1488,9 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
                 const isDraw = koreanScore === opponentScore;
 
                 return (
-                  <div key={m.id} onClick={() => onMatch(m)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', cursor:'pointer', borderBottom:'0.5px solid var(--border)' }}>
+                  <React.Fragment key={m.id}>
+                  {header}
+                  <div onClick={() => onMatch(m)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', cursor:'pointer', borderBottom:'0.5px solid var(--border)' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, justifyContent:'flex-end', minWidth:0 }}>
                       <span style={{ fontSize:14, fontWeight:600, color:'var(--text)', textAlign:'right' }}>{m.home.name}</span>
                       <TeamBadge code={m.home.code} size={24} logo={m.home.logo}/>
@@ -1481,11 +1505,14 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
                       <span style={{ fontSize:14, fontWeight:600, color:'var(--text)' }}>{m.away.name}</span>
                     </div>
                   </div>
+                  </React.Fragment>
                 );
               } else if (m.live || m.time === 'LIVE') {
                 // LIVE MATCH DISPLAY
                 return (
-                  <div key={m.id} onClick={() => onMatch(m)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', cursor:'pointer', borderBottom:'0.5px solid var(--border)' }}>
+                  <React.Fragment key={m.id}>
+                  {header}
+                  <div onClick={() => onMatch(m)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', cursor:'pointer', borderBottom:'0.5px solid var(--border)' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, justifyContent:'flex-end', minWidth:0 }}>
                       <span style={{ fontSize:14, fontWeight:600, color:'var(--text)', textAlign:'right' }}>{m.home.name}</span>
                       <TeamBadge code={m.home.code} size={24} logo={m.home.logo}/>
@@ -1503,45 +1530,24 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
                       <span style={{ fontSize:14, fontWeight:600, color:'var(--text)' }}>{m.away.name}</span>
                     </div>
                   </div>
+                  </React.Fragment>
                 );
               } else {
                 // UPCOMING MATCH DISPLAY
-                let timeDisplay = '—';
-                let dayLabel = '';
-
-                if (m.fullDate) {
-                  const date = new Date(m.fullDate);
-                  const hours = String(date.getHours()).padStart(2, '0');
-                  const minutes = String(date.getMinutes()).padStart(2, '0');
-                  const isToday = date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
-
-                  // Check if tomorrow
-                  const tomorrow = new Date(now);
-                  tomorrow.setDate(tomorrow.getDate() + 1);
-                  const isTomorrow = date.getDate() === tomorrow.getDate() && date.getMonth() === tomorrow.getMonth() && date.getFullYear() === tomorrow.getFullYear();
-
-                  timeDisplay = `${hours}:${minutes}`;
-
-                  if (isToday) {
-                    dayLabel = '오늘';
-                  } else if (isTomorrow) {
-                    dayLabel = '내일';
-                  } else {
-                    // Show date in MM/DD format
-                    const month = String(date.getMonth() + 1).padStart(2, '0');
-                    const day = String(date.getDate()).padStart(2, '0');
-                    dayLabel = `${month}/${day}`;
-                  }
-                }
+                const date = new Date(m.fullDate);
+                const hours = String(date.getHours()).padStart(2, '0');
+                const mins = String(date.getMinutes()).padStart(2, '0');
+                const timeDisplay = m.fullDate ? `${hours}:${mins}` : '—';
 
                 return (
-                  <div key={m.id} onClick={() => onMatch(m)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', cursor:'pointer', borderBottom:'0.5px solid var(--border)' }}>
+                  <React.Fragment key={m.id}>
+                  {header}
+                  <div onClick={() => onMatch(m)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', cursor:'pointer', borderBottom:'0.5px solid var(--border)' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, justifyContent:'flex-end', minWidth:0 }}>
                       <span style={{ fontSize:14, fontWeight:600, color:'var(--text)', textAlign:'right' }}>{m.home.name}</span>
                       <TeamBadge code={m.home.code} size={24} logo={m.home.logo}/>
                     </div>
                     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, flexShrink:0, padding:'0 16px' }}>
-                      <span style={{ fontSize:10, color:'var(--text5)' }}>{dayLabel}</span>
                       <span style={{ ...NUM, fontSize:13, fontWeight:700, color:'var(--text3)' }}>{timeDisplay}</span>
                     </div>
                     <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, minWidth:0 }}>
@@ -1549,6 +1555,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
                       <span style={{ fontSize:14, fontWeight:600, color:'var(--text)' }}>{m.away.name}</span>
                     </div>
                   </div>
+                  </React.Fragment>
                 );
               }
             })}
@@ -3035,8 +3042,7 @@ function App() {
         const today = new Date();
 
         // ── Sofascore: fetch soccer for past 2 days + next 3 days ──────────
-        const SF_BASE = 'https://api.sofascore.com/api/v1';
-        const SF_HEADERS = { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://www.sofascore.com/' };
+        const sfProxy = path => `/api/sofascore?path=${encodeURIComponent(path)}`;
         const sfDates = [-2,-1,0,1,2,3].map(offset => {
           const d = new Date(today); d.setDate(today.getDate() + offset);
           return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -3044,7 +3050,7 @@ function App() {
 
         const sfDateResults = await Promise.allSettled(
           sfDates.map(date =>
-            fetch(`${SF_BASE}/sport/football/scheduled-events/${date}`, { headers: SF_HEADERS })
+            fetch(sfProxy(`/sport/football/scheduled-events/${date}`))
               .then(r => r.json()).catch(() => null)
           )
         );
@@ -3101,8 +3107,8 @@ function App() {
           const sfDetails = await Promise.allSettled(
             sfKorean.map(m =>
               Promise.all([
-                fetch(`${SF_BASE}/event/${m.id}/lineups`, { headers: SF_HEADERS }).then(r => r.json()).catch(() => null),
-                fetch(`${SF_BASE}/event/${m.id}/incidents`, { headers: SF_HEADERS }).then(r => r.json()).catch(() => null),
+                fetch(sfProxy(`/event/${m.id}/lineups`)).then(r => r.json()).catch(() => null),
+                fetch(sfProxy(`/event/${m.id}/incidents`)).then(r => r.json()).catch(() => null),
               ]).then(([lineups, incidents]) => ({ id: m.id, lineups, incidents, isLive: m.live }))
             )
           );
