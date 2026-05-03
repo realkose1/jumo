@@ -1696,6 +1696,19 @@ function LiveDetailScreen({ match, onBack }) {
   const player = ALL_PLAYERS.find(p => p.name === match.koreanPlayer.name);
   const isLive = match.live;
   const isFinished = match.status === 'STATUS_FINAL' || match.status === 'STATUS_FULL_TIME' || match.status === 'final' || match.status === 'STATUS_END_PERIOD' || match.status === 'STATUS_FINAL_PEN';
+  const [lineupsData, setLineupsData] = React.useState(null);
+  const [lineupsLoading, setLineupsLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    if (tab !== 'lineups' || lineupsData || !(isFinished || isLive)) return;
+    const isSoccer = !((match.sport||'').includes('MLB') || (match.sport||'').includes('⚾'));
+    if (!isSoccer) return;
+    setLineupsLoading(true);
+    fetch(`https://api.sofascore.com/api/v1/event/${match.id}/lineups`, { referrerPolicy:'no-referrer' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { setLineupsData(data); setLineupsLoading(false); })
+      .catch(() => { setLineupsLoading(false); });
+  }, [tab, match.id, isFinished, isLive]);
   const typeColor = { goal:'var(--acc)', yellow:'#f5c518', red:'#e03030', assist:'var(--text2)' };
 
   // Countdown for upcoming matches
@@ -1916,9 +1929,68 @@ function LiveDetailScreen({ match, onBack }) {
       {tab === 'stats' && !match.stats && (
         <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text5)', fontSize:14 }}>경기 시작 후 통계가 표시됩니다</div>
       )}
-      {tab === 'lineups' && (
-        <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text5)', fontSize:14 }}>라인업 정보가 준비 중입니다</div>
-      )}
+      {tab === 'lineups' && (() => {
+        if (lineupsLoading) {
+          return <div style={{ display:'flex', justifyContent:'center', padding:'48px 0' }}><div style={{ width:24, height:24, borderRadius:'50%', border:'2.5px solid var(--border)', borderTopColor:'var(--acc)', animation:'spin 0.8s linear infinite' }}/></div>;
+        }
+        const homePlayers = lineupsData?.home?.players || [];
+        const awayPlayers = lineupsData?.away?.players || [];
+        if (homePlayers.length === 0 && awayPlayers.length === 0) {
+          return <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text5)', fontSize:14 }}>라인업 정보가 없습니다</div>;
+        }
+        const koreanName = match.koreanPlayer?.nameEn || '';
+        const renderColumn = (team, teamData, players) => {
+          const starters = players.filter(p => p.substitute === false);
+          const subs = players.filter(p => p.substitute === true);
+          const formation = teamData?.formation;
+          const renderPlayer = (entry, i) => {
+            const p = entry.player || {};
+            const num = p.jerseyNumber || '';
+            const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z\s]/g,'').trim();
+            const a = norm(p.name), b = norm(koreanName);
+            const isKorean = !!(a && b && (a === b || a.includes(b) || b.includes(a) || a.split(/\s+/).some(t => b.split(/\s+/).includes(t) && t.length >= 3)));
+            const rating = entry.statistics?.rating;
+            return (
+              <div key={i} style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 8px', borderRadius:8, background: isKorean ? 'rgba(245,196,0,0.12)' : 'transparent', border: isKorean ? '0.5px solid rgba(245,196,0,0.3)' : '0.5px solid transparent', marginBottom:4 }}>
+                <span style={{ ...NUM, fontSize:11, fontWeight:700, color:'var(--text4)', width:20, textAlign:'center', flexShrink:0 }}>{num}</span>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:12, fontWeight: isKorean ? 700 : 600, color: isKorean ? 'var(--acc)' : 'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                    {isKorean ? `🇰🇷 ${p.name}` : p.name}
+                  </div>
+                </div>
+                {rating != null && (
+                  <span style={{ ...NUM, fontSize:10, fontWeight:700, color:'var(--acc)', background:'rgba(245,196,0,0.15)', border:'0.5px solid rgba(245,196,0,0.3)', borderRadius:6, padding:'2px 6px', flexShrink:0 }}>
+                    {parseFloat(rating).toFixed(1)}
+                  </span>
+                )}
+              </div>
+            );
+          };
+          return (
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
+                <TeamBadge code={team.code} size={20} logo={team.logo}/>
+                <span style={{ fontSize:12, fontWeight:700, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{team.name}</span>
+                {formation && <span style={{ ...NUM, fontSize:10, color:'var(--text4)', flexShrink:0 }}>{formation}</span>}
+              </div>
+              {starters.map(renderPlayer)}
+              {subs.length > 0 && (
+                <>
+                  <div style={{ fontSize:10, fontWeight:700, color:'var(--text4)', letterSpacing:1, marginTop:12, marginBottom:6, paddingLeft:8 }}>SUBS</div>
+                  {subs.map(renderPlayer)}
+                </>
+              )}
+            </div>
+          );
+        };
+        return (
+          <div style={{ padding:'14px 12px', display:'flex', gap:10, alignItems:'flex-start' }}>
+            {renderColumn(match.home, lineupsData?.home, homePlayers)}
+            <div style={{ width:'0.5px', alignSelf:'stretch', background:'var(--border)', flexShrink:0 }}/>
+            {renderColumn(match.away, lineupsData?.away, awayPlayers)}
+          </div>
+        );
+      })()}
 
       <div style={{ height:24 }}/>
     </div>
