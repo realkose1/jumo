@@ -1887,7 +1887,15 @@ function LiveDetailScreen({ match, onBack }) {
             if (incidents.length === 0) {
               return <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text5)', fontSize:14 }}>아직 주요 이벤트가 없습니다</div>;
             }
-            const koreanIsAway = match.koreanPlayer?.team === match.away.code && match.koreanPlayer?.team !== match.home.code;
+            const koreanNameEn = match.koreanPlayer?.nameEn || '';
+            const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z\s]/g,'').trim();
+            const nameMatchesKorean = (n) => {
+              const a = norm(n), b = norm(koreanNameEn);
+              if (!a || !b) return false;
+              if (a === b || a.includes(b) || b.includes(a)) return true;
+              const at = a.split(/\s+/), bt = b.split(/\s+/);
+              return at.some(t => bt.includes(t) && t.length >= 3);
+            };
             const formatTime = (inc) => {
               if (typeof inc.time !== 'number') return '';
               const t = inc.time;
@@ -1899,11 +1907,11 @@ function LiveDetailScreen({ match, onBack }) {
               cardUpgrade:'카드 상향', cardDowngrade:'카드 하향', noCard:'카드 취소'
             };
             const PERIOD_LABELS = { '1H':'전반 시작', 'HT':'전반 종료', '2H':'후반 시작', 'FT':'경기 종료', 'AET':'연장 종료', 'AP':'승부차기 종료' };
+            // Light purple accent for Korean-player-related events
+            const PUR = '#c4a4e8';
+            const PUR_BG = 'rgba(196,164,232,0.12)';
+            const PUR_BD = 'rgba(196,164,232,0.45)';
             const renderInc = (inc, i) => {
-              const isHome = inc.isHome;
-              const isKoreanSide = (isHome && !koreanIsAway) || (!isHome && koreanIsAway);
-              const sideTag = isHome ? match.home.code : match.away.code;
-
               if (inc.incidentType === 'period') {
                 const label = PERIOD_LABELS[inc.text] || inc.text || '';
                 return (
@@ -1915,7 +1923,22 @@ function LiveDetailScreen({ match, onBack }) {
                 );
               }
 
+              if (inc.incidentType === 'injuryTime') {
+                return (
+                  <div key={i} style={{ display:'flex', alignItems:'center', gap:8, margin:'10px 0' }}>
+                    <div style={{ flex:1, height:'0.5px', background:'var(--border)' }}/>
+                    <span style={{ fontSize:10, fontWeight:700, color:'var(--text4)', letterSpacing:0.5 }}>⏱ 추가시간 +{inc.length || ''}분</span>
+                    <div style={{ flex:1, height:'0.5px', background:'var(--border)' }}/>
+                  </div>
+                );
+              }
+
+              const isHome = inc.isHome;
+              const teamLogo = isHome ? match.home.logo : match.away.logo;
+              const teamCode = isHome ? match.home.code : match.away.code;
+
               let icon = '•', title = '', detail = '';
+              const involvedNames = [];
               if (inc.incidentType === 'goal') {
                 const cls = inc.incidentClass;
                 if (cls === 'ownGoal') { icon = '⚽'; title = `${inc.player?.name || ''} (자책골)`; }
@@ -1924,41 +1947,48 @@ function LiveDetailScreen({ match, onBack }) {
                 else { icon = '⚽'; title = inc.player?.name || ''; }
                 if (inc.assist1?.name) detail = `🅰️ ${inc.assist1.name}`;
                 if (typeof inc.homeScore === 'number') detail = (detail ? detail + ' · ' : '') + `${inc.homeScore}:${inc.awayScore}`;
+                if (inc.player?.name) involvedNames.push(inc.player.name);
+                if (inc.assist1?.name) involvedNames.push(inc.assist1.name);
               } else if (inc.incidentType === 'card') {
                 const cls = inc.incidentClass;
                 icon = cls === 'red' ? '🟥' : cls === 'yellowRed' ? '🟥' : '🟨';
                 title = inc.player?.name || inc.playerName || '';
                 detail = cls === 'yellowRed' ? '경고누적 퇴장' : (inc.reason || (cls === 'red' ? '퇴장' : '경고'));
+                if (inc.player?.name) involvedNames.push(inc.player.name);
               } else if (inc.incidentType === 'substitution') {
                 icon = '🔄';
                 title = inc.playerIn?.name || '';
                 detail = `↑ IN  /  ${inc.playerOut?.name || ''} ↓ OUT`;
+                if (inc.playerIn?.name) involvedNames.push(inc.playerIn.name);
+                if (inc.playerOut?.name) involvedNames.push(inc.playerOut.name);
               } else if (inc.incidentType === 'varDecision') {
                 icon = '🎥';
                 title = `VAR · ${VAR_LABELS[inc.incidentClass] || inc.incidentClass || ''}`;
                 detail = inc.player?.name || '';
+                if (inc.player?.name) involvedNames.push(inc.player.name);
               } else if (inc.incidentType === 'inGamePenalty') {
                 icon = '🟡';
                 title = 'PK 선언';
                 detail = inc.player?.name || '';
-              } else if (inc.incidentType === 'injuryTime') {
-                icon = '⏱';
-                title = `추가시간 +${inc.length || ''}분`;
+                if (inc.player?.name) involvedNames.push(inc.player.name);
               }
+
+              const isKoreanEvent = involvedNames.some(nameMatchesKorean);
 
               return (
                 <div key={i} style={{
                   display:'flex', alignItems:'flex-start', gap:10, marginBottom:8, padding:'10px 12px',
-                  background:'var(--surface)', borderRadius:10,
-                  border: isKoreanSide ? '0.5px solid rgba(245,196,0,0.35)' : '0.5px solid var(--border2)',
-                  flexDirection: koreanIsAway ? 'row-reverse' : 'row',
-                  textAlign: koreanIsAway ? 'right' : 'left',
+                  background: isKoreanEvent ? PUR_BG : 'var(--surface)', borderRadius:10,
+                  border: isKoreanEvent ? `0.5px solid ${PUR_BD}` : '0.5px solid var(--border2)',
                 }}>
-                  <div style={{ ...NUM, width:38, textAlign:'center', fontSize:12, fontWeight:700, color: isKoreanSide ? 'var(--acc)' : 'var(--text3)', flexShrink:0, paddingTop:2 }}>{formatTime(inc)}</div>
+                  <div style={{ ...NUM, width:38, textAlign:'center', fontSize:12, fontWeight:700, color: isKoreanEvent ? PUR : 'var(--text3)', flexShrink:0, paddingTop:2 }}>{formatTime(inc)}</div>
                   <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:6, justifyContent: koreanIsAway ? 'flex-end' : 'flex-start' }}>
-                      <span style={{ fontSize:9, fontWeight:700, color:'var(--text5)', background:'var(--border)', padding:'1px 5px', borderRadius:4 }}>{sideTag}</span>
-                      <span style={{ fontSize:13, fontWeight:700, color: isKoreanSide ? 'var(--acc)' : 'var(--text)' }}>{title}</span>
+                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                      {teamLogo
+                        ? <img src={teamLogo} alt={teamCode} style={{ width:14, height:14, objectFit:'contain', flexShrink:0 }}/>
+                        : <span style={{ fontSize:9, fontWeight:700, color:'var(--text5)', background:'var(--border)', padding:'1px 5px', borderRadius:4 }}>{teamCode}</span>
+                      }
+                      <span style={{ fontSize:13, fontWeight:700, color: isKoreanEvent ? PUR : 'var(--text)' }}>{title}</span>
                     </div>
                     {detail && <div style={{ fontSize:11, color:'var(--text4)', marginTop:3 }}>{detail}</div>}
                   </div>
