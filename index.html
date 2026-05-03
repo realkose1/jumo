@@ -400,9 +400,9 @@ function PlayerPhoto({ player, style={}, tint='var(--bg)' }) {
   const imageMap = { '손흥민': 'heungmin.png', '이강인': 'kangin.png', '김민재': 'minjae.png', '조규성': 'guesung.png', '황희찬': 'heechan.png', '황인범': 'inbeom.png', '김하성': 'haseong.png', '이정후': 'junghoo.png', '김혜성': 'hyeseong.png', '오현규': 'hyungyu.png', '양현준': 'hyunjun.png', '백승호': 'seungho.webp', '배준호': 'junho.webp', '엄지성': 'jisung.webp' };
   // For full-body source images, zoom into the face area
   const PHOTO_ZOOM = {
-    '백승호': { scale: 2.75, originX: '50%', originY: '12%' },
-    '배준호': { scale: 2.0, originX: '50%', originY: '6%' },
-    '엄지성': { scale: 2.0, originX: '50%', originY: '8%' },
+    '백승호': { scale: 2.75, originX: '50%', originY: '6%' },
+    '배준호': { scale: 2.2, originX: '50%', originY: '6%' },
+    '엄지성': { scale: 1.8, originX: '50%', originY: '8%' },
   };
   const zoom = PHOTO_ZOOM[player.name];
   const imagePath = imageMap[player.name] ? `image/${imageMap[player.name]}` : null;
