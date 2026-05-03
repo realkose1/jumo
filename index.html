@@ -12,6 +12,7 @@
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script type="text/babel" src="ios-frame.jsx"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -118,6 +119,11 @@ window.addEventListener('message', function(e) {
 window.parent.postMessage({ type: '__edit_mode_available' }, '*');
 
 // ─── TWEAK DEFAULTS ───────────────────────────────────────────
+const SB = supabase.createClient(
+  'https://pxchmolcruhxbmvomsyy.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4Y2htb2xjcnVoeGJtdm9tc3l5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3NTk0ODgsImV4cCI6MjA5MzMzNTQ4OH0.WvxjnCkWD_LCgJTPdH3jtMc-maz0dSgS-A9SDHuy58U'
+);
+
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "homeVariant": 1,
   "accentColor": "#f5c400",
@@ -3096,29 +3102,40 @@ function App() {
         const pad = n => String(n).padStart(2, '0');
         const today = new Date();
 
-        // ── Sofascore: fetch soccer for past 2 days + next 3 days ──────────
+        // ── Sofascore: cache-first via Supabase ────────────────────────────
         const SF_BASE = 'https://api.sofascore.com/api/v1';
+        const sfOpts = { referrerPolicy: 'no-referrer' };
         const sfDates = [-2,-1,0,1,2,3].map(offset => {
           const d = new Date(today); d.setDate(today.getDate() + offset);
           return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
         });
+        const todayStr = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
 
-        const sfOpts = { referrerPolicy: 'no-referrer' };
-        const sfDateResults = await Promise.allSettled(
-          sfDates.map(date =>
-            fetch(`${SF_BASE}/sport/football/scheduled-events/${date}`, sfOpts)
-              .then(r => r.ok ? r.json() : null).catch(() => null)
-          )
-        );
+        // Load cached rows from Supabase
+        const { data: cachedRows } = await SB.from('sf_cache').select('date,events,updated_at').in('date', sfDates);
+        const cacheMap = {};
+        (cachedRows || []).forEach(row => { cacheMap[row.date] = row; });
 
-        sfDateResults.forEach(r => {
-          if (r.status === 'fulfilled' && r.value?.events) {
-            r.value.events.forEach(e => {
-              const m = transformSofascoreEvent(e);
-              if (m) allMatches.push(m);
-            });
+        await Promise.all(sfDates.map(async date => {
+          const cached = cacheMap[date];
+          const ttlMs = date === todayStr ? 2 * 60 * 1000 : 10 * 60 * 1000;
+          const isFresh = cached && (Date.now() - new Date(cached.updated_at).getTime()) < ttlMs;
+
+          let events = isFresh ? cached.events : null;
+
+          if (!events) {
+            const data = await fetch(`${SF_BASE}/sport/football/scheduled-events/${date}`, sfOpts)
+              .then(r => r.ok ? r.json() : null).catch(() => null);
+            events = data?.events || [];
+            // Save to Supabase (upsert)
+            SB.from('sf_cache').upsert({ date, events, updated_at: new Date().toISOString() }).then(() => {});
           }
-        });
+
+          events.forEach(e => {
+            const m = transformSofascoreEvent(e);
+            if (m) allMatches.push(m);
+          });
+        }));
 
         // ── ESPN: MLB only ─────────────────────────────────────────────────
         const espnFmt = d => `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
