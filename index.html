@@ -1679,12 +1679,15 @@ function LiveDetailScreen({ match, onBack }) {
   }, [match.id]);
 
   const handleReaction = async (emoji) => {
-    if (myReactions.has(emoji)) return;
-    setReactions(r => ({ ...r, [emoji]: (r[emoji] || 0) + 1 }));
-    const next = new Set(myReactions); next.add(emoji);
+    const isToggleOff = myReactions.has(emoji);
+    const delta = isToggleOff ? -1 : 1;
+    setReactions(r => ({ ...r, [emoji]: Math.max((r[emoji] || 0) + delta, 0) }));
+    const next = new Set(myReactions);
+    if (isToggleOff) next.delete(emoji); else next.add(emoji);
     setMyReactions(next);
     try { localStorage.setItem(`jumo_react_${match.id}`, JSON.stringify([...next])); } catch {}
-    const { data, error } = await SB.rpc('increment_reaction', { p_match_id: String(match.id), p_emoji: emoji });
+    const rpcName = isToggleOff ? 'decrement_reaction' : 'increment_reaction';
+    const { data, error } = await SB.rpc(rpcName, { p_match_id: String(match.id), p_emoji: emoji });
     if (!error && typeof data === 'number') {
       setReactions(r => ({ ...r, [emoji]: data }));
     }
@@ -1877,12 +1880,11 @@ function LiveDetailScreen({ match, onBack }) {
                 const reacted = myReactions.has(em);
                 const display = ct >= 1000 ? (ct/1000).toFixed(1) + 'k' : String(ct);
                 return (
-                  <button key={em} onClick={() => handleReaction(em)} disabled={reacted} style={{
+                  <button key={em} onClick={() => handleReaction(em)} style={{
                     background: reacted ? 'rgba(245,196,0,0.15)' : 'var(--border)',
                     border: reacted ? '0.5px solid rgba(245,196,0,0.4)' : '0.5px solid rgba(255,255,255,0.1)',
-                    borderRadius:20, padding:'8px 14px', cursor: reacted ? 'default' : 'pointer',
+                    borderRadius:20, padding:'8px 14px', cursor:'pointer',
                     display:'flex', alignItems:'center', gap:6, transition:'all 0.15s',
-                    opacity: reacted ? 1 : undefined,
                   }}>
                     <span style={{ fontSize:16 }}>{em}</span>
                     <span style={{ fontSize:12, color: reacted ? 'var(--acc)' : 'var(--text2)', fontWeight:600 }}>{display}</span>
