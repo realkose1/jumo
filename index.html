@@ -1903,9 +1903,14 @@ function LiveDetailScreen({ match, onBack }) {
       <div style={{ position:'relative', overflow:'hidden', background:'var(--bg2)' }}>
         <div style={{ position:'relative', zIndex:2, padding:'12px 20px 20px' }}>
           <BackBtn onBack={onBack}/>
-          <div style={{ display:'flex', alignItems:'center', gap:8, margin:'12px 0 16px' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, margin:'12px 0 16px', flexWrap:'wrap' }}>
             {isLive && <><LiveDot/><span style={{ fontSize:11, fontWeight:700, color:'var(--acc)', letterSpacing:1.5 }}>LIVE</span></>}
             <span style={{ fontSize:11, color:'var(--text3)' }}>{match.competition}</span>
+            {match.isKoreanDerby && (
+              <span style={{ fontSize:10, fontWeight:800, color:'#000', background:'linear-gradient(90deg, var(--acc), #ff8a3d)', borderRadius:6, padding:'3px 8px', letterSpacing:0.5, marginLeft:'auto' }}>
+                🇰🇷 코리안 더비
+              </span>
+            )}
           </div>
           {/* Score block */}
           <div style={{ display:'flex', alignItems:'center', marginBottom:16 }}>
@@ -1945,48 +1950,45 @@ function LiveDetailScreen({ match, onBack }) {
             </div>
           </div>
           {/* Korean player highlight */}
-          <div style={{ background:'rgba(245,196,0,0.08)', borderRadius:10, padding:'10px 14px', border:'0.5px solid rgba(245,196,0,0.3)', display:'flex', alignItems:'center', gap:10 }}>
-            <span style={{ fontSize:18 }}>🇰🇷</span>
-            <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-                <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>{match.koreanPlayer.name} <span style={{ ...NUM, color:'var(--text4)', fontWeight:400 }}>#{match.koreanPlayer.number}</span></div>
-                {match.koreanPlayer?.event && (
-                  <div style={{
-                    background: isLive ? 'rgba(230,48,48,0.1)' : 'var(--btn-bg)',
-                    borderRadius:6, padding:'3px 7px', flexShrink:0, display:'inline-flex', alignItems:'center', justifyContent:'center'
-                  }}>
-                    <span style={{ fontSize:10, fontWeight:600, color: isLive ? 'var(--acc)' : 'var(--text2)', whiteSpace:'nowrap', lineHeight:1 }}>
-                      {match.koreanPlayer.event}
-                    </span>
+          {(() => {
+            const koreans = match.koreanPlayers || [match.koreanPlayer];
+            const renderKoreanCard = (kp, idx) => {
+              const playerObj = ALL_PLAYERS.find(p => p.name === kp.name);
+              const eventsGoals = (match.events||[]).filter(e=>e.type==='goal'&&e.player===kp.name).length;
+              const eventsAssists = (match.events||[]).filter(e=>e.type==='assist'&&e.player===kp.name).length;
+              const goals = (kp.matchGoals != null && kp.matchGoals > 0) ? kp.matchGoals : eventsGoals;
+              const assists = (kp.matchAssists != null && kp.matchAssists > 0) ? kp.matchAssists : eventsAssists;
+              const pills = [];
+              if (goals > 0) pills.push(`⚽ ${goals}골`);
+              if (assists > 0) pills.push(`🅰️ ${assists}도움`);
+              if (kp.sfRating) pills.push(`★ ${kp.sfRating}`);
+              return (
+                <div key={idx} style={{ background:'rgba(245,196,0,0.08)', borderRadius:10, padding:'10px 14px', border:'0.5px solid rgba(245,196,0,0.3)', display:'flex', alignItems:'center', gap:10, marginTop: idx > 0 ? 8 : 0 }}>
+                  <span style={{ fontSize:18 }}>🇰🇷</span>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                      <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>{kp.name} <span style={{ ...NUM, color:'var(--text4)', fontWeight:400 }}>#{kp.number}</span></div>
+                      {kp.event && (
+                        <div style={{ background: isLive ? 'rgba(230,48,48,0.1)' : 'var(--btn-bg)', borderRadius:6, padding:'3px 7px', flexShrink:0, display:'inline-flex', alignItems:'center', justifyContent:'center' }}>
+                          <span style={{ fontSize:10, fontWeight:600, color: isLive ? 'var(--acc)' : 'var(--text2)', whiteSpace:'nowrap', lineHeight:1 }}>{kp.event}</span>
+                        </div>
+                      )}
+                      {pills.map((p, i) => (
+                        <span key={i} style={{ fontSize:10, fontWeight:700, padding:'3px 7px', borderRadius:6, background:'rgba(245,196,0,0.15)', color:'var(--acc)', border:'0.5px solid rgba(245,196,0,0.3)', whiteSpace:'nowrap', lineHeight:1, flexShrink:0 }}>{p}</span>
+                      ))}
+                    </div>
+                    <div style={{ fontSize:11, color:'var(--text3)', fontWeight:500, marginTop:1 }}>{kp.team}</div>
                   </div>
-                )}
-                {(() => {
-                  const kp = match.koreanPlayer || {};
-                  const eventsGoals = (match.events||[]).filter(e=>e.type==='goal'&&e.player===kp.name).length;
-                  const eventsAssists = (match.events||[]).filter(e=>e.type==='assist'&&e.player===kp.name).length;
-                  const goals = (kp.matchGoals != null && kp.matchGoals > 0) ? kp.matchGoals : eventsGoals;
-                  const assists = (kp.matchAssists != null && kp.matchAssists > 0) ? kp.matchAssists : eventsAssists;
-                  const pills = [];
-                  if (goals > 0) pills.push(`⚽ ${goals}골`);
-                  if (assists > 0) pills.push(`🅰️ ${assists}도움`);
-                  if (kp.sfRating) pills.push(`★ ${kp.sfRating}`);
-                  return pills.map((p, i) => (
-                    <span key={i} style={{
-                      fontSize:10, fontWeight:700, padding:'3px 7px', borderRadius:6,
-                      background:'rgba(245,196,0,0.15)', color:'var(--acc)',
-                      border:'0.5px solid rgba(245,196,0,0.3)', whiteSpace:'nowrap', lineHeight:1, flexShrink:0,
-                    }}>{p}</span>
-                  ));
-                })()}
-              </div>
-              <div style={{ fontSize:11, color:'var(--text3)', fontWeight:500, marginTop:1 }}>{match.koreanPlayer.team}</div>
-            </div>
-            {player && (
-              <div style={{ width:44, height:44, borderRadius:'50%', overflow:'hidden', flexShrink:0, border:'2px solid var(--acc)', background:'var(--surface)' }}>
-                <PlayerPhoto player={player} style={{ width:'100%', height:'100%' }} tint="var(--surface)"/>
-              </div>
-            )}
-          </div>
+                  {playerObj && (
+                    <div style={{ width:44, height:44, borderRadius:'50%', overflow:'hidden', flexShrink:0, border:'2px solid var(--acc)', background:'var(--surface)' }}>
+                      <PlayerPhoto player={playerObj} style={{ width:'100%', height:'100%' }} tint="var(--surface)"/>
+                    </div>
+                  )}
+                </div>
+              );
+            };
+            return koreans.map(renderKoreanCard);
+          })()}
         </div>
       </div>
 
@@ -2019,14 +2021,18 @@ function LiveDetailScreen({ match, onBack }) {
             if (incidents.length === 0) {
               return <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text5)', fontSize:14 }}>아직 주요 이벤트가 없습니다</div>;
             }
-            const koreanNameEn = match.koreanPlayer?.nameEn || '';
+            const koreanNamesEn = (match.koreanPlayers || [match.koreanPlayer]).map(kp => kp?.nameEn).filter(Boolean);
             const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z\s]/g,'').trim();
             const nameMatchesKorean = (n) => {
-              const a = norm(n), b = norm(koreanNameEn);
-              if (!a || !b) return false;
-              if (a === b || a.includes(b) || b.includes(a)) return true;
-              const at = a.split(/\s+/), bt = b.split(/\s+/);
-              return at.some(t => bt.includes(t) && t.length >= 3);
+              const a = norm(n);
+              if (!a) return false;
+              return koreanNamesEn.some(en => {
+                const b = norm(en);
+                if (!b) return false;
+                if (a === b || a.includes(b) || b.includes(a)) return true;
+                const at = a.split(/\s+/), bt = b.split(/\s+/);
+                return at.some(t => bt.includes(t) && t.length >= 3);
+              });
             };
             const formatTime = (inc) => {
               if (typeof inc.time !== 'number') return '';
@@ -3975,64 +3981,66 @@ function App() {
             if (idx === -1) return;
 
             const m = koreanMatches[idx];
-            const nameEn = m.koreanPlayer.nameEn;
-
-            // Find player in lineup (substitute=false → starter)
-            let started = false, foundInRoster = false, sfRating = null;
             const linePlayers = [...(lineups?.home?.players || []), ...(lineups?.away?.players || [])];
-            for (const entry of linePlayers) {
-              const n = entry.player?.name || '';
-              if (nameMatch(n, nameEn)) {
-                foundInRoster = true;
-                started = entry.substitute === false;
-                const r = entry.statistics?.rating;
-                if (r != null) sfRating = parseFloat(r).toFixed(1);
+            const allKoreans = m.koreanPlayers || [m.koreanPlayer];
+
+            // Compute live status + match contributions for one Korean player
+            const computeFor = (kp) => {
+              const nameEn = kp.nameEn;
+              let started = false, foundInRoster = false, sfRating = null;
+              for (const entry of linePlayers) {
+                const n = entry.player?.name || '';
+                if (nameMatch(n, nameEn)) {
+                  foundInRoster = true;
+                  started = entry.substitute === false;
+                  const r = entry.statistics?.rating;
+                  if (r != null) sfRating = parseFloat(r).toFixed(1);
+                }
               }
-            }
-
-            // Parse incidents: goals, assists, substitutions
-            let minutesIn = null, minutesOff = null, matchGoals = 0, matchAssists = 0;
-            for (const inc of (incidents?.incidents || [])) {
-              if (inc.incidentType === 'substitution') {
-                if (nameMatch(inc.playerIn?.name || '', nameEn)) minutesIn = inc.time;
-                if (nameMatch(inc.playerOut?.name || '', nameEn)) minutesOff = inc.time;
+              let minutesIn = null, minutesOff = null, matchGoals = 0, matchAssists = 0;
+              for (const inc of (incidents?.incidents || [])) {
+                if (inc.incidentType === 'substitution') {
+                  if (nameMatch(inc.playerIn?.name || '', nameEn)) minutesIn = inc.time;
+                  if (nameMatch(inc.playerOut?.name || '', nameEn)) minutesOff = inc.time;
+                }
+                if (inc.incidentType === 'goal') {
+                  if (nameMatch(inc.player?.name || '', nameEn)) matchGoals++;
+                  if (inc.assist1?.name && nameMatch(inc.assist1.name, nameEn)) matchAssists++;
+                }
               }
-              if (inc.incidentType === 'goal') {
-                if (nameMatch(inc.player?.name || '', nameEn)) matchGoals++;
-                if (inc.assist1?.name && nameMatch(inc.assist1.name, nameEn)) matchAssists++;
+              const didPlay = started || minutesIn !== null || matchGoals > 0 || matchAssists > 0;
+              let newEvent, minutesPlayed = 0;
+              if (isLive) {
+                const lineupAvailable = linePlayers.length > 0;
+                const onPitch = (started && minutesOff === null) || (minutesIn !== null && minutesOff === null);
+                if (!foundInRoster && lineupAvailable) newEvent = '미출전';
+                else if (!foundInRoster) newEvent = '출전 예상';
+                else if (onPitch) newEvent = minutesIn !== null ? '교체 출전 중' : '출전 중';
+                else if (started && minutesOff !== null) newEvent = '교체 아웃';
+                else newEvent = '벤치';
+              } else {
+                if (started) minutesPlayed = minutesOff ?? 90;
+                else if (minutesIn !== null) minutesPlayed = (minutesOff ?? 90) - minutesIn;
+                newEvent = !didPlay ? '미출전'
+                  : minutesPlayed >= 90 ? '풀타임'
+                  : minutesPlayed > 0 ? `${minutesPlayed}분 출전`
+                  : '출전 완료';
               }
-            }
+              return { ...kp, event: newEvent, minutesPlayed, matchGoals, matchAssists, sfRating };
+            };
 
-            const didPlay = started || minutesIn !== null || matchGoals > 0 || matchAssists > 0;
-            let newEvent, minutesPlayed = 0;
-
-            if (isLive) {
-              const lineupAvailable = linePlayers.length > 0;
-              const onPitch = (started && minutesOff === null) || (minutesIn !== null && minutesOff === null);
-              if (!foundInRoster && lineupAvailable) newEvent = '미출전';
-              else if (!foundInRoster) newEvent = '출전 예상';
-              else if (onPitch) newEvent = minutesIn !== null ? '교체 출전 중' : '출전 중';
-              else if (started && minutesOff !== null) newEvent = '교체 아웃';
-              else newEvent = '벤치';
-            } else {
-              if (started) minutesPlayed = minutesOff ?? 90;
-              else if (minutesIn !== null) minutesPlayed = (minutesOff ?? 90) - minutesIn;
-              newEvent = !didPlay ? '미출전'
-                : minutesPlayed >= 90 ? '풀타임'
-                : minutesPlayed > 0 ? `${minutesPlayed}분 출전`
-                : '출전 완료';
-            }
-
-            const newEvents = [
-              ...(m.events || []),
-              ...Array.from({length: matchGoals}, () => ({ type:'goal', player: m.koreanPlayer.name })),
-              ...Array.from({length: matchAssists}, () => ({ type:'assist', player: m.koreanPlayer.name })),
-            ];
+            const updatedKoreans = allKoreans.map(computeFor);
+            const newEvents = [...(m.events || [])];
+            updatedKoreans.forEach(kp => {
+              for (let i = 0; i < kp.matchGoals; i++) newEvents.push({ type:'goal', player: kp.name });
+              for (let i = 0; i < kp.matchAssists; i++) newEvents.push({ type:'assist', player: kp.name });
+            });
 
             koreanMatches[idx] = {
               ...m,
               events: newEvents,
-              koreanPlayer: { ...m.koreanPlayer, event: newEvent, minutesPlayed, matchGoals, matchAssists, sfRating },
+              koreanPlayer: updatedKoreans[0],
+              koreanPlayers: updatedKoreans,
             };
           });
         }
@@ -4252,17 +4260,20 @@ function App() {
 
     // Match team name against KOREAN_PLAYERS (try full name, short name, nameCode)
     let koreanPlayer = null;
+    let koreanPlayerAway = null;
     const tryHome = [homeTeamName, homeShort, event.homeTeam?.nameCode].filter(Boolean);
     const tryAway = [awayTeamName, awayShort, event.awayTeam?.nameCode].filter(Boolean);
     for (const v of tryHome) {
       if (KOREAN_PLAYERS[v]) { koreanPlayer = { ...KOREAN_PLAYERS[v], team: homeShort }; break; }
     }
-    if (!koreanPlayer) {
-      for (const v of tryAway) {
-        if (KOREAN_PLAYERS[v]) { koreanPlayer = { ...KOREAN_PLAYERS[v], team: awayShort }; break; }
-      }
+    for (const v of tryAway) {
+      if (KOREAN_PLAYERS[v]) { koreanPlayerAway = { ...KOREAN_PLAYERS[v], team: awayShort }; break; }
     }
+    // If no home Korean, treat away as primary
+    if (!koreanPlayer && koreanPlayerAway) { koreanPlayer = koreanPlayerAway; koreanPlayerAway = null; }
     if (!koreanPlayer) return null;
+    const isKoreanDerby = !!(koreanPlayerAway);
+    const koreanPlayers = isKoreanDerby ? [koreanPlayer, koreanPlayerAway] : [koreanPlayer];
 
     const statusType = event.status?.type;
     const isFinished = statusType === 'finished';
@@ -4318,6 +4329,8 @@ function App() {
       home: { name: homeTeamName, code: homeShort, score: (isLive || isFinished || isTimedOut) ? (event.homeScore?.current ?? 0) : null, logo: homeLogo },
       away: { name: awayTeamName, code: awayShort, score: (isLive || isFinished || isTimedOut) ? (event.awayScore?.current ?? 0) : null, logo: awayLogo },
       koreanPlayer: { ...koreanPlayer, event: (isFinished || isTimedOut) ? '미출전' : '출전 예상', minutesPlayed: 0, matchGoals: 0, matchAssists: 0 },
+      koreanPlayers: koreanPlayers.map(kp => ({ ...kp, event: (isFinished || isTimedOut) ? '미출전' : '출전 예상', minutesPlayed: 0, matchGoals: 0, matchAssists: 0 })),
+      isKoreanDerby,
       competition: tournamentName,
       competitionLogo: null,
       venue: event.venue?.city?.name || '',
