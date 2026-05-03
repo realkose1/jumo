@@ -175,7 +175,7 @@ const KOREAN_PLAYERS = {
   // 조규성 — FC Midtjylland (Danish Superliga)
   'Midtjylland': { name: '조규성', nameEn: 'Cho Gue-sung', number: 9, position: '공격수' },
   'FC Midtjylland': { name: '조규성', nameEn: 'Cho Gue-sung', number: 9, position: '공격수' },
-  'FCM': { name: '조규성', nameEn: 'Cho Gue-sung', number: 9, position: '공격수' },
+  'MID': { name: '조규성', nameEn: 'Cho Gue-sung', number: 9, position: '공격수' },
   // 황인범 — Feyenoord (Eredivisie)
   'Feyenoord': { name: '황인범', nameEn: 'Hwang In-beom', number: 5, position: '미드필더' },
   'Feyenoord Rotterdam': { name: '황인범', nameEn: 'Hwang In-beom', number: 5, position: '미드필더' },
@@ -348,7 +348,7 @@ function TeamBadge({ code, size=36, logo }) {
   // Use logo if available
   if (logo) {
     return (
-      <img src={logo} alt={code} style={{ width:size, height:size, objectFit:'contain', flexShrink:0 }} />
+      <img src={logo} alt={code} referrerPolicy="no-referrer" style={{ width:size, height:size, objectFit:'contain', flexShrink:0 }} />
     );
   }
 
