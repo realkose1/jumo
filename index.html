@@ -156,27 +156,42 @@ const ESPN_API = {
 
 // Korean players mapping
 const KOREAN_PLAYERS = {
+  // 손흥민 — LAFC (MLS)
   'Los Angeles FC': { name: '손흥민', nameEn: 'Son Heung-min', number: 7, position: '공격수' },
   'LAFC': { name: '손흥민', nameEn: 'Son Heung-min', number: 7, position: '공격수' },
+  // 이강인 — PSG (Ligue 1)
   'Paris Saint-Germain': { name: '이강인', nameEn: 'Lee Kang-in', number: 19, position: '미드필더' },
   'PSG': { name: '이강인', nameEn: 'Lee Kang-in', number: 19, position: '미드필더' },
+  // 김민재 — Bayern Munich (Bundesliga)
   'Bayern Munich': { name: '김민재', nameEn: 'Kim Min-jae', number: 3, position: '센터백' },
   'FC Bayern München': { name: '김민재', nameEn: 'Kim Min-jae', number: 3, position: '센터백' },
   'Bayern': { name: '김민재', nameEn: 'Kim Min-jae', number: 3, position: '센터백' },
+  'FC Bayern': { name: '김민재', nameEn: 'Kim Min-jae', number: 3, position: '센터백' },
+  // 황희찬 — Wolves (EPL)
   'Wolves': { name: '황희찬', nameEn: 'Hwang Hee-chan', number: 11, position: '공격수' },
   'Wolverhampton Wanderers': { name: '황희찬', nameEn: 'Hwang Hee-chan', number: 11, position: '공격수' },
+  'Wolverhampton': { name: '황희찬', nameEn: 'Hwang Hee-chan', number: 11, position: '공격수' },
+  'WOL': { name: '황희찬', nameEn: 'Hwang Hee-chan', number: 11, position: '공격수' },
+  // 조규성 — FC Midtjylland (Danish Superliga)
   'Midtjylland': { name: '조규성', nameEn: 'Cho Gue-sung', number: 9, position: '공격수' },
   'FC Midtjylland': { name: '조규성', nameEn: 'Cho Gue-sung', number: 9, position: '공격수' },
+  'FCM': { name: '조규성', nameEn: 'Cho Gue-sung', number: 9, position: '공격수' },
+  // 황인범 — Feyenoord (Eredivisie)
   'Feyenoord': { name: '황인범', nameEn: 'Hwang In-beom', number: 5, position: '미드필더' },
   'Feyenoord Rotterdam': { name: '황인범', nameEn: 'Hwang In-beom', number: 5, position: '미드필더' },
+  // 김하성 — Pittsburgh Pirates (MLB)
   'Pittsburgh Pirates': { name: '김하성', nameEn: 'Kim Ha-seong', number: 4, position: '유격수' },
   'Pirates': { name: '김하성', nameEn: 'Kim Ha-seong', number: 4, position: '유격수' },
+  // 이정후 — San Francisco Giants (MLB)
   'San Francisco Giants': { name: '이정후', nameEn: 'Lee Jung-hoo', number: 51, position: '중견수' },
   'Giants': { name: '이정후', nameEn: 'Lee Jung-hoo', number: 51, position: '중견수' },
+  // 김혜성 — LA Dodgers (MLB)
   'Los Angeles Dodgers': { name: '김혜성', nameEn: 'Kim Hye-seong', number: 25, position: '유격수' },
   'Dodgers': { name: '김혜성', nameEn: 'Kim Hye-seong', number: 25, position: '유격수' },
+  // 양현준 — Celtic (Scottish Premiership)
   'Celtic': { name: '양현준', nameEn: 'Yang Hyun-jun', number: 77, position: '공격수' },
   'Celtic FC': { name: '양현준', nameEn: 'Yang Hyun-jun', number: 77, position: '공격수' },
+  // 오현규 — Beşiktaş (Süper Lig)
   'Besiktas': { name: '오현규', nameEn: 'Oh Hyeon-gyu', number: 19, position: '공격수' },
   'Beşiktaş': { name: '오현규', nameEn: 'Oh Hyeon-gyu', number: 19, position: '공격수' },
   'Besiktas JK': { name: '오현규', nameEn: 'Oh Hyeon-gyu', number: 19, position: '공격수' },
@@ -567,6 +582,19 @@ function TodayMatchCard({ m, onMatch, tweaks }) {
                      m.status === 'STATUS_END_PERIOD' ||
                      m.status === 'STATUS_FINAL_PEN';
 
+  // Real-time live minute
+  const calcMinute = () => {
+    if (!m.periodStartTs) return m.minute || '';
+    const minsInPeriod = Math.floor((Date.now()/1000 - m.periodStartTs) / 60);
+    return String(Math.max(0, minsInPeriod + ((m.sfPeriod || 1) >= 2 ? 45 : 0)));
+  };
+  const [liveMinute, setLiveMinute] = React.useState(calcMinute);
+  React.useEffect(() => {
+    if (!isLive) return;
+    const iv = setInterval(() => setLiveMinute(calcMinute()), 30000);
+    return () => clearInterval(iv);
+  }, [isLive, m.periodStartTs, m.sfPeriod]);
+
   // Countdown calculation
   const [countdown, setCountdown] = React.useState('');
 
@@ -755,9 +783,9 @@ function TodayMatchCard({ m, onMatch, tweaks }) {
                       LIVE
                     </span>
                   </div>
-                  {m.minute && (
+                  {(liveMinute || m.minute) && (
                     <span style={{ fontSize:16, fontWeight:700, color:'var(--text)', letterSpacing:-0.3 }}>
-                      {m.minute}'
+                      {liveMinute || m.minute}'
                     </span>
                   )}
                 </div>
@@ -817,6 +845,17 @@ function TodayMatchCard({ m, onMatch, tweaks }) {
 function LiveCarouselCard({ m, onMatch, tweaks }) {
   const player = PLAYERS.find(p => p.name === m.koreanPlayer.name);
   const lastEvent = m.events[m.events.length - 1];
+  const calcLiveMin = () => {
+    if (!m.periodStartTs) return m.minute || '';
+    const mins = Math.floor((Date.now()/1000 - m.periodStartTs) / 60);
+    return String(Math.max(0, mins + ((m.sfPeriod || 1) >= 2 ? 45 : 0)));
+  };
+  const [liveMin, setLiveMin] = React.useState(calcLiveMin);
+  React.useEffect(() => {
+    if (!m.live) return;
+    const iv = setInterval(() => setLiveMin(calcLiveMin()), 30000);
+    return () => clearInterval(iv);
+  }, [m.live, m.periodStartTs, m.sfPeriod]);
   return (
     <div onClick={() => onMatch(m)} style={{ flexShrink:0, width:300, borderRadius:20, overflow:'hidden', position:'relative', cursor:'pointer', background:'var(--bg2)', border:'0.5px solid rgba(230,48,48,0.2)' }}>
       {tweaks.showPlayerPhoto && player && (
@@ -826,7 +865,7 @@ function LiveCarouselCard({ m, onMatch, tweaks }) {
         {/* header */}
         <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:14 }}>
           <LiveDot/>
-          <span style={{ fontSize:11, fontWeight:800, color:'var(--acc)', letterSpacing:1.2 }}>LIVE {m.minute}'</span>
+          <span style={{ fontSize:11, fontWeight:800, color:'var(--acc)', letterSpacing:1.2 }}>LIVE {liveMin}'</span>
           <span style={{ fontSize:10, color:'var(--text4)', marginLeft:2 }}>{m.sport.split(' ')[1]}</span>
         </div>
         {/* score */}
@@ -964,6 +1003,7 @@ function TodayMatchesCarousel({ matches, now, startOfToday, endOfToday, twelveHo
     .filter(m => {
       if (!m.koreanPlayer) return false;
       if (!m.fullDate) return false;
+      if (m.live || m.time === 'LIVE') return true; // always show live
       const matchDate = new Date(m.fullDate);
       const isFinished = m.status === 'STATUS_FINAL' || m.status === 'STATUS_FULL_TIME' || m.status === 'final' || m.status === 'STATUS_END_PERIOD' || m.status === 'STATUS_FINAL_PEN';
       const isToday = matchDate >= startOfToday && matchDate <= endOfToday;
@@ -1020,6 +1060,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
   // State for real-time countdown updates
   const [currentTime, setCurrentTime] = React.useState(new Date());
   const [hlBgImg, setHlBgImg] = React.useState(null);
+  const [hlLiveMinute, setHlLiveMinute] = React.useState('');
 
   // Update current time every second for countdown
   React.useEffect(() => {
@@ -1118,16 +1159,29 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
         const lastEvent = m.events?.[m.events.length - 1];
         const hasGoalEvent = lastEvent && (lastEvent.type === 'goal' || lastEvent.type === 'assist');
 
+        const scoreNode = (
+          <div style={{ display:'flex', alignItems:'center', gap:10, margin:'6px 0 2px' }}>
+            <TeamBadge code={m.home.code} size={28} logo={m.home.logo}/>
+            <span style={{ fontVariantNumeric:'tabular-nums', fontSize:32, fontWeight:900, color:'#fff', letterSpacing:-1 }}>{m.home.score ?? 0}</span>
+            <span style={{ fontSize:20, color:'rgba(255,255,255,0.4)', fontWeight:300 }}>:</span>
+            <span style={{ fontVariantNumeric:'tabular-nums', fontSize:32, fontWeight:900, color:'rgba(255,255,255,0.5)', letterSpacing:-1 }}>{m.away.score ?? 0}</span>
+            <TeamBadge code={m.away.code} size={28} logo={m.away.logo}/>
+          </div>
+        );
         if (hasGoalEvent) {
           return {
-            status: `LIVE NOW · ${m.minute || ''}\'`,
-            main: `${m.koreanPlayer.name}\n${lastEvent.type === 'goal' ? '⚽ 골' : '🅰️ 어시스트'} — ${m.home.score}:${m.away.score}`,
+            status: `LIVE NOW · ${hlLiveMinute || m.minute || ''}\'`,
+            main: lastEvent.type === 'goal' ? `⚽ ${m.koreanPlayer.name} 골!` : `${m.koreanPlayer.name} 어시스트!`,
+            scoreNode,
             sub: `${m.home.name} vs ${m.away.name} · ${m.competition}`
           };
         } else {
+          const ev = m.koreanPlayer.event || '';
+          const evLabel = ev === '교체 출전 중' ? '교체 출전 중' : ev === '교체 아웃' ? '교체 아웃' : ev === '벤치' ? '벤치 대기' : '출전 중';
           return {
-            status: `LIVE NOW · ${m.minute || ''}\'`,
-            main: `${m.koreanPlayer.name} 출전 중\n${m.home.score}:${m.away.score}`,
+            status: `LIVE NOW · ${hlLiveMinute || m.minute || ''}\'`,
+            main: `${m.koreanPlayer.name} ${evLabel}`,
+            scoreNode,
             sub: `${m.home.name} vs ${m.away.name} · ${m.competition}`
           };
         }
@@ -1207,6 +1261,21 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
       .catch(() => {});
     return () => { cancelled = true; };
   }, [highlightMatch?.id, highlightMatch?.koreanPlayer?.name]);
+
+  // Real-time minute for highlight live match
+  React.useEffect(() => {
+    if (!highlightMatch?.live || !highlightMatch.periodStartTs) {
+      setHlLiveMinute(highlightMatch?.minute || '');
+      return;
+    }
+    const calc = () => {
+      const mins = Math.floor((Date.now()/1000 - highlightMatch.periodStartTs) / 60);
+      setHlLiveMinute(String(Math.max(0, mins + ((highlightMatch.sfPeriod || 1) >= 2 ? 45 : 0))));
+    };
+    calc();
+    const iv = setInterval(calc, 30000);
+    return () => clearInterval(iv);
+  }, [highlightMatch?.id, highlightMatch?.live, highlightMatch?.periodStartTs, highlightMatch?.sfPeriod]);
 
   // Show skeleton on initial load
   if (isLoading) {
@@ -1333,12 +1402,13 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
           </div>
         </div>
         <div style={{ position:'absolute', bottom:20, left:20, right:20, zIndex:2 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
             {highlightData?.priority === 1 && <LiveDot/>}
             <span style={{ fontSize:11, fontWeight:700, color: highlightData?.priority === 1 ? 'var(--acc)' : 'rgba(255,255,255,0.7)', letterSpacing:1.5 }}>{highlightText.status}</span>
           </div>
-          <div style={{ fontSize:28, fontWeight:900, color:'#fff', lineHeight:1.1, marginBottom:8, letterSpacing:-0.5, whiteSpace:'pre-line' }}>{highlightText.main}</div>
-          <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)' }}>{highlightText.sub}</div>
+          {highlightText.scoreNode || null}
+          <div style={{ fontSize:28, fontWeight:900, color:'#fff', lineHeight:1.1, letterSpacing:-0.5, whiteSpace:'pre-line', marginTop: highlightText.scoreNode ? 10 : 0 }}>{highlightText.main}</div>
+          <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:10 }}>{highlightText.sub}</div>
         </div>
       </div>
       )}
@@ -1368,6 +1438,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
             if (!m.koreanPlayer || !m.fullDate) return false;
             if (seenIds.has(m.id)) return false;
             seenIds.add(m.id);
+            if (m.live || m.time === 'LIVE') return true; // always show live
             const matchDate = new Date(m.fullDate);
             return matchDate >= startOfToday && matchDate <= twelveHoursLater;
           })
@@ -1404,6 +1475,28 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
                       <span style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text)' }}>{m.home.score}</span>
                       <span style={{ fontSize:14, color:'var(--text5)' }}>-</span>
                       <span style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text)' }}>{m.away.score}</span>
+                    </div>
+                    <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, minWidth:0 }}>
+                      <TeamBadge code={m.away.code} size={24} logo={m.away.logo}/>
+                      <span style={{ fontSize:14, fontWeight:600, color:'var(--text)' }}>{m.away.name}</span>
+                    </div>
+                  </div>
+                );
+              } else if (m.live || m.time === 'LIVE') {
+                // LIVE MATCH DISPLAY
+                return (
+                  <div key={m.id} onClick={() => onMatch(m)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', cursor:'pointer', borderBottom:'0.5px solid var(--border)' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, justifyContent:'flex-end', minWidth:0 }}>
+                      <span style={{ fontSize:14, fontWeight:600, color:'var(--text)', textAlign:'right' }}>{m.home.name}</span>
+                      <TeamBadge code={m.home.code} size={24} logo={m.home.logo}/>
+                    </div>
+                    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, flexShrink:0, padding:'0 16px' }}>
+                      <span style={{ fontSize:9, fontWeight:800, color:'var(--acc)', letterSpacing:1 }}>LIVE</span>
+                      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                        <span style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text)' }}>{m.home.score ?? 0}</span>
+                        <span style={{ fontSize:12, color:'var(--text5)' }}>-</span>
+                        <span style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text)' }}>{m.away.score ?? 0}</span>
+                      </div>
                     </div>
                     <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, minWidth:0 }}>
                       <TeamBadge code={m.away.code} size={24} logo={m.away.logo}/>
@@ -2936,111 +3029,132 @@ function App() {
       try {
         const allMatches = [];
 
-        // Build ±7 day date range string for ESPN API (YYYYMMDD-YYYYMMDD)
         const pad = n => String(n).padStart(2, '0');
-        const fmtDate = d => `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
         const today = new Date();
+
+        // ── Sofascore: fetch soccer for past 2 days + next 3 days ──────────
+        const SF_BASE = 'https://api.sofascore.com/api/v1';
+        const SF_HEADERS = { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://www.sofascore.com/' };
+        const sfDates = [-2,-1,0,1,2,3].map(offset => {
+          const d = new Date(today); d.setDate(today.getDate() + offset);
+          return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+        });
+
+        const sfDateResults = await Promise.allSettled(
+          sfDates.map(date =>
+            fetch(`${SF_BASE}/sport/football/scheduled-events/${date}`, { headers: SF_HEADERS })
+              .then(r => r.json()).catch(() => null)
+          )
+        );
+
+        sfDateResults.forEach(r => {
+          if (r.status === 'fulfilled' && r.value?.events) {
+            r.value.events.forEach(e => {
+              const m = transformSofascoreEvent(e);
+              if (m) allMatches.push(m);
+            });
+          }
+        });
+
+        // ── ESPN: MLB only ─────────────────────────────────────────────────
+        const espnFmt = d => `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
         const from = new Date(today); from.setDate(today.getDate() - 7);
         const to   = new Date(today); to.setDate(today.getDate() + 7);
-        const dateRange = `${fmtDate(from)}-${fmtDate(to)}`;
-
-        // Fetch soccer leagues with date range
-        for (const [league, url] of Object.entries(ESPN_API.soccer)) {
-          try {
-            const res = await fetch(`${url}?dates=${dateRange}&limit=100`);
-            const data = await res.json();
-            if (data.events) {
-              const matches = data.events.map(e => transformESPNEvent(e, 'soccer', league));
-              allMatches.push(...matches);
-            }
-          } catch (err) {
-            console.error(`❌ Failed to fetch ${league}:`, err);
-          }
-        }
-
-        // Fetch MLB with date range
-        const mlbRes = await fetch(`${ESPN_API.mlb}?dates=${dateRange}&limit=200`);
+        const mlbRes = await fetch(`${ESPN_API.mlb}?dates=${espnFmt(from)}-${espnFmt(to)}&limit=200`);
         const mlbData = await mlbRes.json();
         if (mlbData.events) {
           const matches = mlbData.events.map(e => transformESPNEvent(e, 'mlb'));
           allMatches.push(...matches);
         }
 
+        // Deduplicate by id (same match can appear in multiple Sofascore date responses)
+        const seenIds = new Set();
+        const uniqueMatches = allMatches.filter(m => {
+          if (seenIds.has(m.id)) return false;
+          seenIds.add(m.id);
+          return true;
+        });
+
         // Filter for Korean players
-        const koreanMatches = allMatches.filter(m => m.koreanPlayer);
+        const koreanMatches = uniqueMatches.filter(m => m.koreanPlayer);
 
-        // Fetch ESPN summary for finished Korean soccer matches to get real player stats
-        const LEAGUE_PATHS = { mls:'usa.1', epl:'eng.1', ger:'ger.1', fra:'fra.1', ita:'ita.1', sco:'sco.1', tur:'tur.1', den:'den.1', ned:'ned.1', bel:'bel.1' };
-        const FINAL_ST = ['STATUS_FINAL','STATUS_FULL_TIME','STATUS_END_PERIOD','STATUS_FINAL_PEN','final'];
-        const soccerFinished = koreanMatches.filter(m => m.leagueKey && LEAGUE_PATHS[m.leagueKey] && FINAL_ST.includes(m.status));
-
-        const nameMatch = (espnName, nameEn) => {
-          const a = espnName.toLowerCase().replace(/[-\s]/g,'');
+        // ── nameMatch helper ───────────────────────────────────────────────
+        const nameMatch = (sfName, nameEn) => {
+          const a = sfName.toLowerCase().replace(/[-\s]/g,'');
           const b = nameEn.toLowerCase().replace(/[-\s]/g,'');
-          return a.includes(b) || b.includes(a) || a === b;
+          if (a.includes(b) || b.includes(a) || a === b) return true;
+          // Sofascore may use Western name order (e.g. "Hee-chan Hwang" vs "Hwang Hee-chan")
+          const words = nameEn.toLowerCase().split(/[\s-]+/).filter(Boolean);
+          if (words.length >= 2) {
+            const reversed = words.slice(1).join('') + words[0];
+            return a.includes(reversed) || reversed.includes(a) || a === reversed;
+          }
+          return false;
         };
 
-        if (soccerFinished.length > 0) {
-          const summaries = await Promise.allSettled(
-            soccerFinished.map(m =>
-              fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${LEAGUE_PATHS[m.leagueKey]}/summary?event=${m.id}`)
-                .then(r => r.json()).then(d => ({ id: m.id, data: d })).catch(() => null)
+        // ── Sofascore: fetch lineups + incidents for live/finished soccer ──
+        const sfKorean = koreanMatches.filter(m => m.source === 'sofascore' && (m.live || m.status === 'STATUS_FINAL'));
+
+        if (sfKorean.length > 0) {
+          const sfDetails = await Promise.allSettled(
+            sfKorean.map(m =>
+              Promise.all([
+                fetch(`${SF_BASE}/event/${m.id}/lineups`, { headers: SF_HEADERS }).then(r => r.json()).catch(() => null),
+                fetch(`${SF_BASE}/event/${m.id}/incidents`, { headers: SF_HEADERS }).then(r => r.json()).catch(() => null),
+              ]).then(([lineups, incidents]) => ({ id: m.id, lineups, incidents, isLive: m.live }))
             )
           );
 
-          summaries.forEach(result => {
+          sfDetails.forEach(result => {
             if (result.status !== 'fulfilled' || !result.value) return;
-            const { id, data } = result.value;
+            const { id, lineups, incidents, isLive } = result.value;
             const idx = koreanMatches.findIndex(m => m.id === id);
             if (idx === -1) return;
 
             const m = koreanMatches[idx];
             const nameEn = m.koreanPlayer.nameEn;
-            const keyEvents = data.keyEvents || [];
 
-            let matchGoals = 0, matchAssists = 0, minutesIn = null, minutesOff = null, started = false;
-
-            // Check starter status from rosters (ESPN uses roster.roster, not roster.entries)
-            for (const roster of (data.rosters || [])) {
-              for (const entry of (roster.roster || roster.entries || [])) {
-                const n = entry.athlete?.displayName || '';
-                if (nameMatch(n, nameEn)) { started = entry.starter === true; }
+            // Find player in lineup (substitute=false → starter)
+            let started = false, foundInRoster = false;
+            const linePlayers = [...(lineups?.home?.players || []), ...(lineups?.away?.players || [])];
+            for (const entry of linePlayers) {
+              const n = entry.player?.name || '';
+              if (nameMatch(n, nameEn)) {
+                foundInRoster = true;
+                started = entry.substitute === false;
               }
             }
 
-            // Parse key events
-            for (const ke of keyEvents) {
-              const type = ke.type?.type || '';
-              const text = ke.text || '';
-              const min = parseInt(ke.clock?.displayValue) || null;
-
-              if (type.startsWith('goal')) {
-                // Scorer: text after first period until next period or "with"
-                const scorerMatch = text.match(/\.\s*([^(]+)\s*\(/);
-                if (scorerMatch && nameMatch(scorerMatch[1].trim(), nameEn)) matchGoals++;
-                // Assist: "Assisted by X"
-                const assistMatch = text.match(/[Aa]ssisted by ([^.]+)/);
-                if (assistMatch && nameMatch(assistMatch[1].trim(), nameEn)) matchAssists++;
+            // Parse incidents: goals, assists, substitutions
+            let minutesIn = null, minutesOff = null, matchGoals = 0, matchAssists = 0;
+            for (const inc of (incidents?.incidents || [])) {
+              if (inc.incidentType === 'substitution') {
+                if (nameMatch(inc.playerIn?.name || '', nameEn)) minutesIn = inc.time;
+                if (nameMatch(inc.playerOut?.name || '', nameEn)) minutesOff = inc.time;
               }
-
-              if (type === 'substitution' && text.includes('replaces')) {
-                const parts = text.split('replaces');
-                const comesOn = (parts[0] || '').split('.').pop().trim();
-                const goesOff = (parts[1] || '').trim().replace(/\.$/, '');
-                if (nameMatch(goesOff, nameEn)) minutesOff = min;
-                if (nameMatch(comesOn, nameEn)) minutesIn = min;
+              if (inc.incidentType === 'goal') {
+                if (nameMatch(inc.player?.name || '', nameEn)) matchGoals++;
+                if (inc.assist1?.name && nameMatch(inc.assist1.name, nameEn)) matchAssists++;
               }
             }
 
             const didPlay = started || minutesIn !== null || matchGoals > 0 || matchAssists > 0;
-            let minutesPlayed = 0;
-            if (started) minutesPlayed = minutesOff !== null ? minutesOff : 90;
-            else if (minutesIn !== null) minutesPlayed = (minutesOff || 90) - minutesIn;
+            let newEvent, minutesPlayed = 0;
 
-            const newEvent = !didPlay ? '미출전'
-              : minutesPlayed >= 90 ? '풀타임'
-              : minutesPlayed > 0 ? `${minutesPlayed}분 출전`
-              : '출전 완료';
+            if (isLive) {
+              const onPitch = (started && minutesOff === null) || (minutesIn !== null && minutesOff === null);
+              if (!foundInRoster) newEvent = '출전 예상';
+              else if (onPitch) newEvent = minutesIn !== null ? '교체 출전 중' : '출전 중';
+              else if (started && minutesOff !== null) newEvent = '교체 아웃';
+              else newEvent = '벤치';
+            } else {
+              if (started) minutesPlayed = minutesOff ?? 90;
+              else if (minutesIn !== null) minutesPlayed = (minutesOff ?? 90) - minutesIn;
+              newEvent = !didPlay ? '미출전'
+                : minutesPlayed >= 90 ? '풀타임'
+                : minutesPlayed > 0 ? `${minutesPlayed}분 출전`
+                : '출전 완료';
+            }
 
             const newEvents = [
               ...(m.events || []),
@@ -3256,18 +3370,112 @@ function App() {
     setNotifications(uniqueNotifs);
   }, [liveMatches]);
 
+  const transformSofascoreEvent = (event) => {
+    const homeTeamName = event.homeTeam?.name || '';
+    const awayTeamName = event.awayTeam?.name || '';
+    const homeShort = event.homeTeam?.shortName || event.homeTeam?.nameCode || homeTeamName.slice(0,3).toUpperCase();
+    const awayShort = event.awayTeam?.shortName || event.awayTeam?.nameCode || awayTeamName.slice(0,3).toUpperCase();
+
+    // Match team name against KOREAN_PLAYERS (try full name, short name, nameCode)
+    let koreanPlayer = null;
+    const tryHome = [homeTeamName, homeShort, event.homeTeam?.nameCode].filter(Boolean);
+    const tryAway = [awayTeamName, awayShort, event.awayTeam?.nameCode].filter(Boolean);
+    for (const v of tryHome) {
+      if (KOREAN_PLAYERS[v]) { koreanPlayer = { ...KOREAN_PLAYERS[v], team: homeShort }; break; }
+    }
+    if (!koreanPlayer) {
+      for (const v of tryAway) {
+        if (KOREAN_PLAYERS[v]) { koreanPlayer = { ...KOREAN_PLAYERS[v], team: awayShort }; break; }
+      }
+    }
+    if (!koreanPlayer) return null;
+
+    const statusType = event.status?.type;
+    const isFinished = statusType === 'finished';
+    const matchDate = new Date(event.startTimestamp * 1000);
+    const isTimedOut = statusType === 'inprogress' && (Date.now() - matchDate.getTime()) > 160 * 60 * 1000;
+    const isLive = statusType === 'inprogress' && !isTimedOut;
+    const status = isLive ? 'STATUS_IN_PROGRESS' : (isFinished || isTimedOut) ? 'STATUS_FINAL' : 'notstarted';
+
+    // Store period timing for real-time minute computation in UI
+    // Sofascore status.description = "1st Half" / "2nd Half" / "Halftime" etc.
+    const desc = (event.status?.description || '').toLowerCase();
+    const sfPeriod = event.time?.period ?? (
+      (desc.includes('2nd') || desc.includes('extra') || desc.includes('penalt')) ? 2 : 1
+    );
+    const periodStartTs = event.time?.currentPeriodStartTimestamp ?? event.time?.currentPeriodStart ?? null;
+
+    // Initial minute estimate
+    let minute = '';
+    if (isLive) {
+      if (periodStartTs) {
+        const minsInPeriod = Math.floor((Date.now()/1000 - periodStartTs) / 60);
+        minute = String(Math.max(0, minsInPeriod + (sfPeriod >= 2 ? 45 : 0)));
+      } else if (event.time?.played != null) {
+        minute = String(event.time.played + (sfPeriod >= 2 ? 45 : 0));
+      }
+    }
+
+    let timeDisplay = '';
+    if (isLive) timeDisplay = 'LIVE';
+    else if (!isFinished && !isTimedOut) {
+      const h = String(matchDate.getHours()).padStart(2,'0');
+      const m = String(matchDate.getMinutes()).padStart(2,'0');
+      timeDisplay = `${h}:${m}`;
+    }
+
+    const homeLogo = `https://api.sofascore.com/api/v1/team/${event.homeTeam?.id}/image`;
+    const awayLogo = `https://api.sofascore.com/api/v1/team/${event.awayTeam?.id}/image`;
+    const tournamentName = event.tournament?.name || '';
+    const TOURNEY_ABBR = {
+      'Premier League':'EPL','Bundesliga':'GER','Ligue 1':'L1','Serie A':'ITA',
+      'Scottish Premiership':'SPL','Süper Lig':'TUR','Eredivisie':'NED',
+      'Belgian Pro League':'BEL','MLS':'MLS','Superliga':'DEN','La Liga':'ESP',
+    };
+    const leagueAbbr = TOURNEY_ABBR[tournamentName] || tournamentName.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,4);
+
+    return {
+      id: String(event.id),
+      source: 'sofascore',
+      live: isLive,
+      minute,
+      sport: `⚽ ${leagueAbbr}`,
+      leagueKey: '',
+      home: { name: homeTeamName, code: homeShort, score: (isLive || isFinished || isTimedOut) ? (event.homeScore?.current ?? 0) : null, logo: homeLogo },
+      away: { name: awayTeamName, code: awayShort, score: (isLive || isFinished || isTimedOut) ? (event.awayScore?.current ?? 0) : null, logo: awayLogo },
+      koreanPlayer: { ...koreanPlayer, event: (isFinished || isTimedOut) ? '미출전' : '출전 예상', minutesPlayed: 0, matchGoals: 0, matchAssists: 0 },
+      competition: tournamentName,
+      competitionLogo: null,
+      venue: event.venue?.city?.name || '',
+      time: timeDisplay,
+      fullDate: matchDate.toISOString(),
+      krTime: formatKRTime(matchDate.toISOString()),
+      lineupConfirmed: isLive || isFinished,
+      events: [],
+      stats: null,
+      status,
+      isTimedOut,
+      periodStartTs,
+      sfPeriod,
+    };
+  };
+
   const transformESPNEvent = (event, sport, league = '') => {
     const comp = event.competitions[0];
     const home = comp.competitors.find(c => c.homeAway === 'home') || comp.competitors[0];
     const away = comp.competitors.find(c => c.homeAway === 'away') || comp.competitors[1];
     const status = event.status.type.name;
+    // If match started more than 160 min ago, ESPN API may lag — treat as not live
+    const matchStartMs = event.date ? new Date(event.date).getTime() : 0;
+    const isTimedOut = matchStartMs > 0 && (Date.now() - matchStartMs) > 160 * 60 * 1000;
     // Check multiple live status codes
-    const isLive = status === 'STATUS_IN_PROGRESS' ||
+    const isLive = !isTimedOut && (
+                   status === 'STATUS_IN_PROGRESS' ||
                    status === 'STATUS_FIRST_HALF' ||
                    status === 'STATUS_SECOND_HALF' ||
                    status === 'STATUS_HALFTIME' ||
                    status === 'STATUS_EXTRA_TIME' ||
-                   status === 'STATUS_OVERTIME';
+                   status === 'STATUS_OVERTIME');
 
     // Check for Korean players
     let koreanPlayer = null;
@@ -3432,7 +3640,7 @@ function App() {
       }
 
       // Set event text
-      const isFinished = status === 'STATUS_FINAL' || status === 'STATUS_FULL_TIME' || status === 'STATUS_END_PERIOD' || status === 'STATUS_FINAL_PEN';
+      const isFinished = isTimedOut || status === 'STATUS_FINAL' || status === 'STATUS_FULL_TIME' || status === 'STATUS_END_PERIOD' || status === 'STATUS_FINAL_PEN';
       if (isLive) {
         const isStarter = koreanAthlete?.starter === true;
         const hasMinutes = playerStats.minutesPlayed && playerStats.minutesPlayed > 0;
@@ -3494,6 +3702,7 @@ function App() {
       events,
       stats: null,
       status: status,
+      isTimedOut,
     };
   };
 
