@@ -204,6 +204,18 @@ const KOREAN_PLAYERS = {
   'Besiktas JK': { name: '오현규', nameEn: 'Oh Hyeon-gyu', number: 19, position: '공격수' },
   'Beşiktaş JK': { name: '오현규', nameEn: 'Oh Hyeon-gyu', number: 19, position: '공격수' },
   'BJK': { name: '오현규', nameEn: 'Oh Hyeon-gyu', number: 19, position: '공격수' },
+  // 백승호 — Birmingham City (Championship)
+  'Birmingham City': { name: '백승호', nameEn: 'Paik Seung-ho', number: 17, position: '미드필더' },
+  'Birmingham': { name: '백승호', nameEn: 'Paik Seung-ho', number: 17, position: '미드필더' },
+  'BIR': { name: '백승호', nameEn: 'Paik Seung-ho', number: 17, position: '미드필더' },
+  // 배준호 — Stoke City (Championship)
+  'Stoke City': { name: '배준호', nameEn: 'Bae Jun-ho', number: 17, position: '공격수' },
+  'Stoke': { name: '배준호', nameEn: 'Bae Jun-ho', number: 17, position: '공격수' },
+  'STK': { name: '배준호', nameEn: 'Bae Jun-ho', number: 17, position: '공격수' },
+  // 엄지성 — Swansea City (Championship)
+  'Swansea City': { name: '엄지성', nameEn: 'Eom Ji-sung', number: 7, position: '공격수' },
+  'Swansea': { name: '엄지성', nameEn: 'Eom Ji-sung', number: 7, position: '공격수' },
+  'SWA': { name: '엄지성', nameEn: 'Eom Ji-sung', number: 7, position: '공격수' },
 };
 
 // ─── HELPER: Dynamic date generator ──────────────────────────
@@ -257,7 +269,9 @@ const ALL_PLAYERS = [
   { id: 8,  name: '조규성',  nameEn: 'Cho Gue-sung',    number: 9,  sport: '축구',   team: 'Midtjylland',league: 'Superliga',  position: '공격수',   nation: '🇰🇷', goals: 6,  assists: 2,  matches: 28, rating: 6.9, age: 28, birth: '1998.01.25', height: '190cm', espnLeague: 'den.1',  espnId: 303464 },
   { id: 19, name: '오현규',  nameEn: 'Oh Hyeon-gyu',    number: 19, sport: '축구',   team: 'Besiktas',   league: 'Süper Lig',  position: '공격수',   nation: '🇰🇷', goals: 8,  assists: 3,  matches: 29, rating: 7.0, age: 24, birth: '2001.04.12', height: '181cm', espnLeague: 'tur.1',  espnId: 302434 },
   { id: 20, name: '양현준',  nameEn: 'Yang Hyun-jun',   number: 77, sport: '축구',   team: 'Celtic',     league: 'SPFL',       position: '공격수',   nation: '🇰🇷', goals: 7,  assists: 6,  matches: 30, rating: 7.1, age: 22, birth: '2002.06.25', height: '172cm', espnLeague: 'sco.1',  espnId: 350711 },
-  { id: 21, name: '백승호',  nameEn: 'Paik Seung-ho',   number: 22, sport: '축구',   team: 'Jeonbuk',    league: 'K League 1', position: '미드필더', nation: '🇰🇷', goals: 4,  assists: 5,  matches: 8,  rating: 7.0, age: 28, birth: '1997.03.17', height: '183cm', espnLeague: 'kor.1' },
+  { id: 21, name: '백승호',  nameEn: 'Paik Seung-ho',   number: 17, sport: '축구',   team: 'Birmingham', league: 'Championship', position: '미드필더', nation: '🇰🇷', goals: 3,  assists: 4,  matches: 28, rating: 7.0, age: 28, birth: '1997.03.17', height: '183cm', espnLeague: 'eng.2' },
+  { id: 22, name: '배준호',  nameEn: 'Bae Jun-ho',      number: 17, sport: '축구',   team: 'Stoke',      league: 'Championship', position: '공격수',   nation: '🇰🇷', goals: 6,  assists: 4,  matches: 30, rating: 7.2, age: 22, birth: '2003.07.21', height: '178cm', espnLeague: 'eng.2' },
+  { id: 23, name: '엄지성',  nameEn: 'Eom Ji-sung',     number: 7,  sport: '축구',   team: 'Swansea',    league: 'Championship', position: '공격수',   nation: '🇰🇷', goals: 5,  assists: 5,  matches: 32, rating: 7.1, age: 23, birth: '2002.05.30', height: '178cm', espnLeague: 'eng.2' },
 
   // 야구 - MLB (2026 시즌)
   { id: 9,  name: '김하성',  nameEn: 'Kim Ha-seong',    number: 4,  sport: '야구',   team: 'Pirates',    league: 'MLB',        position: '유격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 18, rating: 0,   age: 30, birth: '1995.10.17', height: '179cm', mlbId: 628406 },
@@ -383,7 +397,7 @@ function TeamBadge({ code, size=36, logo }) {
 
 function PlayerPhoto({ player, style={}, tint='var(--bg)' }) {
   const num = player.number;
-  const imageMap = { '손흥민': 'heungmin.png', '이강인': 'kangin.png', '김민재': 'minjae.png', '조규성': 'guesung.png', '황희찬': 'heechan.png', '황인범': 'inbeom.png', '김하성': 'haseong.png', '이정후': 'junghoo.png', '김혜성': 'hyeseong.png', '오현규': 'hyungyu.png', '양현준': 'hyunjun.png' };
+  const imageMap = { '손흥민': 'heungmin.png', '이강인': 'kangin.png', '김민재': 'minjae.png', '조규성': 'guesung.png', '황희찬': 'heechan.png', '황인범': 'inbeom.png', '김하성': 'haseong.png', '이정후': 'junghoo.png', '김혜성': 'hyeseong.png', '오현규': 'hyungyu.png', '양현준': 'hyunjun.png', '백승호': 'landscape/seungho.png', '배준호': 'landscape/junho.jpeg', '엄지성': 'landscape/jisung.jpeg' };
   const imagePath = imageMap[player.name] ? `image/${imageMap[player.name]}` : null;
 
   return (
@@ -1316,6 +1330,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
     '조규성': 'guesung.jpeg', '황희찬': 'heechan.jpeg', '황인범': 'inbeom.png',
     '김하성': 'haseong.jpeg', '이정후': 'junghoo.jpeg', '김혜성': 'hyesung.jpeg',
     '오현규': 'hyeongyu.jpeg', '양현준': 'hyunjun.jpeg',
+    '백승호': 'seungho.png', '배준호': 'junho.jpeg', '엄지성': 'jisung.jpeg',
   };
   React.useEffect(() => {
     const playerName = highlightMatch?.koreanPlayer?.name;
@@ -2880,6 +2895,9 @@ const NEWS_PLAYERS = [
   { label:'조규성', query:'조규성' },
   { label:'양현준', query:'양현준' },
   { label:'오현규', query:'오현규' },
+  { label:'백승호', query:'백승호' },
+  { label:'배준호', query:'배준호' },
+  { label:'엄지성', query:'엄지성' },
 ];
 
 const newsImageCache = {};
@@ -2891,6 +2909,9 @@ const NEWS_PLAYER_IMG = {
   '김하성': 'image/haseong.png',  '이정후': 'image/junghoo.png',
   '김혜성': 'image/hyeseong.png', '오현규': 'image/hyungyu.png',
   '양현준': 'image/hyunjun.png',
+  '백승호': 'image/landscape/seungho.png',
+  '배준호': 'image/landscape/junho.jpeg',
+  '엄지성': 'image/landscape/jisung.jpeg',
 };
 
 function detectPlayerName(text) {
