@@ -1846,6 +1846,24 @@ function LiveDetailScreen({ match, onBack }) {
                     </span>
                   </div>
                 )}
+                {(() => {
+                  const kp = match.koreanPlayer || {};
+                  const eventsGoals = (match.events||[]).filter(e=>e.type==='goal'&&e.player===kp.name).length;
+                  const eventsAssists = (match.events||[]).filter(e=>e.type==='assist'&&e.player===kp.name).length;
+                  const goals = (kp.matchGoals != null && kp.matchGoals > 0) ? kp.matchGoals : eventsGoals;
+                  const assists = (kp.matchAssists != null && kp.matchAssists > 0) ? kp.matchAssists : eventsAssists;
+                  const pills = [];
+                  if (goals > 0) pills.push(`⚽ ${goals}골`);
+                  if (assists > 0) pills.push(`🅰️ ${assists}도움`);
+                  if (kp.sfRating) pills.push(`★ ${kp.sfRating}`);
+                  return pills.map((p, i) => (
+                    <span key={i} style={{
+                      fontSize:10, fontWeight:700, padding:'3px 7px', borderRadius:6,
+                      background:'rgba(245,196,0,0.15)', color:'var(--acc)',
+                      border:'0.5px solid rgba(245,196,0,0.3)', whiteSpace:'nowrap', lineHeight:1, flexShrink:0,
+                    }}>{p}</span>
+                  ));
+                })()}
               </div>
               <div style={{ fontSize:11, color:'var(--text3)', fontWeight:500, marginTop:1 }}>{match.koreanPlayer.team}</div>
             </div>
