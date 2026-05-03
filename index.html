@@ -779,8 +779,6 @@ function TodayMatchCard({ m, onMatch, tweaks }) {
             // Build stat pills
             const statPills = [];
             if (!isMLB && didPlay) {
-              if (kp.minutesPlayed >= 90) statPills.push({ label:'풀타임', accent:false });
-              else if (kp.minutesPlayed > 0) statPills.push({ label:`${kp.minutesPlayed}분`, accent:false });
               if (matchGoals > 0) statPills.push({ label:`⚽ ${matchGoals}골`, accent:true });
               if (matchAssists > 0) statPills.push({ label:`🅰️ ${matchAssists}도움`, accent:true });
               if (kp.sfRating) statPills.push({ label:`★ ${kp.sfRating}`, accent:false, rating:true });
