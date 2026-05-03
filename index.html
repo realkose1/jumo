@@ -3042,7 +3042,7 @@ function App() {
         const today = new Date();
 
         // ── Sofascore: fetch soccer for past 2 days + next 3 days ──────────
-        const sfProxy = path => `/api/sofascore?path=${encodeURIComponent(path)}`;
+        const SF_BASE = 'https://api.sofascore.com/api/v1';
         const sfDates = [-2,-1,0,1,2,3].map(offset => {
           const d = new Date(today); d.setDate(today.getDate() + offset);
           return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -3050,8 +3050,8 @@ function App() {
 
         const sfDateResults = await Promise.allSettled(
           sfDates.map(date =>
-            fetch(sfProxy(`/sport/football/scheduled-events/${date}`))
-              .then(r => r.json()).catch(() => null)
+            fetch(`${SF_BASE}/sport/football/scheduled-events/${date}`)
+              .then(r => r.ok ? r.json() : null).catch(() => null)
           )
         );
 
@@ -3107,8 +3107,8 @@ function App() {
           const sfDetails = await Promise.allSettled(
             sfKorean.map(m =>
               Promise.all([
-                fetch(sfProxy(`/event/${m.id}/lineups`)).then(r => r.json()).catch(() => null),
-                fetch(sfProxy(`/event/${m.id}/incidents`)).then(r => r.json()).catch(() => null),
+                fetch(`${SF_BASE}/event/${m.id}/lineups`).then(r => r.ok ? r.json() : null).catch(() => null),
+                fetch(`${SF_BASE}/event/${m.id}/incidents`).then(r => r.ok ? r.json() : null).catch(() => null),
               ]).then(([lineups, incidents]) => ({ id: m.id, lineups, incidents, isLive: m.live }))
             )
           );
