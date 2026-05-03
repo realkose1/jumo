@@ -1258,17 +1258,27 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
   const isFinishedHighlight = highlightData?.priority === 4;
   const finishedHeadline = isFinishedHighlight ? buildFinishedHeadline(highlightMatch) : null;
 
-  // Fetch highlight background: try news image first, fall back to image/{name}.png or .jpeg
+  // landscape image map: Korean name → filename in image/landscape/
+  const LANDSCAPE_MAP = {
+    '손흥민': 'heungmin.jpg', '이강인': 'kangin.png', '김민재': 'minjae.jpeg',
+    '조규성': 'guesung.jpeg', '황희찬': 'heechan.jpeg', '황인범': 'inbeom.png',
+    '김하성': 'haseong.jpeg', '이정후': 'junghoo.jpeg', '김혜성': 'hyesung.jpeg',
+    '오현규': 'hyeongyu.jpeg', '양현준': 'hyunjun.jpeg',
+  };
   const tryImgLoad = (src) => new Promise(resolve => {
     const img = new Image(); img.onload = () => resolve(src); img.onerror = () => resolve(null); img.src = src;
   });
   React.useEffect(() => {
     const playerName = highlightMatch?.koreanPlayer?.name;
     if (!playerName) { setHlBgImg(null); return; }
+    // Set landscape image immediately as baseline
+    const landscapeFile = LANDSCAPE_MAP[playerName];
+    const landscapeSrc = landscapeFile ? `image/landscape/${landscapeFile}` : null;
+    if (landscapeSrc) setHlBgImg(landscapeSrc);
+    else setHlBgImg(null);
+    // Then try to upgrade to a news image in the background
     let cancelled = false;
-    setHlBgImg(null);
     (async () => {
-      // 1. Try news image
       try {
         const data = await fetch(`/api/naver-news?query=${encodeURIComponent(playerName)}&display=6&sort=date`).then(r => r.ok ? r.json() : null);
         for (const item of (data?.items || [])) {
@@ -1282,11 +1292,6 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
           } catch(e) {}
         }
       } catch(e) {}
-      // 2. Fall back to image/{name}.png or .jpeg
-      if (!cancelled) {
-        const local = await tryImgLoad(`image/${playerName}.png`) || await tryImgLoad(`image/${playerName}.jpeg`);
-        if (!cancelled) setHlBgImg(local);
-      }
     })();
     return () => { cancelled = true; };
   }, [highlightMatch?.id, highlightMatch?.koreanPlayer?.name]);
