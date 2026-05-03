@@ -1,7 +1,7 @@
 const https = require('https');
 
-const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID;
-const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET;
+const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID || 'egGLPNSn105d5k_4NNZP';
+const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET || 'cu5uJKq7tS';
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');

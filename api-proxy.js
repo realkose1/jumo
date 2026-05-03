@@ -55,6 +55,31 @@ const server = http.createServer(async (req, res) => {
 
   const reqUrl = new URL(req.url, `http://localhost:${PORT}`);
 
+  // Sofascore proxy: /sofascore?path=/sport/football/scheduled-events/2026-05-03
+  if (reqUrl.pathname === '/sofascore') {
+    const sfPath = reqUrl.searchParams.get('path');
+    if (!sfPath) { res.writeHead(400); res.end('{}'); return; }
+    const sfReq = https.request({
+      hostname: 'api.sofascore.com',
+      path: `/api/v1${sfPath}`,
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Referer': 'https://www.sofascore.com/',
+        'Origin': 'https://www.sofascore.com',
+        'Accept': 'application/json',
+      },
+    }, sfRes => {
+      let body = '';
+      sfRes.on('data', c => body += c);
+      sfRes.on('end', () => { res.setHeader('Content-Type', 'application/json'); res.writeHead(sfRes.statusCode); res.end(body); });
+    });
+    sfReq.on('error', () => { res.writeHead(502); res.end('{}'); });
+    sfReq.setTimeout(10000, () => { sfReq.destroy(); res.writeHead(502); res.end('{}'); });
+    sfReq.end();
+    return;
+  }
+
   // Naver News Search API proxy: /naver-news?query=손흥민
   if (reqUrl.pathname === '/naver-news') {
     const query = reqUrl.searchParams.get('query') || '';
