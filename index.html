@@ -3128,8 +3128,7 @@ function App() {
               .then(r => r.ok ? r.json() : null).catch(() => null);
             events = data?.events || [];
             // Save to Supabase (upsert)
-            SB.from('sf_cache').upsert({ date, events, updated_at: new Date().toISOString() })
-              .then(({ error }) => { if (error) console.warn('[SB upsert error]', date, error.message); });
+            SB.from('sf_cache').upsert({ date, events, updated_at: new Date().toISOString() }).then(() => {});
           }
 
           events.forEach(e => {
