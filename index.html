@@ -3023,14 +3023,7 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
 
 // ─── SCREEN: NOTIFICATIONS ───────────────────────────────────
 function NotifScreen({ notifications }) {
-  // Use real-time notifications from API data
-  const notifs = notifications.length > 0 ? notifications : [
-    // Fallback example notifications if no real data
-    { id:1, time:'방금', icon:'⚽', title:'손흥민 골!', body:'Tottenham 1–1 Man City · 71\'', type:'goal', live:true },
-    { id:2, time:'38분 전', icon:'🅰️', title:'이강인 어시스트', body:'PSG 2–0 Lyon · 38\'', type:'assist', live:true },
-    { id:3, time:'1시간 전', icon:'🔄', title:'황희찬 교체 출전', body:'Wolves 0–1 Arsenal · 62\'', type:'sub_in', live:true },
-    { id:4, time:'2시간 전', icon:'📋', title:'김민재 선발 출전 확정', body:'Bayern vs Wolfsburg · 오늘 21:30', type:'lineup', live:false },
-  ];
+  const notifs = notifications;
   return (
     <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
       {notifs.length === 0 ? (
@@ -3671,6 +3664,16 @@ function App() {
   const [screen, setScreen] = React.useState('main');
   const [selectedMatch, setSelectedMatch] = React.useState(null);
   const [selectedPlayer, setSelectedPlayer] = React.useState(null);
+  // Device ID for cross-refresh persistence
+  const deviceId = React.useMemo(() => {
+    let id = localStorage.getItem('jumo_device_id');
+    if (!id) {
+      id = (crypto.randomUUID ? crypto.randomUUID() : 'dev-' + Math.random().toString(36).slice(2) + Date.now().toString(36));
+      localStorage.setItem('jumo_device_id', id);
+    }
+    return id;
+  }, []);
+
   const [followed, setFollowed] = React.useState(() => {
     try {
       const v = localStorage.getItem('jumo_followed');
@@ -3678,10 +3681,27 @@ function App() {
     } catch {}
     return new Set([1,2,3,6,7,8,9,17,18,15]);
   });
+
+  // Hydrate from Supabase on mount (overrides localStorage if newer)
+  React.useEffect(() => {
+    let cancelled = false;
+    SB.from('user_follows').select('player_ids').eq('device_id', deviceId).maybeSingle()
+      .then(({ data }) => {
+        if (cancelled || !data?.player_ids) return;
+        const ids = Array.isArray(data.player_ids) ? data.player_ids : [];
+        setFollowed(new Set(ids));
+        localStorage.setItem('jumo_followed', JSON.stringify(ids));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [deviceId]);
+
   const toggleFollow = (id) => setFollowed(prev => {
     const n = new Set(prev);
     n.has(id) ? n.delete(id) : n.add(id);
-    try { localStorage.setItem('jumo_followed', JSON.stringify([...n])); } catch {}
+    const ids = [...n];
+    try { localStorage.setItem('jumo_followed', JSON.stringify(ids)); } catch {}
+    SB.from('user_follows').upsert({ device_id: deviceId, player_ids: ids, updated_at: new Date().toISOString() }).then(() => {});
     return n;
   });
   const [darkMode, setDarkMode] = React.useState(true);
