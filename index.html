@@ -783,7 +783,8 @@ function TodayMatchCard({ m, onMatch, tweaks }) {
               else if (kp.minutesPlayed > 0) statPills.push({ label:`${kp.minutesPlayed}분`, accent:false });
               if (matchGoals > 0) statPills.push({ label:`⚽ ${matchGoals}골`, accent:true });
               if (matchAssists > 0) statPills.push({ label:`🅰️ ${matchAssists}도움`, accent:true });
-              if (kp.rating) statPills.push({ label:`★ ${kp.rating}`, accent:false });
+              if (kp.sfRating) statPills.push({ label:`★ ${kp.sfRating}`, accent:false, rating:true });
+              else if (kp.rating) statPills.push({ label:`★ ${kp.rating}`, accent:false });
             } else if (isMLB && didPlay) {
               if (kp.hits !== undefined) statPills.push({ label:`${kp.hits}안타`, accent: kp.hits > 0 });
               if (kp.homeRuns > 0) statPills.push({ label:`${kp.homeRuns}홈런`, accent:true });
@@ -802,9 +803,9 @@ function TodayMatchCard({ m, onMatch, tweaks }) {
                           <span key={i} style={{
                             fontSize:11, fontWeight:700, padding:'4px 9px', borderRadius:8,
                             display:'inline-flex', alignItems:'center', lineHeight:1,
-                            background: s.accent ? 'rgba(245,196,0,0.15)' : 'var(--btn-bg)',
-                            color: s.accent ? 'var(--acc)' : 'var(--text2)',
-                            border: s.accent ? '0.5px solid rgba(245,196,0,0.3)' : '0.5px solid var(--border)',
+                            background: s.rating ? 'rgba(99,179,237,0.15)' : s.accent ? 'rgba(245,196,0,0.15)' : 'var(--btn-bg)',
+                            color: s.rating ? '#63b3ed' : s.accent ? 'var(--acc)' : 'var(--text2)',
+                            border: s.rating ? '0.5px solid rgba(99,179,237,0.35)' : s.accent ? '0.5px solid rgba(245,196,0,0.3)' : '0.5px solid var(--border)',
                           }}>{s.label}</span>
                         ))}
                       </div>
@@ -3330,13 +3331,15 @@ function App() {
             const nameEn = m.koreanPlayer.nameEn;
 
             // Find player in lineup (substitute=false → starter)
-            let started = false, foundInRoster = false;
+            let started = false, foundInRoster = false, sfRating = null;
             const linePlayers = [...(lineups?.home?.players || []), ...(lineups?.away?.players || [])];
             for (const entry of linePlayers) {
               const n = entry.player?.name || '';
               if (nameMatch(n, nameEn)) {
                 foundInRoster = true;
                 started = entry.substitute === false;
+                const r = entry.statistics?.rating;
+                if (r != null) sfRating = parseFloat(r).toFixed(1);
               }
             }
 
@@ -3382,7 +3385,7 @@ function App() {
             koreanMatches[idx] = {
               ...m,
               events: newEvents,
-              koreanPlayer: { ...m.koreanPlayer, event: newEvent, minutesPlayed, matchGoals, matchAssists },
+              koreanPlayer: { ...m.koreanPlayer, event: newEvent, minutesPlayed, matchGoals, matchAssists, sfRating },
             };
           });
         }
