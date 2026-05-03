@@ -1128,7 +1128,9 @@ function TodayMatchesCarousel({ matches, now, startOfToday, endOfToday, twelveHo
 }
 
 // ─── SCREEN: HOME V2 — Editorial ─────────────────────────────
-function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoading = false }) {
+function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoading = false, scrollTopKey = 0 }) {
+  const homeScrollRef = React.useRef(null);
+  React.useEffect(() => { if (scrollTopKey > 0) homeScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }, [scrollTopKey]);
   // State for real-time countdown updates
   const [currentTime, setCurrentTime] = React.useState(new Date());
   const [hlBgImg, setHlBgImg] = React.useState(null);
@@ -1357,7 +1359,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
   }
 
   return (
-    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+    <div ref={homeScrollRef} style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
 
       {/* ── HIGHLIGHT CARD (finished + live/upcoming share same layout) ── */}
       {isFinishedHighlight ? (() => {
@@ -2176,7 +2178,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
 }
 
 // ─── SCREEN: SCHEDULE ─────────────────────────────────────────
-function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRefresh, isActive = false }) {
+function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRefresh, isActive = false, scrollTopKey = 0 }) {
   const days = ['일','월','화','수','목','금','토'];
   const now = new Date();
 
@@ -2228,6 +2230,9 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
     const offset = cell.offsetLeft - (strip.clientWidth / 2) + (cell.offsetWidth / 2);
     strip.scrollLeft = offset;
   }, [isActive]);
+
+  // Scroll to top when tab tapped
+  React.useEffect(() => { if (scrollTopKey > 0) scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }, [scrollTopKey]);
 
   // Filter matches for selected date and within ±7 days range
   const sevenDaysAgo = new Date(now);
@@ -2396,7 +2401,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
 }
 
 // ─── SCREEN: PLAYERS LIST ────────────────────────────────────
-function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading = false, onRefresh }) {
+function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading = false, onRefresh, scrollTopKey = 0 }) {
   const sports = ['전체', '축구', '야구', '배드민턴'];
   const [filter, setFilter] = React.useState('전체');
   const followedPlayers = ALL_PLAYERS.filter(p => followed.has(p.id));
@@ -2408,6 +2413,7 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
   const touchStartY = React.useRef(0);
   const scrollRef = React.useRef(null);
   const PULL_THRESHOLD = 64;
+  React.useEffect(() => { if (scrollTopKey > 0) scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }, [scrollTopKey]);
 
   const handleTouchStart = (e) => { touchStartY.current = e.touches[0].clientY; };
   const handleTouchMove = (e) => {
@@ -2632,7 +2638,7 @@ function stripHtml(str) {
   return str ? str.replace(/<[^>]*>/g, '').replace(/&quot;/g,'"').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>') : '';
 }
 
-function NewsScreen({ sportFeeds }) {
+function NewsScreen({ sportFeeds, scrollTopKey = 0 }) {
   const NEWS_CATEGORIES = ['전체', '해외축구', 'MLB', '기타'];
   const [category, setCategory] = React.useState('전체');
   const [articles, setArticles] = React.useState([]);
@@ -2645,6 +2651,7 @@ function NewsScreen({ sportFeeds }) {
   const touchStartY = React.useRef(0);
   const scrollRef = React.useRef(null);
   const PULL_THRESHOLD = 64;
+  React.useEffect(() => { if (scrollTopKey > 0) scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }, [scrollTopKey]);
 
   const handleTouchStart = (e) => { touchStartY.current = e.touches[0].clientY; };
   const handleTouchMove = (e) => {
@@ -3955,7 +3962,8 @@ function App() {
   const goNotif = () => setScreen('notif');
   const goBack = () => setScreen('main');
 
-  const handleTab = (t) => { setTab(t); setScreen('main'); localStorage.setItem('jumo_tab', t); };
+  const [tabScrollKeys, setTabScrollKeys] = React.useState({ home:0, schedule:0, players:0, news:0, more:0 });
+  const handleTab = (t) => { setTab(t); setScreen('main'); localStorage.setItem('jumo_tab', t); setTabScrollKeys(k => ({ ...k, [t]: k[t] + 1 })); };
 
   const HomeComponent = [HomeV1, HomeV2, HomeV3][tweaks.homeVariant] || HomeV1;
 
@@ -3967,10 +3975,10 @@ function App() {
         <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'var(--bg)', paddingBottom:'70px' }}>
           {screen === 'main' && (
             <>
-              <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} tweaks={tweaks} liveApiMatches={liveMatches} isLoading={isInitialLoad && apiLoading}/></div>
-              <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} liveApiMatches={liveMatches} isLoading={apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'}/></div>
-              <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} followed={followed} statsCache={playerStatsCache} isLoading={apiLoading} onRefresh={fetchLiveMatches}/></div>
-              <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds}/></div>
+              <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} tweaks={tweaks} liveApiMatches={liveMatches} isLoading={isInitialLoad && apiLoading} scrollTopKey={tabScrollKeys.home}/></div>
+              <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} liveApiMatches={liveMatches} isLoading={apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
+              <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} followed={followed} statsCache={playerStatsCache} isLoading={apiLoading} onRefresh={fetchLiveMatches} scrollTopKey={tabScrollKeys.players}/></div>
+              <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news}/></div>
               <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen darkMode={darkMode} onToggleDark={toggleDark} sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed}/></div>
             </>
           )}
