@@ -218,6 +218,37 @@ const KOREAN_PLAYERS = {
   'SWA': { name: '엄지성', nameEn: 'Eom Ji-sung', number: 7, position: '공격수' },
 };
 
+// ─── HELPER: Start probability based on last 5 finished matches ─
+function computeStartProbability(playerName, allMatches) {
+  const FINAL = ['STATUS_FINAL','STATUS_FULL_TIME','final','STATUS_END_PERIOD','STATUS_FINAL_PEN'];
+  const past = (allMatches || [])
+    .filter(m => {
+      if (!FINAL.includes(m.status)) return false;
+      const allKp = m.koreanPlayers || [m.koreanPlayer];
+      return allKp.some(kp => kp?.name === playerName);
+    })
+    .sort((a, b) => new Date(b.fullDate||0) - new Date(a.fullDate||0))
+    .slice(0, 5);
+  if (past.length === 0) return null;
+  let starts = 0;
+  for (const m of past) {
+    const allKp = m.koreanPlayers || [m.koreanPlayer];
+    const kp = allKp.find(p => p?.name === playerName);
+    if (!kp) continue;
+    if (kp.event === '풀타임' || kp.event === '교체 아웃') starts++;
+    else if ((kp.minutesPlayed||0) >= 60) starts++;
+  }
+  return Math.round((starts / past.length) * 100);
+}
+function formatExpectedEvent(kp, allMatches) {
+  if (!kp) return '';
+  if (kp.event === '출전 예상') {
+    const p = computeStartProbability(kp.name, allMatches);
+    if (p != null) return `출전 예상 ${p}%`;
+  }
+  return kp.event || '';
+}
+
 // ─── HELPER: Dynamic date generator ──────────────────────────
 function getRelativeDate(hoursFromNow) {
   const date = new Date();
@@ -732,7 +763,7 @@ function SkeletonNewsItem() {
 
 // ─── LIVE CAROUSEL CARD ──────────────────────────────────────
 // ─── COMPONENT: Today Match Card ─────────────────────────────
-function TodayMatchCard({ m, onMatch, tweaks }) {
+function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
   const player = ALL_PLAYERS.find(p => p.name === m.koreanPlayer?.name);
   const isLive = m.live || m.time === 'LIVE';
   const isFinished = m.status === 'STATUS_FINAL' ||
@@ -837,7 +868,7 @@ function TodayMatchCard({ m, onMatch, tweaks }) {
               borderRadius:6, padding:'5px 8px', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center'
             }}>
               <span style={{ fontSize:10, fontWeight:600, color: isLive ? 'var(--acc)' : 'var(--text2)', whiteSpace:'nowrap', lineHeight:1 }}>
-                {m.koreanPlayer.event}
+                {formatExpectedEvent(m.koreanPlayer, allMatches)}
               </span>
             </div>
           )}
@@ -1206,7 +1237,7 @@ function TodayMatchesCarousel({ matches, now, startOfToday, endOfToday, twelveHo
     <div ref={scrollRef} style={{ display:'flex', gap:12, paddingLeft:16, paddingRight:16, paddingTop:8, paddingBottom:20, overflowX:'auto', scrollSnapType:'x mandatory', scrollPaddingLeft:16 }} className="scrollbar-hide">
       {todayMatches.map(m => (
         <div key={m.id} style={{ scrollSnapAlign:'center', flexShrink:0 }}>
-          <TodayMatchCard m={m} onMatch={onMatch} tweaks={tweaks}/>
+          <TodayMatchCard m={m} onMatch={onMatch} tweaks={tweaks} allMatches={matches}/>
         </div>
       ))}
     </div>
@@ -1775,7 +1806,7 @@ function HomeV3({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [] }) {
 }
 
 // ─── SCREEN: LIVE MATCH DETAIL ────────────────────────────────
-function LiveDetailScreen({ match, onBack }) {
+function LiveDetailScreen({ match, onBack, liveApiMatches = [] }) {
   const [tab, setTab] = React.useState('events');
   const [countdown, setCountdown] = React.useState('');
   const [reactions, setReactions] = React.useState({});
@@ -1970,7 +2001,7 @@ function LiveDetailScreen({ match, onBack }) {
                       <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>{kp.name} <span style={{ ...NUM, color:'var(--text4)', fontWeight:400 }}>#{kp.number}</span></div>
                       {kp.event && (
                         <div style={{ background: isLive ? 'rgba(230,48,48,0.1)' : 'var(--btn-bg)', borderRadius:6, padding:'3px 7px', flexShrink:0, display:'inline-flex', alignItems:'center', justifyContent:'center' }}>
-                          <span style={{ fontSize:10, fontWeight:600, color: isLive ? 'var(--acc)' : 'var(--text2)', whiteSpace:'nowrap', lineHeight:1 }}>{kp.event}</span>
+                          <span style={{ fontSize:10, fontWeight:600, color: isLive ? 'var(--acc)' : 'var(--text2)', whiteSpace:'nowrap', lineHeight:1 }}>{formatExpectedEvent(kp, liveApiMatches)}</span>
                         </div>
                       )}
                       {pills.map((p, i) => (
@@ -2868,7 +2899,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
                 if (goals > 0) labelParts.push(`${k.name} ${goals}골`);
                 if (assists > 0) labelParts.push(`${k.name} ${assists}도움`);
               });
-              if (labelParts.length === 0 && kp.event) labelParts.push(kp.event);
+              if (labelParts.length === 0 && kp.event) labelParts.push(formatExpectedEvent(kp, liveApiMatches));
             }
 
             const homeHasKorean = koreans.some(k => k.team === m.home.code);
@@ -4663,7 +4694,7 @@ function App() {
             </>
           )}
           {screen === 'match' && selectedMatch && (
-            <LiveDetailScreen match={selectedMatch} onBack={goBack}/>
+            <LiveDetailScreen match={selectedMatch} onBack={goBack} liveApiMatches={liveMatches}/>
           )}
           {screen === 'player' && selectedPlayer && (
             <PlayerScreen player={selectedPlayer} onBack={goBack} onMatch={goMatch} liveApiMatches={liveMatches} statsCache={playerStatsCache}/>
