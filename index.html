@@ -2888,26 +2888,24 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
     '조규성':'https://a.espncdn.com/i/teamlogos/soccer/500/304.png',
     '오현규':'https://a.espncdn.com/i/teamlogos/soccer/500/113.png',
     '양현준':'https://a.espncdn.com/i/teamlogos/soccer/500/256.png',
-    '백승호':'https://api.sofascore.com/api/v1/team/9/image',
-    '배준호':'https://api.sofascore.com/api/v1/team/29/image',
-    '엄지성':'https://api.sofascore.com/api/v1/team/74/image',
+    '백승호':'https://a.espncdn.com/i/teamlogos/soccer/500/337.png',
+    '배준호':'https://a.espncdn.com/i/teamlogos/soccer/500/336.png',
+    '엄지성':'https://a.espncdn.com/i/teamlogos/soccer/500/318.png',
     '김하성':'https://a.espncdn.com/i/teamlogos/mlb/500/pit.png',
     '이정후':'https://a.espncdn.com/i/teamlogos/mlb/500/sf.png',
     '김혜성':'https://a.espncdn.com/i/teamlogos/mlb/500/lad.png',
   };
-  // Build a map: player name → team logo URL (from any cached match, fallback to static)
+  // Build a map: player name → team logo URL
+  // Prefer the static ESPN fallback (always works in browsers); only use
+  // live match logos for players who don't have a fallback entry.
   const teamLogoByPlayer = React.useMemo(() => {
-    const map = {};
+    const map = { ...TEAM_LOGO_FALLBACK };
     for (const m of liveApiMatches) {
       const kp = m.koreanPlayer;
       if (!kp || map[kp.name]) continue;
       const koreanIsHome = kp.team === m.home.code;
       const logo = koreanIsHome ? m.home.logo : m.away.logo;
       if (logo) map[kp.name] = logo;
-    }
-    // Apply fallback for any missing
-    for (const name of Object.keys(TEAM_LOGO_FALLBACK)) {
-      if (!map[name]) map[name] = TEAM_LOGO_FALLBACK[name];
     }
     return map;
   }, [liveApiMatches]);
