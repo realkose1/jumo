@@ -915,7 +915,7 @@ function TodayMatchCard({ m, onMatch, tweaks }) {
 }
 
 function LiveCarouselCard({ m, onMatch, tweaks }) {
-  const player = PLAYERS.find(p => p.name === m.koreanPlayer.name);
+  const player = ALL_PLAYERS.find(p => p.name === m.koreanPlayer.name);
   const lastEvent = m.events[m.events.length - 1];
   const calcLiveMin = () => {
     if (!m.periodStartTs) return m.minute || '';
@@ -1661,7 +1661,7 @@ function HomeV3({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [] }) {
 function LiveDetailScreen({ match, onBack }) {
   const [tab, setTab] = React.useState('events');
   const [countdown, setCountdown] = React.useState('');
-  const player = PLAYERS.find(p => p.name === match.koreanPlayer.name);
+  const player = ALL_PLAYERS.find(p => p.name === match.koreanPlayer.name);
   const isLive = match.live;
   const isFinished = match.status === 'STATUS_FINAL' || match.status === 'STATUS_FULL_TIME' || match.status === 'final' || match.status === 'STATUS_END_PERIOD' || match.status === 'STATUS_FINAL_PEN';
   const typeColor = { goal:'var(--acc)', yellow:'#f5c518', red:'#e03030', assist:'var(--text2)' };
