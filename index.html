@@ -187,14 +187,14 @@ const KOREAN_PLAYERS = {
   'Feyenoord': { name: '황인범', nameEn: 'Hwang In-beom', number: 5, position: '미드필더' },
   'Feyenoord Rotterdam': { name: '황인범', nameEn: 'Hwang In-beom', number: 5, position: '미드필더' },
   // 김하성 — Pittsburgh Pirates (MLB)
-  'Pittsburgh Pirates': { name: '김하성', nameEn: 'Kim Ha-seong', number: 4, position: '유격수' },
-  'Pirates': { name: '김하성', nameEn: 'Kim Ha-seong', number: 4, position: '유격수' },
+  'Pittsburgh Pirates': { name: '김하성', nameEn: 'Ha-Seong Kim', number: 4, position: '유격수' },
+  'Pirates': { name: '김하성', nameEn: 'Ha-Seong Kim', number: 4, position: '유격수' },
   // 이정후 — San Francisco Giants (MLB)
-  'San Francisco Giants': { name: '이정후', nameEn: 'Lee Jung-hoo', number: 51, position: '중견수' },
-  'Giants': { name: '이정후', nameEn: 'Lee Jung-hoo', number: 51, position: '중견수' },
+  'San Francisco Giants': { name: '이정후', nameEn: 'Jung Hoo Lee', number: 51, position: '중견수' },
+  'Giants': { name: '이정후', nameEn: 'Jung Hoo Lee', number: 51, position: '중견수' },
   // 김혜성 — LA Dodgers (MLB)
-  'Los Angeles Dodgers': { name: '김혜성', nameEn: 'Kim Hye-seong', number: 25, position: '유격수' },
-  'Dodgers': { name: '김혜성', nameEn: 'Kim Hye-seong', number: 25, position: '유격수' },
+  'Los Angeles Dodgers': { name: '김혜성', nameEn: 'Hyeseong Kim', number: 25, position: '유격수' },
+  'Dodgers': { name: '김혜성', nameEn: 'Hyeseong Kim', number: 25, position: '유격수' },
   // 양현준 — Celtic (Scottish Premiership)
   'Celtic': { name: '양현준', nameEn: 'Yang Hyun-jun', number: 77, position: '공격수' },
   'Celtic FC': { name: '양현준', nameEn: 'Yang Hyun-jun', number: 77, position: '공격수' },
@@ -2201,12 +2201,17 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [] }) {
               return s;
             };
             const homeTeamId = mlbSummary?.boxscore?.teams?.find(t => t.homeAway === 'home')?.team?.id;
-            const koreans = match.koreanPlayers || [match.koreanPlayer].filter(Boolean);
-            const koreanLastNames = koreans.map(kp => {
-              const parts = (kp.nameEn || '').split(/[\s-]+/).filter(Boolean);
-              return parts[parts.length - 1] || '';
-            }).filter(Boolean);
-            const isKoreanPlay = (text) => koreanLastNames.some(ln => text && text.includes(ln));
+            const koreans = (match.koreanPlayers || [match.koreanPlayer]).filter(Boolean);
+            // Build name tokens to match against play text. Also try ALL_PLAYERS canonical nameEn.
+            const koreanTokens = [];
+            koreans.forEach(kp => {
+              const canonical = ALL_PLAYERS.find(p => p.name === kp.name)?.nameEn || kp.nameEn || '';
+              canonical.split(/[\s-]+/).filter(t => t.length >= 2).forEach(t => koreanTokens.push(t));
+            });
+            // De-dupe and filter very common words
+            const COMMON = new Set(['Lee','Kim']); // intentionally keep — Kim/Lee are valid for our players
+            const uniqueTokens = [...new Set(koreanTokens)];
+            const isKoreanPlay = (text) => uniqueTokens.some(t => text && text.includes(t));
             // Newest first (reverse)
             return [...plays].reverse().map((p, i) => {
               const isHome = String(p.team?.id) === String(homeTeamId);
@@ -2222,7 +2227,10 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [] }) {
                   <div style={{ ...NUM, width:54, textAlign:'center', fontSize:11, fontWeight:700, color: koreanInvolved ? 'var(--acc)' : 'var(--text3)', flexShrink:0, paddingTop:2 }}>{inningLabel}</div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3 }}>
-                      <span style={{ fontSize:9, fontWeight:700, color:'var(--text5)', background:'var(--border)', padding:'1px 5px', borderRadius:4 }}>{isHome ? match.home.code : match.away.code}</span>
+                      {(isHome ? match.home.logo : match.away.logo)
+                        ? <img src={isHome ? match.home.logo : match.away.logo} alt="" style={{ width:14, height:14, objectFit:'contain', flexShrink:0 }}/>
+                        : <span style={{ fontSize:9, fontWeight:700, color:'var(--text5)', background:'var(--border)', padding:'1px 5px', borderRadius:4 }}>{isHome ? match.home.code : match.away.code}</span>
+                      }
                       <span style={{ ...NUM, fontSize:13, fontWeight:800, color:'var(--text)' }}>{p.awayScore}–{p.homeScore}</span>
                     </div>
                     <div style={{ fontSize:12, color:'var(--text2)', lineHeight:1.4 }}>{translate(p.text)}</div>
