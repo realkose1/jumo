@@ -1354,11 +1354,14 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
       .sort((a, b) => new Date(a.fullDate) - new Date(b.fullDate))[0];
 
     if (recentFinished && nextUpcoming) {
-      const finishedAgo = now - new Date(recentFinished.fullDate);
-      const upcomingIn = new Date(nextUpcoming.fullDate) - now;
-      // Prefer finished match if it ended within last 18 hours; otherwise pick by distance
-      if (finishedAgo <= 18 * 3600 * 1000) return { match: recentFinished, priority: 4 };
-      return finishedAgo <= upcomingIn
+      // Estimate end time: kickoff + ~2.5h for soccer, ~3h for baseball
+      const isMLB = (recentFinished.sport||'').includes('MLB') || (recentFinished.sport||'').includes('⚾');
+      const matchDurationMs = (isMLB ? 3 : 2.5) * 3600 * 1000;
+      const finishedEndTime = new Date(recentFinished.fullDate).getTime() + matchDurationMs;
+      const upcomingStartTime = new Date(nextUpcoming.fullDate).getTime();
+      const distFromFinishedEnd = Math.abs(now - finishedEndTime);
+      const distToUpcomingStart = Math.abs(upcomingStartTime - now);
+      return distFromFinishedEnd <= distToUpcomingStart
         ? { match: recentFinished, priority: 4 }
         : { match: nextUpcoming, priority: 5 };
     }
