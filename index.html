@@ -2643,24 +2643,57 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
                 </div>
               )}
               {player.sport === '야구' && recentLiveMatches.length > 0 && (() => {
-                // Form for baseball: hits per game (last 7)
-                const last7 = recentLiveMatches.slice(0, 7).reverse();
-                const hits = last7.map(m => {
+                // Baseline games (most recent N), oldest → newest for left→right reading
+                const games = recentLiveMatches.slice(0, 7).slice().reverse();
+                const parsed = games.map(m => {
                   const c = m.contrib || '';
-                  const match = c.match(/(\d+)안타/);
-                  return match ? parseInt(match[1]) : 0;
+                  const ab = (c.match(/(\d+)타수/) || [])[1];
+                  const h = (c.match(/(\d+)안타/) || [])[1];
+                  const hr = (c.match(/(\d+)HR/) || [])[1];
+                  return {
+                    opp: m.opp,
+                    date: m.date,
+                    ab: ab ? parseInt(ab) : 0,
+                    h: h ? parseInt(h) : 0,
+                    hr: hr ? parseInt(hr) : 0,
+                    result: m.result,
+                  };
                 });
-                const avg = hits.reduce((a,b)=>a+b,0) / Math.max(1, hits.length);
+                const totalAB = parsed.reduce((s,g) => s + g.ab, 0);
+                const totalH = parsed.reduce((s,g) => s + g.h, 0);
+                const recentAvg = totalAB > 0 ? (totalH / totalAB) : 0;
+                const fmtAvg = '.' + (Math.round(recentAvg * 1000) || 0).toString().padStart(3,'0');
+                const colorFor = (g) => {
+                  if (!g.ab) return { bg:'var(--border)', fg:'var(--text4)' }; // DNP
+                  if (g.hr > 0) return { bg:'rgba(245,196,0,0.25)', fg:'var(--acc)' };
+                  if (g.h >= 2) return { bg:'rgba(44,201,109,0.18)', fg:'#2cc96d' };
+                  if (g.h >= 1) return { bg:'rgba(255,255,255,0.08)', fg:'var(--text)' };
+                  return { bg:'rgba(230,48,48,0.10)', fg:'rgba(255,107,107,0.85)' };
+                };
                 return (
                   <div style={{ background:'var(--surface)', borderRadius:16, padding:'16px', border:'0.5px solid var(--border)', marginBottom:12 }}>
-                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-end', marginBottom:14 }}>
                       <div>
-                        <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:2 }}>최근 {hits.length}경기 안타</div>
-                        <div style={{ fontSize:11, color:'var(--text4)' }}>경기당 평균 {avg.toFixed(1)} 안타</div>
+                        <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:2 }}>최근 {parsed.length}경기 타격 폼</div>
+                        <div style={{ fontSize:11, color:'var(--text4)' }}>{totalH}안타 / {totalAB}타수</div>
                       </div>
-                      <div style={{ ...NUM, fontSize:26, fontWeight:800, color:'var(--acc)' }}>{hits[hits.length-1] || 0}</div>
+                      <div style={{ textAlign:'right' }}>
+                        <div style={{ ...NUM, fontSize:26, fontWeight:800, color:'var(--acc)', lineHeight:1 }}>{fmtAvg}</div>
+                        <div style={{ fontSize:10, color:'var(--text4)', marginTop:3 }}>최근 타율</div>
+                      </div>
                     </div>
-                    <FormBar vals={hits.map(h => Math.min(h * 2.5, 10))}/>
+                    <div style={{ display:'flex', gap:5 }}>
+                      {parsed.map((g, i) => {
+                        const c = colorFor(g);
+                        return (
+                          <div key={i} style={{ flex:1, background:c.bg, borderRadius:6, padding:'7px 4px', textAlign:'center', minWidth:0 }}>
+                            <div style={{ ...NUM, fontSize:13, fontWeight:800, color:c.fg, lineHeight:1.1 }}>{g.ab > 0 ? `${g.h}-${g.ab}` : '−'}</div>
+                            <div style={{ fontSize:9, color:'var(--text5)', marginTop:3, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{g.date}</div>
+                            {g.hr > 0 && <div style={{ fontSize:9, color:'var(--acc)', fontWeight:700, marginTop:1 }}>HR</div>}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 );
               })()}
