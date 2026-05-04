@@ -4547,7 +4547,7 @@ function App() {
     try { return { ...TWEAK_DEFAULTS, ...JSON.parse(localStorage.getItem('jumo_tweaks')||'{}') }; }
     catch { return TWEAK_DEFAULTS; }
   });
-  const [tab, setTab] = React.useState(() => { const t = localStorage.getItem('jumo_tab'); return (t === 'notif' || !t) ? 'home' : t; });
+  const [tab, setTab] = React.useState('home');
   const [screen, setScreen] = React.useState('main');
   const [selectedMatch, setSelectedMatch] = React.useState(null);
   const [selectedPlayer, setSelectedPlayer] = React.useState(null);
@@ -5625,7 +5625,7 @@ function App() {
   const goBack = () => setScreen('main');
 
   const [tabScrollKeys, setTabScrollKeys] = React.useState({ home:0, schedule:0, players:0, news:0, more:0 });
-  const handleTab = (t) => { setTab(t); setScreen('main'); localStorage.setItem('jumo_tab', t); setTabScrollKeys(k => ({ ...k, [t]: k[t] + 1 })); };
+  const handleTab = (t) => { setTab(t); setScreen('main'); setTabScrollKeys(k => ({ ...k, [t]: k[t] + 1 })); };
 
   const HomeComponent = [HomeV1, HomeV2, HomeV3][tweaks.homeVariant] || HomeV1;
 
