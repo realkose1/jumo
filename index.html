@@ -321,7 +321,7 @@ const ALL_PLAYERS = [
   { id: 18, name: '김혜성',  nameEn: 'Hyeseong Kim',    number: 25, sport: '야구',   team: 'Dodgers',    league: 'MLB',        position: '유격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 16, rating: 0,   startRate: 70, age: 27, birth: '1999.01.27', height: '178cm', mlbId: 808975 },
 
   // 배드민턴
-  { id: 15, name: '안세영',  nameEn: 'An Se-young',     number: 1,  sport: '배드민턴','team': '한국 대표팀','league': '국제',    position: '여자 단식', nation: '🇰🇷', goals: 0,  assists: 0,  matches: 32, rating: 9.6, age: 24, birth: '2002.02.23', height: '168cm' },
+  { id: 15, name: '안세영',  nameEn: 'An Se-young',     number: 1,  sport: '배드민턴','team': '한국 대표팀','league': 'BWF World Tour', position: '여자 단식', nation: '🇰🇷', goals: 0,  assists: 0,  matches: 32, rating: 9.6, startRate: 100, age: 24, birth: '2002.02.05', height: '168cm' },
 ];
 const PLAYERS = ALL_PLAYERS.slice(0, 5);
 
@@ -464,6 +464,20 @@ const PLAYER_EXTRA = {
     ],
     seasonStats: [],
   },
+  15: { // 안세영
+    form: [9.5, 9.7, 9.6, 9.8, 9.5, 9.9, 9.7],
+    recentMatches: [
+      { opp:'야마구치 아카네', result:'W', score:'21-15, 21-12', contrib:'우승', date:'4.20' },
+      { opp:'천위페이',     result:'W', score:'21-18, 21-19', contrib:'결승 진출', date:'4.18' },
+      { opp:'P.V. 신두',    result:'W', score:'21-13, 21-9',  contrib:'준결승 진출', date:'4.16' },
+    ],
+    career: [
+      { year:'2024',     team:'파리 올림픽 여자단식 금메달', league:'올림픽',   flag:'🇫🇷' },
+      { year:'2023',     team:'항저우 아시안게임 3관왕',    league:'아시안게임', flag:'🇨🇳' },
+      { year:'2018–',    team:'한국 대표팀',                 league:'국제',     flag:'🇰🇷' },
+    ],
+    seasonStats: [],
+  },
 };
 
 const DEFAULT_EXTRA = {
@@ -527,7 +541,7 @@ function TeamBadge({ code, size=36, logo }) {
 
 function PlayerPhoto({ player, style={}, tint='var(--bg)' }) {
   const num = player.number;
-  const imageMap = { '손흥민': 'heungmin.png', '이강인': 'kangin.png', '김민재': 'minjae.png', '조규성': 'guesung.png', '황희찬': 'heechan.png', '황인범': 'inbeom.png', '김하성': 'haseong.png', '이정후': 'junghoo.png', '김혜성': 'hyeseong.png', '오현규': 'hyungyu.png', '양현준': 'hyunjun.png', '백승호': 'seungho.webp', '배준호': 'junho.webp', '엄지성': 'jisung.webp' };
+  const imageMap = { '손흥민': 'heungmin.png', '이강인': 'kangin.png', '김민재': 'minjae.png', '조규성': 'guesung.png', '황희찬': 'heechan.png', '황인범': 'inbeom.png', '김하성': 'haseong.png', '이정후': 'junghoo.png', '김혜성': 'hyeseong.png', '오현규': 'hyungyu.png', '양현준': 'hyunjun.png', '백승호': 'seungho.webp', '배준호': 'junho.webp', '엄지성': 'jisung.webp', '안세영': 'seyoung.webp' };
   // For full-body source images, zoom into the face area
   const PHOTO_ZOOM = {
     '백승호': { scale: 2.75, originX: '45%', originY: '16%' },
@@ -1515,6 +1529,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
     '김하성': 'haseong.jpeg', '이정후': 'junghoo.jpeg', '김혜성': 'hyesung.jpeg',
     '오현규': 'hyeongyu.jpeg', '양현준': 'hyunjun.jpeg',
     '백승호': 'seungho.png', '배준호': 'junho.jpeg', '엄지성': 'jisung.jpeg',
+    '안세영': 'seyoung.jpeg',
   };
   React.useEffect(() => {
     const playerName = highlightMatch?.koreanPlayer?.name;
@@ -2906,6 +2921,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
             '김하성':'haseong.jpeg','이정후':'junghoo.jpeg','김혜성':'hyesung.jpeg',
             '오현규':'hyeongyu.jpeg','양현준':'hyunjun.jpeg',
             '백승호':'seungho.png','배준호':'junho.jpeg','엄지성':'jisung.jpeg',
+            '안세영':'seyoung.jpeg',
           };
           const file = LANDSCAPE[player.name];
           return file
@@ -2962,13 +2978,13 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
       {/* Overview tab */}
       {tab === 'overview' && (
         <div style={{ padding:'16px' }}>
-          {(player.sport === '축구' || player.sport === '야구') && (
+          {(player.sport === '축구' || player.sport === '야구' || player.sport === '배드민턴') && (
             <>
-              {player.sport === '축구' && (
+              {(player.sport === '축구' || player.sport === '배드민턴') && (
                 <div style={{ background:'var(--surface)', borderRadius:16, padding:'16px', border:'0.5px solid var(--border)', marginBottom:12 }}>
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
                     <div>
-                      <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:2 }}>최근 7경기 폼</div>
+                      <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:2 }}>{player.sport === '배드민턴' ? '최근 컨디션' : '최근 7경기 폼'}</div>
                       <div style={{ fontSize:11, color:'var(--text4)' }}>평균 {(extra.form.reduce((a,b)=>a+b,0)/extra.form.length).toFixed(1)} / 10</div>
                     </div>
                     <div style={{ ...NUM, fontSize:26, fontWeight:800, color:'var(--acc)' }}>{extra.form[extra.form.length-1].toFixed(1)}</div>
@@ -3086,7 +3102,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
               <CareerTimeline extra={extra}/>
             </>
           )}
-          {player.sport !== '축구' && player.sport !== '야구' && (
+          {player.sport !== '축구' && player.sport !== '야구' && player.sport !== '배드민턴' && (
             <div style={{ background:'var(--surface)', borderRadius:14, padding:'14px 16px', border:'0.5px solid var(--border)', marginBottom:12 }}>
               <div style={{ fontSize:11, color:'var(--text4)', fontWeight:700, letterSpacing:1, textTransform:'uppercase', marginBottom:12 }}>프로필</div>
               {[['생년월일', player.birth],['나이', `${player.age}세`],['포지션', player.position],['신장', player.height],['클럽', player.team],['리그', player.league]].map(([k,v]) => (
@@ -3655,6 +3671,7 @@ const NEWS_PLAYERS = [
   { label:'백승호', query:'백승호' },
   { label:'배준호', query:'배준호' },
   { label:'엄지성', query:'엄지성' },
+  { label:'안세영', query:'안세영' },
 ];
 
 const newsImageCache = {};
@@ -3669,6 +3686,7 @@ const NEWS_PLAYER_IMG = {
   '백승호': 'image/seungho.webp',
   '배준호': 'image/junho.webp',
   '엄지성': 'image/jisung.webp',
+  '안세영': 'image/seyoung.webp',
 };
 
 function detectPlayerName(text) {
