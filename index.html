@@ -277,21 +277,15 @@ function getRelativeDate(hoursFromNow) {
   return date.toISOString();
 }
 
-function getKstMode() {
-  try { return localStorage.getItem('jumo_kst_mode') !== 'false'; } catch { return true; }
-}
-
-function formatHHMM(date, kst = getKstMode()) {
-  const d = new Date(date);
-  const tz = kst ? 'Asia/Seoul' : undefined;
-  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false })
-    .formatToParts(d).reduce((acc, p) => (acc[p.type] = p.value, acc), {});
+function formatHHMM(date) {
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hour12: false })
+    .formatToParts(new Date(date)).reduce((acc, p) => (acc[p.type] = p.value, acc), {});
   return `${parts.hour}:${parts.minute}`;
 }
 
-function formatKRTime(date, kst = getKstMode()) {
+function formatKRTime(date) {
   const d = new Date(date);
-  const tz = kst ? 'Asia/Seoul' : undefined;
+  const tz = 'Asia/Seoul';
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: tz,
     hour: 'numeric', minute: '2-digit', hour12: false,
@@ -306,9 +300,8 @@ function formatKRTime(date, kst = getKstMode()) {
     .formatToParts(new Date()).reduce((acc, p) => (acc[p.type] = p.value, acc), {});
   const isToday = parts.year === nowParts.year && parts.month === nowParts.month && parts.day === nowParts.day;
   const dayLabel = isToday ? '오늘' : '내일';
-  const suffix = kst ? ' KST' : '';
 
-  return `${dayLabel} ${period} ${displayHours}:${minutes}${suffix}`;
+  return `${dayLabel} ${period} ${displayHours}:${minutes} KST`;
 }
 
 function formatShortTime(date) {
@@ -4468,7 +4461,7 @@ function ProfileEditScreen({ profile, onSave, onBack }) {
   );
 }
 
-function MoreScreen({ darkMode, onToggleDark, sportFeeds, onToggleSportFeed, profile, onUpdateProfile, kstMode, onToggleKst }) {
+function MoreScreen({ sportFeeds, onToggleSportFeed, profile, onUpdateProfile }) {
   const [sub, setSub] = React.useState(null);
   if (sub === 'notif')      return <NotifSettingsScreen onBack={() => setSub(null)}/>;
   if (sub === 'sports')     return <SportFeedScreen onBack={() => setSub(null)} sportFeeds={sportFeeds} onToggleSportFeed={onToggleSportFeed}/>;
@@ -4478,10 +4471,6 @@ function MoreScreen({ darkMode, onToggleDark, sportFeeds, onToggleSportFeed, pro
     { label:'개인화', items:[
       { id:'sports',    icon:'🏆', color:'#e03030', title:'종목별 피드',   sub:'관심 종목 선택',         chevron:true },
       { id:'notif',     icon:'🔔', color:'#ff9500', title:'알림 설정',     sub:'경기 시작, 이벤트 알림', chevron:true },
-    ]},
-    { label:'일반', items:[
-      { id:'time', icon:'⏱', color:'#34c759', title:'한국 시간 자동변환', sub: kstMode ? 'KST로 표시' : '현지 시간으로 표시', toggle:true, val:kstMode, onToggle: onToggleKst },
-      { id:'dark', icon:'🌙', color:'#5856d6', title:'다크 모드', sub: darkMode ? '켜짐' : '꺼짐', toggle:true, val:darkMode, onToggle: onToggleDark },
     ]},
     { label:'앱 정보', items:[
       { id:'version',  icon:'ℹ️', color:'#48484a', title:'버전 정보',     sub:'Jumo v1.0.0' },
@@ -4589,26 +4578,6 @@ function App() {
     toastTimerRef.current = setTimeout(() => setToast(null), 2000);
   }, []);
 
-  const [darkMode, setDarkMode] = React.useState(true);
-  const toggleDark = () => setDarkMode(d => { showToast(`다크 모드 ${!d ? '켜짐' : '꺼짐'}`); return !d; });
-  const [kstMode, setKstMode] = React.useState(() => {
-    try { return localStorage.getItem('jumo_kst_mode') !== 'false'; } catch { return true; }
-  });
-  const toggleKst = () => setKstMode(prev => {
-    const next = !prev;
-    try { localStorage.setItem('jumo_kst_mode', String(next)); } catch {}
-    setLiveMatches(ms => ms.map(m => {
-      if (!m.fullDate) return m;
-      const isLive = m.live || m.time === 'LIVE';
-      return {
-        ...m,
-        krTime: formatKRTime(m.fullDate, next),
-        time: isLive ? m.time : formatHHMM(m.fullDate, next),
-      };
-    }));
-    showToast(next ? '한국 시간(KST)으로 표시' : '현지 시간으로 표시');
-    return next;
-  });
   const [sportFeeds, setSportFeeds] = React.useState(() => {
     try {
       return { soccer:true, baseball:true, badminton:true, ...JSON.parse(localStorage.getItem('jumo_sport_feeds') || '{}') };
@@ -5595,9 +5564,6 @@ function App() {
     };
   };
 
-  React.useEffect(() => {
-    document.documentElement.classList.toggle('light-mode', !darkMode);
-  }, [darkMode]);
   const [showTweaks, setShowTweaks] = React.useState(false);
 
   const updateTweaks = (k, v) => {
@@ -5645,7 +5611,7 @@ function App() {
   return (
     <ToastCtx.Provider value={showToast}>
     <div style={{ '--acc': tweaks.accentColor, fontFamily:"'Noto Sans KR', system-ui, sans-serif", WebkitFontSmoothing:'antialiased' }}>
-      <IOSDevice dark={darkMode} width={deviceDimensions.width} height={deviceDimensions.height}>
+      <IOSDevice dark={true} width={deviceDimensions.width} height={deviceDimensions.height}>
         <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'var(--bg)', paddingBottom:'70px', position:'relative' }}>
           {toast && (
             <div key={toast.id} style={{ position:'fixed', left:'50%', bottom:'calc(78px + env(safe-area-inset-bottom))', transform:'translateX(-50%)', zIndex:200, background:'rgba(0,0,0,0.85)', color:'#fff', padding:'10px 18px', borderRadius:22, fontSize:13, fontWeight:600, letterSpacing:-0.2, whiteSpace:'nowrap', boxShadow:'0 6px 24px rgba(0,0,0,0.35)', backdropFilter:'blur(10px)', WebkitBackdropFilter:'blur(10px)', animation:'toastIn 0.22s ease-out', pointerEvents:'none' }}>
@@ -5658,7 +5624,7 @@ function App() {
               <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} liveApiMatches={filteredLiveMatches} isLoading={apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
               <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} followed={followed} statsCache={playerStatsCache} isLoading={apiLoading} onRefresh={fetchLiveMatches} scrollTopKey={tabScrollKeys.players} liveApiMatches={filteredLiveMatches} sportFeeds={sportFeeds}/></div>
               <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news}/></div>
-              <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen darkMode={darkMode} onToggleDark={toggleDark} sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed} profile={profile} onUpdateProfile={updateProfile} kstMode={kstMode} onToggleKst={toggleKst}/></div>
+              <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed} profile={profile} onUpdateProfile={updateProfile}/></div>
             </>
           )}
           {screen === 'match' && selectedMatch && (
