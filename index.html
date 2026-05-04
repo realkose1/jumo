@@ -2120,21 +2120,86 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [] }) {
             if (plays.length === 0) {
               return <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text5)', fontSize:14 }}>주요 이벤트가 없습니다</div>;
             }
+            const translate = (text) => {
+              if (!text) return '';
+              let s = text;
+              // Hit types & outcomes
+              s = s.replace(/\bhomered\b/gi, '홈런');
+              s = s.replace(/\bhit a (\d+)-run home run\b/gi, '$1점 홈런');
+              s = s.replace(/\bhit a home run\b/gi, '홈런');
+              s = s.replace(/\bgrand slam\b/gi, '만루 홈런');
+              s = s.replace(/\bdoubled\b/gi, '2루타');
+              s = s.replace(/\btripled\b/gi, '3루타');
+              s = s.replace(/\bsingled\b/gi, '안타');
+              s = s.replace(/\bwalked\b/gi, '볼넷으로 출루');
+              s = s.replace(/\bintentionally walked\b/gi, '고의 볼넷');
+              s = s.replace(/\bhit by pitch\b/gi, '몸에 맞는 공');
+              s = s.replace(/\bsacrificed\b/gi, '희생타');
+              s = s.replace(/\bhit a sacrifice fly\b/gi, '희생플라이');
+              s = s.replace(/\bhit a sacrifice bunt\b/gi, '희생번트');
+              s = s.replace(/\bstruck out swinging\b/gi, '헛스윙 삼진');
+              s = s.replace(/\bstruck out looking\b/gi, '루킹 삼진');
+              s = s.replace(/\bstruck out\b/gi, '삼진');
+              s = s.replace(/\bgrounded out\b/gi, '땅볼 아웃');
+              s = s.replace(/\bflied out\b/gi, '뜬공 아웃');
+              s = s.replace(/\blined out\b/gi, '라인드라이브 아웃');
+              s = s.replace(/\bpopped out\b/gi, '내야 플라이 아웃');
+              s = s.replace(/\bgrounded into double play\b/gi, '병살타');
+              s = s.replace(/\breached on (\w+)('s)? error\b/gi, '$1 실책으로 출루');
+              s = s.replace(/\breached on a fielder's choice\b/gi, '필더스 초이스로 출루');
+              s = s.replace(/\bstole second\b/gi, '2루 도루');
+              s = s.replace(/\bstole third\b/gi, '3루 도루');
+              s = s.replace(/\bstole home\b/gi, '홈 스틸');
+              s = s.replace(/\bcaught stealing\b/gi, '도루 실패');
+              s = s.replace(/\badvanced to second\b/gi, '2루 진루');
+              s = s.replace(/\badvanced to third\b/gi, '3루 진루');
+              // Movement & scoring
+              s = s.replace(/\b([A-Z][\w\-.']+) scored\b/g, '$1 득점');
+              s = s.replace(/\bscored\b/gi, '득점');
+              // Field directions
+              s = s.replace(/\bto deep left center\b/gi, ' 좌중간 깊은 곳으로');
+              s = s.replace(/\bto deep right center\b/gi, ' 우중간 깊은 곳으로');
+              s = s.replace(/\bto deep left\b/gi, ' 좌측 깊은 곳으로');
+              s = s.replace(/\bto deep right\b/gi, ' 우측 깊은 곳으로');
+              s = s.replace(/\bto deep center\b/gi, ' 중앙 깊은 곳으로');
+              s = s.replace(/\bto shallow left\b/gi, ' 좌측 얕은 곳으로');
+              s = s.replace(/\bto shallow right\b/gi, ' 우측 얕은 곳으로');
+              s = s.replace(/\bto left center\b/gi, ' 좌중간으로');
+              s = s.replace(/\bto right center\b/gi, ' 우중간으로');
+              s = s.replace(/\bto left\b/gi, ' 좌측으로');
+              s = s.replace(/\bto right\b/gi, ' 우측으로');
+              s = s.replace(/\bto center\b/gi, ' 중앙으로');
+              s = s.replace(/\bto first\b/gi, ' 1루로');
+              s = s.replace(/\bto second\b/gi, ' 2루로');
+              s = s.replace(/\bto third\b/gi, ' 3루로');
+              // Position labels
+              s = s.replace(/\bcenter fielder\b/gi, '중견수');
+              s = s.replace(/\bleft fielder\b/gi, '좌익수');
+              s = s.replace(/\bright fielder\b/gi, '우익수');
+              s = s.replace(/\bshortstop\b/gi, '유격수');
+              s = s.replace(/\bsecond baseman\b/gi, '2루수');
+              s = s.replace(/\bthird baseman\b/gi, '3루수');
+              s = s.replace(/\bfirst baseman\b/gi, '1루수');
+              s = s.replace(/\bcatcher\b/gi, '포수');
+              s = s.replace(/\bpitcher\b/gi, '투수');
+              // Cleanup spaces & misc
+              s = s.replace(/\s+,/g, ',').replace(/\s{2,}/g, ' ').trim();
+              return s;
+            };
             const homeTeamId = mlbSummary?.boxscore?.teams?.find(t => t.homeAway === 'home')?.team?.id;
-            return plays.map((p, i) => {
+            // Newest first (reverse)
+            return [...plays].reverse().map((p, i) => {
               const isHome = String(p.team?.id) === String(homeTeamId);
-              const period = p.period?.displayValue || '';
-              const periodSide = p.period?.type === 'Top' ? '말' : '초';
               const inningLabel = `${p.period?.number}회 ${p.period?.type === 'Top' ? '초' : '말'}`;
               return (
                 <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:10, marginBottom:8, padding:'10px 12px', background:'rgba(245,196,0,0.08)', borderRadius:10, border:'0.5px solid rgba(245,196,0,0.3)' }}>
-                  <div style={{ ...NUM, width:50, textAlign:'center', fontSize:11, fontWeight:700, color:'var(--acc)', flexShrink:0, paddingTop:2 }}>{inningLabel}</div>
+                  <div style={{ ...NUM, width:54, textAlign:'center', fontSize:11, fontWeight:700, color:'var(--acc)', flexShrink:0, paddingTop:2 }}>{inningLabel}</div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3 }}>
                       <span style={{ fontSize:9, fontWeight:700, color:'var(--text5)', background:'var(--border)', padding:'1px 5px', borderRadius:4 }}>{isHome ? match.home.code : match.away.code}</span>
                       <span style={{ ...NUM, fontSize:13, fontWeight:800, color:'var(--text)' }}>{p.awayScore}–{p.homeScore}</span>
                     </div>
-                    <div style={{ fontSize:12, color:'var(--text2)', lineHeight:1.4 }}>{p.text}</div>
+                    <div style={{ fontSize:12, color:'var(--text2)', lineHeight:1.4 }}>{translate(p.text)}</div>
                   </div>
                   <div style={{ fontSize:18, flexShrink:0 }}>{(p.scoreValue||0) >= 4 ? '🎯' : '⚾'}</div>
                 </div>
