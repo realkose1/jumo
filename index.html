@@ -3637,7 +3637,7 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
           ));
         })()}
       </div>
-      <div style={{ height:24 }}/>
+      <div style={{ height:'calc(40px + env(safe-area-inset-bottom))' }}/>
     </div>
   );
 }
@@ -4288,11 +4288,67 @@ function StreamingScreen({ onBack }) {
 }
 
 // ─── SCREEN: MORE (main) ─────────────────────────────────────
-function MoreScreen({ darkMode, onToggleDark, sportFeeds, onToggleSportFeed }) {
+function ProfileEditScreen({ profile, onSave, onBack }) {
+  const [nickname, setNickname] = React.useState(profile.nickname);
+  const [image, setImage] = React.useState(profile.image);
+  const fileRef = React.useRef(null);
+
+  const handleFile = (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => setImage(reader.result);
+    reader.readAsDataURL(f);
+  };
+
+  const save = () => {
+    onSave({ nickname: nickname.trim() || '한국 스포츠 팬', image });
+    onBack();
+  };
+
+  return (
+    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+      <div style={{ padding:'12px 20px 8px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <button onClick={onBack} style={{ background:'none', border:'none', color:'var(--text2)', fontSize:15, cursor:'pointer', padding:0 }}>취소</button>
+        <div style={{ fontSize:16, fontWeight:700, color:'var(--text)' }}>프로필 편집</div>
+        <button onClick={save} style={{ background:'none', border:'none', color:'var(--acc)', fontSize:15, fontWeight:700, cursor:'pointer', padding:0 }}>저장</button>
+      </div>
+
+      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'28px 20px 20px' }}>
+        <div onClick={() => fileRef.current?.click()} style={{ width:104, height:104, borderRadius:'50%', background: image ? 'transparent' : 'linear-gradient(135deg,#e03030,#8b0000)', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden', cursor:'pointer', position:'relative', border:'0.5px solid var(--border)' }}>
+          {image
+            ? <img src={image} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
+            : <span style={{ fontSize:48 }}>🇰🇷</span>}
+          <div style={{ position:'absolute', bottom:0, left:0, right:0, background:'rgba(0,0,0,0.55)', color:'#fff', fontSize:10, fontWeight:600, textAlign:'center', padding:'4px 0' }}>변경</div>
+        </div>
+        <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} style={{ display:'none' }}/>
+        <button onClick={() => fileRef.current?.click()} style={{ marginTop:14, background:'none', border:'none', color:'var(--acc)', fontSize:13, fontWeight:600, cursor:'pointer' }}>사진 변경</button>
+        {image && <button onClick={() => setImage(null)} style={{ marginTop:6, background:'none', border:'none', color:'var(--text4)', fontSize:12, cursor:'pointer' }}>기본 이미지로</button>}
+      </div>
+
+      <div style={{ padding:'0 16px' }}>
+        <div style={{ fontSize:11, fontWeight:700, color:'var(--text4)', letterSpacing:1.5, textTransform:'uppercase', padding:'0 4px', marginBottom:8 }}>닉네임</div>
+        <div style={{ background:'var(--surface)', borderRadius:14, border:'0.5px solid var(--border)', padding:'4px 14px' }}>
+          <input
+            value={nickname}
+            onChange={e => setNickname(e.target.value)}
+            maxLength={20}
+            placeholder="닉네임을 입력하세요"
+            style={{ width:'100%', background:'transparent', border:'none', outline:'none', color:'var(--text)', fontSize:15, fontWeight:600, padding:'12px 0', fontFamily:"'Noto Sans KR', sans-serif" }}
+          />
+        </div>
+        <div style={{ fontSize:11, color:'var(--text5)', padding:'8px 4px' }}>{nickname.length}/20</div>
+      </div>
+    </div>
+  );
+}
+
+function MoreScreen({ darkMode, onToggleDark, sportFeeds, onToggleSportFeed, profile, onUpdateProfile }) {
   const [sub, setSub] = React.useState(null);
   if (sub === 'notif')      return <NotifSettingsScreen onBack={() => setSub(null)}/>;
   if (sub === 'sports')     return <SportFeedScreen onBack={() => setSub(null)} sportFeeds={sportFeeds} onToggleSportFeed={onToggleSportFeed}/>;
   if (sub === 'streaming')  return <StreamingScreen onBack={() => setSub(null)}/>;
+  if (sub === 'profile')    return <ProfileEditScreen profile={profile} onSave={onUpdateProfile} onBack={() => setSub(null)}/>;
 
   const groups = [
     { label:'개인화', items:[
@@ -4314,14 +4370,15 @@ function MoreScreen({ darkMode, onToggleDark, sportFeeds, onToggleSportFeed }) {
     <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
       {/* Profile card */}
       <div style={{ margin:'16px 16px 12px', background:'var(--surface)', borderRadius:18, padding:'18px', border:'0.5px solid var(--border)', display:'flex', alignItems:'center', gap:14 }}>
-        <div style={{ width:52, height:52, borderRadius:'50%', background:'linear-gradient(135deg,#e03030,#8b0000)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-          <span style={{ fontSize:24 }}>🇰🇷</span>
+        <div style={{ width:52, height:52, borderRadius:'50%', background: profile.image ? 'transparent' : 'linear-gradient(135deg,#e03030,#8b0000)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, overflow:'hidden' }}>
+          {profile.image
+            ? <img src={profile.image} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
+            : <span style={{ fontSize:24 }}>🇰🇷</span>}
         </div>
-        <div style={{ flex:1 }}>
-          <div style={{ fontSize:16, fontWeight:800, color:'var(--text)', marginBottom:2 }}>한국 스포츠 팬</div>
-          <div style={{ fontSize:12, color:'var(--text3)' }}>5명 팔로우 중 · 2경기 진행 중</div>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontSize:16, fontWeight:800, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{profile.nickname}</div>
         </div>
-        <button style={{ background:'var(--border)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:10, padding:'7px 12px', color:'var(--text-60)', fontSize:12, fontWeight:600, cursor:'pointer' }}>편집</button>
+        <button onClick={() => setSub('profile')} style={{ background:'var(--border)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:10, padding:'7px 12px', color:'var(--text-60)', fontSize:12, fontWeight:600, cursor:'pointer' }}>편집</button>
       </div>
 
       {groups.map(g => (
@@ -4418,6 +4475,17 @@ function App() {
   const [isInitialLoad, setIsInitialLoad] = React.useState(true);
   const [notifications, setNotifications] = React.useState([]);
   const [playerStatsCache, setPlayerStatsCache] = React.useState({});
+  const [profile, setProfile] = React.useState(() => {
+    try {
+      return { nickname:'한국 스포츠 팬', image:null, ...JSON.parse(localStorage.getItem('jumo_profile') || '{}') };
+    } catch {
+      return { nickname:'한국 스포츠 팬', image:null };
+    }
+  });
+  const updateProfile = (next) => {
+    setProfile(next);
+    try { localStorage.setItem('jumo_profile', JSON.stringify(next)); } catch {}
+  };
 
   React.useEffect(() => {
     const parseESPN = (data) => {
@@ -5420,7 +5488,7 @@ function App() {
               <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} liveApiMatches={liveMatches} isLoading={apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
               <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} followed={followed} statsCache={playerStatsCache} isLoading={apiLoading} onRefresh={fetchLiveMatches} scrollTopKey={tabScrollKeys.players} liveApiMatches={liveMatches}/></div>
               <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news}/></div>
-              <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen darkMode={darkMode} onToggleDark={toggleDark} sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed}/></div>
+              <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen darkMode={darkMode} onToggleDark={toggleDark} sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed} profile={profile} onUpdateProfile={updateProfile}/></div>
             </>
           )}
           {screen === 'match' && selectedMatch && (
