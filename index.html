@@ -5644,7 +5644,14 @@ function App() {
   const goBack = () => setScreen('main');
 
   const [tabScrollKeys, setTabScrollKeys] = React.useState({ home:0, schedule:0, players:0, news:0, more:0 });
-  const handleTab = (t) => { setTab(t); setScreen('main'); setTabScrollKeys(k => ({ ...k, [t]: k[t] + 1 })); };
+  const handleTab = (t) => {
+    if (t === tab && screen === 'main') {
+      setTabScrollKeys(k => ({ ...k, [t]: k[t] + 1 }));
+    } else {
+      setTab(t);
+      setScreen('main');
+    }
+  };
 
   const HomeComponent = [HomeV1, HomeV2, HomeV3][tweaks.homeVariant] || HomeV1;
 
