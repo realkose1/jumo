@@ -281,6 +281,14 @@ function getKstMode() {
   try { return localStorage.getItem('jumo_kst_mode') !== 'false'; } catch { return true; }
 }
 
+function formatHHMM(date, kst = getKstMode()) {
+  const d = new Date(date);
+  const tz = kst ? 'Asia/Seoul' : undefined;
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false })
+    .formatToParts(d).reduce((acc, p) => (acc[p.type] = p.value, acc), {});
+  return `${parts.hour}:${parts.minute}`;
+}
+
 function formatKRTime(date, kst = getKstMode()) {
   const d = new Date(date);
   const tz = kst ? 'Asia/Seoul' : undefined;
@@ -4589,7 +4597,15 @@ function App() {
   const toggleKst = () => setKstMode(prev => {
     const next = !prev;
     try { localStorage.setItem('jumo_kst_mode', String(next)); } catch {}
-    setLiveMatches(ms => ms.map(m => m.fullDate ? { ...m, krTime: formatKRTime(m.fullDate, next) } : m));
+    setLiveMatches(ms => ms.map(m => {
+      if (!m.fullDate) return m;
+      const isLive = m.live || m.time === 'LIVE';
+      return {
+        ...m,
+        krTime: formatKRTime(m.fullDate, next),
+        time: isLive ? m.time : formatHHMM(m.fullDate, next),
+      };
+    }));
     showToast(next ? '한국 시간(KST)으로 표시' : '현지 시간으로 표시');
     return next;
   });
@@ -5303,9 +5319,7 @@ function App() {
     let timeDisplay = '';
     if (isLive) timeDisplay = 'LIVE';
     else if (!isFinished && !isTimedOut) {
-      const h = String(matchDate.getHours()).padStart(2,'0');
-      const m = String(matchDate.getMinutes()).padStart(2,'0');
-      timeDisplay = `${h}:${m}`;
+      timeDisplay = formatHHMM(matchDate);
     }
 
     const homeLogo = `https://api.sofascore.com/api/v1/team/${event.homeTeam?.id}/image`;
@@ -5430,22 +5444,9 @@ function App() {
       }
     }
 
-    // Format time for Korean timezone
     let timeDisplay = '';
     if (!isLive && event.date) {
-      const date = new Date(event.date);
-      const now = new Date();
-      const tomorrow = new Date(now);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      tomorrow.setHours(11, 59, 59, 999);
-
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
-
-      // Check if it's today or tomorrow morning
-      timeDisplay = `${hours}:${minutes}`;
+      timeDisplay = formatHHMM(event.date);
     } else if (isLive) {
       timeDisplay = 'LIVE';
     }
