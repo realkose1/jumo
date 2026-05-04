@@ -10,7 +10,7 @@ module.exports = async (req, res) => {
   const data = await new Promise((resolve, reject) => {
     const r = https.request({
       hostname: 'statsapi.mlb.com',
-      path: `/api/v1/people/${mlbId}/stats?stats=season&season=2025&group=hitting`,
+      path: `/api/v1/people/${mlbId}/stats?stats=season&season=${new Date().getFullYear()}&group=hitting`,
       method: 'GET',
       headers: { 'User-Agent': 'Mozilla/5.0' },
     }, mlbRes => {

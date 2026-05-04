@@ -316,9 +316,9 @@ const ALL_PLAYERS = [
   { id: 23, name: '엄지성',  nameEn: 'Eom Ji-sung',     number: 7,  sport: '축구',   team: 'Swansea',    league: 'Championship', position: '공격수',   nation: '🇰🇷', goals: 3,  assists: 4,  matches: 48, rating: 6.9, startRate: 90, age: 23, birth: '2002.05.30', height: '178cm', espnLeague: 'eng.2' },
 
   // 야구 - MLB (2026 시즌)
-  { id: 9,  name: '김하성',  nameEn: 'Kim Ha-seong',    number: 4,  sport: '야구',   team: 'Pirates',    league: 'MLB',        position: '유격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 18, rating: 0,   startRate: 90, age: 30, birth: '1995.10.17', height: '179cm', mlbId: 628406 },
-  { id: 17, name: '이정후',  nameEn: 'Lee Jung-hoo',    number: 51, sport: '야구',   team: 'Giants',     league: 'MLB',        position: '중견수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 15, rating: 0,   startRate: 95, age: 27, birth: '1998.08.20', height: '186cm', mlbId: 673490 },
-  { id: 18, name: '김혜성',  nameEn: 'Kim Hye-seong',   number: 25, sport: '야구',   team: 'Dodgers',    league: 'MLB',        position: '유격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 16, rating: 0,   startRate: 70, age: 27, birth: '1999.01.27', height: '178cm', mlbId: 700514 },
+  { id: 9,  name: '김하성',  nameEn: 'Ha-Seong Kim',    number: 4,  sport: '야구',   team: 'Pirates',    league: 'MLB',        position: '유격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 18, rating: 0,   startRate: 90, age: 30, birth: '1995.10.17', height: '179cm', mlbId: 673490 },
+  { id: 17, name: '이정후',  nameEn: 'Jung Hoo Lee',    number: 51, sport: '야구',   team: 'Giants',     league: 'MLB',        position: '중견수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 15, rating: 0,   startRate: 95, age: 27, birth: '1998.08.20', height: '186cm', mlbId: 808982 },
+  { id: 18, name: '김혜성',  nameEn: 'Hyeseong Kim',    number: 25, sport: '야구',   team: 'Dodgers',    league: 'MLB',        position: '유격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 16, rating: 0,   startRate: 70, age: 27, birth: '1999.01.27', height: '178cm', mlbId: 808975 },
 
   // 배드민턴
   { id: 15, name: '안세영',  nameEn: 'An Se-young',     number: 1,  sport: '배드민턴','team': '한국 대표팀','league': '국제',    position: '여자 단식', nation: '🇰🇷', goals: 0,  assists: 0,  matches: 32, rating: 9.6, age: 24, birth: '2002.02.23', height: '168cm' },
@@ -4110,77 +4110,67 @@ function App() {
           });
         }
 
-        // ── ESPN MLB: fetch boxscores for live/finished matches with Korean players ──
-        const mlbKorean = koreanMatches.filter(m =>
-          (m.sport || '').includes('MLB') && (m.live || m.status === 'STATUS_FINAL')
-        );
-        if (mlbKorean.length > 0) {
-          const mlbDetails = await Promise.allSettled(
-            mlbKorean.map(m =>
-              fetch(`https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/summary?event=${m.id}`)
+        // ── MLB Stats API: fetch gameLog per Korean baseball player ──
+        const mlbPlayers = ALL_PLAYERS.filter(p => p.sport === '야구' && p.mlbId);
+        const mlbKorean = koreanMatches.filter(m => (m.sport || '').includes('MLB'));
+        if (mlbKorean.length > 0 && mlbPlayers.length > 0) {
+          const season = new Date().getFullYear();
+          const logResults = await Promise.allSettled(
+            mlbPlayers.map(p =>
+              fetch(`https://statsapi.mlb.com/api/v1/people/${p.mlbId}/stats?stats=gameLog&season=${season}&group=hitting&sportId=1`)
                 .then(r => r.ok ? r.json() : null)
-                .then(data => ({ id: m.id, data, isLive: m.live }))
-                .catch(() => ({ id: m.id, data: null, isLive: m.live }))
+                .then(data => ({ playerName: p.name, splits: data?.stats?.[0]?.splits || [] }))
+                .catch(() => ({ playerName: p.name, splits: [] }))
             )
           );
-          mlbDetails.forEach(result => {
-            if (result.status !== 'fulfilled' || !result.value?.data) return;
-            const { id, data, isLive } = result.value;
-            const idx = koreanMatches.findIndex(mm => mm.id === id);
+          // Build map: 'playerName|YYYY-MM-DD' -> stat
+          const statByKey = {};
+          logResults.forEach(r => {
+            if (r.status !== 'fulfilled') return;
+            const { playerName, splits } = r.value;
+            for (const s of splits) {
+              const date = s.date; // e.g., '2026-05-04'
+              if (!date) continue;
+              statByKey[`${playerName}|${date}`] = s.stat || {};
+            }
+          });
+          // Apply to matches
+          mlbKorean.forEach(m => {
+            const idx = koreanMatches.findIndex(mm => mm.id === m.id);
             if (idx === -1) return;
-            const m = koreanMatches[idx];
-            const kp = m.koreanPlayer;
-            if (!kp) return;
-            const norm = s => (s||'').toLowerCase().replace(/[-\s.']/g,'');
-            const target = norm(kp.nameEn);
-            // Generate name variants: handle "Lee Jung-hoo" vs "Jung Hoo Lee"
-            const targetVariants = [target];
-            const parts = (kp.nameEn || '').toLowerCase().split(/[\s-]+/).filter(Boolean);
-            if (parts.length >= 2) {
-              targetVariants.push(norm(parts.slice(1).join('') + parts[0]));
-              targetVariants.push(norm([parts[parts.length-1], ...parts.slice(0,-1)].join('')));
+            const cur = koreanMatches[idx];
+            const kp = cur.koreanPlayer;
+            if (!kp || !cur.fullDate) return;
+            const d = new Date(cur.fullDate);
+            // Game might span midnight UTC vs local; try both date and the day before in case of TZ shift
+            const ymd = (date) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+            const candidates = [ymd(d), ymd(new Date(d.getTime() - 86400000))];
+            let stat = null;
+            for (const c of candidates) {
+              if (statByKey[`${kp.name}|${c}`]) { stat = statByKey[`${kp.name}|${c}`]; break; }
             }
-            const matchesTarget = (n) => targetVariants.some(t => n === t || n.includes(t) || t.includes(n));
-            // Boxscore: data.boxscore.players[].statistics[].athletes[]
-            const teams = data.boxscore?.players || [];
-            let foundAthlete = null, foundStats = {};
-            for (const t of teams) {
-              for (const cat of (t.statistics || [])) {
-                if (cat.type !== 'batting' && cat.name !== 'batting') continue;
-                for (const a of (cat.athletes || [])) {
-                  const name = norm(a.athlete?.displayName || a.athlete?.fullName);
-                  if (name && matchesTarget(name)) {
-                    foundAthlete = a;
-                    (cat.keys || []).forEach((k, ki) => { foundStats[k] = a.stats?.[ki]; });
-                    break;
-                  }
-                }
-                if (foundAthlete) break;
-              }
-              if (foundAthlete) break;
-            }
-            // Determine event status
-            const isFinished = m.status === 'STATUS_FINAL';
+            const isFinished = cur.status === 'STATUS_FINAL';
+            const isLive = cur.live;
             let newEvent;
-            const atBats = parseInt(foundStats.atBats || foundStats.AB || 0) || 0;
-            const hits = parseInt(foundStats.hits || foundStats.H || 0) || 0;
-            const homeRuns = parseInt(foundStats.homeRuns || foundStats.HR || 0) || 0;
-            const rbi = parseInt(foundStats.RBI || foundStats.rbi || 0) || 0;
-            const didPlay = atBats > 0 || hits > 0 || (foundAthlete && Object.keys(foundStats).length > 0);
+            const atBats = parseInt(stat?.atBats ?? 0) || 0;
+            const hits = parseInt(stat?.hits ?? 0) || 0;
+            const homeRuns = parseInt(stat?.homeRuns ?? 0) || 0;
+            const rbi = parseInt(stat?.rbi ?? 0) || 0;
+            const runs = parseInt(stat?.runs ?? 0) || 0;
+            const didPlay = !!stat && (atBats > 0 || stat.plateAppearances > 0);
             if (isLive) {
-              if (didPlay) newEvent = '출전 중';
-              else if (foundAthlete) newEvent = '벤치';
-              else newEvent = '출전 예상';
+              newEvent = didPlay ? '출전 중' : (stat ? '벤치' : '출전 예상');
             } else if (isFinished) {
-              if (!didPlay) newEvent = '미출전';
-              else newEvent = `${atBats}타수 ${hits}안타`;
+              if (!stat) newEvent = '미출전';
+              else if (!didPlay) newEvent = '대기 명단';
+              else newEvent = `${atBats}타수 ${hits}안타${homeRuns ? ' ' + homeRuns + 'HR' : ''}${rbi ? ' ' + rbi + '타점' : ''}`;
             } else {
               newEvent = '출전 예상';
             }
             koreanMatches[idx] = {
-              ...m,
-              koreanPlayer: { ...kp, event: newEvent, atBats, hits, homeRuns, rbi },
-              koreanPlayers: (m.koreanPlayers || [kp]).map(p => p.name === kp.name ? { ...p, event: newEvent, atBats, hits, homeRuns, rbi } : p),
+              ...cur,
+              koreanPlayer: { ...kp, event: newEvent, atBats, hits, homeRuns, rbi, runs },
+              koreanPlayers: (cur.koreanPlayers || [kp]).map(p => p.name === kp.name ? { ...p, event: newEvent, atBats, hits, homeRuns, rbi, runs } : p),
             };
           });
         }
