@@ -3785,6 +3785,25 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0 }) {
   const SOCCER_PLAYERS = ['손흥민','이강인','김민재','황희찬','조규성','양현준','오현규'];
   const MLB_PLAYERS = ['김하성','이정후','김혜성','류현진'];
 
+  // Click-bait patterns: when title uses our player's name as a comparison/foil
+  // for a foreign player who is the actual subject of the article.
+  // Build regex from each player name + common clickbait connectors.
+  const CLICKBAIT_PATTERNS = [
+    '보다', '보단', '만큼', '같은', '차세대', '후계자', '능가', '잡고',
+    '에 제대로', '에게 당', '을 능가', '를 능가', '을 도발', '를 도발',
+    '굴욕', '망신', '도발', '영업만', '같이.*뛸', '저격',
+  ];
+  const isClickbaitForKorean = (title) => {
+    if (!title) return false;
+    return PLAYER_NAMES.some(name => {
+      if (!title.includes(name)) return false;
+      return CLICKBAIT_PATTERNS.some(p => {
+        const re = new RegExp(name + '[가-힣A-Za-z0-9 ]*' + p);
+        return re.test(title);
+      });
+    });
+  };
+
   const enabledSportTypes = React.useMemo(() => {
     const set = new Set();
     if (sportFeeds?.soccer) set.add('soccer');
@@ -3849,6 +3868,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0 }) {
         const merged = responses.flat();
         const filtered = merged.filter(item => {
           if (!isSportsHost(item.source)) return false;
+          if (isClickbaitForKorean(item.title)) return false;
           const haystack = `${item.title} ${item.description}`;
           if (EXCLUDE_KEYWORDS.some(kw => haystack.includes(kw))) return false;
           if (!PLAYER_NAMES.some(name => haystack.includes(name))) return false;
