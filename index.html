@@ -1521,24 +1521,38 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
       {/* ── HIGHLIGHT CARD (finished + live/upcoming share same layout) ── */}
       {isFinishedHighlight ? (() => {
         const kp = highlightMatch.koreanPlayer;
+        const isMLB = (highlightMatch.sport||'').includes('MLB') || (highlightMatch.sport||'').includes('⚾');
+        const homeIsKorean = kp.team === highlightMatch.home.code;
         const eventsGoals = (highlightMatch.events||[]).filter(e=>e.type==='goal'&&e.player===kp.name).length;
         const eventsAssists = (highlightMatch.events||[]).filter(e=>e.type==='assist'&&e.player===kp.name).length;
         const goals = (kp.matchGoals != null && kp.matchGoals > 0) ? kp.matchGoals : eventsGoals;
         const assists = (kp.matchAssists != null && kp.matchAssists > 0) ? kp.matchAssists : eventsAssists;
         const statParts = [];
-        if (goals > 0) statParts.push(`${goals}골`);
-        if (assists > 0) statParts.push(`${assists}도움`);
-        const ev = kp.event || '';
-        const mins = kp.minutesPlayed;
-        const minText = (ev === '풀타임' || mins >= 90) ? '풀타임 출전'
-          : ev.includes('분') ? ev : mins > 0 ? `${mins}분 출전` : ev === '출전 완료' ? '출전 완료' : '출전';
-        statParts.push(minText);
+        if (isMLB) {
+          const ab = kp.atBats || 0, h = kp.hits || 0, hr = kp.homeRuns || 0, rbi = kp.rbi || 0, r = kp.runs || 0, sb = kp.stolenBases || 0;
+          if (ab > 0 || h > 0) statParts.push(`${ab}타수 ${h}안타`);
+          if (hr > 0) statParts.push(`${hr}홈런`);
+          if (rbi > 0) statParts.push(`${rbi}타점`);
+          if (sb > 0) statParts.push(`${sb}도루`);
+          if (r > 0 && hr === 0 && sb === 0) statParts.push(`${r}득점`);
+          if (statParts.length === 0) statParts.push(kp.event || '출전');
+        } else {
+          if (goals > 0) statParts.push(`${goals}골`);
+          if (assists > 0) statParts.push(`${assists}도움`);
+          const ev = kp.event || '';
+          const mins = kp.minutesPlayed;
+          const minText = (ev === '풀타임' || mins >= 90) ? '풀타임 출전'
+            : ev.includes('분') ? ev : mins > 0 ? `${mins}분 출전` : ev === '출전 완료' ? '출전 완료' : '출전';
+          statParts.push(minText);
+        }
+        const homeColor = homeIsKorean ? 'var(--acc)' : '#fff';
+        const awayColor = !homeIsKorean ? 'var(--acc)' : '#fff';
         const scoreNode = (
           <div style={{ display:'flex', alignItems:'center', gap:10, margin:'6px 0 2px' }}>
             <TeamBadge code={highlightMatch.home.code} size={28} logo={highlightMatch.home.logo}/>
-            <span style={{ fontVariantNumeric:'tabular-nums', fontSize:32, fontWeight:900, color:'#fff', letterSpacing:-1 }}>{highlightMatch.home.score}</span>
+            <span style={{ fontVariantNumeric:'tabular-nums', fontSize:32, fontWeight:900, color:homeColor, letterSpacing:-1 }}>{highlightMatch.home.score}</span>
             <span style={{ fontSize:20, color:'rgba(255,255,255,0.4)', fontWeight:300 }}>:</span>
-            <span style={{ fontVariantNumeric:'tabular-nums', fontSize:32, fontWeight:900, color:'rgba(255,255,255,0.5)', letterSpacing:-1 }}>{highlightMatch.away.score}</span>
+            <span style={{ fontVariantNumeric:'tabular-nums', fontSize:32, fontWeight:900, color:awayColor, letterSpacing:-1 }}>{highlightMatch.away.score}</span>
             <TeamBadge code={highlightMatch.away.code} size={28} logo={highlightMatch.away.logo}/>
           </div>
         );
@@ -4157,20 +4171,28 @@ function App() {
             const homeRuns = parseInt(stat?.homeRuns ?? 0) || 0;
             const rbi = parseInt(stat?.rbi ?? 0) || 0;
             const runs = parseInt(stat?.runs ?? 0) || 0;
+            const stolenBases = parseInt(stat?.stolenBases ?? 0) || 0;
+            const baseOnBalls = parseInt(stat?.baseOnBalls ?? 0) || 0;
             const didPlay = !!stat && (atBats > 0 || stat.plateAppearances > 0);
             if (isLive) {
               newEvent = didPlay ? '출전 중' : (stat ? '벤치' : '출전 예상');
             } else if (isFinished) {
               if (!stat) newEvent = '미출전';
               else if (!didPlay) newEvent = '대기 명단';
-              else newEvent = `${atBats}타수 ${hits}안타${homeRuns ? ' ' + homeRuns + 'HR' : ''}${rbi ? ' ' + rbi + '타점' : ''}`;
+              else {
+                const parts = [`${atBats}타수 ${hits}안타`];
+                if (homeRuns) parts.push(`${homeRuns}홈런`);
+                if (rbi) parts.push(`${rbi}타점`);
+                if (stolenBases) parts.push(`${stolenBases}도루`);
+                newEvent = parts.join(' ');
+              }
             } else {
               newEvent = '출전 예상';
             }
             koreanMatches[idx] = {
               ...cur,
-              koreanPlayer: { ...kp, event: newEvent, atBats, hits, homeRuns, rbi, runs },
-              koreanPlayers: (cur.koreanPlayers || [kp]).map(p => p.name === kp.name ? { ...p, event: newEvent, atBats, hits, homeRuns, rbi, runs } : p),
+              koreanPlayer: { ...kp, event: newEvent, atBats, hits, homeRuns, rbi, runs, stolenBases, baseOnBalls },
+              koreanPlayers: (cur.koreanPlayers || [kp]).map(p => p.name === kp.name ? { ...p, event: newEvent, atBats, hits, homeRuns, rbi, runs, stolenBases, baseOnBalls } : p),
             };
           });
         }
