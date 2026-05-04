@@ -127,6 +127,13 @@ const SB = supabase.createClient(
 
 const ToastCtx = React.createContext(() => {});
 
+const matchSportKey = (m) => ((m?.sport||'').includes('MLB') || (m?.sport||'').includes('⚾')) ? 'baseball'
+  : ((m?.sport||'').includes('배드민턴') || (m?.sport||'').includes('🏸')) ? 'badminton'
+  : 'soccer';
+const isMatchAllowed = (m, feeds) => feeds?.[matchSportKey(m)] !== false;
+const playerSportKey = (p) => p?.sport === '야구' ? 'baseball' : p?.sport === '배드민턴' ? 'badminton' : 'soccer';
+const isPlayerAllowed = (p, feeds) => feeds?.[playerSportKey(p)] !== false;
+
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "homeVariant": 1,
   "accentColor": "#f5c400",
@@ -3471,7 +3478,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
 }
 
 // ─── SCREEN: PLAYERS LIST ────────────────────────────────────
-function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading = false, onRefresh, scrollTopKey = 0, liveApiMatches = [] }) {
+function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading = false, onRefresh, scrollTopKey = 0, liveApiMatches = [], sportFeeds }) {
   // Static fallback team logo URLs by player name (used when no recent match cached)
   const TEAM_LOGO_FALLBACK = {
     '손흥민':'https://a.espncdn.com/i/teamlogos/soccer/500/18966.png',
@@ -3506,7 +3513,9 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
 
   const sports = ['전체', '축구', '야구', '배드민턴'];
   const [filter, setFilter] = React.useState('전체');
-  const followedPlayers = ALL_PLAYERS.filter(p => followed.has(p.id));
+  const followedPlayers = ALL_PLAYERS
+    .filter(p => followed.has(p.id))
+    .filter(p => isPlayerAllowed(p, sportFeeds));
   const filtered = filter === '전체' ? followedPlayers
     : followedPlayers.filter(p => p.sport === filter);
 
@@ -5650,21 +5659,26 @@ function App() {
 
   const homeVariantNames = ['카드 스택', '에디토리얼', '컴팩트'];
 
+  const filteredLiveMatches = React.useMemo(
+    () => liveMatches.filter(m => isMatchAllowed(m, sportFeeds)),
+    [liveMatches, sportFeeds]
+  );
+
   return (
     <ToastCtx.Provider value={showToast}>
     <div style={{ '--acc': tweaks.accentColor, fontFamily:"'Noto Sans KR', system-ui, sans-serif", WebkitFontSmoothing:'antialiased' }}>
       <IOSDevice dark={darkMode} width={deviceDimensions.width} height={deviceDimensions.height}>
         <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'var(--bg)', paddingBottom:'70px', position:'relative' }}>
           {toast && (
-            <div key={toast.id} style={{ position:'absolute', left:'50%', bottom:'88px', transform:'translateX(-50%)', zIndex:200, background:'rgba(0,0,0,0.85)', color:'#fff', padding:'10px 18px', borderRadius:22, fontSize:13, fontWeight:600, letterSpacing:-0.2, whiteSpace:'nowrap', boxShadow:'0 6px 24px rgba(0,0,0,0.35)', backdropFilter:'blur(10px)', WebkitBackdropFilter:'blur(10px)', animation:'toastIn 0.22s ease-out', pointerEvents:'none' }}>
+            <div key={toast.id} style={{ position:'fixed', left:'50%', bottom:'calc(78px + env(safe-area-inset-bottom))', transform:'translateX(-50%)', zIndex:200, background:'rgba(0,0,0,0.85)', color:'#fff', padding:'10px 18px', borderRadius:22, fontSize:13, fontWeight:600, letterSpacing:-0.2, whiteSpace:'nowrap', boxShadow:'0 6px 24px rgba(0,0,0,0.35)', backdropFilter:'blur(10px)', WebkitBackdropFilter:'blur(10px)', animation:'toastIn 0.22s ease-out', pointerEvents:'none' }}>
               {toast.message}
             </div>
           )}
           {screen === 'main' && (
             <>
-              <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} tweaks={tweaks} liveApiMatches={liveMatches} isLoading={isInitialLoad && apiLoading} scrollTopKey={tabScrollKeys.home} onRefresh={fetchLiveMatches} unreadCount={unreadCount}/></div>
-              <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} liveApiMatches={liveMatches} isLoading={apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
-              <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} followed={followed} statsCache={playerStatsCache} isLoading={apiLoading} onRefresh={fetchLiveMatches} scrollTopKey={tabScrollKeys.players} liveApiMatches={liveMatches}/></div>
+              <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} tweaks={tweaks} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} scrollTopKey={tabScrollKeys.home} onRefresh={fetchLiveMatches} unreadCount={unreadCount}/></div>
+              <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} liveApiMatches={filteredLiveMatches} isLoading={apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
+              <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} followed={followed} statsCache={playerStatsCache} isLoading={apiLoading} onRefresh={fetchLiveMatches} scrollTopKey={tabScrollKeys.players} liveApiMatches={filteredLiveMatches} sportFeeds={sportFeeds}/></div>
               <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news}/></div>
               <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen darkMode={darkMode} onToggleDark={toggleDark} sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed} profile={profile} onUpdateProfile={updateProfile}/></div>
             </>
