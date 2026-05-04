@@ -1579,11 +1579,11 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
                 <span style={{ fontSize:11, fontWeight:700, color:'rgba(255,255,255,0.7)', letterSpacing:1.5 }}>경기 종료</span>
               </div>
               {scoreNode}
-              <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:10 }}>
-                <div style={{ fontSize:28, fontWeight:900, color:'#fff', lineHeight:1.1, letterSpacing:-0.5 }}>{kp.name} {statParts.join(' · ')}</div>
+              <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:8 }}>{highlightMatch.home.name} vs {highlightMatch.away.name} · {highlightMatch.competition}</div>
+              <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:8 }}>
+                <div style={{ fontSize:24, fontWeight:900, color:'#fff', lineHeight:1.1, letterSpacing:-0.5 }}>{kp.name} {statParts.join(' · ')}</div>
                 {kp.sfRating && <span style={{ fontSize:12, fontWeight:700, color:'var(--acc)', background:'rgba(245,196,0,0.15)', border:'0.5px solid rgba(245,196,0,0.3)', borderRadius:8, padding:'4px 8px', flexShrink:0 }}>★ {kp.sfRating}</span>}
               </div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:10 }}>{highlightMatch.home.name} vs {highlightMatch.away.name} · {highlightMatch.competition}</div>
             </div>
           </div>
         );
