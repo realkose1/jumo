@@ -693,8 +693,10 @@ function CareerTimeline({ extra }) {
 const TabBar = React.memo(function TabBar({ active: propActive, onTab }) {
   const [active, setActive] = React.useState(propActive);
   React.useEffect(() => { setActive(propActive); }, [propActive]);
-  const handle = (id) => {
+  const handlePress = (id) => {
     if (id !== active) setActive(id);
+  };
+  const handleClick = (id) => {
     onTab(id);
   };
   const tabs = [
@@ -720,7 +722,7 @@ const TabBar = React.memo(function TabBar({ active: propActive, onTab }) {
       paddingTop:8
     }}>
       {tabs.map(t => (
-        <button key={t.id} onClick={() => handle(t.id)} style={{ flex:1, background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:3, color: active===t.id ? 'var(--acc)' : 'var(--text4)', transition:'none', padding:'4px 0' }}>
+        <button key={t.id} onPointerDown={() => handlePress(t.id)} onClick={() => handleClick(t.id)} style={{ flex:1, background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:3, color: active===t.id ? 'var(--acc)' : 'var(--text4)', transition:'none', padding:'4px 0', WebkitTapHighlightColor:'transparent', touchAction:'manipulation' }}>
           {t.icon}
           <span style={{ fontSize:10, fontWeight:600, letterSpacing:0.2 }}>{t.label}</span>
         </button>
