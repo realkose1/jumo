@@ -277,18 +277,30 @@ function getRelativeDate(hoursFromNow) {
   return date.toISOString();
 }
 
-function formatKRTime(date) {
+function getKstMode() {
+  try { return localStorage.getItem('jumo_kst_mode') !== 'false'; } catch { return true; }
+}
+
+function formatKRTime(date, kst = getKstMode()) {
   const d = new Date(date);
-  const hours = d.getHours();
-  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const tz = kst ? 'Asia/Seoul' : undefined;
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    hour: 'numeric', minute: '2-digit', hour12: false,
+    year: 'numeric', month: 'numeric', day: 'numeric',
+  }).formatToParts(d).reduce((acc, p) => (acc[p.type] = p.value, acc), {});
+  const hours = parseInt(parts.hour, 10);
+  const minutes = parts.minute;
   const period = hours < 12 ? '오전' : '오후';
   const displayHours = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
 
-  const now = new Date();
-  const isToday = d.getDate() === now.getDate() && d.getMonth() === now.getMonth();
+  const nowParts = new Intl.DateTimeFormat('en-US', { timeZone: tz, year:'numeric', month:'numeric', day:'numeric' })
+    .formatToParts(new Date()).reduce((acc, p) => (acc[p.type] = p.value, acc), {});
+  const isToday = parts.year === nowParts.year && parts.month === nowParts.month && parts.day === nowParts.day;
   const dayLabel = isToday ? '오늘' : '내일';
+  const suffix = kst ? ' KST' : '';
 
-  return `${dayLabel} ${period} ${displayHours}:${minutes} KST`;
+  return `${dayLabel} ${period} ${displayHours}:${minutes}${suffix}`;
 }
 
 function formatShortTime(date) {
@@ -4263,53 +4275,6 @@ function SportFeedScreen({ onBack, sportFeeds, onToggleSportFeed }) {
   );
 }
 
-// ─── MORE: STREAMING LINKS ────────────────────────────────────
-function StreamingScreen({ onBack }) {
-  const channels = [
-    { name:'SPOTV',        sub:'EPL, 챔피언스리그, MLB', sports:['⚽','⚾'], color:'#c0392b', badge:'유료',   url:'https://www.spotv.net/' },
-    { name:'SPOTV NOW',    sub:'온라인 스트리밍 서비스',  sports:['⚽','⚾','🏀'], color:'#c0392b', badge:'구독', url:'https://www.spotvnow.co.kr/' },
-    { name:'Coupang Play', sub:'EPL 독점 중계',          sports:['⚽'], color:'#e04e2a', badge:'구독', url:'https://www.coupangplay.com/' },
-    { name:'TVING',        sub:'분데스리가, 리그앙',       sports:['⚽'], color:'#ff153c', badge:'구독', url:'https://www.tving.com/' },
-    { name:'KBS',          sub:'올림픽, 국제대회 무료',    sports:['🏅','🏹','🏊'], color:'#1a5276', badge:'무료', url:'https://sports.kbs.co.kr/' },
-    { name:'MBC Sports+',  sub:'KBO 리그 중계',          sports:['⚾'], color:'#2c5282', badge:'케이블', url:'https://sports.imbc.com/' },
-    { name:'SBS Sports',   sub:'KBO, 국제대회',          sports:['⚾','🏅'], color:'#1a365d', badge:'케이블', url:'https://sports.sbs.co.kr/' },
-    { name:'AfreecaTV',    sub:'e스포츠 무료 중계',       sports:['🎮'], color:'#1f6feb', badge:'무료', url:'https://www.afreecatv.com/' },
-    { name:'YouTube',      sub:'LCK 공식 채널',          sports:['🎮'], color:'#c00', badge:'무료', url:'https://www.youtube.com/@LCK' },
-  ];
-  const badgeBg  = { '무료':'rgba(44,196,93,0.15)',   '구독':'rgba(230,48,48,0.15)', '유료':'rgba(230,48,48,0.15)', '케이블':'var(--border)' };
-  const badgeFg  = { '무료':'#2cc96d', '구독':'var(--acc)', '유료':'var(--acc)', '케이블':'var(--text3)' };
-  return (
-    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
-      <div style={{ padding:'12px 20px 20px' }}>
-        <BackBtn onBack={onBack}/>
-        <div style={{ fontSize:22, fontWeight:800, color:'var(--text)', letterSpacing:-0.5, marginTop:14, marginBottom:6 }}>스트리밍 링크</div>
-        <div style={{ fontSize:13, color:'var(--text4)', marginBottom:20 }}>한국 선수 경기를 볼 수 있는 채널</div>
-        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-          {channels.map(ch => (
-            <div key={ch.name} onClick={() => ch.url && window.open(ch.url, '_blank', 'noopener,noreferrer')} style={{ background:'var(--surface)', borderRadius:14, padding:'13px 16px', border:'0.5px solid var(--border)', display:'flex', alignItems:'center', gap:12, cursor:'pointer' }}>
-              <div style={{ width:44, height:44, borderRadius:12, background:ch.color, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                <span style={{ fontSize:10, fontWeight:800, color:'var(--text)', letterSpacing:-0.3, textAlign:'center', padding:'0 3px' }}>{ch.name.split(' ')[0]}</span>
-              </div>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:3 }}>
-                  <span style={{ fontSize:14, fontWeight:700, color:'var(--text)' }}>{ch.name}</span>
-                  <span style={{ fontSize:10, fontWeight:700, color:badgeFg[ch.badge], background:badgeBg[ch.badge], borderRadius:6, padding:'2px 7px' }}>{ch.badge}</span>
-                </div>
-                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                  <span style={{ fontSize:12, color:'var(--text3)' }}>{ch.sub}</span>
-                  <span style={{ fontSize:13, letterSpacing:1 }}>{ch.sports.join(' ')}</span>
-                </div>
-              </div>
-              <svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M1 1l5 5-5 5" stroke="var(--text6)" strokeWidth="1.8" strokeLinecap="round"/></svg>
-            </div>
-          ))}
-        </div>
-        <div style={{ height:24 }}/>
-      </div>
-    </div>
-  );
-}
-
 // ─── SCREEN: MORE (main) ─────────────────────────────────────
 function CropScreen({ src, onCancel, onConfirm }) {
   const VIEW = 300;
@@ -4495,21 +4460,19 @@ function ProfileEditScreen({ profile, onSave, onBack }) {
   );
 }
 
-function MoreScreen({ darkMode, onToggleDark, sportFeeds, onToggleSportFeed, profile, onUpdateProfile }) {
+function MoreScreen({ darkMode, onToggleDark, sportFeeds, onToggleSportFeed, profile, onUpdateProfile, kstMode, onToggleKst }) {
   const [sub, setSub] = React.useState(null);
   if (sub === 'notif')      return <NotifSettingsScreen onBack={() => setSub(null)}/>;
   if (sub === 'sports')     return <SportFeedScreen onBack={() => setSub(null)} sportFeeds={sportFeeds} onToggleSportFeed={onToggleSportFeed}/>;
-  if (sub === 'streaming')  return <StreamingScreen onBack={() => setSub(null)}/>;
   if (sub === 'profile')    return <ProfileEditScreen profile={profile} onSave={onUpdateProfile} onBack={() => setSub(null)}/>;
 
   const groups = [
     { label:'개인화', items:[
       { id:'sports',    icon:'🏆', color:'#e03030', title:'종목별 피드',   sub:'관심 종목 선택',         chevron:true },
       { id:'notif',     icon:'🔔', color:'#ff9500', title:'알림 설정',     sub:'경기 시작, 이벤트 알림', chevron:true },
-      { id:'streaming', icon:'📡', color:'#1a8fe3', title:'스트리밍 링크', sub:'중계 채널 연결',         chevron:true },
     ]},
     { label:'일반', items:[
-      { id:'time', icon:'⏱', color:'#34c759', title:'한국 시간 자동변환', sub:'항상 KST로 표시', toggle:true, val:true },
+      { id:'time', icon:'⏱', color:'#34c759', title:'한국 시간 자동변환', sub: kstMode ? 'KST로 표시' : '현지 시간으로 표시', toggle:true, val:kstMode, onToggle: onToggleKst },
       { id:'dark', icon:'🌙', color:'#5856d6', title:'다크 모드', sub: darkMode ? '켜짐' : '꺼짐', toggle:true, val:darkMode, onToggle: onToggleDark },
     ]},
     { label:'앱 정보', items:[
@@ -4620,6 +4583,16 @@ function App() {
 
   const [darkMode, setDarkMode] = React.useState(true);
   const toggleDark = () => setDarkMode(d => { showToast(`다크 모드 ${!d ? '켜짐' : '꺼짐'}`); return !d; });
+  const [kstMode, setKstMode] = React.useState(() => {
+    try { return localStorage.getItem('jumo_kst_mode') !== 'false'; } catch { return true; }
+  });
+  const toggleKst = () => setKstMode(prev => {
+    const next = !prev;
+    try { localStorage.setItem('jumo_kst_mode', String(next)); } catch {}
+    setLiveMatches(ms => ms.map(m => m.fullDate ? { ...m, krTime: formatKRTime(m.fullDate, next) } : m));
+    showToast(next ? '한국 시간(KST)으로 표시' : '현지 시간으로 표시');
+    return next;
+  });
   const [sportFeeds, setSportFeeds] = React.useState(() => {
     try {
       return { soccer:true, baseball:true, badminton:true, ...JSON.parse(localStorage.getItem('jumo_sport_feeds') || '{}') };
@@ -5684,7 +5657,7 @@ function App() {
               <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} liveApiMatches={filteredLiveMatches} isLoading={apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
               <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} followed={followed} statsCache={playerStatsCache} isLoading={apiLoading} onRefresh={fetchLiveMatches} scrollTopKey={tabScrollKeys.players} liveApiMatches={filteredLiveMatches} sportFeeds={sportFeeds}/></div>
               <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news}/></div>
-              <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen darkMode={darkMode} onToggleDark={toggleDark} sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed} profile={profile} onUpdateProfile={updateProfile}/></div>
+              <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen darkMode={darkMode} onToggleDark={toggleDark} sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed} profile={profile} onUpdateProfile={updateProfile} kstMode={kstMode} onToggleKst={toggleKst}/></div>
             </>
           )}
           {screen === 'match' && selectedMatch && (
