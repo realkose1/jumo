@@ -321,7 +321,7 @@ const ALL_PLAYERS = [
   { id: 18, name: '김혜성',  nameEn: 'Hyeseong Kim',    number: 25, sport: '야구',   team: 'Dodgers',    league: 'MLB',        position: '유격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 16, rating: 0,   startRate: 70, age: 27, birth: '1999.01.27', height: '178cm', mlbId: 808975 },
 
   // 배드민턴
-  { id: 15, name: '안세영',  nameEn: 'An Se-young',     number: 1,  sport: '배드민턴','team': '한국 대표팀','league': 'BWF World Tour', position: '여자 단식', nation: '🇰🇷', goals: 0,  assists: 0,  matches: 32, rating: 9.6, startRate: 100, age: 24, birth: '2002.02.05', height: '168cm' },
+  { id: 15, name: '안세영',  nameEn: 'An Se-young',     number: 1,  sport: '배드민턴','team': '한국 대표팀','league': 'BWF World Tour', position: '여자 단식', nation: '🇰🇷', goals: 0,  assists: 0,  matches: 32, wins: 27, winRate: 85, rating: 0, startRate: 100, age: 24, birth: '2002.02.05', height: '168cm' },
 ];
 const PLAYERS = ALL_PLAYERS.slice(0, 5);
 
@@ -2907,6 +2907,8 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
     ['출전', liveStats.matches], ['안타', liveStats.hits], ['홈런', liveStats.homeRuns], ['타율', liveStats.avg],
   ] : player.sport === '야구' ? [
     ['출전', player.matches], ['나이', player.age],
+  ] : player.sport === '배드민턴' ? [
+    ['경기', player.matches], ['승', player.wins ?? 0], ['승률', `${player.winRate ?? 0}%`],
   ] : [
     ['출전', player.matches], ['나이', player.age],
   ];
@@ -3558,6 +3560,10 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
               stats.push({ k:'홈런', v:s.homeRuns, accent: s.homeRuns > 0 });
               stats.push({ k:'안타', v:s.hits, accent: false });
               if (s.avg) stats.push({ k:'타율', v:s.avg, accent: true });
+            } else if (p.sport === '배드민턴') {
+              stats.push({ k:'경기', v:matches, accent: false });
+              if (p.wins != null) stats.push({ k:'승', v:p.wins, accent: true });
+              if (p.winRate != null) stats.push({ k:'승률', v:`${p.winRate}%`, accent: true });
             } else {
               stats.push({ k:'경기', v:matches, accent: false });
               if (p.rating > 0) stats.push({ k:'평점', v:p.rating.toFixed(1), accent: true });
