@@ -4204,62 +4204,99 @@ function App() {
 
         setLiveMatches([...koreanMatches]);
 
-        // Stabilize player metrics by aggregating per player:
-        // - Counting stats use max (avoid dropping due to partial match payloads)
-        // - Rating/AVG use the most recent match payload
-        const playerMetrics = new Map();
+        // Save manual baseline once (first run) so we can rebuild totals each refresh
+        // by adding contributions from finished matches in the live cache.
+        if (!ALL_PLAYERS[0]._baselineSnapshot) {
+          ALL_PLAYERS.forEach(p => {
+            p._baselineSnapshot = {
+              goals: Number(p.goals) || 0,
+              assists: Number(p.assists) || 0,
+              matches: Number(p.matches) || 0,
+              hits: Number(p.hits) || 0,
+              homeRuns: Number(p.homeRuns) || 0,
+              rbi: Number(p.rbi) || 0,
+              rating: Number(p.rating) || 0,
+              avg: p.avg,
+            };
+          });
+        }
 
-        koreanMatches.forEach(match => {
-          if (!match.koreanPlayer) return;
+        // For each player: take baseline + add per-match deltas from finished matches
+        const FINAL_STATUSES = ['STATUS_FINAL','STATUS_FULL_TIME','final','STATUS_END_PERIOD','STATUS_FINAL_PEN'];
+        const seenMatchByPlayer = new Map(); // playerIdx -> Set of match IDs already counted
+        ALL_PLAYERS.forEach((p, idx) => seenMatchByPlayer.set(idx, new Set()));
 
-          const playerIndex = ALL_PLAYERS.findIndex(p =>
-            p.nameEn === match.koreanPlayer.nameEn ||
-            p.name === match.koreanPlayer.name
-          );
-          if (playerIndex === -1) return;
-
-          const current = playerMetrics.get(playerIndex) || {
-            goals: Number(ALL_PLAYERS[playerIndex].goals) || 0,
-            assists: Number(ALL_PLAYERS[playerIndex].assists) || 0,
-            hits: Number(ALL_PLAYERS[playerIndex].hits) || 0,
-            homeRuns: Number(ALL_PLAYERS[playerIndex].homeRuns) || 0,
-            rbi: Number(ALL_PLAYERS[playerIndex].rbi) || 0,
-            rating: Number(ALL_PLAYERS[playerIndex].rating) || 0,
-            avg: ALL_PLAYERS[playerIndex].avg,
-            latestTs: 0,
-          };
-
-          const ts = match.fullDate ? new Date(match.fullDate).getTime() : 0;
-          const kp = match.koreanPlayer;
-
-          if (kp.goals !== undefined && kp.goals !== null) current.goals = Math.max(current.goals, Number(kp.goals) || 0);
-          if (kp.assists !== undefined && kp.assists !== null) current.assists = Math.max(current.assists, Number(kp.assists) || 0);
-          if (kp.hits !== undefined && kp.hits !== null) current.hits = Math.max(current.hits, Number(kp.hits) || 0);
-          if (kp.homeRuns !== undefined && kp.homeRuns !== null) current.homeRuns = Math.max(current.homeRuns, Number(kp.homeRuns) || 0);
-          if (kp.rbi !== undefined && kp.rbi !== null) current.rbi = Math.max(current.rbi, Number(kp.rbi) || 0);
-
-          if (ts >= current.latestTs) {
-            if (kp.rating !== undefined && kp.rating !== null && kp.rating !== '') {
-              const parsedRating = parseFloat(kp.rating);
-              if (!Number.isNaN(parsedRating)) current.rating = parsedRating;
-            }
-            if (kp.avg !== undefined && kp.avg !== null && kp.avg !== '') {
-              current.avg = kp.avg;
-            }
-            current.latestTs = ts;
-          }
-
-          playerMetrics.set(playerIndex, current);
+        // Reset to baseline first
+        ALL_PLAYERS.forEach(p => {
+          const b = p._baselineSnapshot;
+          if (!b) return;
+          p.goals = b.goals;
+          p.assists = b.assists;
+          p.matches = b.matches;
+          p.hits = b.hits;
+          p.homeRuns = b.homeRuns;
+          p.rbi = b.rbi;
+          p.rating = b.rating;
+          p.avg = b.avg;
         });
 
-        playerMetrics.forEach((metrics, playerIndex) => {
-          ALL_PLAYERS[playerIndex].goals = metrics.goals;
-          ALL_PLAYERS[playerIndex].assists = metrics.assists;
-          ALL_PLAYERS[playerIndex].hits = metrics.hits;
-          ALL_PLAYERS[playerIndex].homeRuns = metrics.homeRuns;
-          ALL_PLAYERS[playerIndex].rbi = metrics.rbi;
-          ALL_PLAYERS[playerIndex].rating = metrics.rating;
-          if (metrics.avg !== undefined) ALL_PLAYERS[playerIndex].avg = metrics.avg;
+        // Track latest rating/avg per player
+        const latestPerPlayer = new Map(); // idx -> { ts, rating, avg }
+
+        koreanMatches.forEach(match => {
+          if (!FINAL_STATUSES.includes(match.status)) return;
+          const allKp = match.koreanPlayers || [match.koreanPlayer];
+          allKp.forEach(kp => {
+            if (!kp) return;
+            const idx = ALL_PLAYERS.findIndex(p => p.nameEn === kp.nameEn || p.name === kp.name);
+            if (idx === -1) return;
+            const seen = seenMatchByPlayer.get(idx);
+            if (seen.has(match.id)) return;
+            seen.add(match.id);
+            const player = ALL_PLAYERS[idx];
+
+            // Per-match contributions (additive)
+            if (player.sport === '축구') {
+              const mg = Number(kp.matchGoals) || 0;
+              const ma = Number(kp.matchAssists) || 0;
+              if (mg > 0) player.goals += mg;
+              if (ma > 0) player.assists += ma;
+              // Count appearance if event indicates play
+              const ev = kp.event || '';
+              const played = (kp.minutesPlayed || 0) > 0
+                || ev === '풀타임' || ev === '교체 아웃' || ev.includes('분 출전')
+                || mg > 0 || ma > 0;
+              if (played) player.matches += 1;
+            } else if (player.sport === '야구') {
+              const h = Number(kp.hits) || 0;
+              const hr = Number(kp.homeRuns) || 0;
+              const rbi = Number(kp.rbi) || 0;
+              if (h > 0) player.hits += h;
+              if (hr > 0) player.homeRuns += hr;
+              if (rbi > 0) player.rbi += rbi;
+              const didPlay = (kp.atBats || 0) > 0 || h > 0;
+              if (didPlay) player.matches += 1;
+            }
+
+            // Track latest rating/avg
+            const ts = match.fullDate ? new Date(match.fullDate).getTime() : 0;
+            const cur = latestPerPlayer.get(idx) || { ts: 0 };
+            if (ts >= cur.ts) {
+              const upd = { ts };
+              if (kp.sfRating != null && kp.sfRating !== '') {
+                const r = parseFloat(kp.sfRating);
+                if (!Number.isNaN(r)) upd.rating = r;
+              }
+              if (kp.avg != null && kp.avg !== '') upd.avg = kp.avg;
+              latestPerPlayer.set(idx, { ...cur, ...upd });
+            }
+          });
+        });
+
+        // Apply latest rating/avg
+        latestPerPlayer.forEach((info, idx) => {
+          if (info.rating !== undefined) ALL_PLAYERS[idx].rating = info.rating;
+          if (info.avg !== undefined) ALL_PLAYERS[idx].avg = info.avg;
         });
 
         console.log(`✅ ${new Date().toLocaleTimeString('ko-KR')} | 한국 선수 경기: ${koreanMatches.length}개`);
