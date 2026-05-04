@@ -94,6 +94,7 @@ body {
 html.light-mode body { background: #e5e5ea; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 @keyframes slideUp { from{transform:translateY(100%);opacity:0} to{transform:translateY(0);opacity:1} }
+@keyframes toastIn { from{transform:translate(-50%, 12px);opacity:0} to{transform:translate(-50%, 0);opacity:1} }
 @keyframes fadeIn { from{opacity:0} to{opacity:1} }
 @keyframes ripple { 0%{transform:scale(1);opacity:0.6} 100%{transform:scale(2.5);opacity:0} }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -123,6 +124,8 @@ const SB = supabase.createClient(
   'https://pxchmolcruhxbmvomsyy.supabase.co',
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4Y2htb2xjcnVoeGJtdm9tc3l5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3NTk0ODgsImV4cCI6MjA5MzMzNTQ4OH0.WvxjnCkWD_LCgJTPdH3jtMc-maz0dSgS-A9SDHuy58U'
 );
+
+const ToastCtx = React.createContext(() => {});
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "homeVariant": 1,
@@ -4170,7 +4173,9 @@ function AddPlayerScreen({ followed, onToggle, onBack }) {
 
 // ─── MORE: NOTIFICATION SETTINGS ─────────────────────────────
 function NotifSettingsScreen({ onBack }) {
+  const showToast = React.useContext(ToastCtx);
   const DEFAULTS = { matchStart:true, goal:true, assist:true, result:true, highlight:false, lineup:false, injury:true };
+  const LABELS = { matchStart:'경기 시작 알림', goal:'골 알림', assist:'어시스트 알림', result:'경기 결과', highlight:'하이라이트 영상', lineup:'선발 라인업', injury:'부상/출장 정보' };
   const [s, setS] = React.useState(() => {
     try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('jumo_notif_settings') || '{}') }; }
     catch { return DEFAULTS; }
@@ -4178,6 +4183,7 @@ function NotifSettingsScreen({ onBack }) {
   const toggle = k => setS(p => {
     const next = { ...p, [k]: !p[k] };
     try { localStorage.setItem('jumo_notif_settings', JSON.stringify(next)); } catch {}
+    showToast(`${LABELS[k] || k} ${next[k] ? '켜짐' : '꺼짐'}`);
     return next;
   });
   const Toggle = ({ k }) => (
@@ -4591,8 +4597,16 @@ function App() {
     SB.from('user_follows').upsert({ device_id: deviceId, player_ids: ids, updated_at: new Date().toISOString() }).then(() => {});
     return n;
   });
+  const [toast, setToast] = React.useState(null);
+  const toastTimerRef = React.useRef(null);
+  const showToast = React.useCallback((message) => {
+    setToast({ id: Date.now() + Math.random(), message });
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(null), 2000);
+  }, []);
+
   const [darkMode, setDarkMode] = React.useState(true);
-  const toggleDark = () => setDarkMode(d => !d);
+  const toggleDark = () => setDarkMode(d => { showToast(`다크 모드 ${!d ? '켜짐' : '꺼짐'}`); return !d; });
   const [sportFeeds, setSportFeeds] = React.useState(() => {
     try {
       return { soccer:true, baseball:true, badminton:true, ...JSON.parse(localStorage.getItem('jumo_sport_feeds') || '{}') };
@@ -4600,10 +4614,12 @@ function App() {
       return { soccer:true, baseball:true, badminton:true };
     }
   });
+  const SPORT_LABELS = { soccer:'축구', baseball:'야구', badminton:'배드민턴' };
   const toggleSportFeed = (id) => {
     setSportFeeds(prev => {
       const next = { ...prev, [id]: !prev[id] };
       localStorage.setItem('jumo_sport_feeds', JSON.stringify(next));
+      showToast(`${SPORT_LABELS[id] || id} 피드 ${next[id] ? '켜짐' : '꺼짐'}`);
       return next;
     });
   };
@@ -4637,7 +4653,10 @@ function App() {
       nickname: next.nickname,
       image: next.image,
       updated_at: new Date().toISOString(),
-    }).then(({ error }) => { if (error) console.warn('profile sync failed', error); });
+    }).then(({ error }) => {
+      if (error) { console.warn('profile sync failed', error); showToast('저장 중 오류'); }
+      else showToast('프로필이 저장되었습니다');
+    });
   };
 
   React.useEffect(() => {
@@ -5632,9 +5651,15 @@ function App() {
   const homeVariantNames = ['카드 스택', '에디토리얼', '컴팩트'];
 
   return (
+    <ToastCtx.Provider value={showToast}>
     <div style={{ '--acc': tweaks.accentColor, fontFamily:"'Noto Sans KR', system-ui, sans-serif", WebkitFontSmoothing:'antialiased' }}>
       <IOSDevice dark={darkMode} width={deviceDimensions.width} height={deviceDimensions.height}>
-        <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'var(--bg)', paddingBottom:'70px' }}>
+        <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'var(--bg)', paddingBottom:'70px', position:'relative' }}>
+          {toast && (
+            <div key={toast.id} style={{ position:'absolute', left:'50%', bottom:'88px', transform:'translateX(-50%)', zIndex:200, background:'rgba(0,0,0,0.85)', color:'#fff', padding:'10px 18px', borderRadius:22, fontSize:13, fontWeight:600, letterSpacing:-0.2, whiteSpace:'nowrap', boxShadow:'0 6px 24px rgba(0,0,0,0.35)', backdropFilter:'blur(10px)', WebkitBackdropFilter:'blur(10px)', animation:'toastIn 0.22s ease-out', pointerEvents:'none' }}>
+              {toast.message}
+            </div>
+          )}
           {screen === 'main' && (
             <>
               <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} tweaks={tweaks} liveApiMatches={liveMatches} isLoading={isInitialLoad && apiLoading} scrollTopKey={tabScrollKeys.home} onRefresh={fetchLiveMatches} unreadCount={unreadCount}/></div>
@@ -5702,6 +5727,7 @@ function App() {
         </div>
       )}
     </div>
+    </ToastCtx.Provider>
   );
 }
 
