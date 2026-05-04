@@ -4600,10 +4600,14 @@ function App() {
 
   const toggleFollow = (id) => setFollowed(prev => {
     const n = new Set(prev);
-    n.has(id) ? n.delete(id) : n.add(id);
+    const wasFollowed = n.has(id);
+    wasFollowed ? n.delete(id) : n.add(id);
     const ids = [...n];
     try { localStorage.setItem('jumo_followed', JSON.stringify(ids)); } catch {}
     SB.from('user_follows').upsert({ device_id: deviceId, player_ids: ids, updated_at: new Date().toISOString() }).then(() => {});
+    const player = ALL_PLAYERS.find(p => p.id === id);
+    const name = player?.name || '선수';
+    showToast(wasFollowed ? `${name} 팔로우 해제` : `${name} 팔로우 추가`);
     return n;
   });
   const [toast, setToast] = React.useState(null);
