@@ -557,7 +557,7 @@ function PlayerPhoto({ player, style={}, tint='var(--bg)' }) {
       {imagePath ? (
         <img src={imagePath} alt={player.name} style={{
           width:'100%', height:'100%', objectFit:'cover',
-          objectPosition: player.name === '조규성' ? '40% 50%' : '50% 50%',
+          objectPosition: player.name === '조규성' ? '40% 50%' : player.name === '안세영' ? '50% 0%' : '50% 50%',
           display:'block', filter:'brightness(1.1) contrast(1.05)',
           transform: zoom ? `scale(${zoom.scale})` : undefined,
           transformOrigin: zoom ? `${zoom.originX} ${zoom.originY}` : undefined,
