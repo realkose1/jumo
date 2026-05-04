@@ -3977,6 +3977,37 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0 }) {
         {visibleArticles.map((a, i) => {
           const fallbackPlayer = detectPlayerName(`${a.title} ${a.description}`) || a.player || null;
           const source = (() => { try { return new URL(a.link).hostname.replace('www.','').replace('m.','').split('.')[0]; } catch { return ''; } })();
+          if (i === 0) {
+            // Hero article — large image on top, headline overlaid
+            return (
+              <a key={i} href={a.naverLink || a.link} target="_blank" rel="noopener noreferrer" style={{ textDecoration:'none' }}>
+                <div style={{ background:'var(--surface)', borderRadius:18, border:'0.5px solid var(--border2)', overflow:'hidden', position:'relative', minHeight:280 }}>
+                  <div style={{ position:'relative', width:'100%', aspectRatio:'16/10', overflow:'hidden' }}>
+                    <NewsImage url={a.link} fallbackPlayer={fallbackPlayer}/>
+                    <div style={{ position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,0.0) 30%, rgba(0,0,0,0.85) 100%)', pointerEvents:'none' }}/>
+                    <div style={{ position:'absolute', top:12, left:12, display:'inline-flex', alignItems:'center', gap:6, background:'rgba(245,196,0,0.92)', color:'#000', padding:'4px 10px', borderRadius:20, fontSize:10, fontWeight:800, letterSpacing:0.5 }}>
+                      <span>📰</span><span>HEADLINE</span>
+                    </div>
+                    <div style={{ position:'absolute', left:0, right:0, bottom:0, padding:'14px 16px 16px', color:'#fff' }}>
+                      <div style={{ fontSize:18, fontWeight:800, lineHeight:1.35, color:'#fff', letterSpacing:-0.3, textShadow:'0 1px 6px rgba(0,0,0,0.5)', display:'-webkit-box', WebkitLineClamp:3, WebkitBoxOrient:'vertical', overflow:'hidden' }}>
+                        {a.title}
+                      </div>
+                      <div style={{ display:'flex', gap:5, alignItems:'center', marginTop:8 }}>
+                        {source && <span style={{ fontSize:11, color:'var(--acc)', fontWeight:700 }}>{source}</span>}
+                        {source && <span style={{ fontSize:10, color:'rgba(255,255,255,0.5)' }}>·</span>}
+                        <span style={{ fontSize:11, color:'rgba(255,255,255,0.7)' }}>{timeAgo(a.pubDate)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  {a.description && (
+                    <div style={{ padding:'12px 16px', fontSize:12, color:'var(--text3)', lineHeight:1.5, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>
+                      {a.description}
+                    </div>
+                  )}
+                </div>
+              </a>
+            );
+          }
           return (
             <a key={i} href={a.naverLink || a.link} target="_blank" rel="noopener noreferrer" style={{ textDecoration:'none' }}>
               <div style={{ background:'var(--surface)', borderRadius:18, border:'0.5px solid var(--border2)', display:'flex', overflow:'hidden', minHeight:130 }}>
