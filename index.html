@@ -95,6 +95,8 @@ html.light-mode body { background: #e5e5ea; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 @keyframes slideUp { from{transform:translateY(100%);opacity:0} to{transform:translateY(0);opacity:1} }
 @keyframes toastIn { from{transform:translate(-50%, 12px);opacity:0} to{transform:translate(-50%, 0);opacity:1} }
+@keyframes slideInRight { from{transform:translateX(100%)} to{transform:translateX(0)} }
+.screen-slide-in { animation: slideInRight 0.26s cubic-bezier(0.32, 0.72, 0, 1); }
 @keyframes fadeIn { from{opacity:0} to{opacity:1} }
 @keyframes ripple { 0%{transform:scale(1);opacity:0.6} 100%{transform:scale(2.5);opacity:0} }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -2055,7 +2057,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [] }) {
   }
 
   return (
-    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide screen-slide-in">
       {/* Hero */}
       <div style={{ position:'relative', overflow:'hidden', background:'var(--bg2)' }}>
         <div style={{ position:'relative', zIndex:2, padding:'12px 20px 20px' }}>
@@ -2948,7 +2950,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
   ];
 
   return (
-    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide screen-slide-in">
       {/* Hero */}
       <div style={{ position:'relative', height:320, overflow:'hidden' }}>
         {(() => {
@@ -4133,7 +4135,7 @@ function AddPlayerScreen({ followed, onToggle, onBack }) {
   const sportIcon = { '축구':'⚽', '야구':'⚾', '배드민턴':'🏸' };
 
   return (
-    <div style={{ flex:1, display:'flex', flexDirection:'column', background:'var(--bg)', overflow:'hidden' }}>
+    <div className="screen-slide-in" style={{ flex:1, display:'flex', flexDirection:'column', background:'var(--bg)', overflow:'hidden' }}>
       <div style={{ padding:'12px 20px 0', flexShrink:0 }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
           <BackBtn onBack={onBack}/>
@@ -4223,7 +4225,7 @@ function NotifSettingsScreen({ onBack }) {
     { k:'injury', label:'부상/출장 정보', sub:'선수 컨디션 업데이트' },
   ];
   return (
-    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide screen-slide-in">
       <div style={{ padding:'12px 20px 20px' }}>
         <BackBtn onBack={onBack}/>
         <div style={{ fontSize:22, fontWeight:800, color:'var(--text)', letterSpacing:-0.5, marginTop:14, marginBottom:6 }}>알림 설정</div>
@@ -4255,7 +4257,7 @@ function SportFeedScreen({ onBack, sportFeeds, onToggleSportFeed }) {
   const isOn = (id) => sportFeeds?.[id] !== false;
   const toggle = (id) => onToggleSportFeed?.(id);
   return (
-    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide screen-slide-in">
       <div style={{ padding:'12px 20px 20px' }}>
         <BackBtn onBack={onBack}/>
         <div style={{ fontSize:22, fontWeight:800, color:'var(--text)', letterSpacing:-0.5, marginTop:14, marginBottom:6 }}>종목별 피드</div>
@@ -4418,7 +4420,7 @@ function ProfileEditScreen({ profile, onSave, onBack }) {
   };
 
   return (
-    <div style={{ flex:1, overflow:'auto', background:'var(--bg)', position:'relative' }} className="scrollbar-hide">
+    <div style={{ flex:1, overflow:'auto', background:'var(--bg)', position:'relative' }} className="scrollbar-hide screen-slide-in">
       {cropSrc && (
         <CropScreen
           src={cropSrc}
@@ -4478,7 +4480,7 @@ function FeedbackScreen({ onBack }) {
   };
 
   return (
-    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide screen-slide-in">
       <div style={{ padding:'12px 20px 8px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <button onClick={onBack} style={{ background:'none', border:'none', color:'var(--text2)', fontSize:15, cursor:'pointer', padding:0 }}>취소</button>
         <div style={{ fontSize:16, fontWeight:700, color:'var(--text)' }}>피드백 보내기</div>
@@ -5682,7 +5684,7 @@ function App() {
             <AddPlayerScreen followed={followed} onToggle={toggleFollow} onBack={goBack}/>
           )}
           {screen === 'notif' && (
-            <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+            <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide screen-slide-in">
               <div style={{ padding:'12px 20px 8px', display:'flex', alignItems:'center', gap:10 }}>
                 <button onClick={goBack} style={{ ...LG.base, ...LG.circle, color:'rgba(255,255,255,0.85)' }}>
                   <svg width="10" height="17" viewBox="0 0 10 17" fill="none"><path d="M8.5 1.5L1.5 8.5l7 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
