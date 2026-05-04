@@ -1909,8 +1909,22 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [] }) {
   const [statsLoading, setStatsLoading] = React.useState(false);
   const [incidentsData, setIncidentsData] = React.useState(null);
   const [incidentsLoading, setIncidentsLoading] = React.useState(false);
+  const [mlbSummary, setMlbSummary] = React.useState(null);
+  const [mlbLoading, setMlbLoading] = React.useState(false);
 
   const isSoccerMatch = !((match.sport||'').includes('MLB') || (match.sport||'').includes('⚾'));
+  const isMLBMatch = !isSoccerMatch;
+
+  // MLB summary covers events + stats + lineups in one shot
+  React.useEffect(() => {
+    if (!isMLBMatch || mlbSummary || !(tab === 'events' || tab === 'stats' || tab === 'lineups')) return;
+    if (!(isFinished || isLive)) return;
+    setMlbLoading(true);
+    fetch(`https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/summary?event=${match.id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { setMlbSummary(data); setMlbLoading(false); })
+      .catch(() => { setMlbLoading(false); });
+  }, [tab, match.id, isFinished, isLive, isMLBMatch]);
 
   React.useEffect(() => {
     if (tab !== 'events' || incidentsData || !(isFinished || isLive)) return;
@@ -2096,7 +2110,57 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [] }) {
       </div>
 
       {/* Events */}
-      {tab === 'events' && (
+      {tab === 'events' && isMLBMatch && (
+        <div style={{ padding:'16px' }}>
+          {(() => {
+            if (mlbLoading) {
+              return <div style={{ display:'flex', justifyContent:'center', padding:'48px 0' }}><div style={{ width:24, height:24, borderRadius:'50%', border:'2.5px solid var(--border)', borderTopColor:'var(--acc)', animation:'spin 0.8s linear infinite' }}/></div>;
+            }
+            const plays = (mlbSummary?.plays || []).filter(p => p.scoringPlay);
+            if (plays.length === 0) {
+              return <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text5)', fontSize:14 }}>주요 이벤트가 없습니다</div>;
+            }
+            const homeTeamId = mlbSummary?.boxscore?.teams?.find(t => t.homeAway === 'home')?.team?.id;
+            return plays.map((p, i) => {
+              const isHome = String(p.team?.id) === String(homeTeamId);
+              const period = p.period?.displayValue || '';
+              const periodSide = p.period?.type === 'Top' ? '말' : '초';
+              const inningLabel = `${p.period?.number}회 ${p.period?.type === 'Top' ? '초' : '말'}`;
+              return (
+                <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:10, marginBottom:8, padding:'10px 12px', background:'rgba(245,196,0,0.08)', borderRadius:10, border:'0.5px solid rgba(245,196,0,0.3)' }}>
+                  <div style={{ ...NUM, width:50, textAlign:'center', fontSize:11, fontWeight:700, color:'var(--acc)', flexShrink:0, paddingTop:2 }}>{inningLabel}</div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3 }}>
+                      <span style={{ fontSize:9, fontWeight:700, color:'var(--text5)', background:'var(--border)', padding:'1px 5px', borderRadius:4 }}>{isHome ? match.home.code : match.away.code}</span>
+                      <span style={{ ...NUM, fontSize:13, fontWeight:800, color:'var(--text)' }}>{p.awayScore}–{p.homeScore}</span>
+                    </div>
+                    <div style={{ fontSize:12, color:'var(--text2)', lineHeight:1.4 }}>{p.text}</div>
+                  </div>
+                  <div style={{ fontSize:18, flexShrink:0 }}>{(p.scoreValue||0) >= 4 ? '🎯' : '⚾'}</div>
+                </div>
+              );
+            });
+          })()}
+          {/* Reactions */}
+          <div style={{ marginTop:20, padding:'14px', background:'var(--surface)', borderRadius:14, border:'0.5px solid var(--border2)' }}>
+            <div style={{ fontSize:12, color:'var(--text3)', marginBottom:10, fontWeight:600 }}>응원 리액션</div>
+            <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+              {REACTION_EMOJIS.map(em => {
+                const ct = reactions[em] || 0;
+                const reacted = myReactions.has(em);
+                const display = ct >= 1000 ? (ct/1000).toFixed(1) + 'k' : String(ct);
+                return (
+                  <button key={em} onClick={() => handleReaction(em)} style={{ background: reacted ? 'rgba(245,196,0,0.15)' : 'var(--border)', border: reacted ? '0.5px solid rgba(245,196,0,0.4)' : '0.5px solid rgba(255,255,255,0.1)', borderRadius:20, padding:'8px 14px', cursor:'pointer', display:'flex', alignItems:'center', gap:6, transition:'all 0.15s' }}>
+                    <span style={{ fontSize:16 }}>{em}</span>
+                    <span style={{ fontSize:12, color: reacted ? 'var(--acc)' : 'var(--text2)', fontWeight:600 }}>{display}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+      {tab === 'events' && !isMLBMatch && (
         <div style={{ padding:'16px' }}>
           {isLive && (
             <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:16, padding:'10px 14px', background:'rgba(230,48,48,0.08)', borderRadius:10, border:'0.5px solid rgba(230,48,48,0.2)' }}>
@@ -2266,7 +2330,85 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [] }) {
       )}
 
       {/* Stats */}
-      {tab === 'stats' && (() => {
+      {tab === 'stats' && isMLBMatch && (() => {
+        if (mlbLoading) return <div style={{ display:'flex', justifyContent:'center', padding:'48px 0' }}><div style={{ width:24, height:24, borderRadius:'50%', border:'2.5px solid var(--border)', borderTopColor:'var(--acc)', animation:'spin 0.8s linear infinite' }}/></div>;
+        const teams = mlbSummary?.boxscore?.teams || [];
+        if (teams.length < 2) return <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text5)', fontSize:14 }}>통계가 없습니다</div>;
+        const home = teams.find(t => t.homeAway === 'home') || teams[0];
+        const away = teams.find(t => t.homeAway === 'away') || teams[1];
+        const getStat = (team, type, name) => {
+          const cat = (team.statistics || []).find(s => s.name === type);
+          if (!cat) return '';
+          const item = (cat.stats || []).find(x => x.name === name || x.abbreviation === name);
+          return item ? (item.displayValue || item.value || '') : '';
+        };
+        const koreanIsAway = match.koreanPlayer?.team === match.away.code && match.koreanPlayer?.team !== match.home.code;
+        const ROWS = [
+          ['타격', [
+            ['runs', '득점'], ['hits', '안타'], ['doubles', '2루타'], ['triples', '3루타'],
+            ['homeRuns', '홈런'], ['rbi', '타점'], ['walks', '볼넷'], ['strikeouts', '삼진'],
+            ['leftOnBase', '잔루'], ['avg', '타율'], ['onBasePct', '출루율'], ['slugAvg', '장타율'],
+          ]],
+          ['투구', [
+            ['inningsPitched', '이닝'], ['hits', '피안타'], ['runs', '실점'],
+            ['earnedRuns', '자책점'], ['walks', '볼넷'], ['strikeouts', '탈삼진'],
+            ['homeRuns', '피홈런'], ['ERA', 'ERA'], ['WHIP', 'WHIP'],
+          ]],
+        ];
+        const renderRow = ([key, label]) => {
+          const type = ROWS.find(g => g[1].some(([k]) => k === key))?.[0];
+          // determine type based on group
+          return null;
+        };
+        return (
+          <div style={{ padding:'16px' }}>
+            {ROWS.map(([groupName, items]) => {
+              const type = groupName === '타격' ? 'batting' : 'pitching';
+              const rows = items.map(([key, label]) => {
+                const h = getStat(home, type, key);
+                const a = getStat(away, type, key);
+                return { label, h, a };
+              }).filter(r => r.h || r.a);
+              if (rows.length === 0) return null;
+              return (
+                <div key={groupName} style={{ marginBottom:18 }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:'var(--text4)', letterSpacing:1, textTransform:'uppercase', marginBottom:10 }}>{groupName}</div>
+                  {rows.map((r, i) => {
+                    const hVal = parseFloat(r.h) || 0;
+                    const aVal = parseFloat(r.a) || 0;
+                    const total = hVal + aVal;
+                    const homePct = total > 0 ? (hVal/total)*100 : 50;
+                    const awayPct = total > 0 ? (aVal/total)*100 : 50;
+                    return (
+                      <div key={i} style={{ marginBottom:14 }}>
+                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:5 }}>
+                          <span style={{ ...NUM, fontSize:13, fontWeight:700, color: koreanIsAway ? 'var(--text2)' : 'var(--acc)', minWidth:50 }}>{r.h}</span>
+                          <span style={{ fontSize:11, color:'var(--text3)', fontWeight:600 }}>{r.label}</span>
+                          <span style={{ ...NUM, fontSize:13, fontWeight:700, color: koreanIsAway ? 'var(--acc)' : 'var(--text2)', minWidth:50, textAlign:'right' }}>{r.a}</span>
+                        </div>
+                        <div style={{ display:'flex', height:5, gap:2 }}>
+                          {koreanIsAway ? (
+                            <>
+                              <div style={{ flex:1, height:'100%', background:'var(--border)', borderRadius:3 }}/>
+                              <div style={{ width:`${awayPct}%`, height:'100%', background:'var(--acc)', borderRadius:3 }}/>
+                            </>
+                          ) : (
+                            <>
+                              <div style={{ width:`${homePct}%`, height:'100%', background:'var(--acc)', borderRadius:3 }}/>
+                              <div style={{ flex:1, height:'100%', background:'var(--border)', borderRadius:3 }}/>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
+      {tab === 'stats' && !isMLBMatch && (() => {
         if (statsLoading) {
           return <div style={{ display:'flex', justifyContent:'center', padding:'48px 0' }}><div style={{ width:24, height:24, borderRadius:'50%', border:'2.5px solid var(--border)', borderTopColor:'var(--acc)', animation:'spin 0.8s linear infinite' }}/></div>;
         }
@@ -2361,7 +2503,82 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [] }) {
           </div>
         );
       })()}
-      {tab === 'lineups' && (() => {
+      {tab === 'lineups' && isMLBMatch && (() => {
+        if (mlbLoading) return <div style={{ display:'flex', justifyContent:'center', padding:'48px 0' }}><div style={{ width:24, height:24, borderRadius:'50%', border:'2.5px solid var(--border)', borderTopColor:'var(--acc)', animation:'spin 0.8s linear infinite' }}/></div>;
+        const teams = mlbSummary?.boxscore?.players || [];
+        if (teams.length < 2) return <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text5)', fontSize:14 }}>라인업 정보가 없습니다</div>;
+        const koreanName = match.koreanPlayer?.nameEn || '';
+        const norm = s => (s||'').toLowerCase().replace(/[-\s.']/g,'');
+        const targetVariants = [norm(koreanName)];
+        const parts = koreanName.toLowerCase().split(/[\s-]+/).filter(Boolean);
+        if (parts.length >= 2) {
+          targetVariants.push(norm(parts.slice(1).join('') + parts[0]));
+          targetVariants.push(norm([parts[parts.length-1], ...parts.slice(0,-1)].join('')));
+        }
+        const isKorean = (n) => { const x = norm(n); return targetVariants.some(t => x === t || x.includes(t) || t.includes(x)); };
+        const renderColumn = (matchTeam, teamData) => {
+          const battingCat = (teamData.statistics || []).find(s => s.name === 'batting');
+          const athletes = battingCat?.athletes || [];
+          // Starters: those with batting order, fall back to first 9 with stats
+          const lineup = athletes.filter(a => a.starter).slice(0, 9);
+          const bench = athletes.filter(a => !a.starter);
+          const renderEntry = (a, i) => {
+            const name = a.athlete?.displayName || '';
+            const pos = a.position?.abbreviation || '';
+            const korean = isKorean(name);
+            const keys = battingCat?.keys || [];
+            const stats = a.stats || [];
+            const get = (k) => {
+              const idx = keys.indexOf(k);
+              return idx >= 0 ? stats[idx] : '';
+            };
+            const summary = get('hits-atBats') || `${get('hits')}/${get('atBats')}`;
+            return (
+              <div key={i} style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 8px', borderRadius:8, background: korean ? 'rgba(245,196,0,0.12)' : 'transparent', border: korean ? '0.5px solid rgba(245,196,0,0.3)' : '0.5px solid transparent', marginBottom:4 }}>
+                <span style={{ ...NUM, fontSize:11, fontWeight:700, color:'var(--text4)', width:24, textAlign:'center', flexShrink:0 }}>{pos}</span>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:12, fontWeight: korean ? 700 : 600, color: korean ? 'var(--acc)' : 'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                    {korean ? `🇰🇷 ${name}` : name}
+                  </div>
+                </div>
+                {summary && summary !== '/' && (
+                  <span style={{ ...NUM, fontSize:10, fontWeight:700, color:'var(--text3)', flexShrink:0 }}>{summary}</span>
+                )}
+              </div>
+            );
+          };
+          return (
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
+                <TeamBadge code={matchTeam.code} size={20} logo={matchTeam.logo}/>
+                <span style={{ fontSize:12, fontWeight:700, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{matchTeam.name}</span>
+              </div>
+              {lineup.map(renderEntry)}
+              {bench.length > 0 && (
+                <>
+                  <div style={{ fontSize:10, fontWeight:700, color:'var(--text4)', letterSpacing:1, marginTop:12, marginBottom:6, paddingLeft:8 }}>BENCH</div>
+                  {bench.slice(0, 8).map(renderEntry)}
+                </>
+              )}
+            </div>
+          );
+        };
+        const homeTeamData = teams.find(t => t.team?.id) ? teams[teams.findIndex(t => t.displayOrder === 0)] || teams[0] : teams[0];
+        const awayTeamData = teams.find(t => t.team?.id) ? teams[teams.findIndex(t => t.displayOrder === 1)] || teams[1] : teams[1];
+        // ESPN MLB: home is typically displayOrder 0, away 1, but check `homeAway` if available via boxscore.teams instead
+        const bsTeams = mlbSummary?.boxscore?.teams || [];
+        const homeId = bsTeams.find(t => t.homeAway === 'home')?.team?.id;
+        const homeData = teams.find(t => t.team?.id === homeId) || teams[0];
+        const awayData = teams.find(t => t.team?.id !== homeId) || teams[1];
+        return (
+          <div style={{ padding:'14px 12px', display:'flex', gap:10, alignItems:'flex-start' }}>
+            {renderColumn(match.home, homeData)}
+            <div style={{ width:'0.5px', alignSelf:'stretch', background:'var(--border)', flexShrink:0 }}/>
+            {renderColumn(match.away, awayData)}
+          </div>
+        );
+      })()}
+      {tab === 'lineups' && !isMLBMatch && (() => {
         if (lineupsLoading) {
           return <div style={{ display:'flex', justifyContent:'center', padding:'48px 0' }}><div style={{ width:24, height:24, borderRadius:'50%', border:'2.5px solid var(--border)', borderTopColor:'var(--acc)', animation:'spin 0.8s linear infinite' }}/></div>;
         }
