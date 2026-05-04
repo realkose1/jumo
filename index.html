@@ -2070,23 +2070,37 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [] }) {
               return (
                 <div key={idx} style={{ background:'rgba(245,196,0,0.08)', borderRadius:10, padding:'10px 14px', border:'0.5px solid rgba(245,196,0,0.3)', display:'flex', alignItems:'center', gap:10, marginTop: idx > 0 ? 8 : 0 }}>
                   <span style={{ fontSize:18 }}>🇰🇷</span>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-                      <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>{kp.name} <span style={{ ...NUM, color:'var(--text4)', fontWeight:400 }}>#{kp.number}</span></div>
-                      {kp.event && (
-                        <div style={{ background: isLive ? 'rgba(230,48,48,0.1)' : 'var(--btn-bg)', borderRadius:6, padding:'3px 7px', flexShrink:0, display:'inline-flex', alignItems:'center', justifyContent:'center' }}>
-                          <span style={{ fontSize:10, fontWeight:600, color: isLive ? 'var(--acc)' : 'var(--text2)', whiteSpace:'nowrap', lineHeight:1 }}>{formatExpectedEvent(kp, liveApiMatches)}</span>
+                  {(() => {
+                    const formattedEvent = formatExpectedEvent(kp, liveApiMatches);
+                    // Baseball stat-line detection (e.g. "4타수 2안타 1홈런 2타점")
+                    const isStatLine = /\d+타수.+안타/.test(formattedEvent);
+                    return (
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                          <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>{kp.name} <span style={{ ...NUM, color:'var(--text4)', fontWeight:400 }}>#{kp.number}</span></div>
+                          {kp.event && !isStatLine && (
+                            <div style={{ background: isLive ? 'rgba(230,48,48,0.1)' : 'var(--btn-bg)', borderRadius:6, padding:'3px 7px', flexShrink:0, display:'inline-flex', alignItems:'center', justifyContent:'center' }}>
+                              <span style={{ fontSize:10, fontWeight:600, color: isLive ? 'var(--acc)' : 'var(--text2)', whiteSpace:'nowrap', lineHeight:1 }}>{formattedEvent}</span>
+                            </div>
+                          )}
+                          {injury && (
+                            <span style={{ fontSize:10, fontWeight:700, padding:'3px 7px', borderRadius:6, background:'rgba(230,48,48,0.15)', color:'#ff6b6b', border:'0.5px solid rgba(230,48,48,0.4)', whiteSpace:'nowrap', lineHeight:1, flexShrink:0 }}><span style={{ color:'#e63030', fontWeight:900, marginRight:4 }}>✚</span>{injury.label}</span>
+                          )}
+                          {pills.map((p, i) => (
+                            <span key={i} style={{ fontSize:10, fontWeight:700, padding:'3px 7px', borderRadius:6, background:'rgba(245,196,0,0.15)', color:'var(--acc)', border:'0.5px solid rgba(245,196,0,0.3)', whiteSpace:'nowrap', lineHeight:1, flexShrink:0 }}>{p}</span>
+                          ))}
                         </div>
-                      )}
-                      {injury && (
-                        <span style={{ fontSize:10, fontWeight:700, padding:'3px 7px', borderRadius:6, background:'rgba(230,48,48,0.15)', color:'#ff6b6b', border:'0.5px solid rgba(230,48,48,0.4)', whiteSpace:'nowrap', lineHeight:1, flexShrink:0 }}><span style={{ color:'#e63030', fontWeight:900, marginRight:4 }}>✚</span>{injury.label}</span>
-                      )}
-                      {pills.map((p, i) => (
-                        <span key={i} style={{ fontSize:10, fontWeight:700, padding:'3px 7px', borderRadius:6, background:'rgba(245,196,0,0.15)', color:'var(--acc)', border:'0.5px solid rgba(245,196,0,0.3)', whiteSpace:'nowrap', lineHeight:1, flexShrink:0 }}>{p}</span>
-                      ))}
-                    </div>
-                    <div style={{ fontSize:11, color:'var(--text3)', fontWeight:500, marginTop:1 }}>{kp.team}</div>
-                  </div>
+                        {isStatLine ? (
+                          <div style={{ fontSize:15, fontWeight:800, color:'var(--acc)', marginTop:5, letterSpacing:-0.2 }}>{formattedEvent}</div>
+                        ) : (
+                          <div style={{ fontSize:11, color:'var(--text3)', fontWeight:500, marginTop:1 }}>{kp.team}</div>
+                        )}
+                        {isStatLine && (
+                          <div style={{ fontSize:10, color:'var(--text4)', fontWeight:500, marginTop:2 }}>{kp.team}</div>
+                        )}
+                      </div>
+                    );
+                  })()}
                   {playerObj && (
                     <div style={{ width:44, height:44, borderRadius:'50%', overflow:'hidden', flexShrink:0, border:'2px solid var(--acc)', background:'var(--surface)' }}>
                       <PlayerPhoto player={playerObj} style={{ width:'100%', height:'100%' }} tint="var(--surface)"/>
