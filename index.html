@@ -4157,7 +4157,14 @@ function App() {
         };
 
         // ── Sofascore: fetch lineups + incidents for live/finished soccer ──
-        const sfKorean = koreanMatches.filter(m => m.source === 'sofascore' && (m.live || m.status === 'STATUS_FINAL'));
+        // Include upcoming matches starting within next 2 hours (lineup typically posted ~1h before)
+        const sfKorean = koreanMatches.filter(m => {
+          if (m.source !== 'sofascore') return false;
+          if (m.live || m.status === 'STATUS_FINAL') return true;
+          if (!m.fullDate) return false;
+          const tilStart = new Date(m.fullDate).getTime() - Date.now();
+          return tilStart > 0 && tilStart <= 2 * 3600 * 1000;
+        });
 
         if (sfKorean.length > 0) {
           const sfDetails = await Promise.allSettled(
@@ -4178,6 +4185,9 @@ function App() {
             const m = koreanMatches[idx];
             const linePlayers = [...(lineups?.home?.players || []), ...(lineups?.away?.players || [])];
             const allKoreans = m.koreanPlayers || [m.koreanPlayer];
+            const isFinishedMatch = m.status === 'STATUS_FINAL';
+            const isUpcoming = !isLive && !isFinishedMatch;
+            const lineupConfirmed = !!lineups?.confirmed && linePlayers.length > 0;
 
             // Compute live status + match contributions for one Korean player
             const computeFor = (kp) => {
@@ -4205,7 +4215,16 @@ function App() {
               }
               const didPlay = started || minutesIn !== null || matchGoals > 0 || matchAssists > 0;
               let newEvent, minutesPlayed = 0;
-              if (isLive) {
+              if (isUpcoming) {
+                // Lineup announced for upcoming match
+                if (lineupConfirmed) {
+                  if (started) newEvent = '선발 출전';
+                  else if (foundInRoster) newEvent = '벤치 대기';
+                  else newEvent = '미출전';
+                } else {
+                  newEvent = '출전 예상';
+                }
+              } else if (isLive) {
                 const lineupAvailable = linePlayers.length > 0;
                 const onPitch = (started && minutesOff === null) || (minutesIn !== null && minutesOff === null);
                 if (!foundInRoster && lineupAvailable) newEvent = '미출전';
@@ -4221,7 +4240,7 @@ function App() {
                   : minutesPlayed > 0 ? `${minutesPlayed}분 출전`
                   : '출전 완료';
               }
-              return { ...kp, event: newEvent, minutesPlayed, matchGoals, matchAssists, sfRating };
+              return { ...kp, event: newEvent, minutesPlayed, matchGoals, matchAssists, sfRating, lineupConfirmed };
             };
 
             const updatedKoreans = allKoreans.map(computeFor);
@@ -4447,20 +4466,46 @@ function App() {
         return `${days}일 전`;
       };
 
-      // 1. Lineup confirmed (1 hour before match)
-      if (matchTime && !match.live && timeDiff < 0 && timeDiff > -3600000) {
-        if (match.koreanPlayer.event === '선발 출전') {
-          newNotifs.push({
-            id: `lineup-${match.id}`,
-            time: getTimeAgo(-timeDiff),
-            icon: '📋',
-            title: `${match.koreanPlayer.name} 선발 출전 확정`,
-            body: `${match.home.name} vs ${match.away.name} · ${match.krTime || match.time}`,
-            type: 'lineup',
-            live: false,
-            timestamp: matchTime.getTime() - 3600000
-          });
-        }
+      // 1. Lineup confirmed (within 2 hours before kickoff)
+      if (matchTime && !match.live && timeDiff < 0 && timeDiff > -2 * 3600000) {
+        const allKoreans = match.koreanPlayers || [match.koreanPlayer];
+        allKoreans.forEach(kp => {
+          if (!kp?.lineupConfirmed) return;
+          if (kp.event === '선발 출전') {
+            newNotifs.push({
+              id: `lineup-start-${match.id}-${kp.name}`,
+              time: getTimeAgo(-timeDiff),
+              icon: '📋',
+              title: `${kp.name} 선발 출전 확정`,
+              body: `${match.home.name} vs ${match.away.name} · ${match.krTime || match.time}`,
+              type: 'lineup_start',
+              live: false,
+              timestamp: matchTime.getTime() - 3600000
+            });
+          } else if (kp.event === '벤치 대기') {
+            newNotifs.push({
+              id: `lineup-bench-${match.id}-${kp.name}`,
+              time: getTimeAgo(-timeDiff),
+              icon: '🪑',
+              title: `${kp.name} 벤치 대기`,
+              body: `${match.home.name} vs ${match.away.name} · ${match.krTime || match.time}`,
+              type: 'lineup_bench',
+              live: false,
+              timestamp: matchTime.getTime() - 3600000
+            });
+          } else if (kp.event === '미출전') {
+            newNotifs.push({
+              id: `lineup-out-${match.id}-${kp.name}`,
+              time: getTimeAgo(-timeDiff),
+              icon: '✚',
+              title: `${kp.name} 명단 제외`,
+              body: `${match.home.name} vs ${match.away.name} · ${match.krTime || match.time}`,
+              type: 'lineup_out',
+              live: false,
+              timestamp: matchTime.getTime() - 3600000
+            });
+          }
+        });
       }
 
       // 2. Live match events
