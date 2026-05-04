@@ -41,10 +41,9 @@
 
 ```
 jumo/
-├── Jumo App.html       # 메인 애플리케이션
+├── index.html          # 메인 애플리케이션
 ├── ios-frame.jsx       # iOS 프레임 컴포넌트
 ├── api-proxy.js        # API 프록시 (선택사항)
-├── index.html          # 리다이렉트 파일
 ├── _redirects          # Netlify 리다이렉트 설정
 └── image/              # 선수 프로필 이미지
     ├── heungmin.png
