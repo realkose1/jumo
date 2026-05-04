@@ -2201,13 +2201,25 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [] }) {
               return s;
             };
             const homeTeamId = mlbSummary?.boxscore?.teams?.find(t => t.homeAway === 'home')?.team?.id;
+            const koreans = match.koreanPlayers || [match.koreanPlayer].filter(Boolean);
+            const koreanLastNames = koreans.map(kp => {
+              const parts = (kp.nameEn || '').split(/[\s-]+/).filter(Boolean);
+              return parts[parts.length - 1] || '';
+            }).filter(Boolean);
+            const isKoreanPlay = (text) => koreanLastNames.some(ln => text && text.includes(ln));
             // Newest first (reverse)
             return [...plays].reverse().map((p, i) => {
               const isHome = String(p.team?.id) === String(homeTeamId);
               const inningLabel = `${p.period?.number}회 ${p.period?.type === 'Top' ? '초' : '말'}`;
+              const koreanInvolved = isKoreanPlay(p.text);
               return (
-                <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:10, marginBottom:8, padding:'10px 12px', background:'rgba(245,196,0,0.08)', borderRadius:10, border:'0.5px solid rgba(245,196,0,0.3)' }}>
-                  <div style={{ ...NUM, width:54, textAlign:'center', fontSize:11, fontWeight:700, color:'var(--acc)', flexShrink:0, paddingTop:2 }}>{inningLabel}</div>
+                <div key={i} style={{
+                  display:'flex', alignItems:'flex-start', gap:10, marginBottom:8, padding:'10px 12px',
+                  background: koreanInvolved ? 'rgba(245,196,0,0.08)' : 'var(--surface)',
+                  borderRadius:10,
+                  border: koreanInvolved ? '0.5px solid rgba(245,196,0,0.3)' : '0.5px solid var(--border2)'
+                }}>
+                  <div style={{ ...NUM, width:54, textAlign:'center', fontSize:11, fontWeight:700, color: koreanInvolved ? 'var(--acc)' : 'var(--text3)', flexShrink:0, paddingTop:2 }}>{inningLabel}</div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3 }}>
                       <span style={{ fontSize:9, fontWeight:700, color:'var(--text5)', background:'var(--border)', padding:'1px 5px', borderRadius:4 }}>{isHome ? match.home.code : match.away.code}</span>
