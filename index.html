@@ -4110,6 +4110,75 @@ function App() {
           });
         }
 
+        // ── ESPN MLB: fetch boxscores for live/finished matches with Korean players ──
+        const mlbKorean = koreanMatches.filter(m =>
+          (m.sport || '').includes('MLB') && (m.live || m.status === 'STATUS_FINAL')
+        );
+        if (mlbKorean.length > 0) {
+          const mlbDetails = await Promise.allSettled(
+            mlbKorean.map(m =>
+              fetch(`https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/summary?event=${m.id}`)
+                .then(r => r.ok ? r.json() : null)
+                .then(data => ({ id: m.id, data, isLive: m.live }))
+                .catch(() => ({ id: m.id, data: null, isLive: m.live }))
+            )
+          );
+          mlbDetails.forEach(result => {
+            if (result.status !== 'fulfilled' || !result.value?.data) return;
+            const { id, data, isLive } = result.value;
+            const idx = koreanMatches.findIndex(mm => mm.id === id);
+            if (idx === -1) return;
+            const m = koreanMatches[idx];
+            const kp = m.koreanPlayer;
+            if (!kp) return;
+            const norm = s => (s||'').toLowerCase().replace(/[-\s.']/g,'');
+            const target = norm(kp.nameEn);
+            // Boxscore: data.boxscore.players[].statistics[].athletes[]
+            const teams = data.boxscore?.players || [];
+            let foundAthlete = null, foundStats = {};
+            for (const t of teams) {
+              for (const cat of (t.statistics || [])) {
+                for (const a of (cat.athletes || [])) {
+                  const name = norm(a.athlete?.displayName);
+                  if (name && (name === target || name.includes(target) || target.includes(name))) {
+                    foundAthlete = a;
+                    // Map labels to keys
+                    (cat.keys || []).forEach((k, ki) => {
+                      foundStats[k] = a.stats?.[ki];
+                    });
+                    break;
+                  }
+                }
+                if (foundAthlete) break;
+              }
+              if (foundAthlete) break;
+            }
+            // Determine event status
+            const isFinished = m.status === 'STATUS_FINAL';
+            let newEvent;
+            const atBats = parseInt(foundStats.atBats || foundStats.AB || 0) || 0;
+            const hits = parseInt(foundStats.hits || foundStats.H || 0) || 0;
+            const homeRuns = parseInt(foundStats.homeRuns || foundStats.HR || 0) || 0;
+            const rbi = parseInt(foundStats.RBI || foundStats.rbi || 0) || 0;
+            const didPlay = atBats > 0 || hits > 0 || (foundAthlete && Object.keys(foundStats).length > 0);
+            if (isLive) {
+              if (didPlay) newEvent = '출전 중';
+              else if (foundAthlete) newEvent = '벤치';
+              else newEvent = '출전 예상';
+            } else if (isFinished) {
+              if (!didPlay) newEvent = '미출전';
+              else newEvent = `${atBats}타수 ${hits}안타`;
+            } else {
+              newEvent = '출전 예상';
+            }
+            koreanMatches[idx] = {
+              ...m,
+              koreanPlayer: { ...kp, event: newEvent, atBats, hits, homeRuns, rbi },
+              koreanPlayers: (m.koreanPlayers || [kp]).map(p => p.name === kp.name ? { ...p, event: newEvent, atBats, hits, homeRuns, rbi } : p),
+            };
+          });
+        }
+
         setLiveMatches([...koreanMatches]);
 
         // Stabilize player metrics by aggregating per player:
