@@ -1356,6 +1356,8 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
     if (recentFinished && nextUpcoming) {
       const finishedAgo = now - new Date(recentFinished.fullDate);
       const upcomingIn = new Date(nextUpcoming.fullDate) - now;
+      // Prefer finished match if it ended within last 18 hours; otherwise pick by distance
+      if (finishedAgo <= 18 * 3600 * 1000) return { match: recentFinished, priority: 4 };
       return finishedAgo <= upcomingIn
         ? { match: recentFinished, priority: 4 }
         : { match: nextUpcoming, priority: 5 };
