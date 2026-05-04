@@ -3510,8 +3510,25 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0 }) {
           )
         );
 
+        // Allowlist of sports-focused outlets (host substrings)
+        const SPORTS_HOSTS = [
+          'spotvnews', 'xportsnews', 'osen', 'mydaily', 'starnewskorea', 'isplus', 'sportsq',
+          'sportsworldi', 'sportsseoul', 'sportschosun', 'mksports', 'sports.news', 'sports.donga',
+          'sports.chosun', 'sports.hankyung', 'sports.joongang', 'sports.khan', 'sports.kbsm',
+          'sports.naver', 'sports.daum', 'footballist', 'thespike', 'thefootballist',
+          'interfootball', 'bestelevenmag', 'soccerline', 'fourfourtwo', 'soccerphile',
+          'baseballrising', 'mhns.co.kr', 'sportstoday', 'isportskorea', 'sportsdonga',
+          'soccertown', 'soccerassociation', 'football-asian', 'fmkorea',
+          'sportalkorea', 'gettyimages', 'tvdaily', 'sportv', 'jtbcgolf',
+        ];
+        const isSportsHost = (host) => {
+          const h = (host || '').toLowerCase();
+          return SPORTS_HOSTS.some(k => h.includes(k));
+        };
+
         const merged = responses.flat();
         const filtered = merged.filter(item => {
+          if (!isSportsHost(item.source)) return false;
           const haystack = `${item.title} ${item.description}`;
           if (EXCLUDE_KEYWORDS.some(kw => haystack.includes(kw))) return false;
           if (!PLAYER_NAMES.some(name => haystack.includes(name))) return false;
