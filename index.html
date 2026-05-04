@@ -2613,7 +2613,9 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [] }) {
               const idx = keys.indexOf(k);
               return idx >= 0 ? stats[idx] : '';
             };
-            const summary = get('hits-atBats') || `${get('hits')}/${get('atBats')}`;
+            const rawHA = get('hits-atBats');
+            const h = get('hits'), ab = get('atBats');
+            const summary = (rawHA ? String(rawHA).replace('-', '/') : (h && ab ? `${h}/${ab}` : ''));
             return (
               <div key={i} style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 8px', borderRadius:8, background: korean ? 'rgba(245,196,0,0.12)' : 'transparent', border: korean ? '0.5px solid rgba(245,196,0,0.3)' : '0.5px solid transparent', marginBottom:4 }}>
                 <span style={{ ...NUM, fontSize:11, fontWeight:700, color:'var(--text4)', width:24, textAlign:'center', flexShrink:0 }}>{pos}</span>
