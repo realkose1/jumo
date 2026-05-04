@@ -2402,7 +2402,8 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [] }) {
         const home = teams.find(t => t.homeAway === 'home') || teams[0];
         const away = teams.find(t => t.homeAway === 'away') || teams[1];
         const getStat = (team, type, name) => {
-          const cat = (team.statistics || []).find(s => s.name === type);
+          // boxscore.teams uses statistics with name field
+          const cat = (team.statistics || []).find(s => s.name === type || s.type === type);
           if (!cat) return '';
           const item = (cat.stats || []).find(x => x.name === name || x.abbreviation === name);
           return item ? (item.displayValue || item.value || '') : '';
@@ -2582,10 +2583,11 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [] }) {
         }
         const isKorean = (n) => { const x = norm(n); return targetVariants.some(t => x === t || x.includes(t) || t.includes(x)); };
         const renderColumn = (matchTeam, teamData) => {
-          const battingCat = (teamData.statistics || []).find(s => s.name === 'batting');
+          if (!teamData) return null;
+          const battingCat = (teamData.statistics || []).find(s => s.type === 'batting');
           const athletes = battingCat?.athletes || [];
-          // Starters: those with batting order, fall back to first 9 with stats
-          const lineup = athletes.filter(a => a.starter).slice(0, 9);
+          // Starters by batting order
+          const lineup = athletes.filter(a => a.starter).sort((a,b) => (a.batOrder||99) - (b.batOrder||99));
           const bench = athletes.filter(a => !a.starter);
           const renderEntry = (a, i) => {
             const name = a.athlete?.displayName || '';
