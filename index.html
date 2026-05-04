@@ -3544,8 +3544,8 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
       <div style={{ padding:'16px 20px 8px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         <div style={{ fontSize:22, fontWeight:700, color:'var(--text)', letterSpacing:-0.5 }}>선수</div>
         <button onClick={onAdd} style={{ display:'flex', alignItems:'center', gap:6, background:'var(--acc)', border:'none', borderRadius:20, padding:'8px 16px', color:'#000', fontSize:13, fontWeight:700, cursor:'pointer' }}>
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="#000" strokeWidth="2" strokeLinecap="round"/></svg>
-          선수 추가
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="#000"/></svg>
+          선수 편집
         </button>
       </div>
       <div style={{ display:'flex', gap:8, padding:'0 16px 14px', overflowX:'auto' }} className="scrollbar-hide">
@@ -4116,7 +4116,7 @@ function AddPlayerScreen({ followed, onToggle, onBack }) {
             완료 {followed.size > 0 && `(${followed.size})`}
           </button>
         </div>
-        <div style={{ fontSize:22, fontWeight:800, color:'var(--text)', letterSpacing:-0.5, marginBottom:14 }}>선수 추가</div>
+        <div style={{ fontSize:22, fontWeight:800, color:'var(--text)', letterSpacing:-0.5, marginBottom:14 }}>선수 편집</div>
         <div style={{ position:'relative', marginBottom:12 }}>
           <div style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', pointerEvents:'none' }}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="var(--text4)" strokeWidth="1.6"/><path d="M10.5 10.5L14 14" stroke="var(--text4)" strokeWidth="1.6" strokeLinecap="round"/></svg>
