@@ -4461,11 +4461,56 @@ function ProfileEditScreen({ profile, onSave, onBack }) {
   );
 }
 
+function FeedbackScreen({ onBack }) {
+  const showToast = React.useContext(ToastCtx);
+  const [text, setText] = React.useState('');
+  const MAX = 1000;
+  const RECIPIENT = 'gsh0729@naver.com';
+
+  const send = () => {
+    const body = text.trim();
+    if (!body) { showToast('내용을 입력해주세요'); return; }
+    const subject = '[Jumo] 피드백';
+    const meta = `\n\n---\n${navigator.userAgent}`;
+    const url = `mailto:${RECIPIENT}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body + meta)}`;
+    window.location.href = url;
+    showToast('메일 앱으로 이동합니다');
+  };
+
+  return (
+    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+      <div style={{ padding:'12px 20px 8px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <button onClick={onBack} style={{ background:'none', border:'none', color:'var(--text2)', fontSize:15, cursor:'pointer', padding:0 }}>취소</button>
+        <div style={{ fontSize:16, fontWeight:700, color:'var(--text)' }}>피드백 보내기</div>
+        <button onClick={send} style={{ background:'none', border:'none', color: text.trim() ? 'var(--acc)' : 'var(--text5)', fontSize:15, fontWeight:700, cursor:'pointer', padding:0 }}>보내기</button>
+      </div>
+
+      <div style={{ padding:'16px' }}>
+        <div style={{ fontSize:12, color:'var(--text4)', lineHeight:1.6, marginBottom:14 }}>
+          개선 사항이나 버그를 알려주세요. 보내기를 누르면 메일 앱이 열려{' '}
+          <span style={{ color:'var(--text2)', fontWeight:600 }}>{RECIPIENT}</span>{' '}
+          으로 전송할 수 있습니다.
+        </div>
+        <div style={{ background:'var(--surface)', borderRadius:14, border:'0.5px solid var(--border)', padding:'12px 14px' }}>
+          <textarea
+            value={text}
+            onChange={e => setText(e.target.value.slice(0, MAX))}
+            placeholder="어떤 부분이 좋았거나 불편하셨나요?"
+            style={{ width:'100%', minHeight:200, background:'transparent', border:'none', outline:'none', color:'var(--text)', fontSize:14, lineHeight:1.6, resize:'none', fontFamily:"'Noto Sans KR', sans-serif" }}
+          />
+        </div>
+        <div style={{ fontSize:11, color:'var(--text5)', padding:'8px 4px', textAlign:'right' }}>{text.length}/{MAX}</div>
+      </div>
+    </div>
+  );
+}
+
 function MoreScreen({ sportFeeds, onToggleSportFeed, profile, onUpdateProfile }) {
   const [sub, setSub] = React.useState(null);
   if (sub === 'notif')      return <NotifSettingsScreen onBack={() => setSub(null)}/>;
   if (sub === 'sports')     return <SportFeedScreen onBack={() => setSub(null)} sportFeeds={sportFeeds} onToggleSportFeed={onToggleSportFeed}/>;
   if (sub === 'profile')    return <ProfileEditScreen profile={profile} onSave={onUpdateProfile} onBack={() => setSub(null)}/>;
+  if (sub === 'feedback')   return <FeedbackScreen onBack={() => setSub(null)}/>;
 
   const groups = [
     { label:'개인화', items:[
