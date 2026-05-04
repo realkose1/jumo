@@ -5644,13 +5644,18 @@ function App() {
   const goBack = () => setScreen('main');
 
   const [tabScrollKeys, setTabScrollKeys] = React.useState({ home:0, schedule:0, players:0, news:0, more:0 });
+  const [activeTab, setActiveTab] = React.useState(tab);
+  const [, startTabTransition] = React.useTransition();
   const handleTab = (t) => {
-    if (t === tab && screen === 'main') {
+    if (t === activeTab && screen === 'main') {
       setTabScrollKeys(k => ({ ...k, [t]: k[t] + 1 }));
-    } else {
+      return;
+    }
+    setActiveTab(t);
+    startTabTransition(() => {
       setTab(t);
       setScreen('main');
-    }
+    });
   };
 
   const HomeComponent = [HomeV1, HomeV2, HomeV3][tweaks.homeVariant] || HomeV1;
@@ -5701,7 +5706,7 @@ function App() {
               <NotifScreen notifications={notifications}/>
             </div>
           )}
-          <TabBar active={tab} onTab={handleTab}/>
+          <TabBar active={activeTab} onTab={handleTab}/>
         </div>
       </IOSDevice>
 
