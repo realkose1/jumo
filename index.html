@@ -1563,12 +1563,12 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
         const assists = (kp.matchAssists != null && kp.matchAssists > 0) ? kp.matchAssists : eventsAssists;
         const statParts = [];
         if (isMLB) {
-          const ab = kp.atBats || 0, h = kp.hits || 0, hr = kp.homeRuns || 0, rbi = kp.rbi || 0, r = kp.runs || 0, sb = kp.stolenBases || 0;
-          if (ab > 0 || h > 0) statParts.push(`${ab}타수 ${h}안타`);
+          const h = kp.hits || 0, hr = kp.homeRuns || 0, rbi = kp.rbi || 0, r = kp.runs || 0, sb = kp.stolenBases || 0;
+          if (h > 0) statParts.push(`${h}안타`);
           if (hr > 0) statParts.push(`${hr}홈런`);
           if (rbi > 0) statParts.push(`${rbi}타점`);
           if (sb > 0) statParts.push(`${sb}도루`);
-          if (r > 0 && hr === 0 && sb === 0) statParts.push(`${r}득점`);
+          if (r > 0) statParts.push(`${r}득점`);
           if (statParts.length === 0) statParts.push(kp.event || '출전');
         } else {
           if (goals > 0) statParts.push(`${goals}골`);
