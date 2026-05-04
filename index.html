@@ -690,7 +690,13 @@ function CareerTimeline({ extra }) {
 }
 
 // ─── TAB BAR ─────────────────────────────────────────────────
-function TabBar({ active, onTab }) {
+const TabBar = React.memo(function TabBar({ active: propActive, onTab }) {
+  const [active, setActive] = React.useState(propActive);
+  React.useEffect(() => { setActive(propActive); }, [propActive]);
+  const handle = (id) => {
+    if (id !== active) setActive(id);
+    onTab(id);
+  };
   const tabs = [
     { id:'home', label:'홈', icon: <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M3 9.5L11 2l8 7.5V20H14v-5h-6v5H3V9.5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" fill={active==='home'?'currentColor':'none'}/></svg> },
     { id:'schedule', label:'일정', icon: <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><rect x="3" y="5" width="16" height="15" rx="3" stroke="currentColor" strokeWidth="1.8"/><path d="M7 3v4M15 3v4M3 10h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>{active==='schedule' && <circle cx="11" cy="15" r="1.5" fill="currentColor"/>}</svg> },
@@ -714,14 +720,14 @@ function TabBar({ active, onTab }) {
       paddingTop:8
     }}>
       {tabs.map(t => (
-        <button key={t.id} onClick={() => onTab(t.id)} style={{ flex:1, background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:3, color: active===t.id ? 'var(--acc)' : 'var(--text4)', transition:'none', padding:'4px 0' }}>
+        <button key={t.id} onClick={() => handle(t.id)} style={{ flex:1, background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:3, color: active===t.id ? 'var(--acc)' : 'var(--text4)', transition:'none', padding:'4px 0' }}>
           {t.icon}
           <span style={{ fontSize:10, fontWeight:600, letterSpacing:0.2 }}>{t.label}</span>
         </button>
       ))}
     </div>
   );
-}
+});
 
 // ─── SKELETON UI ──────────────────────────────────────────────
 function SkeletonHighlight() {
@@ -5644,19 +5650,16 @@ function App() {
   const goBack = () => setScreen('main');
 
   const [tabScrollKeys, setTabScrollKeys] = React.useState({ home:0, schedule:0, players:0, news:0, more:0 });
-  const [activeTab, setActiveTab] = React.useState(tab);
-  const [, startTabTransition] = React.useTransition();
-  const handleTab = (t) => {
-    if (t === activeTab && screen === 'main') {
+  const handleTab = React.useCallback((t) => {
+    if (t === tab && screen === 'main') {
       setTabScrollKeys(k => ({ ...k, [t]: k[t] + 1 }));
       return;
     }
-    setActiveTab(t);
-    startTabTransition(() => {
+    React.startTransition(() => {
       setTab(t);
       setScreen('main');
     });
-  };
+  }, [tab, screen]);
 
   const HomeComponent = [HomeV1, HomeV2, HomeV3][tweaks.homeVariant] || HomeV1;
 
@@ -5706,7 +5709,7 @@ function App() {
               <NotifScreen notifications={notifications}/>
             </div>
           )}
-          <TabBar active={activeTab} onTab={handleTab}/>
+          <TabBar active={tab} onTab={handleTab}/>
         </div>
       </IOSDevice>
 
