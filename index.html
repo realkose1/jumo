@@ -790,13 +790,27 @@ function SkeletonPlayerCard() {
 
 function SkeletonNewsItem() {
   return (
-    <div style={{ display:'flex', gap:12, padding:'12px 0', borderBottom:'0.5px solid var(--border)' }}>
-      <div style={{ flex:1 }}>
-        <div className="shimmer" style={{ width:'90%', height:14, borderRadius:6, marginBottom:6 }}/>
-        <div className="shimmer" style={{ width:'60%', height:14, borderRadius:6, marginBottom:8 }}/>
-        <div className="shimmer" style={{ width:'40%', height:11, borderRadius:6 }}/>
+    <div style={{ background:'var(--surface)', borderRadius:18, border:'0.5px solid var(--border2)', display:'flex', overflow:'hidden', minHeight:130 }}>
+      <div className="shimmer" style={{ width:120, flexShrink:0 }}/>
+      <div style={{ flex:1, padding:'16px 16px', display:'flex', flexDirection:'column', justifyContent:'space-between', minWidth:0 }}>
+        <div>
+          <div className="shimmer" style={{ width:'90%', height:14, borderRadius:6, marginBottom:6 }}/>
+          <div className="shimmer" style={{ width:'70%', height:14, borderRadius:6 }}/>
+        </div>
+        <div className="shimmer" style={{ width:'40%', height:10, borderRadius:5 }}/>
       </div>
-      <div className="shimmer" style={{ width:80, height:80, borderRadius:10, flexShrink:0 }}/>
+    </div>
+  );
+}
+
+function SkeletonNewsHero() {
+  return (
+    <div style={{ background:'var(--surface)', borderRadius:18, border:'0.5px solid var(--border2)', overflow:'hidden' }}>
+      <div className="shimmer" style={{ width:'100%', aspectRatio:'16/10' }}/>
+      <div style={{ padding:'14px 16px 18px' }}>
+        <div className="shimmer" style={{ width:'80%', height:13, borderRadius:6, marginBottom:6 }}/>
+        <div className="shimmer" style={{ width:'55%', height:13, borderRadius:6 }}/>
+      </div>
     </div>
   );
 }
@@ -3957,7 +3971,10 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0 }) {
 
       {/* Articles */}
       <div style={{ padding:'0 16px', display:'flex', flexDirection:'column', gap:12 }}>
-        {loading && Array.from({length:6}).map((_, i) => <SkeletonNewsItem key={i}/>)}
+        {loading && <>
+          <SkeletonNewsHero/>
+          {Array.from({length:5}).map((_, i) => <SkeletonNewsItem key={i}/>)}
+        </>}
 
         {!loading && error && (
           <div style={{ textAlign:'center', padding:'48px 20px', color:'var(--text4)' }}>
