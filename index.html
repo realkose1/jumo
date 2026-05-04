@@ -4133,19 +4133,25 @@ function App() {
             if (!kp) return;
             const norm = s => (s||'').toLowerCase().replace(/[-\s.']/g,'');
             const target = norm(kp.nameEn);
+            // Generate name variants: handle "Lee Jung-hoo" vs "Jung Hoo Lee"
+            const targetVariants = [target];
+            const parts = (kp.nameEn || '').toLowerCase().split(/[\s-]+/).filter(Boolean);
+            if (parts.length >= 2) {
+              targetVariants.push(norm(parts.slice(1).join('') + parts[0]));
+              targetVariants.push(norm([parts[parts.length-1], ...parts.slice(0,-1)].join('')));
+            }
+            const matchesTarget = (n) => targetVariants.some(t => n === t || n.includes(t) || t.includes(n));
             // Boxscore: data.boxscore.players[].statistics[].athletes[]
             const teams = data.boxscore?.players || [];
             let foundAthlete = null, foundStats = {};
             for (const t of teams) {
               for (const cat of (t.statistics || [])) {
+                if (cat.type !== 'batting' && cat.name !== 'batting') continue;
                 for (const a of (cat.athletes || [])) {
-                  const name = norm(a.athlete?.displayName);
-                  if (name && (name === target || name.includes(target) || target.includes(name))) {
+                  const name = norm(a.athlete?.displayName || a.athlete?.fullName);
+                  if (name && matchesTarget(name)) {
                     foundAthlete = a;
-                    // Map labels to keys
-                    (cat.keys || []).forEach((k, ki) => {
-                      foundStats[k] = a.stats?.[ki];
-                    });
+                    (cat.keys || []).forEach((k, ki) => { foundStats[k] = a.stats?.[ki]; });
                     break;
                   }
                 }
