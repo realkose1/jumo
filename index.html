@@ -2687,7 +2687,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
                         const c = colorFor(g);
                         return (
                           <div key={i} style={{ flex:1, background:c.bg, borderRadius:6, padding:'7px 4px', textAlign:'center', minWidth:0 }}>
-                            <div style={{ ...NUM, fontSize:13, fontWeight:800, color:c.fg, lineHeight:1.1 }}>{g.ab > 0 ? `${g.h}-${g.ab}` : '−'}</div>
+                            <div style={{ ...NUM, fontSize:13, fontWeight:800, color:c.fg, lineHeight:1.1 }}>{g.ab > 0 ? `${g.h}/${g.ab}` : '−'}</div>
                             <div style={{ fontSize:9, color:'var(--text5)', marginTop:3, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{g.date}</div>
                             {g.hr > 0 && <div style={{ fontSize:9, color:'var(--acc)', fontWeight:700, marginTop:1 }}>HR</div>}
                           </div>
