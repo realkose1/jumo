@@ -4488,14 +4488,6 @@ function App() {
   const [isInitialLoad, setIsInitialLoad] = React.useState(true);
   const [notifications, setNotifications] = React.useState([]);
   const [playerStatsCache, setPlayerStatsCache] = React.useState({});
-  const deviceId = React.useMemo(() => {
-    let id = localStorage.getItem('jumo_device_id');
-    if (!id) {
-      id = (crypto.randomUUID && crypto.randomUUID()) || `dev-${Date.now()}-${Math.random().toString(36).slice(2,10)}`;
-      localStorage.setItem('jumo_device_id', id);
-    }
-    return id;
-  }, []);
   const [profile, setProfile] = React.useState(() => {
     try {
       return { nickname:'한국 스포츠 팬', image:null, ...JSON.parse(localStorage.getItem('jumo_profile') || '{}') };
