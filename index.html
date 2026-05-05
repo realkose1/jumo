@@ -134,6 +134,11 @@ const matchSportKey = (m) => ((m?.sport||'').includes('MLB') || (m?.sport||'').i
   : 'soccer';
 const isMatchAllowed = (m, feeds) => feeds?.[matchSportKey(m)] !== false;
 const playerSportKey = (p) => p?.sport === '야구' ? 'baseball' : p?.sport === '배드민턴' ? 'badminton' : 'soccer';
+const liveTimeLabel = (m, liveMinute) => {
+  if (matchSportKey(m) === 'baseball') return m?.inning || '';
+  const v = liveMinute || m?.minute;
+  return v ? `${v}'` : '';
+};
 const isPlayerAllowed = (p, feeds) => feeds?.[playerSportKey(p)] !== false;
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
@@ -1074,9 +1079,9 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
                       LIVE
                     </span>
                   </div>
-                  {(liveMinute || m.minute) && (
+                  {liveTimeLabel(m, liveMinute) && (
                     <span style={{ fontSize:16, fontWeight:700, color:'var(--text)', letterSpacing:-0.3 }}>
-                      {liveMinute || m.minute}'
+                      {liveTimeLabel(m, liveMinute)}
                     </span>
                   )}
                 </div>
@@ -1247,7 +1252,7 @@ function HomeV1({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
             <span key={ri} style={{ display:'inline-flex', gap:32, paddingRight:32 }}>
               {liveMatches.map(m => (
                 <span key={m.id} style={{ display:'inline-flex', alignItems:'center', gap:8, fontSize:11, fontWeight:600, color:'var(--text-60)', letterSpacing:0.3 }}>
-                  <LiveDot/> {m.home.code} {m.home.score}–{m.away.score} {m.away.code} <span style={{ color:'var(--text4)' }}>{m.minute}'</span>
+                  <LiveDot/> {m.home.code} {m.home.score}–{m.away.score} {m.away.code} <span style={{ color:'var(--text4)' }}>{liveTimeLabel(m)}</span>
                   <span style={{ color:'var(--acc)' }}>· 🇰🇷 {m.koreanPlayer.name}</span>
                 </span>
               ))}
@@ -1490,7 +1495,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
         );
         if (hasGoalEvent) {
           return {
-            status: `LIVE NOW · ${hlLiveMinute || m.minute || ''}\'`,
+            status: matchSportKey(m) === 'baseball' ? `LIVE NOW · ${m.inning || ''}` : `LIVE NOW · ${hlLiveMinute || m.minute || ''}\'`,
             main: lastEvent.type === 'goal' ? `⚽ ${m.koreanPlayer.name} 골!` : `${m.koreanPlayer.name} 어시스트!`,
             scoreNode,
             sub: `${m.home.name} vs ${m.away.name} · ${m.competition}`
@@ -1499,7 +1504,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
           const ev = m.koreanPlayer.event || '';
           const evLabel = ev === '교체 출전 중' ? '교체 출전 중' : ev === '교체 아웃' ? '교체 아웃' : ev === '벤치' ? '벤치 대기' : ev === '미출전' ? '결장' : ev === '출전 예상' ? '출전 여부 확인 중' : '출전 중';
           return {
-            status: `LIVE NOW · ${hlLiveMinute || m.minute || ''}\'`,
+            status: matchSportKey(m) === 'baseball' ? `LIVE NOW · ${m.inning || ''}` : `LIVE NOW · ${hlLiveMinute || m.minute || ''}\'`,
             main: `${m.koreanPlayer.name} ${evLabel}`,
             scoreNode,
             sub: `${m.home.name} vs ${m.away.name} · ${m.competition}`
@@ -5592,6 +5597,21 @@ function App() {
       minute = event.status.displayClock;
     }
 
+    // For MLB, derive inning label like "9회초 / 7회말"
+    let inning = '';
+    if (sport === 'mlb' && isLive) {
+      const period = event.status?.period;
+      const shortDetail = event.status?.type?.shortDetail || '';
+      if (period) {
+        let half = '';
+        if (/^Top/i.test(shortDetail)) half = '초';
+        else if (/^(Bot|Bottom)/i.test(shortDetail)) half = '말';
+        else if (/^Mid/i.test(shortDetail)) half = '중간';
+        else if (/^End/i.test(shortDetail)) half = '종료';
+        inning = half ? `${period}회${half}` : `${period}회`;
+      }
+    }
+
     // Extract team logos from ESPN API
     const homeLogo = home.team?.logo || home.team?.logos?.[0]?.href || null;
     const awayLogo = away.team?.logo || away.team?.logos?.[0]?.href || null;
@@ -5600,6 +5620,7 @@ function App() {
       id: event.id,
       live: isLive,
       minute,
+      inning,
       sport: sport === 'mlb' ? '⚾ MLB' : `⚽ ${league.toUpperCase()}`,
       leagueKey: league,
       home: { name: homeTeam, code: home.team.abbreviation, score: parseInt(home.score) || 0, logo: homeLogo },
