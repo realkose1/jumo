@@ -3,3 +3,14 @@
 scraps/
 screenshots/
 uploads/
+
+# Capacitor
+node_modules/
+www/
+ios/App/Pods/
+ios/App/build/
+ios/App/Podfile.lock
+ios/DerivedData/
+ios/App/App.xcworkspace/xcuserdata/
+ios/App/App.xcodeproj/xcuserdata/
+ios/App/App.xcodeproj/project.xcworkspace/xcuserdata/

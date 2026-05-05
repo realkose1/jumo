@@ -122,6 +122,12 @@ window.addEventListener('message', function(e) {
 window.parent.postMessage({ type: '__edit_mode_available' }, '*');
 
 // ─── TWEAK DEFAULTS ───────────────────────────────────────────
+// API base: when running inside the Capacitor iOS shell, the page is
+// served from capacitor:// or file://, so /api/* needs an absolute URL.
+const API_BASE = (location.protocol === 'capacitor:' || location.protocol === 'file:')
+  ? 'https://jumo.vercel.app'
+  : '';
+
 const SB = supabase.createClient(
   'https://pxchmolcruhxbmvomsyy.supabase.co',
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4Y2htb2xjcnVoeGJtdm9tc3l5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3NTk0ODgsImV4cCI6MjA5MzMzNTQ4OH0.WvxjnCkWD_LCgJTPdH3jtMc-maz0dSgS-A9SDHuy58U'
@@ -2956,7 +2962,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
     const fetchStats = async () => {
       try {
         if (player.sport === '야구' && player.mlbId) {
-          const res = await fetch(`/api/mlb-stats?id=${player.mlbId}`);
+          const res = await fetch(`${API_BASE}/api/mlb-stats?id=${player.mlbId}`);
           const data = await res.json();
           const stat = data?.stats?.[0]?.splits?.[0]?.stat;
           if (stat && !cancelled) {
@@ -2971,7 +2977,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
             });
           }
         } else if (player.sport === '축구' && player.espnLeague && player.espnId) {
-          const res = await fetch(`/api/espn-player-stats?league=${player.espnLeague}&id=${player.espnId}`);
+          const res = await fetch(`${API_BASE}/api/espn-player-stats?league=${player.espnLeague}&id=${player.espnId}`);
           const data = await res.json();
           const cats = data?.splits?.categories || [];
           if (cats.length > 0 && !cancelled) {
@@ -3892,7 +3898,7 @@ function NewsImage({ url, fallbackPlayer }) {
       return;
     }
     setLoading(true);
-    fetch(`/api/news-image?url=${encodeURIComponent(url)}`)
+    fetch(`${API_BASE}/api/news-image?url=${encodeURIComponent(url)}`)
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         const raw = d?.image || null;
@@ -4036,7 +4042,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0 }) {
       try {
         const responses = await Promise.all(
           NEWS_PLAYERS.map(player =>
-            fetch(`/api/naver-news?query=${encodeURIComponent(player.query)}`)
+            fetch(`${API_BASE}/api/naver-news?query=${encodeURIComponent(player.query)}`)
               .then(r => r.json())
               .then(data => (data.items || []).map(item => ({
                 title: stripHtml(item.title),
@@ -4822,12 +4828,12 @@ function App() {
     Promise.all(ALL_PLAYERS.map(async p => {
       try {
         if (p.sport === '축구' && p.espnLeague && p.espnId) {
-          const res = await fetch(`/api/espn-player-stats?league=${p.espnLeague}&id=${p.espnId}`);
+          const res = await fetch(`${API_BASE}/api/espn-player-stats?league=${p.espnLeague}&id=${p.espnId}`);
           const data = await res.json();
           const stats = parseESPN(data);
           if (stats) cache[p.id] = stats;
         } else if (p.sport === '야구' && p.mlbId) {
-          const res = await fetch(`/api/mlb-stats?id=${p.mlbId}`);
+          const res = await fetch(`${API_BASE}/api/mlb-stats?id=${p.mlbId}`);
           const data = await res.json();
           const stats = parseMLB(data);
           if (stats) cache[p.id] = stats;

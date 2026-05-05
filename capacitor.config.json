@@ -1,0 +1,12 @@
+{
+  "appId": "com.realkose.jumo",
+  "appName": "Jumo",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "always",
+    "limitsNavigationsToAppBoundDomains": false
+  },
+  "server": {
+    "iosScheme": "capacitor"
+  }
+}
