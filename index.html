@@ -233,6 +233,13 @@ const KOREAN_PLAYERS = {
   'Swansea City': { name: '엄지성', nameEn: 'Eom Ji-sung', number: 7, position: '공격수' },
   'Swansea': { name: '엄지성', nameEn: 'Eom Ji-sung', number: 7, position: '공격수' },
   'SWA': { name: '엄지성', nameEn: 'Eom Ji-sung', number: 7, position: '공격수' },
+  // 설영우 — Crvena Zvezda (Serbian SuperLiga)
+  'Crvena Zvezda': { name: '설영우', nameEn: 'Seol Young-woo', number: 26, position: '풀백' },
+  'FK Crvena Zvezda': { name: '설영우', nameEn: 'Seol Young-woo', number: 26, position: '풀백' },
+  'Crvena zvezda': { name: '설영우', nameEn: 'Seol Young-woo', number: 26, position: '풀백' },
+  'Red Star Belgrade': { name: '설영우', nameEn: 'Seol Young-woo', number: 26, position: '풀백' },
+  'Red Star': { name: '설영우', nameEn: 'Seol Young-woo', number: 26, position: '풀백' },
+  'CZV': { name: '설영우', nameEn: 'Seol Young-woo', number: 26, position: '풀백' },
 };
 
 // ─── HELPER: Start probability based on last 5 finished matches ─
@@ -344,6 +351,7 @@ const ALL_PLAYERS = [
   { id: 21, name: '백승호',  nameEn: 'Paik Seung-ho',   number: 17, sport: '축구',   team: 'Birmingham', league: 'Championship', position: '미드필더', nation: '🇰🇷', goals: 4,  assists: 4,  matches: 42, rating: 7.0, startRate: 95, age: 29, birth: '1997.03.17', height: '183cm', espnLeague: 'eng.2' },
   { id: 22, name: '배준호',  nameEn: 'Bae Jun-ho',      number: 17, sport: '축구',   team: 'Stoke',      league: 'Championship', position: '공격수',   nation: '🇰🇷', goals: 3,  assists: 3,  matches: 45, rating: 6.8, startRate: 85, age: 22, birth: '2003.07.21', height: '178cm', espnLeague: 'eng.2' },
   { id: 23, name: '엄지성',  nameEn: 'Eom Ji-sung',     number: 7,  sport: '축구',   team: 'Swansea',    league: 'Championship', position: '공격수',   nation: '🇰🇷', goals: 3,  assists: 4,  matches: 48, rating: 6.9, startRate: 90, age: 23, birth: '2002.05.30', height: '178cm', espnLeague: 'eng.2' },
+  { id: 24, name: '설영우',  nameEn: 'Seol Young-woo',  number: 26, sport: '축구',   team: 'Crvena Zvezda', league: 'Serbian SuperLiga', position: '풀백', nation: '🇰🇷', goals: 1, assists: 2, matches: 28, rating: 7.1, startRate: 90, age: 26, birth: '1998.12.05', height: '180cm', espnLeague: 'srb.1' },
 
   // 야구 - MLB (2026 시즌)
   { id: 9,  name: '김하성',  nameEn: 'Ha-Seong Kim',    number: 4,  sport: '야구',   team: 'Pirates',    league: 'MLB',        position: '유격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 0,  age: 30, birth: '1995.10.17', height: '179cm', mlbId: 673490, injury: { label:'부상자 명단 (IL)', severity:'high' } },
@@ -571,7 +579,7 @@ function TeamBadge({ code, size=36, logo }) {
 
 function PlayerPhoto({ player, style={}, tint='var(--bg)' }) {
   const num = player.number;
-  const imageMap = { '손흥민': 'heungmin.png', '이강인': 'kangin.png', '김민재': 'minjae.png', '조규성': 'guesung.png', '황희찬': 'heechan.png', '황인범': 'inbeom.png', '김하성': 'haseong.png', '이정후': 'junghoo.png', '김혜성': 'hyeseong.png', '오현규': 'hyungyu.png', '양현준': 'hyunjun.png', '백승호': 'seungho.webp', '배준호': 'junho.webp', '엄지성': 'jisung.webp', '안세영': 'seyoung.webp' };
+  const imageMap = { '손흥민': 'heungmin.png', '이강인': 'kangin.png', '김민재': 'minjae.png', '조규성': 'guesung.png', '황희찬': 'heechan.png', '황인범': 'inbeom.png', '김하성': 'haseong.png', '이정후': 'junghoo.png', '김혜성': 'hyeseong.png', '오현규': 'hyungyu.png', '양현준': 'hyunjun.png', '백승호': 'seungho.webp', '배준호': 'junho.webp', '엄지성': 'jisung.webp', '안세영': 'seyoung.webp', '설영우': 'youngwoo.webp' };
   // For full-body source images, zoom into the face area
   const PHOTO_ZOOM = {
     '백승호': { scale: 2.75, originX: '45%', originY: '16%' },
@@ -1568,7 +1576,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
     '김하성': 'haseong.jpeg', '이정후': 'junghoo.jpeg', '김혜성': 'hyesung.jpeg',
     '오현규': 'hyeongyu.jpeg', '양현준': 'hyunjun.jpeg',
     '백승호': 'seungho.png', '배준호': 'junho.jpeg', '엄지성': 'jisung.jpeg',
-    '안세영': 'seyoung.jpeg',
+    '안세영': 'seyoung.jpeg', '설영우': 'youngwoo.jpeg',
   };
   React.useEffect(() => {
     const playerName = highlightMatch?.koreanPlayer?.name;
@@ -2978,7 +2986,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
             '김하성':'haseong.jpeg','이정후':'junghoo.jpeg','김혜성':'hyesung.jpeg',
             '오현규':'hyeongyu.jpeg','양현준':'hyunjun.jpeg',
             '백승호':'seungho.png','배준호':'junho.jpeg','엄지성':'jisung.jpeg',
-            '안세영':'seyoung.jpeg',
+            '안세영':'seyoung.jpeg','설영우':'youngwoo.jpeg',
           };
           const file = LANDSCAPE[player.name];
           return file
@@ -3525,6 +3533,7 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
     '백승호':'https://a.espncdn.com/i/teamlogos/soccer/500/337.png',
     '배준호':'https://a.espncdn.com/i/teamlogos/soccer/500/336.png',
     '엄지성':'https://a.espncdn.com/i/teamlogos/soccer/500/318.png',
+    '설영우':'https://api.sofascore.com/api/v1/team/2674/image',
     '김하성':'https://a.espncdn.com/i/teamlogos/mlb/500/pit.png',
     '이정후':'https://a.espncdn.com/i/teamlogos/mlb/500/sf.png',
     '김혜성':'https://a.espncdn.com/i/teamlogos/mlb/500/lad.png',
@@ -3734,6 +3743,7 @@ const NEWS_PLAYERS = [
   { label:'백승호', query:'백승호' },
   { label:'배준호', query:'배준호' },
   { label:'엄지성', query:'엄지성' },
+  { label:'설영우', query:'설영우' },
   { label:'안세영', query:'안세영' },
 ];
 
@@ -3750,6 +3760,7 @@ const NEWS_PLAYER_IMG = {
   '배준호': 'image/junho.webp',
   '엄지성': 'image/jisung.webp',
   '안세영': 'image/seyoung.webp',
+  '설영우': 'image/youngwoo.webp',
 };
 
 function detectPlayerName(text) {
