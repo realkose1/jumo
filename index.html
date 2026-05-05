@@ -1933,7 +1933,12 @@ function HomeV3({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [] }) {
 }
 
 // ─── SCREEN: LIVE MATCH DETAIL ────────────────────────────────
-function LiveDetailScreen({ match, onBack, liveApiMatches = [] }) {
+function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
+  const goKoreanPlayer = React.useCallback((kp) => {
+    if (!onPlayer || !kp) return;
+    const full = ALL_PLAYERS.find(p => p.name === kp.name);
+    if (full) onPlayer(full);
+  }, [onPlayer]);
   const [tab, setTab] = React.useState('events');
   const [countdown, setCountdown] = React.useState('');
   const [reactions, setReactions] = React.useState({});
@@ -2136,7 +2141,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [] }) {
               if (assists > 0) pills.push(`🅰️ ${assists}도움`);
               if (kp.sfRating) pills.push(`★ ${kp.sfRating}`);
               return (
-                <div key={idx} style={{ background:'rgba(245,196,0,0.08)', borderRadius:10, padding:'10px 14px', border:'0.5px solid rgba(245,196,0,0.3)', display:'flex', alignItems:'center', gap:10, marginTop: idx > 0 ? 8 : 0 }}>
+                <div key={idx} onClick={() => goKoreanPlayer(kp)} style={{ background:'rgba(245,196,0,0.08)', borderRadius:10, padding:'10px 14px', border:'0.5px solid rgba(245,196,0,0.3)', display:'flex', alignItems:'center', gap:10, marginTop: idx > 0 ? 8 : 0, cursor: onPlayer ? 'pointer' : 'default' }}>
                   <span style={{ fontSize:18 }}>🇰🇷</span>
                   {(() => {
                     const formattedEvent = formatExpectedEvent(kp, liveApiMatches);
@@ -2705,7 +2710,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [] }) {
             const h = get('hits'), ab = get('atBats');
             const summary = (rawHA ? String(rawHA).replace('-', '/') : (h && ab ? `${h}/${ab}` : ''));
             return (
-              <div key={i} style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 8px', borderRadius:8, background: korean ? 'rgba(245,196,0,0.12)' : 'transparent', border: korean ? '0.5px solid rgba(245,196,0,0.3)' : '0.5px solid transparent', marginBottom:4 }}>
+              <div key={i} onClick={korean ? () => goKoreanPlayer(match.koreanPlayer) : undefined} style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 8px', borderRadius:8, background: korean ? 'rgba(245,196,0,0.12)' : 'transparent', border: korean ? '0.5px solid rgba(245,196,0,0.3)' : '0.5px solid transparent', marginBottom:4, cursor: korean && onPlayer ? 'pointer' : 'default' }}>
                 <span style={{ ...NUM, fontSize:11, fontWeight:700, color:'var(--text4)', width:24, textAlign:'center', flexShrink:0 }}>{pos}</span>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:12, fontWeight: korean ? 700 : 600, color: korean ? 'var(--acc)' : 'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
@@ -2771,7 +2776,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [] }) {
             const isKorean = !!(a && b && (a === b || a.includes(b) || b.includes(a) || a.split(/\s+/).some(t => b.split(/\s+/).includes(t) && t.length >= 3)));
             const rating = entry.statistics?.rating;
             return (
-              <div key={i} style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 8px', borderRadius:8, background: isKorean ? 'rgba(245,196,0,0.12)' : 'transparent', border: isKorean ? '0.5px solid rgba(245,196,0,0.3)' : '0.5px solid transparent', marginBottom:4 }}>
+              <div key={i} onClick={isKorean ? () => goKoreanPlayer(match.koreanPlayer) : undefined} style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 8px', borderRadius:8, background: isKorean ? 'rgba(245,196,0,0.12)' : 'transparent', border: isKorean ? '0.5px solid rgba(245,196,0,0.3)' : '0.5px solid transparent', marginBottom:4, cursor: isKorean && onPlayer ? 'pointer' : 'default' }}>
                 <span style={{ ...NUM, fontSize:11, fontWeight:700, color:'var(--text4)', width:20, textAlign:'center', flexShrink:0 }}>{num}</span>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:12, fontWeight: isKorean ? 700 : 600, color: isKorean ? 'var(--acc)' : 'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
@@ -5713,7 +5718,7 @@ function App() {
             </>
           )}
           {screen === 'match' && selectedMatch && (
-            <LiveDetailScreen match={selectedMatch} onBack={goBack} liveApiMatches={liveMatches}/>
+            <LiveDetailScreen match={selectedMatch} onBack={goBack} liveApiMatches={liveMatches} onPlayer={goPlayer}/>
           )}
           {screen === 'player' && selectedPlayer && (
             <PlayerScreen player={selectedPlayer} onBack={goBack} onMatch={goMatch} liveApiMatches={liveMatches} statsCache={playerStatsCache} followedSet={followed} onToggleFollow={toggleFollow}/>
