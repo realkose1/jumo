@@ -881,17 +881,27 @@ function CareerTimeline({ extra }) {
 }
 
 // ─── TAB BAR ─────────────────────────────────────────────────
-// iOS 26+ detection — UA looks like "iPhone OS 26_0" / "iPad ... OS 26_1_2".
-// Capacitor's WKWebView reports the same UA, so this works in the iOS app shell too.
-// Override: append `?glass=1` to URL to preview Liquid Glass on any browser
-// (handy for desktop dev / Vercel preview deploys).
+// iOS 26+ detection.
+//   1) `?glass=1` query forces ON.
+//   2) Capacitor iOS shell: ON unconditionally (the iOS 26 WKWebView reports
+//      a frozen UA of "iPhone OS 18_x" so version sniffing doesn't work —
+//      we instead rely on Xcode's deployment target to gate the OS version).
+//   3) Mobile Safari on the public web: try UA patterns (works for ?glass=1
+//      previews from desktop, and any future iOS that exposes a real version).
 const IS_IOS26_PLUS = (() => {
   try {
     if (typeof location !== 'undefined' && /[?&]glass=1\b/.test(location.search)) return true;
+    const inCapacitorIOS = typeof window !== 'undefined' && !!(window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() === 'ios');
+    if (inCapacitorIOS) return true;
     const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
     if (!/iPhone|iPad|iPod/.test(ua)) return false;
-    const m = ua.match(/OS (\d+)[_\.]/);
-    return !!m && parseInt(m[1], 10) >= 26;
+    const patterns = [/OS (\d+)[_.]/, /Version\/(\d+)\./, /CPU OS (\d+)/];
+    let major = 0;
+    for (const re of patterns) {
+      const m = ua.match(re);
+      if (m) major = Math.max(major, parseInt(m[1], 10));
+    }
+    return major >= 26;
   } catch { return false; }
 })();
 
