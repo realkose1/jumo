@@ -106,29 +106,23 @@ html.light-mode body { background: #e5e5ea; }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 
-/* iOS 26+ Liquid Glass tab bar — floating capsule with heavy frosted blur */
+/* iOS 26+ Liquid Glass tab bar — floating capsule with heavy frosted blur.
+   App is forced dark (IOSDevice dark={true}), so we only define dark-mode tones
+   and skip prefers-color-scheme to avoid mismatched light styles when the
+   simulator OS happens to be in light mode. */
 .tabbar-liquid-glass {
   margin: 0 12px calc(10px + env(safe-area-inset-bottom)) !important;
   border-radius: 26px !important;
-  border: 0.5px solid rgba(255,255,255,0.18) !important;
-  background: rgba(28,28,30,0.50) !important;
-  backdrop-filter: blur(38px) saturate(165%) !important;
-  -webkit-backdrop-filter: blur(38px) saturate(165%) !important;
+  border: 0.5px solid rgba(255,255,255,0.08) !important;
+  background: rgba(10,10,12,0.62) !important;
+  backdrop-filter: blur(38px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(38px) saturate(140%) !important;
   box-shadow:
-    0 10px 36px rgba(0,0,0,0.30),
-    0 1px 0 rgba(255,255,255,0.14) inset,
-    0 -1px 0 rgba(255,255,255,0.04) inset !important;
+    0 10px 30px rgba(0,0,0,0.45),
+    0 0.5px 0 rgba(255,255,255,0.06) inset !important;
   padding: 6px 6px !important;
   position: fixed;
   align-items: center !important;
-}
-.tabbar-liquid-glass::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0) 45%);
-  pointer-events: none;
 }
 .tabbar-liquid-glass > button {
   position: relative;
@@ -140,24 +134,12 @@ html.light-mode body { background: #e5e5ea; }
 .tabbar-liquid-glass > button.active::before {
   content: '';
   position: absolute;
-  inset: 2px 6px;
-  border-radius: 16px;
-  background: rgba(255,255,255,0.10);
+  inset: 3px 8px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.07);
   z-index: 0;
 }
 .tabbar-liquid-glass > button > * { position: relative; z-index: 1; }
-@media (prefers-color-scheme: light) {
-  .tabbar-liquid-glass {
-    background: rgba(255,255,255,0.55) !important;
-    border-color: rgba(0,0,0,0.06) !important;
-    box-shadow:
-      0 10px 36px rgba(0,0,0,0.14),
-      0 1px 0 rgba(255,255,255,0.6) inset !important;
-  }
-  .tabbar-liquid-glass > button.active::before {
-    background: rgba(0,0,0,0.06);
-  }
-}
 </style>
 </head>
 <body>
