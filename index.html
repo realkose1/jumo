@@ -105,6 +105,41 @@ html.light-mode body { background: #e5e5ea; }
 .shimmer { background:linear-gradient(90deg,var(--border) 25%,var(--border2) 50%,var(--border) 75%); background-size:200% 100%; animation:shimmer 1.4s ease-in-out infinite; }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+
+/* iOS 26+ Liquid Glass tab bar — floating capsule with heavy frosted blur */
+.tabbar-liquid-glass {
+  margin: 0 12px calc(10px + env(safe-area-inset-bottom)) !important;
+  border-radius: 28px !important;
+  border: 0.5px solid rgba(255,255,255,0.18) !important;
+  background: rgba(28,28,30,0.55) !important;
+  backdrop-filter: blur(40px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(180%) !important;
+  box-shadow:
+    0 12px 40px rgba(0,0,0,0.32),
+    0 1px 0 rgba(255,255,255,0.15) inset,
+    0 -1px 0 rgba(255,255,255,0.04) inset !important;
+  padding-bottom: 10px !important;
+  padding-top: 10px !important;
+  overflow: hidden;
+  position: fixed;
+}
+.tabbar-liquid-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0) 45%);
+  pointer-events: none;
+}
+@media (prefers-color-scheme: light) {
+  .tabbar-liquid-glass {
+    background: rgba(255,255,255,0.55) !important;
+    border-color: rgba(0,0,0,0.06) !important;
+    box-shadow:
+      0 12px 40px rgba(0,0,0,0.14),
+      0 1px 0 rgba(255,255,255,0.6) inset !important;
+  }
+}
 </style>
 </head>
 <body>
@@ -846,6 +881,17 @@ function CareerTimeline({ extra }) {
 }
 
 // ─── TAB BAR ─────────────────────────────────────────────────
+// iOS 26+ detection — UA looks like "iPhone OS 26_0" / "iPad ... OS 26_1_2".
+// Capacitor's WKWebView reports the same UA, so this works in the iOS app shell too.
+const IS_IOS26_PLUS = (() => {
+  try {
+    const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+    if (!/iPhone|iPad|iPod/.test(ua)) return false;
+    const m = ua.match(/OS (\d+)[_\.]/);
+    return !!m && parseInt(m[1], 10) >= 26;
+  } catch { return false; }
+})();
+
 const TabBar = React.memo(function TabBar({ active: propActive, onTab }) {
   const [active, setActive] = React.useState(propActive);
   React.useEffect(() => { setActive(propActive); }, [propActive]);
@@ -863,19 +909,19 @@ const TabBar = React.memo(function TabBar({ active: propActive, onTab }) {
     { id:'more', label:'더보기', icon: <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><circle cx="5" cy="11" r="1.8" fill="currentColor"/><circle cx="11" cy="11" r="1.8" fill="currentColor"/><circle cx="17" cy="11" r="1.8" fill="currentColor"/></svg> },
   ];
   return (
-    <div style={{
+    <div className={IS_IOS26_PLUS ? 'tabbar-liquid-glass' : ''} style={{
       position: 'fixed',
       bottom: 0,
       left: 0,
       right: 0,
       zIndex: 100,
       display:'flex',
-      borderTop:'0.5px solid var(--border)',
-      background:'var(--tab-bg)',
-      backdropFilter:'blur(20px)',
-      WebkitBackdropFilter:'blur(20px)',
-      paddingBottom:'calc(8px + env(safe-area-inset-bottom))',
-      paddingTop:8,
+      borderTop: IS_IOS26_PLUS ? 'none' : '0.5px solid var(--border)',
+      background: IS_IOS26_PLUS ? undefined : 'var(--tab-bg)',
+      backdropFilter: IS_IOS26_PLUS ? undefined : 'blur(20px)',
+      WebkitBackdropFilter: IS_IOS26_PLUS ? undefined : 'blur(20px)',
+      paddingBottom: IS_IOS26_PLUS ? undefined : 'calc(8px + env(safe-area-inset-bottom))',
+      paddingTop: IS_IOS26_PLUS ? undefined : 8,
       transform:'translateZ(0)',
       WebkitTransform:'translateZ(0)',
       willChange:'transform',
@@ -5900,7 +5946,7 @@ function App() {
     <ToastCtx.Provider value={showToast}>
     <div style={{ '--acc': tweaks.accentColor, fontFamily:"'Noto Sans KR', system-ui, sans-serif", WebkitFontSmoothing:'antialiased' }}>
       <IOSDevice dark={true} width={deviceDimensions.width} height={deviceDimensions.height}>
-        <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'var(--bg)', paddingBottom:'70px', position:'relative' }}>
+        <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'var(--bg)', paddingBottom: IS_IOS26_PLUS ? 'calc(86px + env(safe-area-inset-bottom))' : '70px', position:'relative' }}>
           {toast && (
             <div key={toast.id} style={{ position:'fixed', left:'50%', bottom:'calc(78px + env(safe-area-inset-bottom))', transform:'translateX(-50%)', zIndex:200, background:'rgba(0,0,0,0.85)', color:'#fff', padding:'10px 18px', borderRadius:22, fontSize:13, fontWeight:600, letterSpacing:-0.2, whiteSpace:'nowrap', boxShadow:'0 6px 24px rgba(0,0,0,0.35)', backdropFilter:'blur(10px)', WebkitBackdropFilter:'blur(10px)', animation:'toastIn 0.22s ease-out', pointerEvents:'none' }}>
               {toast.message}
