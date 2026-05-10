@@ -244,7 +244,6 @@ const KOREAN_PLAYERS = {
   'FK Crvena Zvezda': { name: '설영우', nameEn: 'Seol Young-woo', number: 26, position: '풀백' },
   'Crvena zvezda': { name: '설영우', nameEn: 'Seol Young-woo', number: 26, position: '풀백' },
   'Red Star Belgrade': { name: '설영우', nameEn: 'Seol Young-woo', number: 26, position: '풀백' },
-  'Red Star': { name: '설영우', nameEn: 'Seol Young-woo', number: 26, position: '풀백' },
   'CZV': { name: '설영우', nameEn: 'Seol Young-woo', number: 26, position: '풀백' },
 };
 
@@ -1407,28 +1406,8 @@ function HomeV1({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
 }
 
 // ─── TODAY MATCHES CAROUSEL ──────────────────────────────────
-function TodayMatchesCarousel({ matches, now, startOfToday, endOfToday, twelveHoursLater, onMatch, tweaks }) {
+function TodayMatchesCarousel({ todayMatches, matches, now, onMatch, tweaks }) {
   const scrollRef = React.useRef(null);
-
-  // Filter and sort today's matches
-  const todayMatches = matches
-    .filter(m => {
-      if (!m.koreanPlayer) return false;
-      if (!m.fullDate) return false;
-      if (m.live || m.time === 'LIVE') return true; // always show live
-      const matchDate = new Date(m.fullDate);
-      const isFinished = m.status === 'STATUS_FINAL' || m.status === 'STATUS_FULL_TIME' || m.status === 'final' || m.status === 'STATUS_END_PERIOD' || m.status === 'STATUS_FINAL_PEN';
-      const isToday = matchDate >= startOfToday && matchDate <= endOfToday;
-      const isUpcoming = matchDate > now && matchDate <= twelveHoursLater;
-
-      // Include: finished matches from today OR upcoming matches (within 12 hours)
-      return (isFinished && isToday) || isUpcoming;
-    })
-    .sort((a, b) => {
-      const dateA = new Date(a.fullDate);
-      const dateB = new Date(b.fullDate);
-      return dateA - dateB; // Sort chronologically
-    });
 
   // Auto-scroll to first future match on mount
   React.useEffect(() => {
@@ -1549,38 +1528,52 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
     })
     .sort((a, b) => new Date(a.fullDate || 0) - new Date(b.fullDate || 0));
 
-  // Determine highlight match: live > closest to now (finished vs upcoming)
+  // Today's matches pool — shared with TodayMatchesCarousel so highlight & carousel
+  // are guaranteed to draw from the exact same set of matches.
+  const todayMatches = allMatches
+    .filter(m => {
+      if (!m.koreanPlayer) return false;
+      if (!m.fullDate) return false;
+      if (m.live || m.time === 'LIVE') return true;
+      const matchDate = new Date(m.fullDate);
+      const isFinished = isFinalStatus(m.status);
+      const isToday = matchDate >= startOfToday && matchDate <= endOfToday;
+      const isUpcoming = matchDate > now && matchDate <= twelveHoursLater;
+      return (isFinished && isToday) || isUpcoming;
+    })
+    .sort((a, b) => new Date(a.fullDate) - new Date(b.fullDate));
+
+  // Highlight: pick the match with the biggest Korean-player impact from today's pool.
+  // Live » goals » assists » recency. Excludes matches where the Korean did not play.
   const getHighlightMatch = () => {
-    // Priority 1: Live match with Korean player who is actually playing (not absent)
-    const liveWithKorean = allMatches.find(m => (m.live || m.time === 'LIVE') && m.koreanPlayer && m.koreanPlayer.event !== '미출전');
-    if (liveWithKorean) return { match: liveWithKorean, priority: 1 };
+    const eligible = todayMatches.filter(m => m.koreanPlayer?.event !== '미출전');
+    if (eligible.length === 0) return null;
 
-    // Most recent finished match with Korean player
-    const recentFinished = allMatches
-      .filter(m => isFinalStatus(m.status) && m.koreanPlayer && m.koreanPlayer.event !== '미출전' && m.fullDate)
-      .sort((a, b) => new Date(b.fullDate) - new Date(a.fullDate))[0];
+    const isLive = m => m.live || m.time === 'LIVE';
+    const isFinal = m => isFinalStatus(m.status);
+    const goals = m => m.koreanPlayer?.matchGoals || 0;
+    const assists = m => m.koreanPlayer?.matchAssists || 0;
 
-    // Next upcoming match with Korean player
-    const nextUpcoming = allMatches
-      .filter(m => m.koreanPlayer && m.fullDate && !isFinalStatus(m.status) && !(m.live || m.time === 'LIVE') && new Date(m.fullDate) > now)
-      .sort((a, b) => new Date(a.fullDate) - new Date(b.fullDate))[0];
+    const score = m => {
+      let s = 0;
+      if (isLive(m)) s += 1000;            // live always outranks non-live
+      s += goals(m) * 100;                  // each goal: massive impact
+      s += assists(m) * 50;                 // each assist: big impact
+      if (isFinal(m)) {
+        const hoursAgo = (now - new Date(m.fullDate)) / 3600000;
+        s += Math.max(0, 30 - hoursAgo * 5); // recency boost: 0h→+30, 6h+→0
+      } else if (!isLive(m)) {
+        const hoursUntil = (new Date(m.fullDate) - now) / 3600000;
+        s += Math.max(0, 25 - hoursUntil * 2); // imminence boost: 0h→+25, 12.5h→0
+      }
+      return s;
+    };
 
-    if (recentFinished && nextUpcoming) {
-      // Estimate end time: kickoff + ~2.5h for soccer, ~3h for baseball
-      const isMLB = (recentFinished.sport||'').includes('MLB') || (recentFinished.sport||'').includes('⚾');
-      const matchDurationMs = (isMLB ? 3 : 2.5) * 3600 * 1000;
-      const finishedEndTime = new Date(recentFinished.fullDate).getTime() + matchDurationMs;
-      const upcomingStartTime = new Date(nextUpcoming.fullDate).getTime();
-      const distFromFinishedEnd = Math.abs(now - finishedEndTime);
-      const distToUpcomingStart = Math.abs(upcomingStartTime - now);
-      return distFromFinishedEnd <= distToUpcomingStart
-        ? { match: recentFinished, priority: 4 }
-        : { match: nextUpcoming, priority: 5 };
-    }
-    if (recentFinished) return { match: recentFinished, priority: 4 };
-    if (nextUpcoming) return { match: nextUpcoming, priority: 5 };
-
-    return null;
+    const best = [...eligible].sort((a, b) => score(b) - score(a))[0];
+    if (!best) return null;
+    if (isLive(best)) return { match: best, priority: 1 };
+    if (isFinal(best)) return { match: best, priority: 4 };
+    return { match: best, priority: 5 };
   };
 
   const highlightData = getHighlightMatch();
@@ -1844,11 +1837,9 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
 
       {/* Today's Matches Carousel */}
       <TodayMatchesCarousel
+        todayMatches={todayMatches}
         matches={allMatches}
         now={now}
-        startOfToday={startOfToday}
-        endOfToday={endOfToday}
-        twelveHoursLater={twelveHoursLater}
         onMatch={onMatch}
         tweaks={tweaks}
       />
@@ -4976,12 +4967,16 @@ function App() {
 
         // ── Sofascore: fetch lineups + incidents for live/finished soccer ──
         // Include upcoming matches starting within next 2 hours (lineup typically posted ~1h before)
+        // Lineup fetch window:
+        //   - live / finished: always
+        //   - upcoming: from 90min before kickoff (Sofascore typically confirms ~60min prior)
+        //   - just-kicked-off: up to 10min after, to cover the lag before status flips to inprogress
         const sfKorean = koreanMatches.filter(m => {
           if (m.source !== 'sofascore') return false;
           if (m.live || m.status === 'STATUS_FINAL') return true;
           if (!m.fullDate) return false;
           const tilStart = new Date(m.fullDate).getTime() - Date.now();
-          return tilStart > 0 && tilStart <= 2 * 3600 * 1000;
+          return tilStart > -10 * 60 * 1000 && tilStart <= 90 * 60 * 1000;
         });
 
         if (sfKorean.length > 0) {
@@ -5256,10 +5251,31 @@ function App() {
       }
   }, []);
 
+  // Adaptive polling: 20s near kickoff (so confirmed lineups land within seconds),
+  // 60s otherwise. Recomputed each tick by reading the latest liveMatches via ref.
+  const liveMatchesRef = React.useRef(liveMatches);
+  React.useEffect(() => { liveMatchesRef.current = liveMatches; }, [liveMatches]);
+
   React.useEffect(() => {
-    fetchLiveMatches();
-    const interval = setInterval(fetchLiveMatches, 60000);
-    return () => clearInterval(interval);
+    let cancelled = false;
+    let timeoutId;
+    const computeNextDelay = () => {
+      const hasImminent = (liveMatchesRef.current || []).some(m => {
+        if (m.live || m.time === 'LIVE') return true;
+        if (!m.fullDate) return false;
+        const til = new Date(m.fullDate).getTime() - Date.now();
+        return til > -10 * 60 * 1000 && til <= 90 * 60 * 1000;
+      });
+      return hasImminent ? 20000 : 60000;
+    };
+    const tick = async () => {
+      if (cancelled) return;
+      await fetchLiveMatches();
+      if (cancelled) return;
+      timeoutId = setTimeout(tick, computeNextDelay());
+    };
+    tick();
+    return () => { cancelled = true; clearTimeout(timeoutId); };
   }, [fetchLiveMatches]);
 
   // Generate notifications from match data
