@@ -3601,7 +3601,13 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
   };
 
   return (
-    <div ref={scrollRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+    <div style={{ display:'flex', flexDirection:'column', flex:1, height:'100%', background:'var(--bg)', minHeight:0 }}>
+      {/* Fixed top nav */}
+      <div style={{ flexShrink:0, background:'var(--bg)' }}>
+        <div style={{ padding:'16px 20px 8px', fontSize:22, fontWeight:700, color:'var(--text)', letterSpacing:-0.5 }}>일정</div>
+      </div>
+      {/* Scrollable content with pull-to-refresh */}
+      <div ref={scrollRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} style={{ flex:1, overflow:'auto', background:'var(--bg)', minHeight:0 }} className="scrollbar-hide">
       {/* Pull-to-refresh indicator */}
       <div style={{ overflow:'hidden', height: pullY, transition: pullY === 0 ? 'height 0.25s ease' : 'none', display:'flex', alignItems:'center', justifyContent:'center' }}>
         <div style={{ display:'flex', alignItems:'center', gap:8, opacity: Math.min(pullY / PULL_THRESHOLD, 1) }}>
@@ -3609,7 +3615,6 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
           <span style={{ fontSize:12, color:'var(--text3)', fontWeight:600 }}>{refreshing ? '새로고침 중...' : pullY >= PULL_THRESHOLD ? '놓아서 새로고침' : '당겨서 새로고침'}</span>
         </div>
       </div>
-      <div style={{ padding:'16px 20px 8px', fontSize:22, fontWeight:700, color:'var(--text)', letterSpacing:-0.5 }}>일정</div>
 
       {/* Date strip */}
       <div ref={stripRef} style={{ display:'flex', gap:6, padding:'8px 16px 12px', overflowX:'auto' }} className="scrollbar-hide">
@@ -3739,6 +3744,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
         )}
       </div>
       <div style={{ height:24 }}/>
+      </div>
     </div>
   );
 }
@@ -3812,25 +3818,30 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
   };
 
   return (
-    <div ref={scrollRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+    <div style={{ display:'flex', flexDirection:'column', flex:1, height:'100%', background:'var(--bg)', minHeight:0 }}>
+      {/* Fixed top nav (title + edit button + sport filter chips) */}
+      <div style={{ flexShrink:0, background:'var(--bg)' }}>
+        <div style={{ padding:'16px 20px 8px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div style={{ fontSize:22, fontWeight:700, color:'var(--text)', letterSpacing:-0.5 }}>선수</div>
+          <button onClick={onAdd} style={{ display:'flex', alignItems:'center', gap:6, background:'var(--acc)', border:'none', borderRadius:20, padding:'8px 16px', color:'#000', fontSize:13, fontWeight:700, cursor:'pointer' }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="#000"/></svg>
+            선수 편집
+          </button>
+        </div>
+        <div style={{ display:'flex', gap:8, padding:'0 16px 14px', overflowX:'auto' }} className="scrollbar-hide">
+          {sports.map(s => (
+            <button key={s} onClick={() => setFilter(s)} style={{ flexShrink:0, background: filter===s ? 'var(--acc)' : 'var(--border)', border:'none', borderRadius:20, padding:'7px 16px', color: filter===s ? '#000' : 'var(--text2)', fontSize:13, fontWeight:600, cursor:'pointer' }}>{s}</button>
+          ))}
+        </div>
+      </div>
+      {/* Scrollable content with pull-to-refresh */}
+      <div ref={scrollRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} style={{ flex:1, overflow:'auto', background:'var(--bg)', minHeight:0 }} className="scrollbar-hide">
       {/* Pull-to-refresh indicator */}
       <div style={{ overflow:'hidden', height: pullY, transition: pullY === 0 ? 'height 0.25s ease' : 'none', display:'flex', alignItems:'center', justifyContent:'center' }}>
         <div style={{ display:'flex', alignItems:'center', gap:8, opacity: Math.min(pullY / PULL_THRESHOLD, 1) }}>
           <div style={{ width:18, height:18, border:'2.5px solid var(--acc)', borderTopColor:'transparent', borderRadius:'50%', animation: refreshing || pullY >= PULL_THRESHOLD ? 'spin 0.7s linear infinite' : 'none', transform: !refreshing && pullY < PULL_THRESHOLD ? `rotate(${pullY * 4}deg)` : undefined }}/>
           <span style={{ fontSize:12, color:'var(--text3)', fontWeight:600 }}>{refreshing ? '새로고침 중...' : pullY >= PULL_THRESHOLD ? '놓아서 새로고침' : '당겨서 새로고침'}</span>
         </div>
-      </div>
-      <div style={{ padding:'16px 20px 8px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-        <div style={{ fontSize:22, fontWeight:700, color:'var(--text)', letterSpacing:-0.5 }}>선수</div>
-        <button onClick={onAdd} style={{ display:'flex', alignItems:'center', gap:6, background:'var(--acc)', border:'none', borderRadius:20, padding:'8px 16px', color:'#000', fontSize:13, fontWeight:700, cursor:'pointer' }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="#000"/></svg>
-          선수 편집
-        </button>
-      </div>
-      <div style={{ display:'flex', gap:8, padding:'0 16px 14px', overflowX:'auto' }} className="scrollbar-hide">
-        {sports.map(s => (
-          <button key={s} onClick={() => setFilter(s)} style={{ flexShrink:0, background: filter===s ? 'var(--acc)' : 'var(--border)', border:'none', borderRadius:20, padding:'7px 16px', color: filter===s ? '#000' : 'var(--text2)', fontSize:13, fontWeight:600, cursor:'pointer' }}>{s}</button>
-        ))}
       </div>
       <div style={{ padding:'0 16px', display:'flex', flexDirection:'column', gap:10 }}>
         {(() => {
@@ -3917,6 +3928,7 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
         })()}
       </div>
       <div style={{ height:'calc(40px + env(safe-area-inset-bottom))' }}/>
+      </div>
     </div>
   );
 }
@@ -4253,37 +4265,41 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0 }) {
   }, [enabledCategories, category]);
 
   return (
-    <div ref={scrollRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+    <div style={{ display:'flex', flexDirection:'column', flex:1, height:'100%', background:'var(--bg)', minHeight:0 }}>
+      {/* Fixed top nav (title + category chips) */}
+      <div style={{ flexShrink:0, background:'var(--bg)' }}>
+        <div style={{ padding:'16px 20px 12px', fontSize:22, fontWeight:700, color:'var(--text)', letterSpacing:-0.5 }}>뉴스</div>
+        <div style={{ display:'flex', gap:8, overflowX:'auto', padding:'0 16px 14px' }} className="scrollbar-hide">
+          {NEWS_CATEGORIES.filter(c => enabledCategories.includes(c)).map(c => (
+            <button
+              key={c}
+              onClick={() => setCategory(c)}
+              style={{
+                flexShrink:0,
+                background: category === c ? 'var(--acc)' : 'var(--border)',
+                border:'none',
+                borderRadius:20,
+                padding:'7px 16px',
+                fontSize:13,
+                fontWeight:600,
+                color: category === c ? '#000' : 'var(--text2)',
+                cursor:'pointer',
+                whiteSpace:'nowrap',
+              }}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      </div>
+      {/* Scrollable content with pull-to-refresh */}
+      <div ref={scrollRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} style={{ flex:1, overflow:'auto', background:'var(--bg)', minHeight:0 }} className="scrollbar-hide">
       {/* Pull-to-refresh indicator */}
       <div style={{ overflow:'hidden', height: pullY, transition: pullY === 0 ? 'height 0.25s ease' : 'none', display:'flex', alignItems:'center', justifyContent:'center' }}>
         <div style={{ display:'flex', alignItems:'center', gap:8, opacity: Math.min(pullY / PULL_THRESHOLD, 1) }}>
           <div style={{ width:18, height:18, border:'2.5px solid var(--acc)', borderTopColor:'transparent', borderRadius:'50%', animation: refreshing || pullY >= PULL_THRESHOLD ? 'spin 0.7s linear infinite' : 'none', transform: !refreshing && pullY < PULL_THRESHOLD ? `rotate(${pullY * 4}deg)` : undefined }}/>
           <span style={{ fontSize:12, color:'var(--text3)', fontWeight:600 }}>{refreshing ? '새로고침 중...' : pullY >= PULL_THRESHOLD ? '놓아서 새로고침' : '당겨서 새로고침'}</span>
         </div>
-      </div>
-      <div style={{ padding:'16px 20px 12px', fontSize:22, fontWeight:700, color:'var(--text)', letterSpacing:-0.5 }}>뉴스</div>
-
-      <div style={{ display:'flex', gap:8, overflowX:'auto', padding:'0 16px 14px' }} className="scrollbar-hide">
-        {NEWS_CATEGORIES.filter(c => enabledCategories.includes(c)).map(c => (
-          <button
-            key={c}
-            onClick={() => setCategory(c)}
-            style={{
-              flexShrink:0,
-              background: category === c ? 'var(--acc)' : 'var(--border)',
-              border:'none',
-              borderRadius:20,
-              padding:'7px 16px',
-              fontSize:13,
-              fontWeight:600,
-              color: category === c ? '#000' : 'var(--text2)',
-              cursor:'pointer',
-              whiteSpace:'nowrap',
-            }}
-          >
-            {c}
-          </button>
-        ))}
       </div>
 
       {/* Articles */}
@@ -4367,6 +4383,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0 }) {
           );
         })}
         <div style={{ height:20 }}/>
+      </div>
       </div>
     </div>
   );
