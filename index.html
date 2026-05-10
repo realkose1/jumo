@@ -5041,10 +5041,17 @@ function App() {
         });
         const todayStr = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
 
-        // Load cached rows from Supabase
-        const { data: cachedRows } = await SB.from('sf_cache').select('date,events,updated_at').in('date', sfDates);
+        // Load cached rows from Supabase. If Supabase is paused/down (CORS, 522,
+        // network error), gracefully degrade — we'll just refetch from Sofascore.
+        let cachedRows = [];
+        try {
+          const result = await SB.from('sf_cache').select('date,events,updated_at').in('date', sfDates);
+          cachedRows = result?.data || [];
+        } catch (e) {
+          console.warn('Supabase sf_cache unavailable, falling back to direct fetch:', e?.message || e);
+        }
         const cacheMap = {};
-        (cachedRows || []).forEach(row => { cacheMap[row.date] = row; });
+        cachedRows.forEach(row => { cacheMap[row.date] = row; });
 
         await Promise.all(sfDates.map(async date => {
           const cached = cacheMap[date];
