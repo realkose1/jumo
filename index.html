@@ -1593,7 +1593,10 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
     if (pullY >= PULL_THRESHOLD && onRefresh && !refreshing) {
       setRefreshing(true);
       setPullY(PULL_THRESHOLD);
-      await onRefresh();
+      // Safety: cap PTR spinner duration so it never sticks.
+      const ptrSafety = setTimeout(() => setRefreshing(false), 12000);
+      try { await onRefresh(); } catch (e) { console.warn('PTR refresh error:', e); }
+      clearTimeout(ptrSafety);
       setRefreshing(false);
     }
     setPullY(0);
@@ -3550,7 +3553,10 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
     if (pullY >= PULL_THRESHOLD && onRefresh && !refreshing) {
       setRefreshing(true);
       setPullY(PULL_THRESHOLD);
-      await onRefresh();
+      // Safety: cap PTR spinner duration so it never sticks.
+      const ptrSafety = setTimeout(() => setRefreshing(false), 12000);
+      try { await onRefresh(); } catch (e) { console.warn('PTR refresh error:', e); }
+      clearTimeout(ptrSafety);
       setRefreshing(false);
     }
     setPullY(0);
@@ -3809,7 +3815,10 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
     if (pullY >= PULL_THRESHOLD && onRefresh && !refreshing) {
       setRefreshing(true);
       setPullY(PULL_THRESHOLD);
-      await onRefresh();
+      // Safety: cap PTR spinner duration so it never sticks.
+      const ptrSafety = setTimeout(() => setRefreshing(false), 12000);
+      try { await onRefresh(); } catch (e) { console.warn('PTR refresh error:', e); }
+      clearTimeout(ptrSafety);
       setRefreshing(false);
     }
     setPullY(0);
@@ -5011,6 +5020,12 @@ function App() {
   // Fetch live matches from ESPN API and update player stats
   const fetchLiveMatches = React.useCallback(async () => {
       setApiLoading(true);
+      // Safety: even if a network call hangs indefinitely, never lock the UI.
+      const safetyTimer = setTimeout(() => {
+        console.warn('⏱️ fetchLiveMatches safety timeout — clearing loading state');
+        setApiLoading(false);
+        setIsInitialLoad(false);
+      }, 8000);
       try {
         const allMatches = [];
 
@@ -5387,6 +5402,7 @@ function App() {
       } catch (error) {
         console.error('❌ Failed to fetch matches:', error);
       } finally {
+        clearTimeout(safetyTimer);
         setApiLoading(false);
         setIsInitialLoad(false);
       }
