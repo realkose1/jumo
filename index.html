@@ -247,6 +247,45 @@ const KOREAN_PLAYERS = {
   'CZV': { name: '설영우', nameEn: 'Seol Young-woo', number: 26, position: '풀백' },
 };
 
+// ─── KOREAN BROADCAST RIGHTS (2025-26 시즌) ──────────────────
+// Keys matched against Sofascore tournament name (m.competition).
+// Lookup falls back to substring match for naming variants.
+const BROADCASTERS = {
+  'Premier League': ['쿠팡플레이'],
+  'Bundesliga': ['쿠팡플레이'],
+  'Ligue 1': ['쿠팡플레이'],
+  'Serie A': ['스포티비 NOW'],
+  'LaLiga': ['쿠팡플레이'],
+  'La Liga': ['쿠팡플레이'],
+  'Eredivisie': ['스포티비 NOW'],
+  'MLS': ['Apple TV'],
+  'Championship': ['스포티비 NOW'],
+  'Scottish Premiership': ['스포티비 NOW'],
+  'Süper Lig': ['스포티비 NOW'],
+  'Super Lig': ['스포티비 NOW'],
+  'Superliga': ['스포티비 NOW'],
+  'Serbian SuperLiga': [],
+  'UEFA Champions League': ['티빙', 'tvN'],
+  'UEFA Europa League': ['쿠팡플레이'],
+  'UEFA Conference League': ['쿠팡플레이'],
+  'FA Cup': ['쿠팡플레이'],
+  'EFL Cup': ['쿠팡플레이'],
+  'DFB Pokal': ['쿠팡플레이'],
+  'Coupe de France': ['쿠팡플레이'],
+};
+function getBroadcasters(m) {
+  if (!m) return [];
+  const sport = m.sport || '';
+  if (sport.includes('MLB') || sport.includes('⚾')) return ['쿠팡플레이'];
+  const comp = m.competition || '';
+  if (BROADCASTERS[comp]) return BROADCASTERS[comp];
+  const lower = comp.toLowerCase();
+  for (const key of Object.keys(BROADCASTERS)) {
+    if (lower.includes(key.toLowerCase())) return BROADCASTERS[key];
+  }
+  return [];
+}
+
 // ─── HELPER: Start probability based on last 5 finished matches ─
 function computeStartProbability(playerName, allMatches) {
   const FINAL = ['STATUS_FINAL','STATUS_FULL_TIME','final','STATUS_END_PERIOD','STATUS_FINAL_PEN'];
@@ -985,6 +1024,24 @@ function SkeletonNewsHero() {
 
 // ─── LIVE CAROUSEL CARD ──────────────────────────────────────
 // ─── COMPONENT: Today Match Card ─────────────────────────────
+function BroadcastBadge({ match }) {
+  const broadcasters = getBroadcasters(match);
+  if (!broadcasters || broadcasters.length === 0) return null;
+  return (
+    <div style={{
+      display:'inline-flex', alignItems:'center', gap:4, flexShrink:0,
+      background:'rgba(120,170,255,0.10)', border:'0.5px solid rgba(120,170,255,0.25)',
+      borderRadius:6, padding:'3px 7px', maxWidth:'60%'
+    }}>
+      <span style={{ fontSize:9, lineHeight:1 }}>📺</span>
+      <span style={{
+        fontSize:10, fontWeight:600, color:'var(--text2)', letterSpacing:-0.1,
+        whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', lineHeight:1
+      }}>{broadcasters.join(' · ')}</span>
+    </div>
+  );
+}
+
 function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
   const player = ALL_PLAYERS.find(p => p.name === m.koreanPlayer?.name);
   const isLive = m.live || m.time === 'LIVE';
@@ -1171,7 +1228,10 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
                   </div>
                 </div>
 
-                <div style={{ fontSize:11, color:'var(--text4)' }}>{m.competition}</div>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
+                  <div style={{ fontSize:11, color:'var(--text4)', minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.competition}</div>
+                  <BroadcastBadge match={m}/>
+                </div>
               </>
             );
           })()
@@ -1243,8 +1303,11 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
             </div>
 
             {/* Competition info */}
-            <div style={{ fontSize:11, color:'var(--text4)' }}>
-              {m.sport.split(' ')[1]} · {m.competition}
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
+              <div style={{ fontSize:11, color:'var(--text4)', minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                {m.sport.split(' ')[1]} · {m.competition}
+              </div>
+              <BroadcastBadge match={m}/>
             </div>
           </>
         )}
