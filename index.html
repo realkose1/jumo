@@ -5989,8 +5989,8 @@ function App() {
           {screen === 'main' && (
             <>
               <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} tweaks={tweaks} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} scrollTopKey={tabScrollKeys.home} onRefresh={fetchLiveMatches} unreadCount={unreadCount}/></div>
-              <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} liveApiMatches={filteredLiveMatches} isLoading={apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
-              <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} followed={followed} statsCache={playerStatsCache} isLoading={apiLoading} onRefresh={fetchLiveMatches} scrollTopKey={tabScrollKeys.players} liveApiMatches={filteredLiveMatches} sportFeeds={sportFeeds}/></div>
+              <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
+              <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} followed={followed} statsCache={playerStatsCache} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} scrollTopKey={tabScrollKeys.players} liveApiMatches={filteredLiveMatches} sportFeeds={sportFeeds}/></div>
               <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news}/></div>
               <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed} profile={profile} onUpdateProfile={updateProfile}/></div>
             </>
