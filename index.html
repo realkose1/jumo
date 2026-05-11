@@ -3503,20 +3503,22 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
             <div style={{ display:'flex', justifyContent:'center', padding:'48px 0' }}>
               <div style={{ width:28, height:28, borderRadius:'50%', border:'3px solid var(--border)', borderTopColor:'var(--acc)', animation:'spin 0.8s linear infinite' }}/>
             </div>
-          ) : player.sport === '축구' && PLAYER_COMP_STATS[player.id] ? (
+          ) : player.sport === '축구' && (player.compStats || PLAYER_COMP_STATS[player.id]) ? (() => {
+            const comps = player.compStats || PLAYER_COMP_STATS[player.id];
+            return (
             <>
               <div style={{ background:'var(--surface)', borderRadius:16, padding:'14px 16px', border:'0.5px solid var(--border)', marginBottom:12 }}>
                 <div style={{ fontSize:11, fontWeight:700, color:'var(--text4)', letterSpacing:1, textTransform:'uppercase', marginBottom:10 }}>2025-26 시즌 합계</div>
                 <div style={{ display:'flex', justifyContent:'space-around', textAlign:'center' }}>
                   {(() => {
-                    const total = PLAYER_COMP_STATS[player.id].reduce((acc,c)=>({goals:acc.goals+c.goals, assists:acc.assists+c.assists, matches:acc.matches+c.matches}),{goals:0,assists:0,matches:0});
+                    const total = comps.reduce((acc,c)=>({goals:acc.goals+c.goals, assists:acc.assists+c.assists, matches:acc.matches+c.matches}),{goals:0,assists:0,matches:0});
                     return [['골',total.goals],['도움',total.assists],['경기',total.matches]].map(([k,v]) => (
                       <div key={k}><div style={{ ...NUM, fontSize:22, fontWeight:800, color:'var(--text)' }}>{v}</div><div style={{ fontSize:10, color:'var(--text4)', marginTop:2 }}>{k}</div></div>
                     ));
                   })()}
                 </div>
               </div>
-              {PLAYER_COMP_STATS[player.id].map((c, i) => (
+              {comps.map((c, i) => (
                 <div key={i} style={{ background:'var(--surface)', borderRadius:14, padding:'12px 16px', border:'0.5px solid var(--border2)', marginBottom:8, display:'flex', alignItems:'center', gap:12 }}>
                   <span style={{ fontSize:18 }}>{c.icon}</span>
                   <div style={{ flex:1, minWidth:0 }}>
@@ -3548,7 +3550,8 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
                 </div>
               )}
             </>
-          ) : player.sport === '야구' && liveStats ? (
+            );
+          })() : player.sport === '야구' && liveStats ? (
             <div style={{ background:'var(--surface)', borderRadius:16, padding:'16px', border:'0.5px solid var(--border)' }}>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
                 <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>2025 시즌 스탯</div>
@@ -5569,11 +5572,45 @@ function App() {
   }, []);
 
   // Fetch each Korean soccer player's 2025-26 season totals from API-Football
-  // once at app load. Updates ALL_PLAYERS baseline (club competitions only —
-  // friendlies/international matches are excluded).
+  // once at app load. Updates ALL_PLAYERS baseline + per-competition breakdown
+  // (club competitions only — friendlies/international matches are excluded).
   React.useEffect(() => {
     let cancelled = false;
     const season = 2025;
+    // Map league name → display name + icon for the player stats tab.
+    const LEAGUE_DISPLAY = {
+      'Major League Soccer': { name: 'MLS', icon: '🇺🇸' },
+      'Premier League': { name: '프리미어리그', icon: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
+      'Bundesliga': { name: '분데스리가', icon: '🇩🇪' },
+      'Ligue 1': { name: '리그앙', icon: '🇫🇷' },
+      'Serie A': { name: '세리에A', icon: '🇮🇹' },
+      'La Liga': { name: '라리가', icon: '🇪🇸' },
+      'Eredivisie': { name: '에레디비시', icon: '🇳🇱' },
+      'Süper Lig': { name: '쉬페르리그', icon: '🇹🇷' },
+      'Championship': { name: '챔피언십', icon: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
+      'Premiership': { name: '스코티시 PL', icon: '🏴󠁧󠁢󠁳󠁣󠁴󠁿' },
+      'Superliga': { name: '덴마크 SL', icon: '🇩🇰' },
+      'Super Liga': { name: '세르비아 SL', icon: '🇷🇸' },
+      'Jupiler Pro League': { name: '벨기에 1부', icon: '🇧🇪' },
+      'UEFA Champions League': { name: '챔피언스리그', icon: '🏆' },
+      'UEFA Europa League': { name: '유로파리그', icon: '🏆' },
+      'UEFA Conference League': { name: '컨퍼런스리그', icon: '🏆' },
+      'UEFA Super Cup': { name: 'UEFA 슈퍼컵', icon: '🏆' },
+      'FA Cup': { name: 'FA컵', icon: '🏆' },
+      'EFL Cup': { name: 'EFL컵', icon: '🏆' },
+      'League Cup': { name: '리그컵', icon: '🏆' },
+      'DFB Pokal': { name: 'DFB-포칼', icon: '🏆' },
+      'DFB-Pokal': { name: 'DFB-포칼', icon: '🏆' },
+      'Coupe de France': { name: '쿠프 드 프랑스', icon: '🏆' },
+      'KNVB Beker': { name: 'KNVB컵', icon: '🏆' },
+      'Türkiye Kupası': { name: '터키 컵', icon: '🏆' },
+      'FIFA Club World Cup': { name: 'FIFA 클럽 월드컵', icon: '🏆' },
+    };
+    const labelLeague = (name, country) => {
+      if (LEAGUE_DISPLAY[name]) return LEAGUE_DISPLAY[name];
+      const isCup = /Cup|Coppa|Coupe|Pokal|Beker|Kupası|Kupa|Trophy/i.test(name);
+      return { name: name || '대회', icon: isCup ? '🏆' : '⚽' };
+    };
     const soccerPlayers = ALL_PLAYERS.filter(p => p.sport === '축구' && p.apiFootballId);
     (async () => {
       await Promise.all(soccerPlayers.map(async p => {
@@ -5589,18 +5626,27 @@ function App() {
           if (clubStats.length === 0) return;
           let g = 0, a = 0, m = 0;
           const ratings = [];
+          const compStats = [];
           for (const s of clubStats) {
-            g += s.goals?.total || 0;
-            a += s.goals?.assists || 0;
-            m += s.games?.appearences || 0;
-            const r2 = s.games?.rating, w = s.games?.appearences || 0;
+            const sg = s.goals?.total || 0;
+            const sa = s.goals?.assists || 0;
+            const sm = s.games?.appearences || 0;
+            g += sg; a += sa; m += sm;
+            const r2 = s.games?.rating, w = sm;
             if (r2 && w > 0) ratings.push([parseFloat(r2), w]);
+            // Only include competitions where the player actually played
+            if (sm > 0 || sg > 0 || sa > 0) {
+              const lbl = labelLeague(s.league?.name, s.league?.country);
+              compStats.push({ name: lbl.name, icon: lbl.icon, goals: sg, assists: sa, matches: sm });
+            }
           }
           const totalW = ratings.reduce((acc, [, w]) => acc + w, 0);
           const avgR = totalW > 0 ? ratings.reduce((acc, [r2, w]) => acc + r2 * w, 0) / totalW : 0;
           if (cancelled) return;
           p.goals = g; p.assists = a; p.matches = m;
           if (avgR > 0) p.rating = parseFloat(avgR.toFixed(2));
+          // Sort: leagues first by matches desc, then cups
+          p.compStats = compStats.sort((x, y) => y.matches - x.matches);
           delete p._baselineSnapshot; // force baseline rebuild in next poll
         } catch (e) {
           console.warn(`Season stats fetch failed for ${p.name}:`, e?.message || e);
