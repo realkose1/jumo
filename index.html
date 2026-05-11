@@ -5009,6 +5009,13 @@ function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Per-fixture details cache (lineups + events + players).
+  // FINISHED matches: cached indefinitely (data never changes).
+  // LIVE matches: cached 20s (fresh-ish).
+  // UPCOMING matches in lineup window: cached 30s.
+  // Keyed by fixture id. Persists across polling cycles within a session.
+  const afDetailsCacheRef = React.useRef({});
+
   // Fetch live matches from ESPN API and update player stats
   const fetchLiveMatches = React.useCallback(async () => {
       setApiLoading(true);
@@ -5140,22 +5147,40 @@ function App() {
         });
 
         if (afKorean.length > 0) {
+          const detailsCache = afDetailsCacheRef.current;
           const afDetails = await Promise.allSettled(
-            afKorean.map(m => {
+            afKorean.map(async (m) => {
               const needPlayers = m.live || m.status === 'STATUS_FINAL';
-              return Promise.all([
+              const isFinalMatch = m.status === 'STATUS_FINAL';
+              const cached = detailsCache[m.id];
+              // Cache TTL: finished match = forever, live = 20s, upcoming = 30s
+              if (cached) {
+                const age = Date.now() - cached.fetchedAt;
+                const ttl = cached.status === 'STATUS_FINAL' ? Infinity : (cached.live ? 20000 : 30000);
+                if (age < ttl) {
+                  return { id: m.id, lineups: cached.lineups, events: cached.events, players: cached.players, isLive: m.live };
+                }
+              }
+              const [lineups, events, players] = await Promise.all([
                 fetch(`${AF_BASE}?path=fixtures/lineups&fixture=${m.id}`).then(r => r.ok ? r.json() : null).catch(() => null),
                 fetch(`${AF_BASE}?path=fixtures/events&fixture=${m.id}`).then(r => r.ok ? r.json() : null).catch(() => null),
                 needPlayers
                   ? fetch(`${AF_BASE}?path=fixtures/players&fixture=${m.id}`).then(r => r.ok ? r.json() : null).catch(() => null)
                   : Promise.resolve(null),
-              ]).then(([lineups, events, players]) => ({
-                id: m.id,
+              ]);
+              const detail = {
                 lineups: lineups?.response || [],
                 events: events?.response || [],
                 players: players?.response || [],
-                isLive: m.live,
-              }));
+                fetchedAt: Date.now(),
+                status: m.status,
+                live: m.live,
+              };
+              // Only cache successful (non-empty) responses; failed fetches shouldn't poison.
+              if (detail.lineups.length > 0 || detail.events.length > 0 || isFinalMatch) {
+                detailsCache[m.id] = detail;
+              }
+              return { id: m.id, lineups: detail.lineups, events: detail.events, players: detail.players, isLive: m.live };
             })
           );
 
