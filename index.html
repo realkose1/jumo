@@ -5576,7 +5576,10 @@ function App() {
   // (club competitions only — friendlies/international matches are excluded).
   React.useEffect(() => {
     let cancelled = false;
-    const season = 2025;
+    // API-Football "season" is the start year. European leagues (Aug→May)
+    // use 2025 for the 2025-26 season. MLS (Feb→Dec) uses calendar year,
+    // so the current season is 2026.
+    const seasonFor = (p) => (p.league === 'MLS' ? 2026 : 2025);
     // Map league name → display name + icon for the player stats tab.
     const LEAGUE_DISPLAY = {
       'Major League Soccer': { name: 'MLS', icon: '🇺🇸' },
@@ -5606,6 +5609,9 @@ function App() {
       'Türkiye Kupası': { name: '터키 컵', icon: '🏆' },
       'FIFA Club World Cup': { name: 'FIFA 클럽 월드컵', icon: '🏆' },
       'FIFA Intercontinental Cup': { name: 'FIFA 인터컨티넨탈컵', icon: '🏆' },
+      'CONCACAF Champions League': { name: 'CONCACAF 챔피언스컵', icon: '🏆' },
+      'US Open Cup': { name: 'US 오픈컵', icon: '🏆' },
+      'Leagues Cup': { name: '리그스컵', icon: '🏆' },
       'Friendlies': { name: '국가대표 친선', icon: '🇰🇷' },
       'Friendlies Clubs': { name: '클럽 친선', icon: '🤝' },
       'World Cup - Qualification Asia': { name: '월드컵 예선 (아시아)', icon: '🌏' },
@@ -5621,7 +5627,7 @@ function App() {
     (async () => {
       await Promise.all(soccerPlayers.map(async p => {
         try {
-          const r = await fetch(`/api/apifootball?path=players&id=${p.apiFootballId}&season=${season}`);
+          const r = await fetch(`/api/apifootball?path=players&id=${p.apiFootballId}&season=${seasonFor(p)}`);
           if (!r.ok) return;
           const j = await r.json();
           // Club competitions only — exclude national team / friendlies / qualifiers.
