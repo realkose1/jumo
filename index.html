@@ -5624,13 +5624,25 @@ function App() {
           const r = await fetch(`/api/apifootball?path=players&id=${p.apiFootballId}&season=${season}`);
           if (!r.ok) return;
           const j = await r.json();
-          // Include ALL competitions (clubs + cup + national team / friendlies).
+          // Club competitions only — exclude national team / friendlies / qualifiers.
           const stats = j?.response?.[0]?.statistics || [];
-          if (stats.length === 0) return;
+          const clubStats = stats.filter(s => {
+            const lname = (s.league?.name || '').toLowerCase();
+            const ltype = (s.league?.country || '').toLowerCase();
+            if (lname.includes('friendlies') && !lname.includes('clubs')) return false; // 국가대표 친선
+            if (lname.includes('international')) return false;
+            if (lname.includes('nations league')) return false;
+            if (lname.includes('world cup') && lname.includes('qualif')) return false;
+            if (lname.includes('afc asian cup')) return false;
+            // World cup, Asian cup, etc. — usually country='World'
+            if (ltype === 'world' && !lname.includes('club')) return false;
+            return true;
+          });
+          if (clubStats.length === 0) return;
           let g = 0, a = 0, m = 0;
           const ratings = [];
           const compStats = [];
-          for (const s of stats) {
+          for (const s of clubStats) {
             const sg = s.goals?.total || 0;
             const sa = s.goals?.assists || 0;
             const sm = s.games?.appearences || 0;
