@@ -5630,19 +5630,16 @@ function App() {
           const r = await fetch(`/api/apifootball?path=players&id=${p.apiFootballId}&season=${seasonFor(p)}`);
           if (!r.ok) return;
           const j = await r.json();
-          // Club competitions only — exclude national team / friendlies / qualifiers.
+          // Club competitions only. API-Football uses `team.name` = national team
+          // (e.g., 'South Korea') for national team appearances and the club name
+          // (e.g., 'Paris Saint Germain') for club competitions including UEFA
+          // Champions League, Super Cup, FIFA Intercontinental Cup, domestic
+          // cups, etc. So a simple team-name check is the most accurate filter.
           const stats = j?.response?.[0]?.statistics || [];
+          const NATIONAL_TEAM_NAMES = new Set(['south korea', 'korea republic', 'korea']);
           const clubStats = stats.filter(s => {
-            const lname = (s.league?.name || '').toLowerCase();
-            const ltype = (s.league?.country || '').toLowerCase();
-            if (lname.includes('friendlies') && !lname.includes('clubs')) return false; // 국가대표 친선
-            if (lname.includes('international')) return false;
-            if (lname.includes('nations league')) return false;
-            if (lname.includes('world cup') && lname.includes('qualif')) return false;
-            if (lname.includes('afc asian cup')) return false;
-            // World cup, Asian cup, etc. — usually country='World'
-            if (ltype === 'world' && !lname.includes('club')) return false;
-            return true;
+            const teamName = (s.team?.name || '').toLowerCase();
+            return !NATIONAL_TEAM_NAMES.has(teamName);
           });
           if (clubStats.length === 0) return;
           let g = 0, a = 0, m = 0;
