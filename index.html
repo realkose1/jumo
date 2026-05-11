@@ -2693,51 +2693,6 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
               const at = inc.addedTime ? `+${inc.addedTime}` : '';
               return `${t}${at}'`;
             };
-            // Generate a concise Korean caption for a single incident.
-            // Style: noun-ending, no verb conjugation. e.g.
-            //   "전반 25분 · 휴스턴 J. McGlynn 골 (도움 L. Ennali)"
-            const buildNarration = (inc) => {
-              if (inc.incidentType === 'period' || inc.incidentType === 'injuryTime') return '';
-              const isHome = inc.isHome;
-              const teamName = isHome ? match.home.name : match.away.name;
-              const t = typeof inc.time === 'number' ? inc.time : null;
-              const at = inc.addedTime ? `+${inc.addedTime}` : '';
-              const half = t == null ? '' : (t <= 45 ? `전반 ${t}${at}'` : t <= 90 ? `후반 ${t}${at}'` : t <= 105 ? `연장 전반 ${t-90}${at}'` : `연장 후반 ${t-105}${at}'`);
-              const score = (typeof inc.homeScore === 'number' && typeof inc.awayScore === 'number')
-                ? ` ${inc.homeScore}-${inc.awayScore}` : '';
-              const join = (parts) => parts.filter(Boolean).join(' · ');
-              if (inc.incidentType === 'goal') {
-                const player = inc.player?.name || '';
-                const cls = inc.incidentClass;
-                let kind = '골';
-                if (cls === 'ownGoal') kind = '자책골';
-                else if (cls === 'penalty') kind = 'PK 골';
-                else if (cls === 'missedPenalty') kind = 'PK 실축';
-                const assist = inc.assist1?.name ? `도움 ${inc.assist1.name}` : '';
-                return join([half, `${teamName} ${player} ${kind}${score}`, assist]);
-              }
-              if (inc.incidentType === 'card') {
-                const player = inc.player?.name || inc.playerName || '';
-                const cls = inc.incidentClass;
-                let kind = '옐로카드';
-                if (cls === 'red') kind = '레드카드 퇴장';
-                else if (cls === 'yellowRed') kind = '경고누적 퇴장';
-                return join([half, `${teamName} ${player} ${kind}`, inc.reason]);
-              }
-              if (inc.incidentType === 'substitution') {
-                const inName = inc.playerIn?.name || '';
-                const outName = inc.playerOut?.name || '';
-                return join([half, `${teamName} 교체`, `IN ${inName}`, `OUT ${outName}`]);
-              }
-              if (inc.incidentType === 'varDecision') {
-                const label = VAR_LABELS[inc.incidentClass] || inc.text || inc.incidentClass || 'VAR 판정';
-                return join([half, `VAR ${label}`, inc.player?.name]);
-              }
-              if (inc.incidentType === 'inGamePenalty') {
-                return join([half, `${teamName} PK 선언`, inc.player?.name]);
-              }
-              return '';
-            };
             const VAR_LABELS = {
               goalAwarded:'골 인정', goalNotAwarded:'골 취소', penaltyAwarded:'PK 선언', penaltyNotAwarded:'PK 취소',
               cardUpgrade:'카드 상향', cardDowngrade:'카드 하향', noCard:'카드 취소'
@@ -2821,7 +2776,6 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
               const accentBg = isKoreanEvent ? 'rgba(245,196,0,0.12)' : isHighlight ? PUR_BG : 'var(--surface)';
               const accentBd = isKoreanEvent ? '0.5px solid rgba(245,196,0,0.4)' : isHighlight ? `0.5px solid ${PUR_BD}` : '0.5px solid var(--border2)';
 
-              const narration = buildNarration(inc);
               return (
                 <div key={i} style={{
                   display:'flex', alignItems:'flex-start', gap:10, marginBottom:8, padding:'10px 12px',
@@ -2837,7 +2791,6 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
                       <span style={{ fontSize:13, fontWeight:700, color: accentColor || 'var(--text)' }}>{title}</span>
                     </div>
                     {detail && <div style={{ fontSize:11, color:'var(--text4)', marginTop:3 }}>{detail}</div>}
-                    {narration && <div style={{ fontSize:11.5, color:'var(--text3)', lineHeight:1.55, marginTop:6, paddingTop:6, borderTop:'0.5px dashed var(--border)' }}>{narration}</div>}
                   </div>
                   <div style={{ fontSize:18, flexShrink:0 }}>{icon}</div>
                 </div>
