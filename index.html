@@ -226,9 +226,11 @@ const KOREAN_PLAYERS = {
   'LAFC': { name: '손흥민', nameEn: 'Son Heung-min', number: 7, position: '공격수' },
   // 이강인 — PSG (Ligue 1)
   'Paris Saint-Germain': { name: '이강인', nameEn: 'Lee Kang-in', number: 19, position: '미드필더' },
+  'Paris Saint Germain': { name: '이강인', nameEn: 'Lee Kang-in', number: 19, position: '미드필더' },
   'PSG': { name: '이강인', nameEn: 'Lee Kang-in', number: 19, position: '미드필더' },
   // 김민재 — Bayern Munich (Bundesliga)
   'Bayern Munich': { name: '김민재', nameEn: 'Kim Min-jae', number: 3, position: '센터백' },
+  'Bayern München': { name: '김민재', nameEn: 'Kim Min-jae', number: 3, position: '센터백' },
   'FC Bayern München': { name: '김민재', nameEn: 'Kim Min-jae', number: 3, position: '센터백' },
   'Bayern': { name: '김민재', nameEn: 'Kim Min-jae', number: 3, position: '센터백' },
   'FC Bayern': { name: '김민재', nameEn: 'Kim Min-jae', number: 3, position: '센터백' },
@@ -5032,23 +5034,21 @@ function App() {
         const pad = n => String(n).padStart(2, '0');
         const today = new Date();
 
-        // ── Sofascore: cache-first via Supabase ────────────────────────────
-        const SF_BASE = 'https://api.sofascore.com/api/v1';
-        // Sofascore's anti-bot started rejecting requests with empty Referer.
-        // Send the standard cross-origin referrer (origin URL) so the request
-        // looks like it's coming from a normal website embedding their widget.
-        const sfOpts = { referrerPolicy: 'strict-origin-when-cross-origin' };
-        const sfDates = [-2,-1,0,1,2,3].map(offset => {
+        // ── API-Football: fixtures by date, cache-first via Supabase ────────
+        // Pro plan = 7,500 req/day. We hit 4 dates per cycle (-1..+2). With
+        // 60-90s poll interval and Supabase cache TTL of 2min/today,
+        // 10min/other, we stay well under budget.
+        const AF_BASE = '/api/apifootball';
+        const afDates = [-1,0,1,2].map(offset => {
           const d = new Date(today); d.setDate(today.getDate() + offset);
           return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
         });
         const todayStr = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
 
-        // Load cached rows from Supabase. If Supabase is paused/down (CORS, 522,
-        // network error), gracefully degrade — we'll just refetch from Sofascore.
+        // Load cached rows from Supabase (sf_cache table is reused for API-Football fixtures)
         let cachedRows = [];
         try {
-          const result = await SB.from('sf_cache').select('date,events,updated_at').in('date', sfDates);
+          const result = await SB.from('sf_cache').select('date,events,updated_at').in('date', afDates);
           cachedRows = result?.data || [];
         } catch (e) {
           console.warn('Supabase sf_cache unavailable, falling back to direct fetch:', e?.message || e);
@@ -5056,34 +5056,31 @@ function App() {
         const cacheMap = {};
         cachedRows.forEach(row => { cacheMap[row.date] = row; });
 
-        await Promise.all(sfDates.map(async date => {
+        await Promise.all(afDates.map(async date => {
           const cached = cacheMap[date];
           const ttlMs = date === todayStr ? 2 * 60 * 1000 : 10 * 60 * 1000;
-          const cachedHasEvents = Array.isArray(cached?.events) && cached.events.length > 0;
-          const isFresh = cachedHasEvents && (Date.now() - new Date(cached.updated_at).getTime()) < ttlMs;
+          const cachedHasFixtures = Array.isArray(cached?.events) && cached.events.length > 0;
+          const isFresh = cachedHasFixtures && (Date.now() - new Date(cached.updated_at).getTime()) < ttlMs;
 
-          let events = isFresh ? cached.events : null;
+          let fixtures = isFresh ? cached.events : null;
 
-          if (!events) {
-            const data = await fetch(`${SF_BASE}/sport/football/scheduled-events/${date}`, sfOpts)
+          if (!fixtures) {
+            const data = await fetch(`${AF_BASE}?path=fixtures&date=${date}`)
               .then(r => r.ok ? r.json() : null).catch(() => null);
-            const fetched = data?.events;
+            const fetched = data?.response;
             if (Array.isArray(fetched) && fetched.length > 0) {
-              events = fetched;
-              // Only persist successful, non-empty responses so a transient
-              // Sofascore 403 doesn't wipe out the good cache.
-              SB.from('sf_cache').upsert({ date, events, updated_at: new Date().toISOString() }).then(() => {});
+              fixtures = fetched;
+              SB.from('sf_cache').upsert({ date, events: fixtures, updated_at: new Date().toISOString() }).then(() => {});
             } else {
-              // Fetch failed or empty — fall back to stale cache if available.
-              events = cached?.events || [];
-              if (events.length === 0) {
-                console.warn(`Sofascore fetch failed for ${date} and no cached fallback`);
+              fixtures = cached?.events || [];
+              if (fixtures.length === 0) {
+                console.warn(`API-Football fetch failed for ${date} and no cached fallback`);
               }
             }
           }
 
-          events.forEach(e => {
-            const m = transformSofascoreEvent(e);
+          fixtures.forEach(fx => {
+            const m = transformApiFootballFixture(fx);
             if (m) allMatches.push(m);
           });
         }));
@@ -5142,44 +5139,47 @@ function App() {
           return false;
         };
 
-        // ── Sofascore: fetch lineups + incidents for live/finished soccer ──
-        // Include upcoming matches starting within next 2 hours (lineup typically posted ~1h before)
-        // Lineup fetch window:
-        //   - live / finished: always
-        //   - upcoming: from 90min before kickoff (Sofascore typically confirms ~60min prior)
-        //   - just-kicked-off: up to 10min after, to cover the lag before status flips to inprogress
-        const sfKorean = koreanMatches.filter(m => {
-          if (m.source !== 'sofascore') return false;
+        // ── API-Football: fetch lineups + events for live/finished/imminent soccer ──
+        // Window: -10min..+90min from kickoff, plus all live/finished.
+        const afKorean = koreanMatches.filter(m => {
+          if (m.source !== 'apifootball') return false;
           if (m.live || m.status === 'STATUS_FINAL') return true;
           if (!m.fullDate) return false;
           const tilStart = new Date(m.fullDate).getTime() - Date.now();
           return tilStart > -10 * 60 * 1000 && tilStart <= 90 * 60 * 1000;
         });
 
-        if (sfKorean.length > 0) {
-          const sfDetails = await Promise.allSettled(
-            sfKorean.map(m =>
+        if (afKorean.length > 0) {
+          const afDetails = await Promise.allSettled(
+            afKorean.map(m =>
               Promise.all([
-                fetch(`${SF_BASE}/event/${m.id}/lineups`, sfOpts).then(r => r.ok ? r.json() : null).catch(() => null),
-                fetch(`${SF_BASE}/event/${m.id}/incidents`, sfOpts).then(r => r.ok ? r.json() : null).catch(() => null),
-              ]).then(([lineups, incidents]) => ({ id: m.id, lineups, incidents, isLive: m.live }))
+                fetch(`${AF_BASE}?path=fixtures/lineups&fixture=${m.id}`).then(r => r.ok ? r.json() : null).catch(() => null),
+                fetch(`${AF_BASE}?path=fixtures/events&fixture=${m.id}`).then(r => r.ok ? r.json() : null).catch(() => null),
+              ]).then(([lineups, events]) => ({ id: m.id, lineups: lineups?.response || [], events: events?.response || [], isLive: m.live }))
             )
           );
 
-          sfDetails.forEach(result => {
+          afDetails.forEach(result => {
             if (result.status !== 'fulfilled' || !result.value) return;
-            const { id, lineups, incidents, isLive } = result.value;
+            const { id, lineups, events: incidents, isLive } = result.value;
             const idx = koreanMatches.findIndex(m => m.id === id);
             if (idx === -1) return;
 
             const m = koreanMatches[idx];
-            const linePlayers = [...(lineups?.home?.players || []), ...(lineups?.away?.players || [])];
+            // Flatten startXI + substitutes from both teams into a single roster list,
+            // tagging each with whether they were in the starting XI.
+            const linePlayers = [];
+            (lineups || []).forEach(team => {
+              (team.startXI || []).forEach(e => linePlayers.push({ player: e.player, substitute: false }));
+              (team.substitutes || []).forEach(e => linePlayers.push({ player: e.player, substitute: true }));
+            });
             const allKoreans = m.koreanPlayers || [m.koreanPlayer];
             const isFinishedMatch = m.status === 'STATUS_FINAL';
             const isUpcoming = !isLive && !isFinishedMatch;
-            const lineupConfirmed = !!lineups?.confirmed && linePlayers.length > 0;
+            // API-Football confirms by populating startXI; if startXI is empty
+            // it means lineup hasn't been published yet.
+            const lineupConfirmed = (lineups || []).some(t => (t.startXI || []).length > 0);
 
-            // Compute live status + match contributions for one Korean player
             const computeFor = (kp) => {
               const nameEn = kp.nameEn;
               let started = false, foundInRoster = false, sfRating = null;
@@ -5187,20 +5187,23 @@ function App() {
                 const n = entry.player?.name || '';
                 if (nameMatch(n, nameEn)) {
                   foundInRoster = true;
-                  started = entry.substitute === false;
-                  const r = entry.statistics?.rating;
-                  if (r != null) sfRating = parseFloat(r).toFixed(1);
+                  if (entry.substitute === false) started = true;
                 }
               }
               let minutesIn = null, minutesOff = null, matchGoals = 0, matchAssists = 0;
-              for (const inc of (incidents?.incidents || [])) {
-                if (inc.incidentType === 'substitution') {
-                  if (nameMatch(inc.playerIn?.name || '', nameEn)) minutesIn = inc.time;
-                  if (nameMatch(inc.playerOut?.name || '', nameEn)) minutesOff = inc.time;
+              for (const inc of (incidents || [])) {
+                const min = inc.time?.elapsed;
+                if (inc.type === 'subst') {
+                  // API-Football: inc.player = sub IN, inc.assist = sub OUT
+                  if (nameMatch(inc.player?.name || '', nameEn)) minutesIn = min;
+                  if (nameMatch(inc.assist?.name || '', nameEn)) minutesOff = min;
                 }
-                if (inc.incidentType === 'goal') {
-                  if (nameMatch(inc.player?.name || '', nameEn)) matchGoals++;
-                  if (inc.assist1?.name && nameMatch(inc.assist1.name, nameEn)) matchAssists++;
+                if (inc.type === 'Goal' && inc.detail !== 'Missed Penalty') {
+                  if (nameMatch(inc.player?.name || '', nameEn)) {
+                    if (inc.detail === 'Own Goal') { /* skip — not their goal */ }
+                    else matchGoals++;
+                  }
+                  if (inc.assist?.name && nameMatch(inc.assist.name, nameEn)) matchAssists++;
                 }
               }
               const didPlay = started || minutesIn !== null || matchGoals > 0 || matchAssists > 0;
@@ -5704,6 +5707,96 @@ function App() {
       isTimedOut,
       periodStartTs,
       sfPeriod,
+    };
+  };
+
+  // ── API-Football fixture transformer ─────────────────────────────────
+  // Maps a fixture object from api-sports.io to our standard match shape.
+  const transformApiFootballFixture = (fx) => {
+    if (!fx?.fixture || !fx?.teams) return null;
+    const tourneyName = (fx.league?.name || '').toLowerCase();
+    const homeTeamRaw = (fx.teams.home?.name || '').toLowerCase();
+    const awayTeamRaw = (fx.teams.away?.name || '').toLowerCase();
+    const WOMEN_MARKERS = ['women', ' w ', '(w)', 'frauen', 'féminin', 'femenin', 'dames', 'ladies'];
+    if (WOMEN_MARKERS.some(k => tourneyName.includes(k) || homeTeamRaw.includes(k) || awayTeamRaw.includes(k))) return null;
+    // Skip youth / reserve / II teams
+    const YOUTH_MARKERS = [' u17', ' u18', ' u19', ' u20', ' u21', ' u23', 'youth', 'reserve', ' ii ', ' ii$'];
+    const homeAwayCombined = `${homeTeamRaw} ${awayTeamRaw}`;
+    if (YOUTH_MARKERS.some(k => new RegExp(k).test(homeAwayCombined))) return null;
+
+    const homeTeamName = fx.teams.home?.name || '';
+    const awayTeamName = fx.teams.away?.name || '';
+    const homeShort = homeTeamName.replace(/[^A-Za-z0-9]/g,'').slice(0, 3).toUpperCase() || homeTeamName.slice(0,3).toUpperCase();
+    const awayShort = awayTeamName.replace(/[^A-Za-z0-9]/g,'').slice(0, 3).toUpperCase() || awayTeamName.slice(0,3).toUpperCase();
+
+    // Match against KOREAN_PLAYERS map (try full name and short)
+    let koreanPlayer = null;
+    let koreanPlayerAway = null;
+    const tryHome = [homeTeamName, homeShort];
+    const tryAway = [awayTeamName, awayShort];
+    for (const v of tryHome) { if (KOREAN_PLAYERS[v]) { koreanPlayer = { ...KOREAN_PLAYERS[v], team: homeShort }; break; } }
+    for (const v of tryAway) { if (KOREAN_PLAYERS[v]) { koreanPlayerAway = { ...KOREAN_PLAYERS[v], team: awayShort }; break; } }
+    if (!koreanPlayer && koreanPlayerAway) { koreanPlayer = koreanPlayerAway; koreanPlayerAway = null; }
+    if (!koreanPlayer) return null;
+    const isKoreanDerby = !!koreanPlayerAway;
+    const koreanPlayers = isKoreanDerby ? [koreanPlayer, koreanPlayerAway] : [koreanPlayer];
+
+    // API-Football status codes
+    const sShort = fx.fixture.status?.short || 'NS';
+    const LIVE_CODES = new Set(['1H','HT','2H','ET','BT','P','INT','LIVE']);
+    const FINAL_CODES = new Set(['FT','AET','PEN']);
+    const isLive = LIVE_CODES.has(sShort);
+    const isFinished = FINAL_CODES.has(sShort);
+
+    const matchDate = new Date(fx.fixture.date);
+    const isTimedOut = isLive && (Date.now() - matchDate.getTime()) > 160 * 60 * 1000;
+    const liveAfterTimeout = isLive && !isTimedOut;
+    const status = liveAfterTimeout ? 'STATUS_IN_PROGRESS' : (isFinished || isTimedOut) ? 'STATUS_FINAL' : 'notstarted';
+
+    const elapsed = fx.fixture.status?.elapsed;
+    let minute = '';
+    if (liveAfterTimeout && elapsed != null) minute = String(elapsed);
+    const periodStartTs = null; // not provided by API-football; we'll just show elapsed
+
+    let timeDisplay = '';
+    if (liveAfterTimeout) timeDisplay = 'LIVE';
+    else if (!isFinished && !isTimedOut) timeDisplay = formatHHMM(matchDate);
+
+    const tournamentName = fx.league?.name || '';
+    const TOURNEY_ABBR = {
+      'Premier League':'EPL','Bundesliga':'GER','Ligue 1':'L1','Serie A':'ITA',
+      'Premiership':'SPL','Süper Lig':'TUR','Eredivisie':'NED',
+      'Jupiler Pro League':'BEL','Major League Soccer':'MLS','Superliga':'DEN','La Liga':'ESP',
+      'Championship':'CHA','Serbian SuperLiga':'SRB','UEFA Champions League':'UCL',
+      'UEFA Europa League':'UEL','UEFA Conference League':'UECL',
+    };
+    const leagueAbbr = TOURNEY_ABBR[tournamentName] || tournamentName.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,4);
+
+    return {
+      id: String(fx.fixture.id),
+      source: 'apifootball',
+      live: liveAfterTimeout,
+      minute,
+      sport: `⚽ ${leagueAbbr}`,
+      leagueKey: '',
+      home: { name: homeTeamName, code: homeShort, score: (liveAfterTimeout || isFinished || isTimedOut) ? (fx.goals?.home ?? 0) : null, logo: fx.teams.home?.logo || null },
+      away: { name: awayTeamName, code: awayShort, score: (liveAfterTimeout || isFinished || isTimedOut) ? (fx.goals?.away ?? 0) : null, logo: fx.teams.away?.logo || null },
+      koreanPlayer: { ...koreanPlayer, event: (isFinished || isTimedOut) ? '미출전' : '출전 예상', minutesPlayed: 0, matchGoals: 0, matchAssists: 0 },
+      koreanPlayers: koreanPlayers.map(kp => ({ ...kp, event: (isFinished || isTimedOut) ? '미출전' : '출전 예상', minutesPlayed: 0, matchGoals: 0, matchAssists: 0 })),
+      isKoreanDerby,
+      competition: tournamentName,
+      competitionLogo: fx.league?.logo || null,
+      venue: fx.fixture.venue?.city || '',
+      time: timeDisplay,
+      fullDate: matchDate.toISOString(),
+      krTime: formatKRTime(matchDate.toISOString()),
+      lineupConfirmed: liveAfterTimeout || isFinished,
+      events: [],
+      stats: null,
+      status,
+      isTimedOut,
+      periodStartTs,
+      sfPeriod: 1,
     };
   };
 
