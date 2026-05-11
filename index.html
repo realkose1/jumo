@@ -5136,15 +5136,23 @@ function App() {
         const today = new Date();
 
         // ── API-Football: fixtures by date, cache-first via Supabase ────────
-        // Pro plan = 7,500 req/day. We hit 4 dates per cycle (-1..+2). With
-        // 60-90s poll interval and Supabase cache TTL of 2min/today,
-        // 10min/other, we stay well under budget.
+        // Range covers the schedule-tab date strip (±7 days). Tiered TTL keeps
+        // calls within the Pro 7,500/day budget — today refreshes often,
+        // far-future dates rarely change.
         const AF_BASE = '/api/apifootball';
-        const afDates = [-1,0,1,2].map(offset => {
+        const dateOffsets = [-2,-1,0,1,2,3,4,5,6,7];
+        const afDates = dateOffsets.map(offset => {
           const d = new Date(today); d.setDate(today.getDate() + offset);
           return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
         });
         const todayStr = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
+        const ttlForDate = (dateStr) => {
+          if (dateStr === todayStr) return 2 * 60 * 1000; // 오늘: 2분
+          const dt = new Date(dateStr).getTime();
+          const diff = Math.abs(dt - today.getTime()) / (24 * 3600 * 1000);
+          if (diff <= 1.5) return 10 * 60 * 1000;   // ±1일: 10분
+          return 30 * 60 * 1000;                     // 그 외: 30분
+        };
 
         // Load cached rows from Supabase (sf_cache table is reused for API-Football fixtures)
         let cachedRows = [];
@@ -5159,7 +5167,7 @@ function App() {
 
         await Promise.all(afDates.map(async date => {
           const cached = cacheMap[date];
-          const ttlMs = date === todayStr ? 2 * 60 * 1000 : 10 * 60 * 1000;
+          const ttlMs = ttlForDate(date);
           const cachedHasFixtures = Array.isArray(cached?.events) && cached.events.length > 0;
           const isFresh = cachedHasFixtures && (Date.now() - new Date(cached.updated_at).getTime()) < ttlMs;
 
