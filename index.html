@@ -2693,48 +2693,48 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
               const at = inc.addedTime ? `+${inc.addedTime}` : '';
               return `${t}${at}'`;
             };
-            // Generate a full Korean commentary sentence for a single incident.
+            // Generate a concise Korean caption for a single incident.
+            // Style: noun-ending, no verb conjugation. e.g.
+            //   "전반 25분 · 휴스턴 J. McGlynn 골 (도움 L. Ennali)"
             const buildNarration = (inc) => {
               if (inc.incidentType === 'period' || inc.incidentType === 'injuryTime') return '';
               const isHome = inc.isHome;
               const teamName = isHome ? match.home.name : match.away.name;
-              const oppName = isHome ? match.away.name : match.home.name;
               const t = typeof inc.time === 'number' ? inc.time : null;
               const at = inc.addedTime ? `+${inc.addedTime}` : '';
-              const half = t == null ? '' : (t <= 45 ? `전반 ${t}${at}분` : t <= 90 ? `후반 ${t}${at}분` : t <= 105 ? `연장 전반 ${t-90}${at}분` : `연장 후반 ${t-105}${at}분`);
-              const prefix = half ? `${half}, ` : '';
-              const goalScore = (typeof inc.homeScore === 'number' && typeof inc.awayScore === 'number')
-                ? ` (${match.home.name} ${inc.homeScore}-${inc.awayScore} ${match.away.name})` : '';
+              const half = t == null ? '' : (t <= 45 ? `전반 ${t}${at}'` : t <= 90 ? `후반 ${t}${at}'` : t <= 105 ? `연장 전반 ${t-90}${at}'` : `연장 후반 ${t-105}${at}'`);
+              const score = (typeof inc.homeScore === 'number' && typeof inc.awayScore === 'number')
+                ? ` ${inc.homeScore}-${inc.awayScore}` : '';
+              const join = (parts) => parts.filter(Boolean).join(' · ');
               if (inc.incidentType === 'goal') {
-                const player = inc.player?.name || '선수';
-                const assist = inc.assist1?.name ? `, ${inc.assist1.name}의 도움` : '';
+                const player = inc.player?.name || '';
                 const cls = inc.incidentClass;
-                if (cls === 'ownGoal') return `${prefix}${teamName}의 ${player}가 자책골을 기록해 ${oppName}에게 득점을 안겼다${goalScore}.`;
-                if (cls === 'penalty') return `${prefix}${teamName}의 ${player}가 페널티킥을 성공시켰다${assist}${goalScore}.`;
-                if (cls === 'missedPenalty') return `${prefix}${teamName}의 ${player}가 페널티킥을 실축했다.`;
-                return `${prefix}${teamName}의 ${player}가 골을 터트렸다${assist}${goalScore}.`;
+                let kind = '골';
+                if (cls === 'ownGoal') kind = '자책골';
+                else if (cls === 'penalty') kind = 'PK 골';
+                else if (cls === 'missedPenalty') kind = 'PK 실축';
+                const assist = inc.assist1?.name ? `도움 ${inc.assist1.name}` : '';
+                return join([half, `${teamName} ${player} ${kind}${score}`, assist]);
               }
               if (inc.incidentType === 'card') {
-                const player = inc.player?.name || inc.playerName || '선수';
-                const reason = inc.reason ? ` (${inc.reason})` : '';
+                const player = inc.player?.name || inc.playerName || '';
                 const cls = inc.incidentClass;
-                if (cls === 'red') return `${prefix}${teamName}의 ${player}가 다이렉트 레드카드로 퇴장당했다${reason}.`;
-                if (cls === 'yellowRed') return `${prefix}${teamName}의 ${player}가 경고 누적으로 퇴장당했다${reason}.`;
-                return `${prefix}${teamName}의 ${player}가 옐로카드를 받았다${reason}.`;
+                let kind = '옐로카드';
+                if (cls === 'red') kind = '레드카드 퇴장';
+                else if (cls === 'yellowRed') kind = '경고누적 퇴장';
+                return join([half, `${teamName} ${player} ${kind}`, inc.reason]);
               }
               if (inc.incidentType === 'substitution') {
-                const inName = inc.playerIn?.name || '선수';
-                const outName = inc.playerOut?.name || '선수';
-                return `${prefix}${teamName}이(가) ${outName}을(를) 빼고 ${inName}을(를) 투입했다.`;
+                const inName = inc.playerIn?.name || '';
+                const outName = inc.playerOut?.name || '';
+                return join([half, `${teamName} 교체`, `IN ${inName}`, `OUT ${outName}`]);
               }
               if (inc.incidentType === 'varDecision') {
                 const label = VAR_LABELS[inc.incidentClass] || inc.text || inc.incidentClass || 'VAR 판정';
-                const player = inc.player?.name ? `대상: ${inc.player.name}` : '';
-                return `${prefix}VAR 판독 결과 ${label}${player ? ' · ' + player : ''}.`;
+                return join([half, `VAR ${label}`, inc.player?.name]);
               }
               if (inc.incidentType === 'inGamePenalty') {
-                const player = inc.player?.name || '';
-                return `${prefix}${teamName}에 페널티킥이 선언됐다${player ? ` (대상: ${player})` : ''}.`;
+                return join([half, `${teamName} PK 선언`, inc.player?.name]);
               }
               return '';
             };
