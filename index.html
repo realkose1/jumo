@@ -5730,14 +5730,27 @@ function App() {
     const awayShort = awayTeamName.replace(/[^A-Za-z0-9]/g,'').slice(0, 3).toUpperCase() || awayTeamName.slice(0,3).toUpperCase();
 
     // Match against KOREAN_PLAYERS map (try full name and short)
-    let koreanPlayer = null;
-    let koreanPlayerAway = null;
+    let homeKoreanInfo = null, awayKoreanInfo = null;
     const tryHome = [homeTeamName, homeShort];
     const tryAway = [awayTeamName, awayShort];
-    for (const v of tryHome) { if (KOREAN_PLAYERS[v]) { koreanPlayer = { ...KOREAN_PLAYERS[v], team: homeShort }; break; } }
-    for (const v of tryAway) { if (KOREAN_PLAYERS[v]) { koreanPlayerAway = { ...KOREAN_PLAYERS[v], team: awayShort }; break; } }
+    for (const v of tryHome) { if (KOREAN_PLAYERS[v]) { homeKoreanInfo = KOREAN_PLAYERS[v]; break; } }
+    for (const v of tryAway) { if (KOREAN_PLAYERS[v]) { awayKoreanInfo = KOREAN_PLAYERS[v]; break; } }
+    if (!homeKoreanInfo && !awayKoreanInfo) return null;
+
+    // Use player's canonical team abbrev from ALL_PLAYERS for both card display
+    // and home.code/away.code comparisons (which key off Korean player's team).
+    let homeCode = homeShort, awayCode = awayShort;
+    if (homeKoreanInfo) {
+      const info = ALL_PLAYERS.find(p => p.name === homeKoreanInfo.name);
+      if (info?.team) homeCode = info.team;
+    }
+    if (awayKoreanInfo) {
+      const info = ALL_PLAYERS.find(p => p.name === awayKoreanInfo.name);
+      if (info?.team) awayCode = info.team;
+    }
+    let koreanPlayer = homeKoreanInfo ? { ...homeKoreanInfo, team: homeCode } : null;
+    let koreanPlayerAway = awayKoreanInfo ? { ...awayKoreanInfo, team: awayCode } : null;
     if (!koreanPlayer && koreanPlayerAway) { koreanPlayer = koreanPlayerAway; koreanPlayerAway = null; }
-    if (!koreanPlayer) return null;
     const isKoreanDerby = !!koreanPlayerAway;
     const koreanPlayers = isKoreanDerby ? [koreanPlayer, koreanPlayerAway] : [koreanPlayer];
 
@@ -5779,8 +5792,8 @@ function App() {
       minute,
       sport: `⚽ ${leagueAbbr}`,
       leagueKey: '',
-      home: { name: homeTeamName, code: homeShort, score: (liveAfterTimeout || isFinished || isTimedOut) ? (fx.goals?.home ?? 0) : null, logo: fx.teams.home?.logo || null },
-      away: { name: awayTeamName, code: awayShort, score: (liveAfterTimeout || isFinished || isTimedOut) ? (fx.goals?.away ?? 0) : null, logo: fx.teams.away?.logo || null },
+      home: { name: homeTeamName, code: homeCode, score: (liveAfterTimeout || isFinished || isTimedOut) ? (fx.goals?.home ?? 0) : null, logo: fx.teams.home?.logo || null },
+      away: { name: awayTeamName, code: awayCode, score: (liveAfterTimeout || isFinished || isTimedOut) ? (fx.goals?.away ?? 0) : null, logo: fx.teams.away?.logo || null },
       koreanPlayer: { ...koreanPlayer, event: (isFinished || isTimedOut) ? '미출전' : '출전 예상', minutesPlayed: 0, matchGoals: 0, matchAssists: 0 },
       koreanPlayers: koreanPlayers.map(kp => ({ ...kp, event: (isFinished || isTimedOut) ? '미출전' : '출전 예상', minutesPlayed: 0, matchGoals: 0, matchAssists: 0 })),
       isKoreanDerby,
