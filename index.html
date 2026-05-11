@@ -223,26 +223,21 @@ const ESPN_API = {
 const KOREAN_PLAYERS = {
   // 손흥민 — LAFC (MLS)
   'Los Angeles FC': { name: '손흥민', nameEn: 'Son Heung-min', number: 7, position: '공격수' },
-  'LAFC': { name: '손흥민', nameEn: 'Son Heung-min', number: 7, position: '공격수' },
   // 이강인 — PSG (Ligue 1)
   'Paris Saint-Germain': { name: '이강인', nameEn: 'Lee Kang-in', number: 19, position: '미드필더' },
   'Paris Saint Germain': { name: '이강인', nameEn: 'Lee Kang-in', number: 19, position: '미드필더' },
-  'PSG': { name: '이강인', nameEn: 'Lee Kang-in', number: 19, position: '미드필더' },
   // 김민재 — Bayern Munich (Bundesliga)
   'Bayern Munich': { name: '김민재', nameEn: 'Kim Min-jae', number: 3, position: '센터백' },
   'Bayern München': { name: '김민재', nameEn: 'Kim Min-jae', number: 3, position: '센터백' },
   'FC Bayern München': { name: '김민재', nameEn: 'Kim Min-jae', number: 3, position: '센터백' },
-  'Bayern': { name: '김민재', nameEn: 'Kim Min-jae', number: 3, position: '센터백' },
   'FC Bayern': { name: '김민재', nameEn: 'Kim Min-jae', number: 3, position: '센터백' },
   // 황희찬 — Wolves (EPL)
   'Wolves': { name: '황희찬', nameEn: 'Hwang Hee-chan', number: 11, position: '공격수' },
   'Wolverhampton Wanderers': { name: '황희찬', nameEn: 'Hwang Hee-chan', number: 11, position: '공격수' },
   'Wolverhampton': { name: '황희찬', nameEn: 'Hwang Hee-chan', number: 11, position: '공격수' },
-  'WOL': { name: '황희찬', nameEn: 'Hwang Hee-chan', number: 11, position: '공격수' },
   // 조규성 — FC Midtjylland (Danish Superliga)
   'Midtjylland': { name: '조규성', nameEn: 'Cho Gue-sung', number: 9, position: '공격수' },
   'FC Midtjylland': { name: '조규성', nameEn: 'Cho Gue-sung', number: 9, position: '공격수' },
-  'MID': { name: '조규성', nameEn: 'Cho Gue-sung', number: 9, position: '공격수' },
   // 황인범 — Feyenoord (Eredivisie)
   'Feyenoord': { name: '황인범', nameEn: 'Hwang In-beom', number: 5, position: '미드필더' },
   'Feyenoord Rotterdam': { name: '황인범', nameEn: 'Hwang In-beom', number: 5, position: '미드필더' },
@@ -263,25 +258,20 @@ const KOREAN_PLAYERS = {
   'Beşiktaş': { name: '오현규', nameEn: 'Oh Hyeon-gyu', number: 19, position: '공격수' },
   'Besiktas JK': { name: '오현규', nameEn: 'Oh Hyeon-gyu', number: 19, position: '공격수' },
   'Beşiktaş JK': { name: '오현규', nameEn: 'Oh Hyeon-gyu', number: 19, position: '공격수' },
-  'BJK': { name: '오현규', nameEn: 'Oh Hyeon-gyu', number: 19, position: '공격수' },
   // 백승호 — Birmingham City (Championship)
   'Birmingham City': { name: '백승호', nameEn: 'Paik Seung-ho', number: 17, position: '미드필더' },
   'Birmingham': { name: '백승호', nameEn: 'Paik Seung-ho', number: 17, position: '미드필더' },
-  'BIR': { name: '백승호', nameEn: 'Paik Seung-ho', number: 17, position: '미드필더' },
   // 배준호 — Stoke City (Championship)
   'Stoke City': { name: '배준호', nameEn: 'Bae Jun-ho', number: 17, position: '공격수' },
   'Stoke': { name: '배준호', nameEn: 'Bae Jun-ho', number: 17, position: '공격수' },
-  'STK': { name: '배준호', nameEn: 'Bae Jun-ho', number: 17, position: '공격수' },
   // 엄지성 — Swansea City (Championship)
   'Swansea City': { name: '엄지성', nameEn: 'Eom Ji-sung', number: 7, position: '공격수' },
   'Swansea': { name: '엄지성', nameEn: 'Eom Ji-sung', number: 7, position: '공격수' },
-  'SWA': { name: '엄지성', nameEn: 'Eom Ji-sung', number: 7, position: '공격수' },
   // 설영우 — Crvena Zvezda (Serbian SuperLiga)
   'Crvena Zvezda': { name: '설영우', nameEn: 'Seol Young-woo', number: 26, position: '풀백' },
   'FK Crvena Zvezda': { name: '설영우', nameEn: 'Seol Young-woo', number: 26, position: '풀백' },
   'Crvena zvezda': { name: '설영우', nameEn: 'Seol Young-woo', number: 26, position: '풀백' },
   'Red Star Belgrade': { name: '설영우', nameEn: 'Seol Young-woo', number: 26, position: '풀백' },
-  'CZV': { name: '설영우', nameEn: 'Seol Young-woo', number: 26, position: '풀백' },
 };
 
 // ─── KOREAN BROADCAST RIGHTS (2025-26 시즌) ──────────────────
@@ -5748,12 +5738,10 @@ function App() {
     const homeShort = homeTeamName.replace(/[^A-Za-z0-9]/g,'').slice(0, 3).toUpperCase() || homeTeamName.slice(0,3).toUpperCase();
     const awayShort = awayTeamName.replace(/[^A-Za-z0-9]/g,'').slice(0, 3).toUpperCase() || awayTeamName.slice(0,3).toUpperCase();
 
-    // Match against KOREAN_PLAYERS map (try full name and short)
-    let homeKoreanInfo = null, awayKoreanInfo = null;
-    const tryHome = [homeTeamName, homeShort];
-    const tryAway = [awayTeamName, awayShort];
-    for (const v of tryHome) { if (KOREAN_PLAYERS[v]) { homeKoreanInfo = KOREAN_PLAYERS[v]; break; } }
-    for (const v of tryAway) { if (KOREAN_PLAYERS[v]) { awayKoreanInfo = KOREAN_PLAYERS[v]; break; } }
+    // Match against KOREAN_PLAYERS map. Use ONLY the full team name to avoid
+    // false positives like Wolfsberg→WOL→황희찬 from the 3-letter slice.
+    const homeKoreanInfo = KOREAN_PLAYERS[homeTeamName] || null;
+    const awayKoreanInfo = KOREAN_PLAYERS[awayTeamName] || null;
     if (!homeKoreanInfo && !awayKoreanInfo) return null;
 
     // Use player's canonical team abbrev from ALL_PLAYERS for both card display
