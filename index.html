@@ -3765,17 +3765,23 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
     '이정후':'https://a.espncdn.com/i/teamlogos/mlb/500/sf.png',
     '김혜성':'https://a.espncdn.com/i/teamlogos/mlb/500/lad.png',
   };
-  // Build a map: player name → team logo URL
-  // Prefer the static ESPN fallback (always works in browsers); only use
-  // live match logos for players who don't have a fallback entry.
+  // Build a map: player name → team logo URL.
+  // Prefer API-Football logos (media.api-sports.io) from live/recent matches —
+  // they're always up-to-date with current team. Fall back to static URLs only
+  // for players not yet found in any recent match.
   const teamLogoByPlayer = React.useMemo(() => {
-    const map = { ...TEAM_LOGO_FALLBACK };
+    const map = {};
     for (const m of liveApiMatches) {
-      const kp = m.koreanPlayer;
-      if (!kp || map[kp.name]) continue;
-      const koreanIsHome = kp.team === m.home.code;
-      const logo = koreanIsHome ? m.home.logo : m.away.logo;
-      if (logo) map[kp.name] = logo;
+      const allKp = m.koreanPlayers || [m.koreanPlayer];
+      for (const kp of allKp) {
+        if (!kp || map[kp.name]) continue;
+        const koreanIsHome = kp.team === m.home.code;
+        const logo = koreanIsHome ? m.home.logo : m.away.logo;
+        if (logo) map[kp.name] = logo;
+      }
+    }
+    for (const [name, logo] of Object.entries(TEAM_LOGO_FALLBACK)) {
+      if (!map[name]) map[name] = logo;
     }
     return map;
   }, [liveApiMatches]);
