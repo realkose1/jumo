@@ -2250,8 +2250,9 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
           player: { name: e.player?.name }, reason: e.comments || '' };
       }
       if (e.type === 'subst') {
+        // API-Football: player = coming OFF (OUT), assist = coming ON (IN)
         return { ...base, incidentType: 'substitution',
-          playerIn: { name: e.player?.name }, playerOut: { name: e.assist?.name } };
+          playerIn: { name: e.assist?.name }, playerOut: { name: e.player?.name } };
       }
       if (e.type === 'Var') {
         return { ...base, incidentType: 'varDecision', text: e.detail || '' };
@@ -5375,9 +5376,10 @@ function App() {
               for (const inc of (incidents || [])) {
                 const min = inc.time?.elapsed;
                 if (inc.type === 'subst') {
-                  // API-Football: inc.player = sub IN, inc.assist = sub OUT
-                  if (nameMatch(inc.player?.name || '', nameEn)) minutesIn = min;
-                  if (nameMatch(inc.assist?.name || '', nameEn)) minutesOff = min;
+                  // API-Football: inc.player = the one coming OFF (sub OUT),
+                  // inc.assist = the one coming ON (sub IN).
+                  if (nameMatch(inc.player?.name || '', nameEn)) minutesOff = min;
+                  if (nameMatch(inc.assist?.name || '', nameEn)) minutesIn = min;
                 }
                 if (inc.type === 'Goal' && inc.detail !== 'Missed Penalty') {
                   if (nameMatch(inc.player?.name || '', nameEn)) {
