@@ -2227,13 +2227,104 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
       .catch(() => { setMlbLoading(false); });
   }, [tab, match.id, isFinished, isLive, isMLBMatch]);
 
+  // Transform API-Football detail responses → Sofascore-shape that the existing
+  // renderers below already expect. This keeps the rendering JSX untouched.
+  const transformAfEvents = (afResp) => {
+    if (!Array.isArray(afResp)) return null;
+    const incidents = afResp.map(e => {
+      const isHome = e.team?.name === match.home.name;
+      const base = { time: e.time?.elapsed, addedTime: e.time?.extra ?? undefined, isHome };
+      if (e.type === 'Goal') {
+        let cls = 'normal';
+        if (e.detail === 'Own Goal') cls = 'ownGoal';
+        else if (e.detail === 'Penalty') cls = 'penalty';
+        else if (e.detail === 'Missed Penalty') cls = 'missedPenalty';
+        return { ...base, incidentType: 'goal', incidentClass: cls,
+          player: { name: e.player?.name }, assist1: e.assist?.name ? { name: e.assist.name } : null };
+      }
+      if (e.type === 'Card') {
+        let cls = 'yellow';
+        if (e.detail === 'Red Card') cls = 'red';
+        else if (e.detail === 'Second Yellow card') cls = 'yellowRed';
+        return { ...base, incidentType: 'card', incidentClass: cls,
+          player: { name: e.player?.name }, reason: e.comments || '' };
+      }
+      if (e.type === 'subst') {
+        return { ...base, incidentType: 'substitution',
+          playerIn: { name: e.player?.name }, playerOut: { name: e.assist?.name } };
+      }
+      if (e.type === 'Var') {
+        return { ...base, incidentType: 'varDecision', text: e.detail || '' };
+      }
+      return null;
+    }).filter(Boolean);
+    return { incidents };
+  };
+
+  const transformAfLineups = (afLineupsResp, afPlayersResp) => {
+    if (!Array.isArray(afLineupsResp) || afLineupsResp.length === 0) return null;
+    const ratingMap = new Map();
+    (afPlayersResp || []).forEach(team => {
+      (team.players || []).forEach(entry => {
+        const id = entry.player?.id;
+        const r = (entry.statistics || [{}])[0]?.games?.rating;
+        if (id != null && r != null) ratingMap.set(id, r);
+      });
+    });
+    const mapTeam = (afTeam) => {
+      if (!afTeam) return null;
+      const mapPlayer = (e, sub) => ({
+        player: { name: e.player?.name, jerseyNumber: e.player?.number, id: e.player?.id },
+        substitute: sub,
+        statistics: ratingMap.has(e.player?.id) ? { rating: ratingMap.get(e.player.id) } : {},
+      });
+      return {
+        formation: afTeam.formation,
+        players: [
+          ...(afTeam.startXI || []).map(e => mapPlayer(e, false)),
+          ...(afTeam.substitutes || []).map(e => mapPlayer(e, true)),
+        ],
+      };
+    };
+    const home = afLineupsResp.find(t => t.team?.name === match.home.name) || afLineupsResp[0];
+    const away = afLineupsResp.find(t => t.team?.name === match.away.name) || afLineupsResp[1];
+    return { home: mapTeam(home), away: mapTeam(away) };
+  };
+
+  const transformAfStats = (afResp) => {
+    if (!Array.isArray(afResp) || afResp.length === 0) return null;
+    const home = afResp.find(t => t.team?.name === match.home.name) || afResp[0];
+    const away = afResp.find(t => t.team?.name === match.away.name) || afResp[1];
+    const homeMap = new Map();
+    (home?.statistics || []).forEach(s => homeMap.set(s.type, s.value));
+    const awayMap = new Map();
+    (away?.statistics || []).forEach(s => awayMap.set(s.type, s.value));
+    // Translate API-Football stat names to the Sofascore-style keys that the
+    // renderer's STAT_LABELS already covers (점유율, 슈팅, 패스 등).
+    const TYPE_MAP = {
+      'Ball Possession':'Ball possession', 'Total Shots':'Total shots',
+      'Shots on Goal':'Shots on target', 'Shots off Goal':'Shots off target',
+      'Blocked Shots':'Blocked shots', 'Fouls':'Fouls', 'Corner Kicks':'Corner kicks',
+      'Offsides':'Offsides', 'Yellow Cards':'Yellow cards', 'Red Cards':'Red cards',
+      'Goalkeeper Saves':'Goalkeeper saves', 'Total passes':'Passes',
+      'Passes accurate':'Accurate passes', 'expected_goals':'Expected goals',
+    };
+    const order = Object.keys(TYPE_MAP);
+    const items = order.filter(k => homeMap.has(k) || awayMap.has(k)).map(k => ({
+      name: TYPE_MAP[k],
+      home: homeMap.get(k) ?? '',
+      away: awayMap.get(k) ?? '',
+    }));
+    return { statistics: [{ period: 'ALL', groups: [{ groupName: 'Match overview', statisticsItems: items }] }] };
+  };
+
   React.useEffect(() => {
     if (tab !== 'events' || incidentsData || !(isFinished || isLive)) return;
     if (!isSoccerMatch) return;
     setIncidentsLoading(true);
-    fetch(`https://api.sofascore.com/api/v1/event/${match.id}/incidents`, { referrerPolicy:'no-referrer' })
+    fetch(`/api/apifootball?path=fixtures/events&fixture=${match.id}`)
       .then(r => r.ok ? r.json() : null)
-      .then(data => { setIncidentsData(data); setIncidentsLoading(false); })
+      .then(data => { setIncidentsData(transformAfEvents(data?.response)); setIncidentsLoading(false); })
       .catch(() => { setIncidentsLoading(false); });
   }, [tab, match.id, isFinished, isLive]);
 
@@ -2241,19 +2332,22 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
     if (tab !== 'lineups' || lineupsData || !(isFinished || isLive)) return;
     if (!isSoccerMatch) return;
     setLineupsLoading(true);
-    fetch(`https://api.sofascore.com/api/v1/event/${match.id}/lineups`, { referrerPolicy:'no-referrer' })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { setLineupsData(data); setLineupsLoading(false); })
-      .catch(() => { setLineupsLoading(false); });
+    Promise.all([
+      fetch(`/api/apifootball?path=fixtures/lineups&fixture=${match.id}`).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`/api/apifootball?path=fixtures/players&fixture=${match.id}`).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([lineupsJson, playersJson]) => {
+      setLineupsData(transformAfLineups(lineupsJson?.response, playersJson?.response));
+      setLineupsLoading(false);
+    }).catch(() => { setLineupsLoading(false); });
   }, [tab, match.id, isFinished, isLive]);
 
   React.useEffect(() => {
     if (tab !== 'stats' || statsData || !(isFinished || isLive)) return;
     if (!isSoccerMatch) return;
     setStatsLoading(true);
-    fetch(`https://api.sofascore.com/api/v1/event/${match.id}/statistics`, { referrerPolicy:'no-referrer' })
+    fetch(`/api/apifootball?path=fixtures/statistics&fixture=${match.id}`)
       .then(r => r.ok ? r.json() : null)
-      .then(data => { setStatsData(data); setStatsLoading(false); })
+      .then(data => { setStatsData(transformAfStats(data?.response)); setStatsLoading(false); })
       .catch(() => { setStatsLoading(false); });
   }, [tab, match.id, isFinished, isLive]);
   const typeColor = { goal:'var(--acc)', yellow:'#f5c518', red:'#e03030', assist:'var(--text2)' };
