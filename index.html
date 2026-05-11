@@ -5034,7 +5034,10 @@ function App() {
 
         // ── Sofascore: cache-first via Supabase ────────────────────────────
         const SF_BASE = 'https://api.sofascore.com/api/v1';
-        const sfOpts = { referrerPolicy: 'no-referrer' };
+        // Sofascore's anti-bot started rejecting requests with empty Referer.
+        // Send the standard cross-origin referrer (origin URL) so the request
+        // looks like it's coming from a normal website embedding their widget.
+        const sfOpts = { referrerPolicy: 'strict-origin-when-cross-origin' };
         const sfDates = [-2,-1,0,1,2,3].map(offset => {
           const d = new Date(today); d.setDate(today.getDate() + offset);
           return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -5056,16 +5059,27 @@ function App() {
         await Promise.all(sfDates.map(async date => {
           const cached = cacheMap[date];
           const ttlMs = date === todayStr ? 2 * 60 * 1000 : 10 * 60 * 1000;
-          const isFresh = cached && (Date.now() - new Date(cached.updated_at).getTime()) < ttlMs;
+          const cachedHasEvents = Array.isArray(cached?.events) && cached.events.length > 0;
+          const isFresh = cachedHasEvents && (Date.now() - new Date(cached.updated_at).getTime()) < ttlMs;
 
           let events = isFresh ? cached.events : null;
 
           if (!events) {
             const data = await fetch(`${SF_BASE}/sport/football/scheduled-events/${date}`, sfOpts)
               .then(r => r.ok ? r.json() : null).catch(() => null);
-            events = data?.events || [];
-            // Save to Supabase (upsert)
-            SB.from('sf_cache').upsert({ date, events, updated_at: new Date().toISOString() }).then(() => {});
+            const fetched = data?.events;
+            if (Array.isArray(fetched) && fetched.length > 0) {
+              events = fetched;
+              // Only persist successful, non-empty responses so a transient
+              // Sofascore 403 doesn't wipe out the good cache.
+              SB.from('sf_cache').upsert({ date, events, updated_at: new Date().toISOString() }).then(() => {});
+            } else {
+              // Fetch failed or empty — fall back to stale cache if available.
+              events = cached?.events || [];
+              if (events.length === 0) {
+                console.warn(`Sofascore fetch failed for ${date} and no cached fallback`);
+              }
+            }
           }
 
           events.forEach(e => {
