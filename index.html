@@ -5151,17 +5151,27 @@ function App() {
 
         if (afKorean.length > 0) {
           const afDetails = await Promise.allSettled(
-            afKorean.map(m =>
-              Promise.all([
+            afKorean.map(m => {
+              const needPlayers = m.live || m.status === 'STATUS_FINAL';
+              return Promise.all([
                 fetch(`${AF_BASE}?path=fixtures/lineups&fixture=${m.id}`).then(r => r.ok ? r.json() : null).catch(() => null),
                 fetch(`${AF_BASE}?path=fixtures/events&fixture=${m.id}`).then(r => r.ok ? r.json() : null).catch(() => null),
-              ]).then(([lineups, events]) => ({ id: m.id, lineups: lineups?.response || [], events: events?.response || [], isLive: m.live }))
-            )
+                needPlayers
+                  ? fetch(`${AF_BASE}?path=fixtures/players&fixture=${m.id}`).then(r => r.ok ? r.json() : null).catch(() => null)
+                  : Promise.resolve(null),
+              ]).then(([lineups, events, players]) => ({
+                id: m.id,
+                lineups: lineups?.response || [],
+                events: events?.response || [],
+                players: players?.response || [],
+                isLive: m.live,
+              }));
+            })
           );
 
           afDetails.forEach(result => {
             if (result.status !== 'fulfilled' || !result.value) return;
-            const { id, lineups, events: incidents, isLive } = result.value;
+            const { id, lineups, events: incidents, players: playerStats, isLive } = result.value;
             const idx = koreanMatches.findIndex(m => m.id === id);
             if (idx === -1) return;
 
@@ -5188,6 +5198,15 @@ function App() {
                 if (nameMatch(n, nameEn)) {
                   foundInRoster = true;
                   if (entry.substitute === false) started = true;
+                }
+              }
+              // Pull rating from /fixtures/players (only fetched for live/finished).
+              for (const team of (playerStats || [])) {
+                for (const entry of (team.players || [])) {
+                  if (nameMatch(entry.player?.name || '', nameEn)) {
+                    const r = (entry.statistics || [{}])[0]?.games?.rating;
+                    if (r != null) sfRating = parseFloat(r).toFixed(1);
+                  }
                 }
               }
               let minutesIn = null, minutesOff = null, matchGoals = 0, matchAssists = 0;
