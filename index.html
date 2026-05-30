@@ -446,9 +446,6 @@ const ALL_PLAYERS = [
   { id: 9,  name: '김하성',  nameEn: 'Ha-Seong Kim',    number: 4,  sport: '야구',   team: 'Pirates',    league: 'MLB',        position: '유격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 0,  age: 30, birth: '1995.10.17', height: '179cm', mlbId: 673490, injury: { label:'부상자 명단 (IL)', severity:'high' } },
   { id: 17, name: '이정후',  nameEn: 'Jung Hoo Lee',    number: 51, sport: '야구',   team: 'Giants',     league: 'MLB',        position: '중견수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 15, rating: 0,   startRate: 95, age: 27, birth: '1998.08.20', height: '186cm', mlbId: 808982 },
   { id: 18, name: '김혜성',  nameEn: 'Hyeseong Kim',    number: 25, sport: '야구',   team: 'Dodgers',    league: 'MLB',        position: '유격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 16, rating: 0,   startRate: 70, age: 27, birth: '1999.01.27', height: '178cm', mlbId: 808975 },
-
-  // 배드민턴
-  { id: 15, name: '안세영',  nameEn: 'An Se-young',     number: 1,  sport: '배드민턴','team': '한국 대표팀','league': 'BWF World Tour', position: '여자 단식', nation: '🇰🇷', goals: 0,  assists: 0,  matches: 32, wins: 27, winRate: 85, rating: 0, startRate: 100, age: 24, birth: '2002.02.05', height: '168cm' },
 ];
 const PLAYERS = ALL_PLAYERS.slice(0, 5);
 
@@ -689,20 +686,6 @@ const PLAYER_EXTRA = {
     ],
     seasonStats: [],
   },
-  15: { // 안세영
-    form: [9.5, 9.7, 9.6, 9.8, 9.5, 9.9, 9.7],
-    recentMatches: [
-      { opp:'야마구치 아카네', result:'W', score:'21-15, 21-12', contrib:'우승', date:'4.20' },
-      { opp:'천위페이',     result:'W', score:'21-18, 21-19', contrib:'결승 진출', date:'4.18' },
-      { opp:'P.V. 신두',    result:'W', score:'21-13, 21-9',  contrib:'준결승 진출', date:'4.16' },
-    ],
-    career: [
-      { year:'2024',     team:'파리 올림픽 여자단식 금메달', league:'올림픽',   flag:'🇫🇷' },
-      { year:'2023',     team:'항저우 아시안게임 3관왕',    league:'아시안게임', flag:'🇨🇳' },
-      { year:'2018–',    team:'한국 대표팀',                 league:'국제',     flag:'🇰🇷' },
-    ],
-    seasonStats: [],
-  },
 };
 
 const DEFAULT_EXTRA = {
@@ -766,13 +749,12 @@ function TeamBadge({ code, size=36, logo }) {
 
 function PlayerPhoto({ player, style={}, tint='var(--bg)' }) {
   const num = player.number;
-  const imageMap = { '손흥민': 'heungmin.png', '이강인': 'kangin.png', '김민재': 'minjae.png', '조규성': 'guesung.png', '황희찬': 'heechan.png', '황인범': 'inbeom.png', '김하성': 'haseong.png', '이정후': 'junghoo.png', '김혜성': 'hyeseong.png', '오현규': 'hyungyu.png', '양현준': 'hyunjun.png', '백승호': 'seungho.webp', '배준호': 'junho.webp', '엄지성': 'jisung.webp', '안세영': 'seyoung.webp', '설영우': 'youngwoo.webp' };
+  const imageMap = { '손흥민': 'heungmin.png', '이강인': 'kangin.png', '김민재': 'minjae.png', '조규성': 'guesung.png', '황희찬': 'heechan.png', '황인범': 'inbeom.png', '김하성': 'haseong.png', '이정후': 'junghoo.png', '김혜성': 'hyeseong.png', '오현규': 'hyungyu.png', '양현준': 'hyunjun.png', '백승호': 'seungho.webp', '배준호': 'junho.webp', '엄지성': 'jisung.webp', '설영우': 'youngwoo.webp' };
   // For full-body source images, zoom into the face area
   const PHOTO_ZOOM = {
     '백승호': { scale: 2.75, originX: '45%', originY: '16%' },
     '배준호': { scale: 2.2, originX: '50%', originY: '6%' },
     '엄지성': { scale: 1.8, originX: '50%', originY: '8%' },
-    '안세영': { scale: 3.4, originX: '50%', originY: '0%' },
     '설영우': { scale: 1.9, originX: '50%', originY: '15%' },
   };
   const zoom = PHOTO_ZOOM[player.name];
@@ -783,7 +765,7 @@ function PlayerPhoto({ player, style={}, tint='var(--bg)' }) {
       {imagePath ? (
         <img src={imagePath} alt={player.name} style={{
           width:'100%', height:'100%', objectFit:'cover',
-          objectPosition: player.name === '조규성' ? '40% 50%' : player.name === '안세영' ? '50% 0%' : '50% 50%',
+          objectPosition: player.name === '조규성' ? '40% 50%' : '50% 50%',
           display:'block', filter:'brightness(1.1) contrast(1.05)',
           transform: zoom ? `scale(${zoom.scale})` : undefined,
           transformOrigin: zoom ? `${zoom.originX} ${zoom.originY}` : undefined,
@@ -1828,7 +1810,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], world
     '김하성': 'haseong.jpeg', '이정후': 'junghoo.jpeg', '김혜성': 'hyesung.jpeg',
     '오현규': 'hyeongyu.jpeg', '양현준': 'hyunjun.jpeg',
     '백승호': 'seungho.png', '배준호': 'junho.jpeg', '엄지성': 'jisung.jpeg',
-    '안세영': 'seyoung.jpeg', '설영우': 'youngwoo.jpeg',
+    '설영우': 'youngwoo.jpeg',
   };
   React.useEffect(() => {
     const playerName = highlightMatch?.koreanPlayer?.name;
@@ -3403,7 +3385,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
             '김하성':'haseong.jpeg','이정후':'junghoo.jpeg','김혜성':'hyesung.jpeg',
             '오현규':'hyeongyu.jpeg','양현준':'hyunjun.jpeg',
             '백승호':'seungho.png','배준호':'junho.jpeg','엄지성':'jisung.jpeg',
-            '안세영':'seyoung.jpeg','설영우':'youngwoo.jpeg',
+            '설영우':'youngwoo.jpeg',
           };
           const file = LANDSCAPE[player.name];
           return file
@@ -3986,7 +3968,7 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
     return map;
   }, [liveApiMatches]);
 
-  const sports = ['전체', '축구', '야구', '배드민턴'];
+  const sports = ['전체', '축구', '야구'];
   const [filter, setFilter] = React.useState('전체');
   const followedPlayers = ALL_PLAYERS
     .filter(p => followed.has(p.id))
@@ -4114,7 +4096,7 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
           if (isLoading) return Array.from({length:5}).map((_,i) => <SkeletonPlayerCard key={i}/>);
           if (filter !== '전체') return filtered.map(renderCard);
           // Grouped rendering for 전체
-          const SPORT_ORDER = ['축구','야구','배드민턴'];
+          const SPORT_ORDER = ['축구','야구'];
           const SPORT_ICON = { '축구':'⚽', '야구':'⚾', '배드민턴':'🏸' };
           const grouped = {};
           for (const p of filtered) {
@@ -4186,7 +4168,6 @@ const NEWS_PLAYERS = [
   { label:'배준호', query:'배준호' },
   { label:'엄지성', query:'엄지성' },
   { label:'설영우', query:'설영우' },
-  { label:'안세영', query:'안세영' },
 ];
 
 const newsImageCache = {};
@@ -4201,7 +4182,6 @@ const NEWS_PLAYER_IMG = {
   '백승호': 'image/seungho.webp',
   '배준호': 'image/junho.webp',
   '엄지성': 'image/jisung.webp',
-  '안세영': 'image/seyoung.webp',
   '설영우': 'image/youngwoo.webp',
 };
 
@@ -4356,9 +4336,6 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0 }) {
     const set = new Set();
     if (sportFeeds?.soccer) set.add('soccer');
     if (sportFeeds?.baseball) set.add('baseball');
-    if (sportFeeds?.badminton) {
-      set.add('other');
-    }
     return set;
   }, [sportFeeds]);
 
@@ -4457,9 +4434,6 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0 }) {
     const categories = ['전체'];
     if (sportFeeds?.soccer) categories.push('해외축구');
     if (sportFeeds?.baseball) categories.push('MLB');
-    if (sportFeeds?.badminton) {
-      categories.push('기타');
-    }
     return categories;
   }, [sportFeeds]);
 
@@ -4596,8 +4570,8 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0 }) {
 
 // ─── SCREEN: ADD PLAYER ───────────────────────────────────────
 function AddPlayerScreen({ followed, onToggle, onBack }) {
-  const sports = ['전체','⚽ 축구','⚾ 야구','🏸 배드민턴'];
-  const sportMap = { '전체': null, '⚽ 축구':'축구', '⚾ 야구':'야구', '🏸 배드민턴':'배드민턴' };
+  const sports = ['전체','⚽ 축구','⚾ 야구'];
+  const sportMap = { '전체': null, '⚽ 축구':'축구', '⚾ 야구':'야구' };
   const [filter, setFilter] = React.useState('전체');
   const [query, setQuery] = React.useState('');
 
@@ -4728,7 +4702,6 @@ function SportFeedScreen({ onBack, sportFeeds, onToggleSportFeed }) {
   const sports = [
     { id:'soccer',    icon:'⚽', name:'축구',      sub:'EPL, 분데스리가, 리그앙', on:true },
     { id:'baseball',  icon:'⚾', name:'야구',      sub:'MLB, KBO, NPB',          on:true },
-    { id:'badminton', icon:'🏸', name:'배드민턴',   sub:'BWF 월드투어',             on:true },
   ];
   const isOn = (id) => sportFeeds?.[id] !== false;
   const toggle = (id) => onToggleSportFeed?.(id);
@@ -5103,9 +5076,9 @@ function App() {
 
   const [sportFeeds, setSportFeeds] = React.useState(() => {
     try {
-      return { soccer:true, baseball:true, badminton:true, ...JSON.parse(localStorage.getItem('jumo_sport_feeds') || '{}') };
+      return { soccer:true, baseball:true, ...JSON.parse(localStorage.getItem('jumo_sport_feeds') || '{}') };
     } catch {
-      return { soccer:true, baseball:true, badminton:true };
+      return { soccer:true, baseball:true };
     }
   });
   const SPORT_LABELS = { soccer:'축구', baseball:'야구', badminton:'배드민턴' };
