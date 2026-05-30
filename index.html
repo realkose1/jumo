@@ -28,7 +28,9 @@ body {
   background: #0b0b0d;
   min-height: 100vh;
   padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
+  /* No padding-bottom: the app container reserves bottom space (incl. safe area)
+     for the tab bar. Adding it here too double-counts the safe area and leaves a
+     tall dark band above the tab bar on devices with a home indicator. */
 }
 *, *::before, *::after { transition: background-color 0.25s, color 0.25s, border-color 0.25s; }
 

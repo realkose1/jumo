@@ -191,6 +191,27 @@ function IOSDevice({
   children, width = 402, height = 874, dark = false,
   title, keyboard = false,
 }) {
+  // On a REAL native device (Capacitor iOS) this "phone mockup" frame must NOT
+  // render — the device already provides rounded corners and a home indicator.
+  // Drawing the mockup (rounded black frame + shadow + a fake home-indicator bar)
+  // inside the real device produced a stray dark layer at the bottom. Render the
+  // app full-screen instead and let env(safe-area-*) handle insets.
+  const isNative = typeof window !== 'undefined'
+    && !!(window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() === 'ios');
+  if (isNative) {
+    return (
+      <div style={{
+        position: 'fixed', inset: 0, overflow: 'hidden',
+        display: 'flex', flexDirection: 'column',
+        background: dark ? '#000' : '#F2F2F7',
+        paddingTop: 'env(safe-area-inset-top)',
+      }}>
+        {title !== undefined && <IOSNavBar title={title} dark={dark} />}
+        <div style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>{children}</div>
+        {keyboard && <IOSKeyboard dark={dark} />}
+      </div>
+    );
+  }
   return (
     <div style={{
       width, height, borderRadius: 48, overflow: 'hidden',
