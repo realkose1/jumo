@@ -34,6 +34,8 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
     private var iconViews: [UIImageView] = []
     private var labels: [UILabel] = []
     private var activeIndex = 0
+    private var isDragging = false
+    private var dragStartCenterX: CGFloat = 0
 
     private var host: UIView!          // container.contentView (everything lives here)
     private var pill: UIView!          // glass selection indicator
@@ -100,7 +102,7 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
         // ── Bar capsule (base glass) ─────────────────────────────────────────
         let barGlass: UIView
         if #available(iOS 26.0, *) {
-            let e = UIGlassEffect()
+            let e = UIGlassEffect(style: .clear)   // clear = crisp see-through glass (not frosted)
             barGlass = UIVisualEffectView(effect: e)
         } else {
             barGlass = UIView()
@@ -118,12 +120,12 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
 
         // ── Selection pill (brighter interactive glass) ──────────────────────
         if #available(iOS 26.0, *) {
-            let e = UIGlassEffect()
+            let e = UIGlassEffect(style: .clear)   // clear glass → crisp lensing, not milky frost
             e.isInteractive = true
-            e.tintColor = Self.brandYellow                 // selected pill = brand yellow #f5c400
+            e.tintColor = Self.brandYellow.withAlphaComponent(0.34)
             pill = UIVisualEffectView(effect: e)
         } else {
-            let p = UIView(); p.backgroundColor = Self.brandYellow.withAlphaComponent(0.92); pill = p
+            let p = UIView(); p.backgroundColor = Self.brandYellow.withAlphaComponent(0.55); pill = p
         }
         pill.isUserInteractionEnabled = false
         setRoundedCorners(pill, radius: (barHeight - 2 * pillInsetY) / 2)
@@ -187,16 +189,19 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
         } else { apply() }
     }
 
-    private func movePill(toX x: CGFloat) {
-        let w = cellFrameInHost(0).width - 2 * pillInsetX
-        let half = w / 2
-        let minX = 6 + pillInsetX + half
-        let maxX = host.bounds.width - 6 - pillInsetX - half
-        let cx = min(max(x, minX), maxX)
-        var f = pill.frame
-        f.size.width = w
-        f.origin.x = cx - half
-        pill.frame = f
+    // Baemin-style liquid stretch: the pill elongates from the origin cell toward
+    // the finger, then snaps to a single cell on release.
+    private func stretchPill(fromX: CGFloat, toX: CGFloat) {
+        let cell = cellFrameInHost(0).insetBy(dx: pillInsetX, dy: pillInsetY)
+        let half = cell.width / 2
+        let minC = 6 + pillInsetX + half
+        let maxC = host.bounds.width - 6 - pillInsetX - half
+        let f = min(max(fromX, minC), maxC)
+        let t = min(max(toX,   minC), maxC)
+        let left  = min(f, t) - half
+        let right = max(f, t) + half
+        let ref = cellFrameInHost(activeIndex).insetBy(dx: pillInsetX, dy: pillInsetY)
+        pill.frame = CGRect(x: left, y: ref.minY, width: right - left, height: ref.height)
     }
 
     private func index(atX x: CGFloat) -> Int {
@@ -209,7 +214,7 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
     private func updateColors(highlight i: Int) {
         for k in cells.indices {
             let on = (k == i)
-            let onColor = UIColor.black                            // black glyph on the yellow pill
+            let onColor = Self.brandYellow                         // vivid yellow glyph in the glass pill
             let offColor = UIColor.white.withAlphaComponent(0.62)  // muted on the dark glass bar
             iconViews[k].tintColor = on ? onColor : offColor
             labels[k].textColor = on ? onColor : offColor
@@ -230,10 +235,16 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
     @objc private func handlePan(_ g: UIPanGestureRecognizer) {
         let x = g.location(in: host).x
         switch g.state {
+        case .began:
+            isDragging = true
+            dragStartCenterX = cellFrameInHost(activeIndex).midX
+            stretchPill(fromX: dragStartCenterX, toX: x)
+            updateColors(highlight: index(atX: x))
         case .changed:
-            movePill(toX: x)
+            stretchPill(fromX: dragStartCenterX, toX: x)
             updateColors(highlight: index(atX: x))
         case .ended, .cancelled, .failed:
+            isDragging = false
             selectTab(index(atX: x))
         default: break
         }
@@ -241,7 +252,7 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        if pill != nil, pill.superview != nil { movePill(to: activeIndex, animated: false) }
+        if pill != nil, pill.superview != nil, !isDragging { movePill(to: activeIndex, animated: false) }
     }
 
     func userContentController(_ uc: WKUserContentController, didReceive message: WKScriptMessage) {
