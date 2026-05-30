@@ -2392,7 +2392,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
     if (tab !== 'events' || incidentsData || !(isFinished || isLive)) return;
     if (!isSoccerMatch) return;
     setIncidentsLoading(true);
-    fetch(`/api/apifootball?path=fixtures/events&fixture=${match.id}`)
+    fetch(`${API_BASE}/api/apifootball?path=fixtures/events&fixture=${match.id}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => { setIncidentsData(transformAfEvents(data?.response)); setIncidentsLoading(false); })
       .catch(() => { setIncidentsLoading(false); });
@@ -2403,8 +2403,8 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
     if (!isSoccerMatch) return;
     setLineupsLoading(true);
     Promise.all([
-      fetch(`/api/apifootball?path=fixtures/lineups&fixture=${match.id}`).then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch(`/api/apifootball?path=fixtures/players&fixture=${match.id}`).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`${API_BASE}/api/apifootball?path=fixtures/lineups&fixture=${match.id}`).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`${API_BASE}/api/apifootball?path=fixtures/players&fixture=${match.id}`).then(r => r.ok ? r.json() : null).catch(() => null),
     ]).then(([lineupsJson, playersJson]) => {
       setLineupsData(transformAfLineups(lineupsJson?.response, playersJson?.response));
       setLineupsLoading(false);
@@ -2415,7 +2415,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
     if (tab !== 'stats' || statsData || !(isFinished || isLive)) return;
     if (!isSoccerMatch) return;
     setStatsLoading(true);
-    fetch(`/api/apifootball?path=fixtures/statistics&fixture=${match.id}`)
+    fetch(`${API_BASE}/api/apifootball?path=fixtures/statistics&fixture=${match.id}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => { setStatsData(transformAfStats(data?.response)); setStatsLoading(false); })
       .catch(() => { setStatsLoading(false); });
@@ -5215,7 +5215,7 @@ function App() {
         // Range covers the schedule-tab date strip (±7 days). Tiered TTL keeps
         // calls within the Pro 7,500/day budget — today refreshes often,
         // far-future dates rarely change.
-        const AF_BASE = '/api/apifootball';
+        const AF_BASE = `${API_BASE}/api/apifootball`;
         const dateOffsets = [-2,-1,0,1,2,3,4,5,6,7];
         const afDates = dateOffsets.map(offset => {
           const d = new Date(today); d.setDate(today.getDate() + offset);
@@ -5820,7 +5820,7 @@ function App() {
     (async () => {
       await Promise.all(soccerPlayers.map(async p => {
         try {
-          const r = await fetch(`/api/apifootball?path=players&id=${p.apiFootballId}&season=${seasonFor(p)}`);
+          const r = await fetch(`${API_BASE}/api/apifootball?path=players&id=${p.apiFootballId}&season=${seasonFor(p)}`);
           if (!r.ok) return;
           const j = await r.json();
           // Club competitions only. API-Football uses `team.name` = national team
