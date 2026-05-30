@@ -365,7 +365,7 @@ function formatExpectedEvent(kp, allMatches) {
   if (!kp) return '';
   if (kp.event === '출전 예상') {
     const p = computeStartProbability(kp.name, allMatches);
-    if (p != null) return `출전 예상 ${p}%`;
+    return p != null ? `출격 대기 ${p}%` : '출격 대기';
   }
   return kp.event || '';
 }
@@ -1065,7 +1065,7 @@ function SkeletonScheduleItem() {
 function SkeletonPlayerCard() {
   return (
     <div style={{ background:'var(--surface)', borderRadius:16, overflow:'hidden', border:'0.5px solid var(--border2)', display:'flex', alignItems:'stretch', marginBottom:10 }}>
-      <div className="shimmer" style={{ width:90, height:100, flexShrink:0 }}/>
+      <div className="shimmer" style={{ width:90, height:112, flexShrink:0 }}/>
       <div style={{ flex:1, padding:'14px 16px' }}>
         <div className="shimmer" style={{ width:'55%', height:16, borderRadius:6, marginBottom:6 }}/>
         <div className="shimmer" style={{ width:'70%', height:12, borderRadius:6, marginBottom:14 }}/>
@@ -4076,8 +4076,8 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
               if (p.rating > 0) stats.push({ k:'평점', v:p.rating.toFixed(1), accent: true });
             }
             return (
-              <div key={p.id} onClick={() => onPlayer(p)} style={{ background:'var(--surface)', borderRadius:16, overflow:'hidden', cursor:'pointer', border:'0.5px solid var(--border2)', display:'flex', alignItems:'stretch', height:100 }}>
-                <div style={{ width:90, height:100, flexShrink:0, background:'var(--card)', position:'relative', overflow:'hidden' }}>
+              <div key={p.id} onClick={() => onPlayer(p)} style={{ background:'var(--surface)', borderRadius:16, overflow:'hidden', cursor:'pointer', border:'0.5px solid var(--border2)', display:'flex', alignItems:'stretch', height:112 }}>
+                <div style={{ width:90, height:112, flexShrink:0, background:'var(--card)', position:'relative', overflow:'hidden' }}>
                   <PlayerPhoto player={p} style={{ position:'absolute', inset:0 }} tint="var(--surface)"/>
                 </div>
                 <div style={{ flex:1, padding:'12px 14px 6px', display:'flex', flexDirection:'column', justifyContent:'space-between', minWidth:0 }}>
