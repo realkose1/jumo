@@ -9,10 +9,10 @@
     "sync": "npm run build && cap sync ios"
   },
   "comment": "Capacitor packages are iOS-build-only; kept in devDependencies so Vercel's serverless-function build (production deps) installs nothing and does not stall.",
-  "dependencies": {},
   "devDependencies": {
     "@capacitor/cli": "^6.1.2",
     "@capacitor/core": "^6.1.2",
-    "@capacitor/ios": "^6.1.2"
+    "@capacitor/ios": "^6.1.2",
+    "@capacitor/splash-screen": "^6.0.4"
   }
 }

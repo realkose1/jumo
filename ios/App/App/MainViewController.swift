@@ -118,17 +118,23 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
             barGlass.bottomAnchor.constraint(equalTo: host.bottomAnchor)
         ])
 
-        // ── Selection pill (brighter interactive glass) ──────────────────────
+        // ── Selection pill (clear glass capsule; the AREA is neutral glass, only
+        //    the icon+label are tinted yellow) ─────────────────────────────────
         if #available(iOS 26.0, *) {
             let e = UIGlassEffect(style: .clear)   // clear glass → crisp lensing, not milky frost
             e.isInteractive = true
-            e.tintColor = Self.brandYellow.withAlphaComponent(0.34)
+            e.tintColor = UIColor.white.withAlphaComponent(0.10)  // neutral lift, NOT colored
             pill = UIVisualEffectView(effect: e)
         } else {
-            let p = UIView(); p.backgroundColor = Self.brandYellow.withAlphaComponent(0.55); pill = p
+            let p = UIView(); p.backgroundColor = UIColor.white.withAlphaComponent(0.16); pill = p
         }
         pill.isUserInteractionEnabled = false
-        setRoundedCorners(pill, radius: (barHeight - 2 * pillInsetY) / 2)
+        let pillRadius = (barHeight - 12 - 2 * pillInsetY) / 2    // cell(44) → 36 tall → r=18
+        pill.layer.cornerRadius = pillRadius
+        pill.layer.cornerCurve = .continuous
+        pill.clipsToBounds = true
+        pill.layer.borderWidth = 1                                // crisp glass rim for definition
+        pill.layer.borderColor = UIColor.white.withAlphaComponent(0.40).cgColor
         host.addSubview(pill)
 
         // ── Icon + label cells (on top) ──────────────────────────────────────
@@ -174,6 +180,12 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
         view.layoutIfNeeded()
         movePill(to: activeIndex, animated: false)
         updateColors(highlight: activeIndex)
+
+        // Stay hidden beneath the launch splash, then fade in with the app.
+        container.alpha = 0
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.9) {
+            UIView.animate(withDuration: 0.45, delay: 0, options: [.curveEaseOut]) { container.alpha = 1 }
+        }
     }
 
     // MARK: - pill / selection

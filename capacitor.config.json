@@ -10,5 +10,16 @@
   },
   "server": {
     "iosScheme": "capacitor"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "launchAutoHide": true,
+      "backgroundColor": "#0b0b0d",
+      "showSpinner": false,
+      "iosSpinnerStyle": "small",
+      "splashFullScreen": true,
+      "splashImmersive": true
+    }
   }
 }
