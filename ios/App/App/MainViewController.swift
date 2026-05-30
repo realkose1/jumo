@@ -24,6 +24,7 @@ final class TabBarModel: ObservableObject {
 struct GlassTabBar: View {
     @ObservedObject var model: TabBarModel
     @Namespace private var ns
+    @State private var dragX: CGFloat? = nil
     private let accent = Color(red: 0.961, green: 0.769, blue: 0.0)   // #f5c400 — glyph only
     private let barHeight: CGFloat = 56
 
@@ -31,55 +32,66 @@ struct GlassTabBar: View {
         GeometryReader { geo in
             let n = max(1, model.tabs.count)
             let cellW = geo.size.width / CGFloat(n)
-            GlassEffectContainer(spacing: 28) {
+            let selW = cellW - 6
+            let half = selW / 2
+            let rest = cellW * (CGFloat(model.selected) + 0.5)
+            let center = min(max(dragX ?? rest, half + 4), geo.size.width - half - 4)
+            ZStack {
+                // ── Glass: native frosted bar + clear selection window that
+                //    refracts the content behind and morphs as it moves ───────
+                GlassEffectContainer(spacing: 26) {
+                    ZStack(alignment: .leading) {
+                        Capsule(style: .continuous).fill(Color.clear)
+                            .glassEffect(.regular, in: .capsule)
+                            .frame(width: geo.size.width, height: geo.size.height)
+                        Capsule(style: .continuous).fill(Color.clear)
+                            .glassEffect(.clear.interactive(), in: .capsule)
+                            .glassEffectID("sel", in: ns)
+                            .frame(width: selW, height: geo.size.height - 10)
+                            .position(x: center, y: geo.size.height / 2)
+                    }
+                }
+
+                // ── Bright icons + labels on top ─────────────────────────────
                 HStack(spacing: 0) {
                     ForEach(Array(model.tabs.enumerated()), id: \.element.id) { idx, tab in
-                        cell(idx, tab)
-                    }
-                }
-                .background {
-                    Color.clear.glassEffect(.clear, in: .capsule)
-                }
-            }
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { v in
-                        let i = clamp(Int(v.location.x / cellW), n)
-                        if i != model.selected {
-                            withAnimation(.spring(response: 0.38, dampingFraction: 0.72)) { model.selected = i }
+                        VStack(spacing: 3) {
+                            Image(systemName: tab.symbol).font(.system(size: 19, weight: .semibold))
+                            Text(tab.label).font(.system(size: 10, weight: .semibold))
                         }
+                        .foregroundStyle(idx == model.selected ? accent : Color.white.opacity(0.92))
+                        .frame(maxWidth: .infinity)
                     }
-                    .onEnded { v in
-                        let i = clamp(Int(v.location.x / cellW), n)
-                        withAnimation(.spring(response: 0.38, dampingFraction: 0.72)) { model.selected = i }
-                        model.onSelect?(i)
-                    }
-            )
+                }
+                .allowsHitTesting(false)
+
+                // ── Gesture overlay (reliable tap + drag across the whole bar) ─
+                Color.clear.contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { v in
+                                let moved = abs(v.translation.width) + abs(v.translation.height)
+                                if moved > 6 { dragX = min(max(v.location.x, half + 4), geo.size.width - half - 4) }
+                                let i = clamp(Int(v.location.x / cellW), n)
+                                if i != model.selected {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.74)) { model.selected = i }
+                                }
+                            }
+                            .onEnded { v in
+                                let i = clamp(Int(v.location.x / cellW), n)
+                                withAnimation(.spring(response: 0.34, dampingFraction: 0.72)) {
+                                    dragX = nil
+                                    model.selected = i
+                                }
+                                model.onSelect?(i)
+                            }
+                    )
+            }
         }
         .frame(height: barHeight)
     }
 
     private func clamp(_ i: Int, _ n: Int) -> Int { max(0, min(n - 1, i)) }
-
-    @ViewBuilder private func cell(_ idx: Int, _ tab: JumoTab) -> some View {
-        let on = idx == model.selected
-        VStack(spacing: 3) {
-            Image(systemName: tab.symbol).font(.system(size: 18, weight: .semibold))
-            Text(tab.label).font(.system(size: 10, weight: .semibold))
-        }
-        .foregroundStyle(on ? accent : Color.white.opacity(0.6))
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background {
-            if on {
-                Color.clear
-                    .padding(.vertical, 7)
-                    .padding(.horizontal, 5)
-                    .glassEffect(.clear.interactive(), in: .capsule)
-                    .glassEffectID("sel", in: ns)
-            }
-        }
-    }
 }
 
 class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
