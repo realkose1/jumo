@@ -20,6 +20,9 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
         ("more",     "더보기", "ellipsis")
     ]
 
+    // Brand accent (matches web --acc #f5c400)
+    static let brandYellow = UIColor(red: 0.961, green: 0.769, blue: 0.0, alpha: 1.0)
+
     // Layout constants (HIG-ish floating tab bar)
     private let barHeight: CGFloat = 56
     private let sideInset: CGFloat = 16
@@ -117,10 +120,10 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
         if #available(iOS 26.0, *) {
             let e = UIGlassEffect()
             e.isInteractive = true
-            e.tintColor = UIColor.white.withAlphaComponent(0.5)
+            e.tintColor = Self.brandYellow                 // selected pill = brand yellow #f5c400
             pill = UIVisualEffectView(effect: e)
         } else {
-            let p = UIView(); p.backgroundColor = UIColor.white.withAlphaComponent(0.22); pill = p
+            let p = UIView(); p.backgroundColor = Self.brandYellow.withAlphaComponent(0.92); pill = p
         }
         pill.isUserInteractionEnabled = false
         setRoundedCorners(pill, radius: (barHeight - 2 * pillInsetY) / 2)
@@ -140,7 +143,7 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
             stack.bottomAnchor.constraint(equalTo: host.bottomAnchor, constant: -6)
         ])
         for t in tabs {
-            let iv = UIImageView(image: UIImage(systemName: t.symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .medium)))
+            let iv = UIImageView(image: UIImage(systemName: t.symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)))
             iv.contentMode = .center
             iv.tintColor = .secondaryLabel
             let lb = UILabel()
@@ -206,8 +209,10 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
     private func updateColors(highlight i: Int) {
         for k in cells.indices {
             let on = (k == i)
-            iconViews[k].tintColor = on ? .label : .secondaryLabel
-            labels[k].textColor = on ? .label : .secondaryLabel
+            let onColor = UIColor.black                            // black glyph on the yellow pill
+            let offColor = UIColor.white.withAlphaComponent(0.62)  // muted on the dark glass bar
+            iconViews[k].tintColor = on ? onColor : offColor
+            labels[k].textColor = on ? onColor : offColor
         }
     }
 
