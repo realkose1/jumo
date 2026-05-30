@@ -94,7 +94,7 @@ struct GlassTabBar: View {
     private func clamp(_ i: Int, _ n: Int) -> Int { max(0, min(n - 1, i)) }
 }
 
-class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
+class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGestureRecognizerDelegate {
 
     private let tabs: [JumoTab] = [
         JumoTab(id: "home",     label: "홈",     symbol: "house.fill"),
@@ -118,7 +118,40 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
             enableWebNativeTabBar()
         }
         // iOS < 26: keep the web app's own CSS tab bar.
+        setupTopGestures()
     }
+
+    // MARK: - Status-bar tap → scroll to top, left-edge swipe → back
+
+    private func setupTopGestures() {
+        // Inner web divs are the real scrollers, so the webview's own scrollView
+        // must not swallow the status-bar tap — we detect it ourselves.
+        wk?.scrollView.scrollsToTop = false
+
+        let topTap = UITapGestureRecognizer(target: self, action: #selector(handleTopTap(_:)))
+        topTap.cancelsTouchesInView = false
+        topTap.delegate = self
+        view.addGestureRecognizer(topTap)
+
+        let edge = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(handleEdgeBack(_:)))
+        edge.edges = .left
+        edge.delegate = self
+        view.addGestureRecognizer(edge)
+    }
+
+    @objc private func handleTopTap(_ g: UITapGestureRecognizer) {
+        if g.location(in: view).y <= max(view.safeAreaInsets.top, 28) {
+            wk?.evaluateJavaScript("window.__scrollTop && window.__scrollTop()")
+        }
+    }
+
+    @objc private func handleEdgeBack(_ g: UIScreenEdgePanGestureRecognizer) {
+        if g.state == .ended, g.translation(in: view).x > 40 {
+            wk?.evaluateJavaScript("window.__back && window.__back()")
+        }
+    }
+
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
 
     @available(iOS 26.0, *)
     private func setupTabBar() {

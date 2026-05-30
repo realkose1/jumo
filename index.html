@@ -6742,8 +6742,26 @@ function App() {
   React.useEffect(() => {
     window.__nativeTab = (id) => handleTab(id);
     window.__enableNativeTabBar = () => { setNativeTabBar(true); return true; };
-    return () => { try { delete window.__nativeTab; delete window.__enableNativeTabBar; } catch {} };
+    // Status-bar tap (native) → smooth-scroll the active screen's scroller to top.
+    window.__scrollTop = () => {
+      try {
+        let target = null, best = -1;
+        document.querySelectorAll('.scrollbar-hide').forEach(el => {
+          if (el.offsetParent === null) return;
+          const oy = getComputedStyle(el).overflowY;
+          if ((oy === 'auto' || oy === 'scroll') && el.scrollTop > 0 && el.clientHeight > best) { best = el.clientHeight; target = el; }
+        });
+        if (target) target.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch (e) {}
+    };
+    return () => { try { delete window.__nativeTab; delete window.__enableNativeTabBar; delete window.__scrollTop; } catch {} };
   }, [handleTab]);
+
+  // Left-edge swipe (native) → go back when on a detail screen.
+  React.useEffect(() => {
+    window.__back = () => { if (screen !== 'main') { goBack(); return true; } return false; };
+    return () => { try { delete window.__back; } catch {} };
+  }, [screen]);
 
   const HomeComponent = [HomeV1, HomeV2, HomeV3][tweaks.homeVariant] || HomeV1;
 
