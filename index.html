@@ -365,7 +365,7 @@ function formatExpectedEvent(kp, allMatches) {
   if (!kp) return '';
   if (kp.event === '출전 예상') {
     const p = computeStartProbability(kp.name, allMatches);
-    return p != null ? `출격 대기 ${p}%` : '출격 대기';
+    if (p != null) return `출전 예상 ${p}%`;
   }
   return kp.event || '';
 }
@@ -1784,7 +1784,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], world
       case 4: // Finished match
         return { status: '경기 종료', main: '', sub: '' };
       case 5: // Upcoming
-        const statusText5 = m.lineupConfirmed ? '선발 출전' : '출전 예상';
+        const statusText5 = m.lineupConfirmed ? '선발 출전' : '출격 대기';
         return {
           status: m.krTime || m.time,
           main: `${m.koreanPlayer.name}\n${statusText5}`,
@@ -2557,7 +2557,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
             // simple team chip instead of the player performance card.
             if (match.koreanPlayer?.isNationalTeam) {
               return (
-                <div style={{ marginTop:12, display:'inline-flex', alignItems:'center', gap:8, background:'rgba(245,196,0,0.08)', border:'0.5px solid rgba(245,196,0,0.3)', borderRadius:10, padding:'10px 14px' }}>
+                <div style={{ marginTop:12, display:'flex', alignItems:'center', gap:8, background:'rgba(245,196,0,0.08)', border:'0.5px solid rgba(245,196,0,0.3)', borderRadius:10, padding:'10px 14px' }}>
                   <span style={{ fontSize:18 }}>🇰🇷</span>
                   <span style={{ fontSize:14, fontWeight:800, color:'var(--text)' }}>대한민국 대표팀</span>
                   <span style={{ fontSize:11, fontWeight:700, color:'var(--text4)' }}>FIFA 월드컵</span>
