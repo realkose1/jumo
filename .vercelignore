@@ -1,0 +1,19 @@
+# Vercel deploys a static index.html + zero-dependency /api serverless
+# functions. Hiding the Node manifest here stops Vercel from running
+# `npm install` at all (the iOS-only Capacitor devDependencies were stalling
+# the build's "Installing dependencies..." step). The /api functions import
+# no npm packages, so nothing needs installing.
+#
+# These files stay in the repo for local iOS development — they're only
+# excluded from what gets uploaded to Vercel.
+node_modules
+package.json
+package-lock.json
+
+# iOS-only / local-only, not used by the web deploy
+ios
+scripts
+screenshots
+scraps
+uploads
+server.py
