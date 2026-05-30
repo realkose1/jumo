@@ -817,6 +817,26 @@ function BackBtn({ onBack }) {
   );
 }
 
+// Liquid-glass segmented control (iOS 26 toolbar tabs). tabs: [{id,label}]
+function GlassSegmented({ tabs, active, onChange, sticky = false, style }) {
+  return (
+    <div style={{ position: sticky ? 'sticky' : 'static', top: 0, zIndex: 10, padding: '10px 16px', background: 'var(--bg)', ...style }}>
+      <div style={{ ...LG.base, display: 'flex', borderRadius: 18, padding: 4 }}>
+        {tabs.map(t => (
+          <button key={t.id} onClick={() => onChange(t.id)} style={{
+            flex: 1, border: 'none', cursor: 'pointer', padding: '9px 4px', fontSize: 13, fontWeight: 700,
+            borderRadius: 14, letterSpacing: 0.2, whiteSpace: 'nowrap', transition: 'color 0.15s',
+            background: active === t.id ? 'rgba(255,255,255,0.20)' : 'transparent',
+            boxShadow: active === t.id ? 'inset 0 0.5px 0 rgba(255,255,255,0.3), 0 1px 3px rgba(0,0,0,0.25)' : 'none',
+            color: active === t.id ? '#fff' : 'var(--text3)',
+            WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation',
+          }}>{t.label}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function FormBar({ vals }) {
   const max = 10;
   return (
@@ -2600,14 +2620,9 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div style={{ display:'flex', borderBottom:'0.5px solid var(--border)', background:'var(--bg)', position:'sticky', top:0, zIndex:10 }}>
-        {['events','stats','lineups'].map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{ flex:1, background:'none', border:'none', padding:'12px 0', fontSize:13, fontWeight:600, color: tab===t ? '#fff' : 'var(--text4)', cursor:'pointer', borderBottom: tab===t ? '2px solid var(--acc)' : '2px solid transparent', transition:'all 0.15s', letterSpacing:0.3 }}>
-            {{events:'이벤트', stats:'통계', lineups:'라인업'}[t]}
-          </button>
-        ))}
-      </div>
+      {/* Tabs (liquid glass segmented) */}
+      <GlassSegmented sticky active={tab} onChange={setTab}
+        tabs={[{id:'events',label:'이벤트'},{id:'stats',label:'통계'},{id:'lineups',label:'라인업'}]}/>
 
       {/* Events */}
       {tab === 'events' && isMLBMatch && (
@@ -3436,14 +3451,9 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
         ))}
       </div>
 
-      {/* Tabs */}
-      <div style={{ display:'flex', borderBottom:'0.5px solid var(--border)', background:'var(--bg)', position:'sticky', top:0, zIndex:10 }}>
-        {[['overview','요약'], ['stats','스탯'], ['info','정보']].map(([t, label]) => (
-          <button key={t} onClick={() => setTab(t)} style={{ flex:1, background:'none', border:'none', padding:'12px 0', fontSize:13, fontWeight:600, color: tab===t ? 'var(--acc)' : 'var(--text4)', cursor:'pointer', borderBottom: tab===t ? '2px solid var(--acc)' : '2px solid transparent', transition:'all 0.15s' }}>
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* Tabs (liquid glass segmented) */}
+      <GlassSegmented sticky active={tab} onChange={setTab}
+        tabs={[{id:'overview',label:'요약'},{id:'stats',label:'스탯'},{id:'info',label:'정보'}]}/>
 
       {/* Overview tab */}
       {tab === 'overview' && (
