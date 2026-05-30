@@ -20,6 +20,7 @@ html, body {
   transition: background 0.3s;
   width: 100%;
   overflow-x: hidden;
+  overscroll-behavior: none;     /* suppress document-level rubber-band reveal */
   -webkit-overflow-scrolling: touch;
   background: #0b0b0d;            /* html bg too → iOS overscroll bounce shows dark, not white */
 }

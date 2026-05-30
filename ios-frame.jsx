@@ -203,7 +203,7 @@ function IOSDevice({
       <div style={{
         position: 'fixed', inset: 0, overflow: 'hidden',
         display: 'flex', flexDirection: 'column',
-        background: dark ? '#000' : '#F2F2F7',
+        background: dark ? '#0b0b0d' : '#F2F2F7',
         paddingTop: 'env(safe-area-inset-top)',
       }}>
         {title !== undefined && <IOSNavBar title={title} dark={dark} />}

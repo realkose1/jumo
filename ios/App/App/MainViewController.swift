@@ -52,7 +52,9 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
 
         let bg: UIView
         if #available(iOS 26.0, *) {
-            bg = UIVisualEffectView(effect: UIGlassEffect())
+            let glass = UIGlassEffect()
+            glass.isInteractive = true   // liquid reacts to touch & drag
+            bg = UIVisualEffectView(effect: glass)
         } else {
             bg = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterialDark))
         }
@@ -96,19 +98,21 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
 
         for (i, t) in tabs.enumerated() {
             var cfg = UIButton.Configuration.plain()
-            cfg.image = UIImage(systemName: t.symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold))
+            cfg.image = UIImage(systemName: t.symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .medium))
             cfg.title = t.label
             cfg.imagePlacement = .top
             cfg.imagePadding = 3
-            cfg.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 2, bottom: 4, trailing: 2)
+            cfg.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0)
             cfg.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
                 var out = incoming
-                out.font = .systemFont(ofSize: 10, weight: .semibold)
+                out.font = .systemFont(ofSize: 9.5, weight: .semibold)
                 return out
             }
             let b = UIButton(configuration: cfg)
             b.tag = i
             b.tintColor = .secondaryLabel
+            b.contentHorizontalAlignment = .center
+            b.contentVerticalAlignment = .center
             b.addTarget(self, action: #selector(tabTapped(_:)), for: .touchUpInside)
             buttons.append(b)
             stack.addArrangedSubview(b)
