@@ -3989,9 +3989,6 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
 
   const sports = ['전체', '축구', '야구'];
   const [scrolled, setScrolled] = React.useState(false);
-  const headerRef = React.useRef(null);
-  const [headerH, setHeaderH] = React.useState(98);
-  React.useLayoutEffect(() => { if (headerRef.current) setHeaderH(headerRef.current.offsetHeight); }, []);
   const [filter, setFilter] = React.useState('전체');
   const followedPlayers = ALL_PLAYERS
     .filter(p => followed.has(p.id))
@@ -4028,24 +4025,24 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
   };
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', flex:1, height:'100%', background:'var(--bg)', minHeight:0, position:'relative' }}>
-      {/* Glass top nav — content scrolls under it (scroll edge effect) */}
-      <div ref={headerRef} style={{ position:'absolute', top:0, left:0, right:0, zIndex:20, background: scrolled ? 'rgba(11,11,13,0.5)' : 'transparent', backdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', WebkitBackdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', borderBottom: `0.5px solid ${scrolled ? 'var(--border)' : 'transparent'}`, transition: 'background 0.25s ease, backdrop-filter 0.25s ease, border-color 0.25s ease' }}>
-        <div style={{ padding:'16px 20px 8px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-          <div style={{ fontSize:22, fontWeight:700, color:'var(--text)', letterSpacing:-0.5 }}>선수</div>
-          <button onClick={onAdd} style={{ display:'flex', alignItems:'center', gap:6, background:'var(--acc)', border:'none', borderRadius:20, padding:'8px 16px', color:'#000', fontSize:13, fontWeight:700, cursor:'pointer' }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="#000"/></svg>
-            선수 편집
-          </button>
+    <div style={{ display:'flex', flexDirection:'column', flex:1, height:'100%', background:'var(--bg)', minHeight:0 }}>
+      {/* Scroll area; the top nav sticks and turns to glass only after scrolling */}
+      <div ref={scrollRef} onScroll={e => { const s = e.currentTarget.scrollTop > 4; setScrolled(p => p !== s ? s : p); }} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} style={{ flex:1, overflow:'auto', background:'var(--bg)', minHeight:0 }} className="scrollbar-hide">
+        {/* Sticky top nav — solid black at rest, glass scroll-edge once scrolled */}
+        <div style={{ position:'sticky', top:0, zIndex:20, background: scrolled ? 'rgba(11,11,13,0.55)' : 'var(--bg)', backdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', WebkitBackdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', borderBottom: `0.5px solid ${scrolled ? 'var(--border)' : 'transparent'}`, transition: 'background 0.28s ease, backdrop-filter 0.28s ease, border-color 0.28s ease' }}>
+          <div style={{ padding:'16px 20px 8px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <div style={{ fontSize:22, fontWeight:700, color:'var(--text)', letterSpacing:-0.5 }}>선수</div>
+            <button onClick={onAdd} style={{ display:'flex', alignItems:'center', gap:6, background:'var(--acc)', border:'none', borderRadius:20, padding:'8px 16px', color:'#000', fontSize:13, fontWeight:700, cursor:'pointer' }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="#000"/></svg>
+              선수 편집
+            </button>
+          </div>
+          <div style={{ display:'flex', gap:8, padding:'0 16px 14px', overflowX:'auto' }} className="scrollbar-hide">
+            {sports.map(s => (
+              <button key={s} onClick={() => setFilter(s)} style={{ flexShrink:0, background: filter===s ? 'var(--acc)' : 'var(--border)', border:'none', borderRadius:20, padding:'7px 16px', color: filter===s ? '#000' : 'var(--text2)', fontSize:13, fontWeight:600, cursor:'pointer' }}>{s}</button>
+            ))}
+          </div>
         </div>
-        <div style={{ display:'flex', gap:8, padding:'0 16px 14px', overflowX:'auto' }} className="scrollbar-hide">
-          {sports.map(s => (
-            <button key={s} onClick={() => setFilter(s)} style={{ flexShrink:0, background: filter===s ? 'var(--acc)' : 'var(--border)', border:'none', borderRadius:20, padding:'7px 16px', color: filter===s ? '#000' : 'var(--text2)', fontSize:13, fontWeight:600, cursor:'pointer' }}>{s}</button>
-          ))}
-        </div>
-      </div>
-      {/* Scrollable content — scrolls under the glass header */}
-      <div ref={scrollRef} onScroll={e => { const s = e.currentTarget.scrollTop > 4; setScrolled(p => p !== s ? s : p); }} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} style={{ flex:1, overflow:'auto', background:'var(--bg)', minHeight:0, paddingTop: headerH }} className="scrollbar-hide">
       {/* Pull-to-refresh indicator */}
       <div style={{ overflow:'hidden', height: pullY, transition: pullY === 0 ? 'height 0.25s ease' : 'none', display:'flex', alignItems:'center', justifyContent:'center' }}>
         <div style={{ display:'flex', alignItems:'center', gap:8, opacity: Math.min(pullY / PULL_THRESHOLD, 1) }}>
@@ -4287,9 +4284,6 @@ function stripHtml(str) {
 function NewsScreen({ sportFeeds, scrollTopKey = 0 }) {
   const NEWS_CATEGORIES = ['전체', '해외축구', 'MLB', '기타'];
   const [scrolled, setScrolled] = React.useState(false);
-  const headerRef = React.useRef(null);
-  const [headerH, setHeaderH] = React.useState(92);
-  React.useLayoutEffect(() => { if (headerRef.current) setHeaderH(headerRef.current.offsetHeight); }, []);
   const [category, setCategory] = React.useState('전체');
   const [articles, setArticles] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
@@ -4471,9 +4465,11 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0 }) {
   }, [enabledCategories, category]);
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', flex:1, height:'100%', background:'var(--bg)', minHeight:0, position:'relative' }}>
-      {/* Glass top nav — content scrolls under it (scroll edge effect) */}
-      <div ref={headerRef} style={{ position:'absolute', top:0, left:0, right:0, zIndex:20, background: scrolled ? 'rgba(11,11,13,0.5)' : 'transparent', backdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', WebkitBackdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', borderBottom: `0.5px solid ${scrolled ? 'var(--border)' : 'transparent'}`, transition: 'background 0.25s ease, backdrop-filter 0.25s ease, border-color 0.25s ease' }}>
+    <div style={{ display:'flex', flexDirection:'column', flex:1, height:'100%', background:'var(--bg)', minHeight:0 }}>
+      {/* Scroll area; the top nav sticks and turns to glass only after scrolling */}
+      <div ref={scrollRef} onScroll={e => { const s = e.currentTarget.scrollTop > 4; setScrolled(p => p !== s ? s : p); }} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} style={{ flex:1, overflow:'auto', background:'var(--bg)', minHeight:0 }} className="scrollbar-hide">
+        {/* Sticky top nav — solid black at rest, glass scroll-edge once scrolled */}
+        <div style={{ position:'sticky', top:0, zIndex:20, background: scrolled ? 'rgba(11,11,13,0.55)' : 'var(--bg)', backdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', WebkitBackdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', borderBottom: `0.5px solid ${scrolled ? 'var(--border)' : 'transparent'}`, transition: 'background 0.28s ease, backdrop-filter 0.28s ease, border-color 0.28s ease' }}>
         <div style={{ padding:'16px 20px 12px', fontSize:22, fontWeight:700, color:'var(--text)', letterSpacing:-0.5 }}>뉴스</div>
         <div style={{ display:'flex', gap:8, overflowX:'auto', padding:'0 16px 14px' }} className="scrollbar-hide">
           {NEWS_CATEGORIES.filter(c => enabledCategories.includes(c)).map(c => (
@@ -4498,8 +4494,6 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0 }) {
           ))}
         </div>
       </div>
-      {/* Scrollable content — scrolls under the glass header */}
-      <div ref={scrollRef} onScroll={e => { const s = e.currentTarget.scrollTop > 4; setScrolled(p => p !== s ? s : p); }} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} style={{ flex:1, overflow:'auto', background:'var(--bg)', minHeight:0, paddingTop: headerH }} className="scrollbar-hide">
       {/* Pull-to-refresh indicator */}
       <div style={{ overflow:'hidden', height: pullY, transition: pullY === 0 ? 'height 0.25s ease' : 'none', display:'flex', alignItems:'center', justifyContent:'center' }}>
         <div style={{ display:'flex', alignItems:'center', gap:8, opacity: Math.min(pullY / PULL_THRESHOLD, 1) }}>
