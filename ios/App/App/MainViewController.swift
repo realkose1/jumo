@@ -25,6 +25,7 @@ struct GlassTabBar: View {
     @ObservedObject var model: TabBarModel
     @Namespace private var ns
     @State private var dragX: CGFloat? = nil
+    @State private var pressed = false
     private let accent = Color(red: 0.961, green: 0.769, blue: 0.0)   // #f5c400 — glyph only
     private let barHeight: CGFloat = 56
 
@@ -47,7 +48,7 @@ struct GlassTabBar: View {
                         Capsule(style: .continuous).fill(Color.clear)
                             .glassEffect(.clear.interactive(), in: .capsule)
                             .glassEffectID("sel", in: ns)
-                            .frame(width: selW, height: geo.size.height - 10)
+                            .frame(width: selW + (pressed ? 18 : 0), height: geo.size.height - (pressed ? 2 : 10))
                             .position(x: center, y: geo.size.height / 2)
                     }
                 }
@@ -70,6 +71,7 @@ struct GlassTabBar: View {
                     .gesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { v in
+                                if !pressed { withAnimation(.spring(response: 0.28, dampingFraction: 0.6)) { pressed = true } }
                                 let moved = abs(v.translation.width) + abs(v.translation.height)
                                 if moved > 6 { dragX = min(max(v.location.x, half + 4), geo.size.width - half - 4) }
                                 let i = clamp(Int(v.location.x / cellW), n)
@@ -81,6 +83,7 @@ struct GlassTabBar: View {
                                 let i = clamp(Int(v.location.x / cellW), n)
                                 withAnimation(.spring(response: 0.34, dampingFraction: 0.72)) {
                                     dragX = nil
+                                    pressed = false
                                     model.selected = i
                                 }
                                 model.onSelect?(i)
