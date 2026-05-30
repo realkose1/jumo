@@ -21,7 +21,9 @@ html, body {
   width: 100%;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  background: #0b0b0d;            /* html bg too → iOS overscroll bounce shows dark, not white */
 }
+html.light-mode, html.light-mode body { background: #e5e5ea; }
 body {
   background: #0b0b0d;
   min-height: 100vh;
@@ -127,16 +129,20 @@ html.light-mode body { background: #e5e5ea; }
 .tabbar-liquid-glass > button {
   position: relative;
   border-radius: 18px !important;
-  padding: 6px 0 !important;
-  gap: 2px !important;
-  min-height: 44px;
+  padding: 7px 0 !important;
+  gap: 3px !important;
+  min-height: 46px;
 }
+/* Active tab = clearly-filled "glass button" pill (iOS 26 tab bar look) */
 .tabbar-liquid-glass > button.active::before {
   content: '';
   position: absolute;
-  inset: 3px 8px;
-  border-radius: 14px;
-  background: rgba(255,255,255,0.07);
+  inset: 3px 6px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.16);
+  box-shadow:
+    0 1px 3px rgba(0,0,0,0.28),
+    inset 0 0.5px 0 rgba(255,255,255,0.35);
   z-index: 0;
 }
 .tabbar-liquid-glass > button > * { position: relative; z-index: 1; }

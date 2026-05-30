@@ -2,9 +2,11 @@
   "appId": "com.realkose.jumo",
   "appName": "Jumo",
   "webDir": "www",
+  "backgroundColor": "#0b0b0d",
   "ios": {
     "contentInset": "always",
-    "limitsNavigationsToAppBoundDomains": false
+    "limitsNavigationsToAppBoundDomains": false,
+    "backgroundColor": "#0b0b0d"
   },
   "server": {
     "iosScheme": "capacitor"
