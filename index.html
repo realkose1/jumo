@@ -5035,6 +5035,7 @@ function App() {
     catch { return TWEAK_DEFAULTS; }
   });
   const [tab, setTab] = React.useState('home');
+  const [nativeTabBar, setNativeTabBar] = React.useState(false); // native iOS glass tab bar present → hide CSS one
   const [screen, setScreen] = React.useState('main');
   const [selectedMatch, setSelectedMatch] = React.useState(null);
   const [selectedPlayer, setSelectedPlayer] = React.useState(null);
@@ -6718,6 +6719,8 @@ function App() {
 
   const [tabScrollKeys, setTabScrollKeys] = React.useState({ home:0, schedule:0, players:0, news:0, more:0 });
   const handleTab = React.useCallback((t) => {
+    // Keep the native glass tab bar's highlight in sync.
+    try { window.webkit?.messageHandlers?.tabbar?.postMessage(t); } catch {}
     if (t === tab && screen === 'main') {
       setTabScrollKeys(k => ({ ...k, [t]: k[t] + 1 }));
       return;
@@ -6727,6 +6730,15 @@ function App() {
       setScreen('main');
     });
   }, [tab, screen]);
+
+  // Bridge for the native iOS Liquid Glass tab bar (MainViewController.swift):
+  // native calls __nativeTab(id) on tap, and __enableNativeTabBar() to tell the
+  // web app to hide its own CSS tab bar.
+  React.useEffect(() => {
+    window.__nativeTab = (id) => handleTab(id);
+    window.__enableNativeTabBar = () => { setNativeTabBar(true); return true; };
+    return () => { try { delete window.__nativeTab; delete window.__enableNativeTabBar; } catch {} };
+  }, [handleTab]);
 
   const HomeComponent = [HomeV1, HomeV2, HomeV3][tweaks.homeVariant] || HomeV1;
 
@@ -6776,7 +6788,7 @@ function App() {
               <NotifScreen notifications={notifications}/>
             </div>
           )}
-          <TabBar active={tab} onTab={handleTab}/>
+          {!nativeTabBar && <TabBar active={tab} onTab={handleTab}/>}
         </div>
       </IOSDevice>
 
