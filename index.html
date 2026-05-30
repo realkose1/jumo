@@ -355,6 +355,18 @@ function formatExpectedEvent(kp, allMatches) {
   return kp.event || '';
 }
 
+// Player availability badge styling, keyed by status kind.
+// kind is set by the daily status sync: il/injured → red ✚, doubtful/suspended
+// → amber, minors → gray. Falls back to the injured (red) style.
+const STATUS_BADGE = {
+  il:        { bg:'rgba(230,48,48,0.15)',   fg:'#ff6b6b', bd:'rgba(230,48,48,0.4)',   icon:'✚', ic:'#e63030' },
+  injured:   { bg:'rgba(230,48,48,0.15)',   fg:'#ff6b6b', bd:'rgba(230,48,48,0.4)',   icon:'✚', ic:'#e63030' },
+  doubtful:  { bg:'rgba(240,176,41,0.16)',  fg:'#f0b029', bd:'rgba(240,176,41,0.4)',  icon:'?', ic:'#f0b029' },
+  suspended: { bg:'rgba(240,176,41,0.16)',  fg:'#f0b029', bd:'rgba(240,176,41,0.4)',  icon:'⊘', ic:'#f0b029' },
+  minors:    { bg:'rgba(150,160,175,0.16)', fg:'#aeb6c2', bd:'rgba(150,160,175,0.35)', icon:'▼', ic:'#97a1b0' },
+};
+const injuryStyle = (inj) => STATUS_BADGE[inj?.kind] || STATUS_BADGE.injured;
+
 // ─── HELPER: Dynamic date generator ──────────────────────────
 function getRelativeDate(hoursFromNow) {
   const date = new Date();
@@ -1732,7 +1744,15 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
           };
         } else {
           const ev = m.koreanPlayer.event || '';
-          const evLabel = ev === '교체 출전 중' ? '교체 출전 중' : ev === '교체 아웃' ? '교체 아웃' : ev === '벤치' ? '벤치 대기' : ev === '미출전' ? '결장' : ev === '출전 예상' ? '출전 여부 확인 중' : '출전 중';
+          const inj = highlightPlayer?.injury;
+          const notPlaying = ['', '벤치', '미출전', '마이너', '부상', '출전 예상'].includes(ev);
+          const evLabel =
+            (notPlaying && inj?.kind === 'minors') ? '마이너 리그' :
+            (notPlaying && (inj?.kind === 'il' || inj?.kind === 'injured')) ? '부상 결장' :
+            ev === '교체 출전 중' ? '교체 출전 중' : ev === '교체 아웃' ? '교체 아웃' :
+            ev === '벤치' ? '벤치 대기' : ev === '미출전' ? '결장' :
+            ev === '마이너' ? '마이너 리그' : ev === '부상' ? '부상 결장' :
+            ev === '출전 예상' ? '출전 여부 확인 중' : '출전 중';
           return {
             status: matchSportKey(m) === 'baseball' ? `LIVE NOW · ${m.inning || ''}` : `LIVE NOW · ${hlLiveMinute || m.minute || ''}\'`,
             main: `${m.koreanPlayer.name} ${evLabel}`,
@@ -2479,9 +2499,9 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
                               <span style={{ fontSize:10, fontWeight:600, color: isLive ? 'var(--acc)' : 'var(--text2)', whiteSpace:'nowrap', lineHeight:1 }}>{formattedEvent}</span>
                             </div>
                           )}
-                          {injury && (
-                            <span style={{ fontSize:10, fontWeight:700, padding:'3px 7px', borderRadius:6, background:'rgba(230,48,48,0.15)', color:'#ff6b6b', border:'0.5px solid rgba(230,48,48,0.4)', whiteSpace:'nowrap', lineHeight:1, flexShrink:0 }}><span style={{ color:'#e63030', fontWeight:900, marginRight:4 }}>✚</span>{injury.label}</span>
-                          )}
+                          {injury && (() => { const s = injuryStyle(injury); return (
+                            <span style={{ fontSize:10, fontWeight:700, padding:'3px 7px', borderRadius:6, background:s.bg, color:s.fg, border:`0.5px solid ${s.bd}`, whiteSpace:'nowrap', lineHeight:1, flexShrink:0 }}><span style={{ color:s.ic, fontWeight:900, marginRight:4 }}>{s.icon}</span>{injury.label}</span>
+                          ); })()}
                           {pills.map((p, i) => (
                             <span key={i} style={{ fontSize:10, fontWeight:700, padding:'3px 7px', borderRadius:6, background:'rgba(245,196,0,0.15)', color:'var(--acc)', border:'0.5px solid rgba(245,196,0,0.3)', whiteSpace:'nowrap', lineHeight:1, flexShrink:0 }}>{p}</span>
                           ))}
@@ -3327,12 +3347,12 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
             {player.name}
           </div>
           <div style={{ fontSize:12, color:'rgba(255,255,255,0.55)' }}>{player.nameEn} · {player.team} · {player.league}</div>
-          {player.injury && (
-            <div style={{ marginTop:10, display:'inline-flex', alignItems:'center', gap:6, background:'rgba(230,48,48,0.18)', border:'0.5px solid rgba(230,48,48,0.5)', borderRadius:10, padding:'6px 10px' }}>
-              <span style={{ fontSize:16, fontWeight:900, color:'#e63030' }}>✚</span>
-              <span style={{ fontSize:12, fontWeight:700, color:'#ff8585' }}>{player.injury.label}</span>
+          {player.injury && (() => { const s = injuryStyle(player.injury); return (
+            <div style={{ marginTop:10, display:'inline-flex', alignItems:'center', gap:6, background:s.bg, border:`0.5px solid ${s.bd}`, borderRadius:10, padding:'6px 10px' }}>
+              <span style={{ fontSize:16, fontWeight:900, color:s.ic }}>{s.icon}</span>
+              <span style={{ fontSize:12, fontWeight:700, color:s.fg }}>{player.injury.label}</span>
             </div>
-          )}
+          ); })()}
         </div>
       </div>
 
@@ -3983,7 +4003,7 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
                     <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:7, flexWrap:'wrap' }}>
                       <span style={{ fontSize:16, fontWeight:800, color:'var(--text)', letterSpacing:-0.3 }}>{p.name}</span>
                       <span style={{ fontSize:10, color:'var(--text5)', fontWeight:500 }}>{p.nameEn}</span>
-                      {p.injury && <span title={p.injury.label} style={{ fontSize:13, fontWeight:900, color:'#e63030' }}>✚</span>}
+                      {p.injury && <span title={p.injury.label} style={{ fontSize:13, fontWeight:900, color:injuryStyle(p.injury).ic }}>{injuryStyle(p.injury).icon}</span>}
                     </div>
                     <div style={{ fontSize:11, color:'var(--text3)' }}>{p.team} · {p.position}</div>
                   </div>
@@ -5423,6 +5443,65 @@ function App() {
               statByKey[`${playerName}|${date}`] = s.stat || {};
             }
           });
+          // Game might span midnight UTC vs local; try both date and the day before in case of TZ shift
+          const ymd = (date) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+          const gameLogStat = (kp, fullDate) => {
+            const d = new Date(fullDate);
+            for (const c of [ymd(d), ymd(new Date(d.getTime() - 86400000))]) {
+              if (statByKey[`${kp.name}|${c}`]) return statByKey[`${kp.name}|${c}`];
+            }
+            return null;
+          };
+
+          // The season gameLog lags 1-3 days behind, so it can't answer "is he in the
+          // lineup right now / did he play in the latest game?". For those we read the
+          // ESPN boxscore (live lineup + final stats) directly. Only fetch where the
+          // gameLog can't answer, to keep the request count small.
+          const needsBox = mlbKorean.filter(m =>
+            m.koreanPlayer && (m.live || (m.status === 'STATUS_FINAL' && !gameLogStat(m.koreanPlayer, m.fullDate)))
+          );
+          const boxResults = await Promise.allSettled(
+            needsBox.map(m =>
+              fetch(`https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/summary?event=${m.id}`)
+                .then(r => r.ok ? r.json() : null)
+                .then(data => ({ id: m.id, players: data?.boxscore?.players || [] }))
+                .catch(() => ({ id: m.id, players: [] }))
+            )
+          );
+          const boxById = {};
+          boxResults.forEach(r => { if (r.status === 'fulfilled') boxById[r.value.id] = r.value.players; });
+
+          // Locate a Korean batter inside an ESPN boxscore by English name (same matching
+          // as the lineup tab: handles "Hyeseong Kim" vs "Kim Hyeseong" ordering).
+          const norm = s => (s||'').toLowerCase().replace(/[-\s.']/g,'');
+          const findInBox = (players, nameEn) => {
+            const variants = [norm(nameEn)];
+            const parts = (nameEn||'').toLowerCase().split(/[\s-]+/).filter(Boolean);
+            if (parts.length >= 2) {
+              variants.push(norm(parts.slice(1).join('') + parts[0]));
+              variants.push(norm([parts[parts.length-1], ...parts.slice(0,-1)].join('')));
+            }
+            const isMatch = n => { const x = norm(n); return x && variants.some(t => t && (x === t || x.includes(t) || t.includes(x))); };
+            let lineupPosted = false;
+            for (const t of (players || [])) {
+              const bat = (t.statistics || []).find(s => s.type === 'batting');
+              const aths = bat?.athletes || [];
+              if (aths.length) lineupPosted = true;
+              const keys = bat?.keys || [];
+              const val = (a, k) => { const i = keys.indexOf(k); return i >= 0 ? (parseInt(a.stats?.[i]) || 0) : 0; };
+              for (const a of aths) {
+                if (isMatch(a.athlete?.displayName || '')) {
+                  return {
+                    found: true, lineupPosted, starter: !!a.starter,
+                    atBats: val(a, 'atBats'), hits: val(a, 'hits'), homeRuns: val(a, 'homeRuns'),
+                    rbi: val(a, 'RBIs'), runs: val(a, 'runs'), baseOnBalls: val(a, 'walks'),
+                  };
+                }
+              }
+            }
+            return { found: false, lineupPosted };
+          };
+
           // Apply to matches
           mlbKorean.forEach(m => {
             const idx = koreanMatches.findIndex(mm => mm.id === m.id);
@@ -5430,40 +5509,58 @@ function App() {
             const cur = koreanMatches[idx];
             const kp = cur.koreanPlayer;
             if (!kp || !cur.fullDate) return;
-            const d = new Date(cur.fullDate);
-            // Game might span midnight UTC vs local; try both date and the day before in case of TZ shift
-            const ymd = (date) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
-            const candidates = [ymd(d), ymd(new Date(d.getTime() - 86400000))];
-            let stat = null;
-            for (const c of candidates) {
-              if (statByKey[`${kp.name}|${c}`]) { stat = statByKey[`${kp.name}|${c}`]; break; }
-            }
             const isFinished = cur.status === 'STATUS_FINAL';
             const isLive = cur.live;
-            let newEvent;
-            const atBats = parseInt(stat?.atBats ?? 0) || 0;
-            const hits = parseInt(stat?.hits ?? 0) || 0;
-            const homeRuns = parseInt(stat?.homeRuns ?? 0) || 0;
-            const rbi = parseInt(stat?.rbi ?? 0) || 0;
-            const runs = parseInt(stat?.runs ?? 0) || 0;
-            const stolenBases = parseInt(stat?.stolenBases ?? 0) || 0;
-            const baseOnBalls = parseInt(stat?.baseOnBalls ?? 0) || 0;
-            const didPlay = !!stat && (atBats > 0 || stat.plateAppearances > 0);
-            if (isLive) {
-              newEvent = didPlay ? '출전 중' : (stat ? '벤치' : '출전 예상');
-            } else if (isFinished) {
-              if (!stat) newEvent = '미출전';
-              else if (!didPlay) newEvent = '대기 명단';
-              else {
-                const parts = [`${atBats}타수 ${hits}안타`];
-                if (homeRuns) parts.push(`${homeRuns}홈런`);
-                if (rbi) parts.push(`${rbi}타점`);
-                if (stolenBases) parts.push(`${stolenBases}도루`);
-                newEvent = parts.join(' ');
+            const gl = gameLogStat(kp, cur.fullDate);
+            const box = boxById[cur.id] ? findInBox(boxById[cur.id], kp.nameEn) : null;
+
+            let newEvent, atBats = 0, hits = 0, homeRuns = 0, rbi = 0, runs = 0, stolenBases = 0, baseOnBalls = 0;
+            const statLine = () => {
+              const parts = [`${atBats}타수 ${hits}안타`];
+              if (homeRuns) parts.push(`${homeRuns}홈런`);
+              if (rbi) parts.push(`${rbi}타점`);
+              if (stolenBases) parts.push(`${stolenBases}도루`);
+              return parts.join(' ');
+            };
+
+            if (box && box.found) {
+              // In the lineup — take live/final numbers straight from the boxscore.
+              atBats = box.atBats; hits = box.hits; homeRuns = box.homeRuns;
+              rbi = box.rbi; runs = box.runs; baseOnBalls = box.baseOnBalls;
+              stolenBases = parseInt(gl?.stolenBases ?? 0) || 0; // SB absent from ESPN batting box
+              const active = atBats > 0 || baseOnBalls > 0 || runs > 0;
+              if (isFinished) {
+                newEvent = (!active && !box.starter) ? '대기 명단' : statLine();
+              } else {
+                newEvent = box.starter ? '출전 중' : (active ? '교체 출전 중' : '벤치');
               }
+            } else if (box && box.lineupPosted) {
+              // Lineup is out and he is not in it → say WHY using the synced roster status.
+              const k = ALL_PLAYERS.find(pl => pl.name === kp.name)?.injury?.kind;
+              newEvent = isFinished ? '미출전'
+                : k === 'minors' ? '마이너'
+                : (k === 'il' || k === 'injured') ? '부상'
+                : '벤치';
+            } else if (gl) {
+              // No boxscore needed/available — fall back to the season gameLog.
+              atBats = parseInt(gl.atBats ?? 0) || 0; hits = parseInt(gl.hits ?? 0) || 0;
+              homeRuns = parseInt(gl.homeRuns ?? 0) || 0; rbi = parseInt(gl.rbi ?? 0) || 0;
+              runs = parseInt(gl.runs ?? 0) || 0; stolenBases = parseInt(gl.stolenBases ?? 0) || 0;
+              baseOnBalls = parseInt(gl.baseOnBalls ?? 0) || 0;
+              const didPlay = atBats > 0 || (parseInt(gl.plateAppearances ?? 0) || 0) > 0;
+              if (isLive) newEvent = didPlay ? '출전 중' : '벤치';
+              else if (isFinished) newEvent = !didPlay ? '대기 명단' : statLine();
+              else newEvent = '출전 예상';
             } else {
-              newEvent = '출전 예상';
+              // Nothing resolved from boxscore/gameLog: use roster status; only a
+              // not-yet-started game with an active player stays "예상".
+              const k = ALL_PLAYERS.find(pl => pl.name === kp.name)?.injury?.kind;
+              newEvent = isFinished ? '미출전'
+                : k === 'minors' ? '마이너'
+                : (k === 'il' || k === 'injured') ? '부상'
+                : (isLive ? '벤치' : '출전 예상');
             }
+
             koreanMatches[idx] = {
               ...cur,
               koreanPlayer: { ...kp, event: newEvent, atBats, hits, homeRuns, rbi, runs, stolenBases, baseOnBalls },
@@ -5679,6 +5776,117 @@ function App() {
         }
       }));
       if (!cancelled) setLiveMatches(prev => [...prev]); // trigger re-render
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // ── Daily player availability sync (IL / minors / injury) ──────────────
+  // Hardcoded injury fields go stale (trades, IL stints, demotions). Once a day
+  // we refresh every player's real status: MLB from statsapi (current team +
+  // 40-man roster status code), soccer from API-Football injuries via the proxy.
+  // Result is cached in localStorage for 24h and written onto ALL_PLAYERS so the
+  // status badges and live "not in lineup" labels stay accurate.
+  React.useEffect(() => {
+    let cancelled = false;
+    const KEY = 'jumoPlayerStatus';
+    const DAY = 24 * 60 * 60 * 1000;
+    // Apply a name→status map onto ALL_PLAYERS. A present key with null clears any
+    // (now stale) injury; an absent key leaves the existing value untouched.
+    const apply = (map) => {
+      if (!map) return;
+      ALL_PLAYERS.forEach(p => {
+        if (Object.prototype.hasOwnProperty.call(map, p.name)) p.injury = map[p.name] || null;
+      });
+    };
+    const REASON_KO = {
+      'knee injury':'무릎 부상', 'ankle injury':'발목 부상', 'hamstring':'햄스트링 부상',
+      'muscle injury':'근육 부상', 'thigh injury':'허벅지 부상', 'calf injury':'종아리 부상',
+      'groin injury':'사타구니 부상', 'back injury':'허리 부상', 'shoulder injury':'어깨 부상',
+      'foot injury':'발 부상', 'illness':'질병', 'knock':'타박상', 'fitness':'컨디션 난조',
+      'suspended':'출전 정지', 'red card':'퇴장 누적', 'coach decision':'감독 결정',
+    };
+    const koReason = (reason) => REASON_KO[(reason || '').toLowerCase().trim()] || reason || '부상';
+
+    (async () => {
+      // Serve from cache when fresh enough.
+      try {
+        const cached = JSON.parse(localStorage.getItem(KEY) || 'null');
+        if (cached && cached.ts && (Date.now() - cached.ts) < DAY && cached.map) {
+          apply(cached.map);
+          if (!cancelled) setLiveMatches(prev => [...prev]);
+          return;
+        }
+      } catch {}
+
+      const map = {};
+
+      // ── MLB: statsapi roster status ──
+      try {
+        const mlb = ALL_PLAYERS.filter(p => p.sport === '야구' && p.mlbId);
+        if (mlb.length) {
+          const ids = mlb.map(p => p.mlbId).join(',');
+          const [pplRes, teamsRes] = await Promise.all([
+            fetch(`https://statsapi.mlb.com/api/v1/people?personIds=${ids}&hydrate=currentTeam`).then(r => r.json()),
+            fetch('https://statsapi.mlb.com/api/v1/teams?sportId=1').then(r => r.json()),
+          ]);
+          const mlbTeamIds = new Set((teamsRes.teams || []).map(t => t.id));
+          const personById = {};
+          (pplRes.people || []).forEach(p => { personById[p.id] = p; });
+          // Fetch each relevant MLB club's 40-man roster once (status codes live there).
+          const needTeams = new Set();
+          mlb.forEach(p => { const ct = personById[p.mlbId]?.currentTeam; if (ct && mlbTeamIds.has(ct.id)) needTeams.add(ct.id); });
+          const rosterByTeam = {};
+          await Promise.all([...needTeams].map(tid =>
+            fetch(`https://statsapi.mlb.com/api/v1/teams/${tid}/roster?rosterType=40Man`)
+              .then(r => r.ok ? r.json() : null)
+              .then(d => { rosterByTeam[tid] = d?.roster || []; })
+              .catch(() => { rosterByTeam[tid] = []; })
+          ));
+          mlb.forEach(p => {
+            const ct = personById[p.mlbId]?.currentTeam;
+            if (!ct) return; // unknown → leave existing value
+            if (!mlbTeamIds.has(ct.id)) { map[p.name] = { label:'마이너', severity:'medium', kind:'minors', note: ct.name }; return; }
+            const entry = (rosterByTeam[ct.id] || []).find(r => r.person?.id === p.mlbId);
+            const code = entry?.status?.code || 'A';
+            const desc = entry?.status?.description || '';
+            if (/^D\d/.test(code) || code === 'DL') map[p.name] = { label:'부상자 명단 (IL)', severity:'high', kind:'il', note: desc };
+            else if (code === 'RM' || code === 'OPT' || code === 'DES' || code === 'OUT') map[p.name] = { label:'마이너', severity:'medium', kind:'minors', note: desc };
+            else map[p.name] = null; // active → clear any stale injury
+          });
+        }
+      } catch (e) { console.warn('MLB status sync failed:', e?.message || e); }
+
+      // ── Soccer: API-Football injuries via proxy ──
+      try {
+        const soccer = ALL_PLAYERS.filter(p => p.sport === '축구' && p.apiFootballId);
+        await Promise.all(soccer.map(async p => {
+          const season = p.league === 'MLS' ? 2026 : 2025;
+          try {
+            const r = await fetch(`${API_BASE}/api/apifootball?path=injuries&player=${p.apiFootballId}&season=${season}`);
+            if (!r.ok) return; // proxy/key unavailable → keep existing value
+            const rows = (await r.json())?.response || [];
+            if (!rows.length) { map[p.name] = null; return; } // no injuries this season → available
+            rows.sort((a, b) => new Date(b.fixture?.date || 0) - new Date(a.fixture?.date || 0));
+            const latest = rows[0];
+            const dt = new Date(latest.fixture?.date || 0).getTime();
+            // Only treat as currently unavailable if the latest entry is recent (~12 days).
+            if (dt && (Date.now() - dt) < 12 * DAY) {
+              const reason = latest.player?.reason || '';
+              const low = reason.toLowerCase();
+              const kind = (low.includes('suspend') || low.includes('red card')) ? 'suspended'
+                : (latest.player?.type || '').toLowerCase().includes('quest') ? 'doubtful' : 'injured';
+              map[p.name] = { label: koReason(reason), severity: kind === 'injured' ? 'high' : 'medium', kind, note: reason };
+            } else {
+              map[p.name] = null; // recovered
+            }
+          } catch {}
+        }));
+      } catch (e) { console.warn('Soccer injury sync failed:', e?.message || e); }
+
+      if (cancelled) return;
+      apply(map);
+      try { localStorage.setItem(KEY, JSON.stringify({ ts: Date.now(), map })); } catch {}
+      setLiveMatches(prev => [...prev]);
     })();
     return () => { cancelled = true; };
   }, []);

@@ -29,6 +29,7 @@ export default async function handler(req, res) {
     'fixtures/statistics',
     'fixtures/players',
     'players',
+    'injuries',
     'status',
   ]);
   if (!allowed.has(path)) {
