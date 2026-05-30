@@ -215,6 +215,12 @@ const ESPN_API = {
     den: 'https://site.api.espn.com/apis/site/v2/sports/soccer/den.1/scoreboard',
     ned: 'https://site.api.espn.com/apis/site/v2/sports/soccer/ned.1/scoreboard',
     bel: 'https://site.api.espn.com/apis/site/v2/sports/soccer/bel.1/scoreboard',
+    // UEFA club competitions — NOT covered by API-Football reliably and absent
+    // from the domestic feeds, so we pull them from ESPN (keyless) to guarantee
+    // big nights (e.g. the Champions League final) always appear.
+    ucl: 'https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.champions/scoreboard',
+    uel: 'https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.europa/scoreboard',
+    uecl: 'https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.europa.conf/scoreboard',
   },
   mlb: 'https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard',
 };
@@ -1985,57 +1991,6 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], world
         tweaks={tweaks}
       />
 
-      {/* 2026 World Cup — South Korea national-team fixtures (team-only, display) */}
-      {worldCupMatches.length > 0 && (
-        <div style={{ margin:'4px 16px', padding:'14px 0', borderTop:'0.5px solid var(--border)' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:12 }}>
-            <span style={{ fontSize:15 }}>🇰🇷</span>
-            <span style={{ fontSize:14, fontWeight:800, color:'var(--text)' }}>2026 월드컵</span>
-            <span style={{ fontSize:11, fontWeight:700, color:'var(--text4)' }}>대한민국 조별리그</span>
-          </div>
-          {worldCupMatches.map(m => {
-            const d = new Date(m.fullDate);
-            const dateStr = d.toLocaleDateString('ko-KR', { timeZone:'Asia/Seoul', month:'long', day:'numeric', weekday:'short' });
-            const timeStr = d.toLocaleTimeString('ko-KR', { timeZone:'Asia/Seoul', hour:'2-digit', minute:'2-digit', hour12:false });
-            const showScore = m.live || m.state === 'post';
-            const draw = m.home.score === m.away.score;
-            const homeWin = m.home.score > m.away.score;
-            const koreaWon = showScore && !draw && ((m.koreaIsHome && homeWin) || (!m.koreaIsHome && !homeWin));
-            const resultTag = !showScore || m.live ? '' : draw ? '무' : koreaWon ? '승' : '패';
-            const resultColor = resultTag === '승' ? 'var(--acc)' : resultTag === '패' ? 'var(--text4)' : 'var(--text3)';
-            return (
-              <div key={m.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 0', borderBottom:'0.5px solid var(--border)' }}>
-                <div style={{ width:78, flexShrink:0 }}>
-                  {m.live ? (
-                    <span style={{ fontSize:11, fontWeight:800, color:'var(--acc)' }}>● LIVE</span>
-                  ) : (
-                    <>
-                      <div style={{ fontSize:12, fontWeight:700, color:'var(--text)' }}>{dateStr}</div>
-                      <div style={{ ...NUM, fontSize:10, color:'var(--text4)' }}>{m.state === 'post' ? '경기 종료' : timeStr}</div>
-                    </>
-                  )}
-                </div>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5 }}>
-                    <TeamBadge code={m.home.code} size={18} logo={m.home.logo}/>
-                    <span style={{ fontSize:13, fontWeight: m.koreaIsHome ? 800 : 600, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.home.koName}</span>
-                    {showScore && <span style={{ ...NUM, marginLeft:'auto', fontSize:15, fontWeight:800, color:'var(--text)' }}>{m.home.score}</span>}
-                  </div>
-                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                    <TeamBadge code={m.away.code} size={18} logo={m.away.logo}/>
-                    <span style={{ fontSize:13, fontWeight: !m.koreaIsHome ? 800 : 600, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.away.koName}</span>
-                    {showScore && <span style={{ ...NUM, marginLeft:'auto', fontSize:15, fontWeight:800, color:'var(--text-70)' }}>{m.away.score}</span>}
-                  </div>
-                </div>
-                {resultTag && (
-                  <span style={{ fontSize:12, fontWeight:800, color:resultColor, width:16, textAlign:'center', flexShrink:0 }}>{resultTag}</span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
       {/* This week's matches list (finished today + upcoming until Sunday) */}
       {(() => {
         // Show today's matches + upcoming within 12 hours, deduplicated
@@ -2169,6 +2124,58 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], world
           </div>
         );
       })()}
+
+      {/* 2026 World Cup — South Korea national-team fixtures, shown as a separate
+          block at the very bottom of the home screen (team matches only). */}
+      {worldCupMatches.length > 0 && (
+        <div style={{ margin:'8px 16px 0', padding:'16px 0 4px', borderTop:'4px solid var(--border)' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:14 }}>
+            <span style={{ fontSize:17 }}>🇰🇷</span>
+            <span style={{ fontSize:15, fontWeight:800, color:'var(--text)' }}>2026 월드컵</span>
+            <span style={{ fontSize:11, fontWeight:700, color:'var(--text4)' }}>대한민국 조별리그</span>
+          </div>
+          {worldCupMatches.map(m => {
+            const d = new Date(m.fullDate);
+            const dateStr = d.toLocaleDateString('ko-KR', { timeZone:'Asia/Seoul', month:'long', day:'numeric', weekday:'short' });
+            const timeStr = d.toLocaleTimeString('ko-KR', { timeZone:'Asia/Seoul', hour:'2-digit', minute:'2-digit', hour12:false });
+            const showScore = m.live || m.state === 'post';
+            const draw = m.home.score === m.away.score;
+            const homeWin = m.home.score > m.away.score;
+            const koreaWon = showScore && !draw && ((m.koreaIsHome && homeWin) || (!m.koreaIsHome && !homeWin));
+            const resultTag = !showScore || m.live ? '' : draw ? '무' : koreaWon ? '승' : '패';
+            const resultColor = resultTag === '승' ? 'var(--acc)' : resultTag === '패' ? 'var(--text4)' : 'var(--text3)';
+            return (
+              <div key={m.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 0', borderBottom:'0.5px solid var(--border)' }}>
+                <div style={{ width:78, flexShrink:0 }}>
+                  {m.live ? (
+                    <span style={{ fontSize:11, fontWeight:800, color:'var(--acc)' }}>● LIVE</span>
+                  ) : (
+                    <>
+                      <div style={{ fontSize:12, fontWeight:700, color:'var(--text)' }}>{dateStr}</div>
+                      <div style={{ ...NUM, fontSize:10, color:'var(--text4)' }}>{m.state === 'post' ? '경기 종료' : timeStr}</div>
+                    </>
+                  )}
+                </div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5 }}>
+                    <TeamBadge code={m.home.code} size={18} logo={m.home.logo}/>
+                    <span style={{ fontSize:13, fontWeight: m.koreaIsHome ? 800 : 600, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.home.koName}</span>
+                    {showScore && <span style={{ ...NUM, marginLeft:'auto', fontSize:15, fontWeight:800, color:'var(--text)' }}>{m.home.score}</span>}
+                  </div>
+                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                    <TeamBadge code={m.away.code} size={18} logo={m.away.logo}/>
+                    <span style={{ fontSize:13, fontWeight: !m.koreaIsHome ? 800 : 600, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.away.koName}</span>
+                    {showScore && <span style={{ ...NUM, marginLeft:'auto', fontSize:15, fontWeight:800, color:'var(--text-70)' }}>{m.away.score}</span>}
+                  </div>
+                </div>
+                {resultTag && (
+                  <span style={{ fontSize:12, fontWeight:800, color:resultColor, width:16, textAlign:'center', flexShrink:0 }}>{resultTag}</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <div style={{ height:24 }}/>
     </div>
@@ -5277,6 +5284,26 @@ function App() {
           allMatches.push(...matches);
         }
 
+        // ── ESPN: UEFA club competitions (Champions/Europa/Conference) ──────
+        // Keyless fallback so Korean players' European nights (e.g. the Champions
+        // League final) always appear, even when the API-Football proxy is down.
+        // Only Korean-player matches are kept; if API-Football also has the same
+        // game it wins later (it carries lineup data), so no duplicates.
+        try {
+          const uefaUrls = [ESPN_API.soccer.ucl, ESPN_API.soccer.uel, ESPN_API.soccer.uecl];
+          const uefaResults = await Promise.allSettled(
+            uefaUrls.map(u => fetch(`${u}?dates=${espnFmt(from)}-${espnFmt(to)}&limit=200`).then(r => r.ok ? r.json() : null))
+          );
+          uefaResults.forEach(r => {
+            if (r.status !== 'fulfilled' || !r.value?.events) return;
+            r.value.events.forEach(e => {
+              const leagueName = e.competitions?.[0]?.league?.name || 'UEFA';
+              const m = transformESPNEvent(e, 'soccer', leagueName);
+              if (m.koreanPlayer) { m.source = 'espn'; allMatches.push(m); }
+            });
+          });
+        } catch (e) { console.warn('ESPN UEFA fetch failed:', e?.message || e); }
+
         // Deduplicate by id (same match can appear in multiple Sofascore date responses)
         const seenIds = new Set();
         const uniqueMatches = allMatches.filter(m => {
@@ -5295,7 +5322,19 @@ function App() {
               return `${m.home.name}|${m.away.name}|${d}`;
             })
         );
+        // ESPN UEFA matches are a fallback: if API-Football already has the same
+        // Korean player's game that day, prefer it (it carries lineup data).
+        const afKoreanKeys = new Set(
+          uniqueMatches
+            .filter(m => m.source === 'apifootball' && m.koreanPlayer)
+            .map(m => `${m.koreanPlayer.name}|${m.fullDate ? new Date(m.fullDate).toDateString() : ''}`)
+        );
         const dedupedMatches = uniqueMatches.filter(m => {
+          if (m.source === 'espn' && m.koreanPlayer) {
+            const k = `${m.koreanPlayer.name}|${m.fullDate ? new Date(m.fullDate).toDateString() : ''}`;
+            if (afKoreanKeys.has(k)) return false; // API-Football already covers it
+            return true;
+          }
           if (m.source === 'sofascore') return true;
           if ((m.sport || '').includes('MLB')) return true; // keep MLB from ESPN
           const d = m.fullDate ? new Date(m.fullDate).toDateString() : '';
