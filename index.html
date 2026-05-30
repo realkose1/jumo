@@ -1577,7 +1577,7 @@ function TodayMatchesCarousel({ todayMatches, matches, now, onMatch, tweaks }) {
 }
 
 // ─── SCREEN: HOME V2 — Editorial ─────────────────────────────
-function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoading = false, scrollTopKey = 0, onRefresh, unreadCount = 0 }) {
+function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], worldCupMatches = [], isLoading = false, scrollTopKey = 0, onRefresh, unreadCount = 0 }) {
   const homeScrollRef = React.useRef(null);
   React.useEffect(() => { if (scrollTopKey > 0) homeScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }, [scrollTopKey]);
   // Pull-to-refresh
@@ -1984,6 +1984,57 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
         onMatch={onMatch}
         tweaks={tweaks}
       />
+
+      {/* 2026 World Cup — South Korea national-team fixtures (team-only, display) */}
+      {worldCupMatches.length > 0 && (
+        <div style={{ margin:'4px 16px', padding:'14px 0', borderTop:'0.5px solid var(--border)' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:12 }}>
+            <span style={{ fontSize:15 }}>🇰🇷</span>
+            <span style={{ fontSize:14, fontWeight:800, color:'var(--text)' }}>2026 월드컵</span>
+            <span style={{ fontSize:11, fontWeight:700, color:'var(--text4)' }}>대한민국 조별리그</span>
+          </div>
+          {worldCupMatches.map(m => {
+            const d = new Date(m.fullDate);
+            const dateStr = d.toLocaleDateString('ko-KR', { timeZone:'Asia/Seoul', month:'long', day:'numeric', weekday:'short' });
+            const timeStr = d.toLocaleTimeString('ko-KR', { timeZone:'Asia/Seoul', hour:'2-digit', minute:'2-digit', hour12:false });
+            const showScore = m.live || m.state === 'post';
+            const draw = m.home.score === m.away.score;
+            const homeWin = m.home.score > m.away.score;
+            const koreaWon = showScore && !draw && ((m.koreaIsHome && homeWin) || (!m.koreaIsHome && !homeWin));
+            const resultTag = !showScore || m.live ? '' : draw ? '무' : koreaWon ? '승' : '패';
+            const resultColor = resultTag === '승' ? 'var(--acc)' : resultTag === '패' ? 'var(--text4)' : 'var(--text3)';
+            return (
+              <div key={m.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 0', borderBottom:'0.5px solid var(--border)' }}>
+                <div style={{ width:78, flexShrink:0 }}>
+                  {m.live ? (
+                    <span style={{ fontSize:11, fontWeight:800, color:'var(--acc)' }}>● LIVE</span>
+                  ) : (
+                    <>
+                      <div style={{ fontSize:12, fontWeight:700, color:'var(--text)' }}>{dateStr}</div>
+                      <div style={{ ...NUM, fontSize:10, color:'var(--text4)' }}>{m.state === 'post' ? '경기 종료' : timeStr}</div>
+                    </>
+                  )}
+                </div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5 }}>
+                    <TeamBadge code={m.home.code} size={18} logo={m.home.logo}/>
+                    <span style={{ fontSize:13, fontWeight: m.koreaIsHome ? 800 : 600, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.home.koName}</span>
+                    {showScore && <span style={{ ...NUM, marginLeft:'auto', fontSize:15, fontWeight:800, color:'var(--text)' }}>{m.home.score}</span>}
+                  </div>
+                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                    <TeamBadge code={m.away.code} size={18} logo={m.away.logo}/>
+                    <span style={{ fontSize:13, fontWeight: !m.koreaIsHome ? 800 : 600, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.away.koName}</span>
+                    {showScore && <span style={{ ...NUM, marginLeft:'auto', fontSize:15, fontWeight:800, color:'var(--text-70)' }}>{m.away.score}</span>}
+                  </div>
+                </div>
+                {resultTag && (
+                  <span style={{ fontSize:12, fontWeight:800, color:resultColor, width:16, textAlign:'center', flexShrink:0 }}>{resultTag}</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* This week's matches list (finished today + upcoming until Sunday) */}
       {(() => {
@@ -5036,6 +5087,7 @@ function App() {
     });
   };
   const [liveMatches, setLiveMatches] = React.useState([]);
+  const [worldCupMatches, setWorldCupMatches] = React.useState([]);
   const [apiLoading, setApiLoading] = React.useState(true); // Start with true for initial load
   const [isInitialLoad, setIsInitialLoad] = React.useState(true);
   const [notifications, setNotifications] = React.useState([]);
@@ -5891,6 +5943,54 @@ function App() {
     return () => { cancelled = true; };
   }, []);
 
+  // ── 2026 World Cup: South Korea national-team fixtures ──────────────────
+  // Kept in a dedicated state (NOT merged into the player-centric match
+  // pipeline) so it renders only in its own home section. ESPN's fifa.world
+  // feed is keyless/CORS-open, like the MLB feed. Refreshed every 60s so live
+  // scores update during a match.
+  React.useEffect(() => {
+    let cancelled = false;
+    const KO_NAME = {
+      'South Korea': '대한민국', 'Korea Republic': '대한민국',
+      'Czechia': '체코', 'Czech Republic': '체코', 'Mexico': '멕시코', 'South Africa': '남아공',
+    };
+    const fetchWC = async () => {
+      try {
+        const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260719');
+        const data = await res.json();
+        const rows = (data.events || [])
+          .filter(e => /korea republic|south korea/i.test(e?.name || ''))
+          .map(e => {
+            const comp = e.competitions?.[0] || {};
+            const cs = comp.competitors || [];
+            const home = cs.find(c => c.homeAway === 'home') || cs[0] || {};
+            const away = cs.find(c => c.homeAway === 'away') || cs[1] || {};
+            const st = e.status?.type || {};
+            const logo = (c) => c?.team?.logos?.[0]?.href || (c?.team?.id ? `https://a.espncdn.com/i/teamlogos/soccer/500/${c.team.id}.png` : null);
+            const side = (c) => ({
+              name: c?.team?.displayName || '', koName: KO_NAME[c?.team?.displayName] || c?.team?.displayName || '',
+              code: c?.team?.abbreviation || '', score: parseInt(c?.score) || 0, logo: logo(c),
+            });
+            return {
+              id: e.id,
+              fullDate: e.date,
+              state: st.state,                       // 'pre' | 'in' | 'post'
+              live: st.state === 'in',
+              statusDetail: st.shortDetail || st.detail || '',
+              koreaIsHome: /korea/i.test(home?.team?.displayName || ''),
+              home: side(home),
+              away: side(away),
+            };
+          })
+          .sort((a, b) => new Date(a.fullDate) - new Date(b.fullDate));
+        if (!cancelled) setWorldCupMatches(rows);
+      } catch (e) { console.warn('World Cup fetch failed:', e?.message || e); }
+    };
+    fetchWC();
+    const iv = setInterval(fetchWC, 60000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, []);
+
   // Adaptive polling: 20s near kickoff (so confirmed lineups land within seconds),
   // 60s otherwise. Recomputed each tick by reading the latest liveMatches via ref.
   const liveMatchesRef = React.useRef(liveMatches);
@@ -6586,7 +6686,7 @@ function App() {
           )}
           {screen === 'main' && (
             <>
-              <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} tweaks={tweaks} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} scrollTopKey={tabScrollKeys.home} onRefresh={fetchLiveMatches} unreadCount={unreadCount}/></div>
+              <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} tweaks={tweaks} liveApiMatches={filteredLiveMatches} worldCupMatches={worldCupMatches} isLoading={isInitialLoad && apiLoading} scrollTopKey={tabScrollKeys.home} onRefresh={fetchLiveMatches} unreadCount={unreadCount}/></div>
               <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
               <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} followed={followed} statsCache={playerStatsCache} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} scrollTopKey={tabScrollKeys.players} liveApiMatches={filteredLiveMatches} sportFeeds={sportFeeds}/></div>
               <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news}/></div>
