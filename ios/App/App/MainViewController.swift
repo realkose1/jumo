@@ -3,11 +3,13 @@ import WebKit
 import Capacitor
 
 // Native iOS 26 Liquid Glass tab bar overlaid on the Capacitor WKWebView.
-// - Real UIGlassEffect (content refracts through the bar).
-// - A glass selection "pill" that the user can DRAG: it follows the finger in
-//   real time (liquid), then snaps to the tab on release. Tap also works.
-// - Bridges tab changes to the web app (window.__nativeTab) and hides the web
-//   app's own CSS tab bar (window.__enableNativeTabBar).
+//
+// Uses UIGlassContainerEffect (the "glass union" container) holding two glass
+// elements — the bar capsule and a brighter selection pill. Because both live
+// in the same container, the pill morphs/blends like liquid as it moves. The
+// pill follows the finger on drag and snaps to a tab on release; tapping works
+// too. Tab changes bridge to the web app (window.__nativeTab) and the web app
+// hides its own CSS tab bar (window.__enableNativeTabBar).
 class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
 
     private let tabs: [(id: String, label: String, symbol: String)] = [
@@ -17,12 +19,21 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
         ("news",     "뉴스",   "newspaper.fill"),
         ("more",     "더보기", "ellipsis")
     ]
-    private var cells: [UIView] = []          // one container per tab (icon + label)
+
+    // Layout constants (HIG-ish floating tab bar)
+    private let barHeight: CGFloat = 56
+    private let sideInset: CGFloat = 16
+    private let bottomGap: CGFloat = 4
+    private let pillInsetX: CGFloat = 4
+    private let pillInsetY: CGFloat = 4
+
+    private var cells: [UIView] = []
     private var iconViews: [UIImageView] = []
     private var labels: [UILabel] = []
     private var activeIndex = 0
-    private let pill = UIView()                // glass-tinted selection indicator
-    private var host: UIView!                  // the bar's content view (pill + cells live here)
+
+    private var host: UIView!          // container.contentView (everything lives here)
+    private var pill: UIView!          // glass selection indicator
     private var stack: UIStackView!
     private var didSetup = false
 
@@ -51,51 +62,75 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
         tryEnable()
     }
 
-    private func setupTabBar() {
-        let container = UIView()
-        container.translatesAutoresizingMaskIntoConstraints = false
-
-        let bar: UIView
+    private func setRoundedCorners(_ v: UIView, radius: CGFloat) {
+        // Prefer the iOS 26 corner configuration (keeps glass shape morph-able);
+        // fall back to layer corners on older systems.
         if #available(iOS 26.0, *) {
-            let glass = UIGlassEffect()
-            glass.isInteractive = true
-            bar = UIVisualEffectView(effect: glass)
+            v.cornerConfiguration = .capsule()
         } else {
-            bar = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterialDark))
+            v.layer.cornerRadius = radius
+            v.layer.cornerCurve = .continuous
+            v.clipsToBounds = true
         }
-        bar.translatesAutoresizingMaskIntoConstraints = false
-        bar.layer.cornerRadius = 30
-        bar.layer.cornerCurve = .continuous
-        bar.clipsToBounds = true
-        container.addSubview(bar)
-        view.addSubview(container)
+    }
 
+    private func setupTabBar() {
+        // ── Glass union container ────────────────────────────────────────────
+        let container: UIVisualEffectView
+        if #available(iOS 26.0, *) {
+            let ce = UIGlassContainerEffect()
+            ce.spacing = 10   // merge threshold for the morph
+            container = UIVisualEffectView(effect: ce)
+        } else {
+            container = UIVisualEffectView(effect: UIBlurEffect(style: .systemChromeMaterialDark))
+        }
+        container.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(container)
         NSLayoutConstraint.activate([
-            container.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 14),
-            container.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -14),
-            container.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -6),
-            container.heightAnchor.constraint(equalToConstant: 60),
-            bar.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            bar.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            bar.topAnchor.constraint(equalTo: container.topAnchor),
-            bar.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+            container.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: sideInset),
+            container.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -sideInset),
+            container.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -bottomGap),
+            container.heightAnchor.constraint(equalToConstant: barHeight)
+        ])
+        host = container.contentView
+
+        // ── Bar capsule (base glass) ─────────────────────────────────────────
+        let barGlass: UIView
+        if #available(iOS 26.0, *) {
+            let e = UIGlassEffect()
+            barGlass = UIVisualEffectView(effect: e)
+        } else {
+            barGlass = UIView()
+            barGlass.backgroundColor = UIColor.black.withAlphaComponent(0.35)
+        }
+        barGlass.translatesAutoresizingMaskIntoConstraints = false
+        setRoundedCorners(barGlass, radius: barHeight / 2)
+        host.addSubview(barGlass)
+        NSLayoutConstraint.activate([
+            barGlass.leadingAnchor.constraint(equalTo: host.leadingAnchor),
+            barGlass.trailingAnchor.constraint(equalTo: host.trailingAnchor),
+            barGlass.topAnchor.constraint(equalTo: host.topAnchor),
+            barGlass.bottomAnchor.constraint(equalTo: host.bottomAnchor)
         ])
 
-        host = (bar as? UIVisualEffectView)?.contentView ?? bar
-
-        // Selection pill (glass-like): a soft white capsule that follows selection.
-        pill.backgroundColor = UIColor.white.withAlphaComponent(0.20)
-        pill.layer.cornerRadius = 17
-        pill.layer.cornerCurve = .continuous
-        pill.layer.borderWidth = 0.5
-        pill.layer.borderColor = UIColor.white.withAlphaComponent(0.30).cgColor
+        // ── Selection pill (brighter interactive glass) ──────────────────────
+        if #available(iOS 26.0, *) {
+            let e = UIGlassEffect()
+            e.isInteractive = true
+            e.tintColor = UIColor.white.withAlphaComponent(0.5)
+            pill = UIVisualEffectView(effect: e)
+        } else {
+            let p = UIView(); p.backgroundColor = UIColor.white.withAlphaComponent(0.22); pill = p
+        }
         pill.isUserInteractionEnabled = false
+        setRoundedCorners(pill, radius: (barHeight - 2 * pillInsetY) / 2)
         host.addSubview(pill)
 
+        // ── Icon + label cells (on top) ──────────────────────────────────────
         stack = UIStackView()
         stack.axis = .horizontal
         stack.distribution = .fillEqually
-        stack.isUserInteractionEnabled = false   // gestures are handled on host
+        stack.isUserInteractionEnabled = false
         stack.translatesAutoresizingMaskIntoConstraints = false
         host.addSubview(stack)
         NSLayoutConstraint.activate([
@@ -104,37 +139,28 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
             stack.topAnchor.constraint(equalTo: host.topAnchor, constant: 6),
             stack.bottomAnchor.constraint(equalTo: host.bottomAnchor, constant: -6)
         ])
-
         for t in tabs {
             let iv = UIImageView(image: UIImage(systemName: t.symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .medium)))
             iv.contentMode = .center
             iv.tintColor = .secondaryLabel
-
             let lb = UILabel()
             lb.text = t.label
             lb.font = .systemFont(ofSize: 10, weight: .semibold)
             lb.textColor = .secondaryLabel
             lb.textAlignment = .center
-
             let v = UIStackView(arrangedSubviews: [iv, lb])
-            v.axis = .vertical
-            v.alignment = .center
-            v.spacing = 3
+            v.axis = .vertical; v.alignment = .center; v.spacing = 3
             v.translatesAutoresizingMaskIntoConstraints = false
-
             let cell = UIView()
             cell.addSubview(v)
             NSLayoutConstraint.activate([
                 v.centerXAnchor.constraint(equalTo: cell.centerXAnchor),
                 v.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
             ])
-            cells.append(cell)
-            iconViews.append(iv)
-            labels.append(lb)
+            cells.append(cell); iconViews.append(iv); labels.append(lb)
             stack.addArrangedSubview(cell)
         }
 
-        // Tap to select, pan to drag the pill in real time.
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
         host.addGestureRecognizer(tap)
         let pan = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
@@ -145,27 +171,24 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
         updateColors(highlight: activeIndex)
     }
 
-    // MARK: - selection / pill
+    // MARK: - pill / selection
 
-    private func cellFrameInHost(_ i: Int) -> CGRect {
-        return cells[i].convert(cells[i].bounds, to: host)
-    }
+    private func cellFrameInHost(_ i: Int) -> CGRect { cells[i].convert(cells[i].bounds, to: host) }
 
     private func movePill(to index: Int, animated: Bool) {
         guard index >= 0, index < cells.count else { return }
-        let target = cellFrameInHost(index).insetBy(dx: 6, dy: 4)
+        let target = cellFrameInHost(index).insetBy(dx: pillInsetX, dy: pillInsetY)
         let apply = { self.pill.frame = target }
         if animated {
-            UIView.animate(withDuration: 0.28, delay: 0, usingSpringWithDamping: 0.8, initialSpringVelocity: 0.4, options: [.curveEaseOut], animations: apply)
+            UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.78, initialSpringVelocity: 0.4, options: [.curveEaseOut], animations: apply)
         } else { apply() }
     }
 
-    // Pill centered on an arbitrary x (used while dragging) — keeps the pill width.
     private func movePill(toX x: CGFloat) {
-        let w = (cellFrameInHost(0).width) - 12
+        let w = cellFrameInHost(0).width - 2 * pillInsetX
         let half = w / 2
-        let minX = (host.bounds.minX) + 6 + half
-        let maxX = (host.bounds.maxX) - 6 - half
+        let minX = 6 + pillInsetX + half
+        let maxX = host.bounds.width - 6 - pillInsetX - half
         let cx = min(max(x, minX), maxX)
         var f = pill.frame
         f.size.width = w
@@ -192,12 +215,8 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
         activeIndex = i
         movePill(to: i, animated: true)
         updateColors(highlight: i)
-        if !fromWeb {
-            wk?.evaluateJavaScript("window.__nativeTab && window.__nativeTab('\(tabs[i].id)')")
-        }
+        if !fromWeb { wk?.evaluateJavaScript("window.__nativeTab && window.__nativeTab('\(tabs[i].id)')") }
     }
-
-    // MARK: - gestures
 
     @objc private func handleTap(_ g: UITapGestureRecognizer) {
         selectTab(index(atX: g.location(in: host).x))
@@ -207,22 +226,19 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
         let x = g.location(in: host).x
         switch g.state {
         case .changed:
-            let i = index(atX: x)
-            movePill(toX: x)            // real-time follow (liquid)
-            updateColors(highlight: i)
+            movePill(toX: x)
+            updateColors(highlight: index(atX: x))
         case .ended, .cancelled, .failed:
             selectTab(index(atX: x))
-        default:
-            break
+        default: break
         }
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        if pill.superview != nil { movePill(to: activeIndex, animated: false) }
+        if pill != nil, pill.superview != nil { movePill(to: activeIndex, animated: false) }
     }
 
-    // web → native: keep the native selection in sync when the web changes tab
     func userContentController(_ uc: WKUserContentController, didReceive message: WKScriptMessage) {
         if message.name == "tabbar", let id = message.body as? String,
            let i = tabs.firstIndex(where: { $0.id == id }), i != activeIndex {
