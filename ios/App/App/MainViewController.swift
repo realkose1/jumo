@@ -3,10 +3,11 @@ import WebKit
 import Capacitor
 
 // Native iOS 26 Liquid Glass tab bar overlaid on the Capacitor WKWebView.
-// The web app's CSS tab bar is hidden (window.__enableNativeTabBar) and tab
-// taps are bridged into the web app (window.__nativeTab). When the web app
-// changes tab itself it posts back via the "tabbar" message handler so the
-// native highlight stays in sync.
+// - Real UIGlassEffect (content refracts through the bar).
+// - A glass selection "pill" that the user can DRAG: it follows the finger in
+//   real time (liquid), then snaps to the tab on release. Tap also works.
+// - Bridges tab changes to the web app (window.__nativeTab) and hides the web
+//   app's own CSS tab bar (window.__enableNativeTabBar).
 class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
 
     private let tabs: [(id: String, label: String, symbol: String)] = [
@@ -16,11 +17,13 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
         ("news",     "뉴스",   "newspaper.fill"),
         ("more",     "더보기", "ellipsis")
     ]
-    private var buttons: [UIButton] = []
+    private var cells: [UIView] = []          // one container per tab (icon + label)
     private var iconViews: [UIImageView] = []
     private var labels: [UILabel] = []
-    private var activeId = "home"
-    private let pill = UIView()
+    private var activeIndex = 0
+    private let pill = UIView()                // glass-tinted selection indicator
+    private var host: UIView!                  // the bar's content view (pill + cells live here)
+    private var stack: UIStackView!
     private var didSetup = false
 
     private var wk: WKWebView? { self.webView as? WKWebView }
@@ -52,19 +55,19 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
         let container = UIView()
         container.translatesAutoresizingMaskIntoConstraints = false
 
-        let bg: UIView
+        let bar: UIView
         if #available(iOS 26.0, *) {
             let glass = UIGlassEffect()
-            glass.isInteractive = true   // liquid reacts to touch & drag
-            bg = UIVisualEffectView(effect: glass)
+            glass.isInteractive = true
+            bar = UIVisualEffectView(effect: glass)
         } else {
-            bg = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterialDark))
+            bar = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterialDark))
         }
-        bg.translatesAutoresizingMaskIntoConstraints = false
-        bg.layer.cornerRadius = 30
-        bg.layer.cornerCurve = .continuous
-        bg.clipsToBounds = true
-        container.addSubview(bg)
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        bar.layer.cornerRadius = 30
+        bar.layer.cornerCurve = .continuous
+        bar.clipsToBounds = true
+        container.addSubview(bar)
         view.addSubview(container)
 
         NSLayoutConstraint.activate([
@@ -72,23 +75,27 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
             container.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -14),
             container.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -6),
             container.heightAnchor.constraint(equalToConstant: 60),
-            bg.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            bg.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            bg.topAnchor.constraint(equalTo: container.topAnchor),
-            bg.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+            bar.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            bar.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            bar.topAnchor.constraint(equalTo: container.topAnchor),
+            bar.bottomAnchor.constraint(equalTo: container.bottomAnchor)
         ])
 
-        let host = (bg as? UIVisualEffectView)?.contentView ?? bg
+        host = (bar as? UIVisualEffectView)?.contentView ?? bar
 
-        pill.backgroundColor = UIColor.white.withAlphaComponent(0.18)
+        // Selection pill (glass-like): a soft white capsule that follows selection.
+        pill.backgroundColor = UIColor.white.withAlphaComponent(0.20)
         pill.layer.cornerRadius = 17
         pill.layer.cornerCurve = .continuous
+        pill.layer.borderWidth = 0.5
+        pill.layer.borderColor = UIColor.white.withAlphaComponent(0.30).cgColor
         pill.isUserInteractionEnabled = false
         host.addSubview(pill)
 
-        let stack = UIStackView()
+        stack = UIStackView()
         stack.axis = .horizontal
         stack.distribution = .fillEqually
+        stack.isUserInteractionEnabled = false   // gestures are handled on host
         stack.translatesAutoresizingMaskIntoConstraints = false
         host.addSubview(stack)
         NSLayoutConstraint.activate([
@@ -98,14 +105,10 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
             stack.bottomAnchor.constraint(equalTo: host.bottomAnchor, constant: -6)
         ])
 
-        for (i, t) in tabs.enumerated() {
-            // Build the icon + label manually and pin the vertical stack to the
-            // button's center — guarantees both are perfectly centered (the
-            // Configuration-based layout was drifting off-center).
+        for t in tabs {
             let iv = UIImageView(image: UIImage(systemName: t.symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .medium)))
             iv.contentMode = .center
             iv.tintColor = .secondaryLabel
-            iv.setContentHuggingPriority(.required, for: .horizontal)
 
             let lb = UILabel()
             lb.text = t.label
@@ -117,62 +120,113 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
             v.axis = .vertical
             v.alignment = .center
             v.spacing = 3
-            v.isUserInteractionEnabled = false
             v.translatesAutoresizingMaskIntoConstraints = false
 
-            let b = UIButton(type: .custom)
-            b.tag = i
-            b.addSubview(v)
+            let cell = UIView()
+            cell.addSubview(v)
             NSLayoutConstraint.activate([
-                v.centerXAnchor.constraint(equalTo: b.centerXAnchor),
-                v.centerYAnchor.constraint(equalTo: b.centerYAnchor)
+                v.centerXAnchor.constraint(equalTo: cell.centerXAnchor),
+                v.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
             ])
-            b.addTarget(self, action: #selector(tabTapped(_:)), for: .touchUpInside)
-            buttons.append(b)
+            cells.append(cell)
             iconViews.append(iv)
             labels.append(lb)
-            stack.addArrangedSubview(b)
+            stack.addArrangedSubview(cell)
         }
+
+        // Tap to select, pan to drag the pill in real time.
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
+        host.addGestureRecognizer(tap)
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
+        host.addGestureRecognizer(pan)
+
         view.layoutIfNeeded()
-        updateHighlight(animated: false)
+        movePill(to: activeIndex, animated: false)
+        updateColors(highlight: activeIndex)
     }
 
-    @objc private func tabTapped(_ sender: UIButton) {
-        let t = tabs[sender.tag]
-        setActive(t.id, animated: true)
-        wk?.evaluateJavaScript("window.__nativeTab && window.__nativeTab('\(t.id)')")
+    // MARK: - selection / pill
+
+    private func cellFrameInHost(_ i: Int) -> CGRect {
+        return cells[i].convert(cells[i].bounds, to: host)
     }
 
-    private func setActive(_ id: String, animated: Bool) {
-        activeId = id
-        updateHighlight(animated: animated)
-    }
-
-    private func updateHighlight(animated: Bool) {
-        guard let idx = tabs.firstIndex(where: { $0.id == activeId }), idx < buttons.count else { return }
-        for i in buttons.indices {
-            let on = (i == idx)
-            iconViews[i].tintColor = on ? .label : .secondaryLabel
-            labels[i].textColor = on ? .label : .secondaryLabel
-        }
-        let target = buttons[idx]
-        let move = { self.pill.frame = target.frame.insetBy(dx: 6, dy: 4) }
+    private func movePill(to index: Int, animated: Bool) {
+        guard index >= 0, index < cells.count else { return }
+        let target = cellFrameInHost(index).insetBy(dx: 6, dy: 4)
+        let apply = { self.pill.frame = target }
         if animated {
-            UIView.animate(withDuration: 0.24, delay: 0, usingSpringWithDamping: 0.82, initialSpringVelocity: 0.3, options: [.curveEaseOut], animations: move)
-        } else {
-            move()
+            UIView.animate(withDuration: 0.28, delay: 0, usingSpringWithDamping: 0.8, initialSpringVelocity: 0.4, options: [.curveEaseOut], animations: apply)
+        } else { apply() }
+    }
+
+    // Pill centered on an arbitrary x (used while dragging) — keeps the pill width.
+    private func movePill(toX x: CGFloat) {
+        let w = (cellFrameInHost(0).width) - 12
+        let half = w / 2
+        let minX = (host.bounds.minX) + 6 + half
+        let maxX = (host.bounds.maxX) - 6 - half
+        let cx = min(max(x, minX), maxX)
+        var f = pill.frame
+        f.size.width = w
+        f.origin.x = cx - half
+        pill.frame = f
+    }
+
+    private func index(atX x: CGFloat) -> Int {
+        guard !cells.isEmpty else { return 0 }
+        let inner = host.bounds.insetBy(dx: 6, dy: 0)
+        let rel = (x - inner.minX) / max(1, inner.width)
+        return min(max(Int(rel * CGFloat(cells.count)), 0), cells.count - 1)
+    }
+
+    private func updateColors(highlight i: Int) {
+        for k in cells.indices {
+            let on = (k == i)
+            iconViews[k].tintColor = on ? .label : .secondaryLabel
+            labels[k].textColor = on ? .label : .secondaryLabel
+        }
+    }
+
+    private func selectTab(_ i: Int, fromWeb: Bool = false) {
+        activeIndex = i
+        movePill(to: i, animated: true)
+        updateColors(highlight: i)
+        if !fromWeb {
+            wk?.evaluateJavaScript("window.__nativeTab && window.__nativeTab('\(tabs[i].id)')")
+        }
+    }
+
+    // MARK: - gestures
+
+    @objc private func handleTap(_ g: UITapGestureRecognizer) {
+        selectTab(index(atX: g.location(in: host).x))
+    }
+
+    @objc private func handlePan(_ g: UIPanGestureRecognizer) {
+        let x = g.location(in: host).x
+        switch g.state {
+        case .changed:
+            let i = index(atX: x)
+            movePill(toX: x)            // real-time follow (liquid)
+            updateColors(highlight: i)
+        case .ended, .cancelled, .failed:
+            selectTab(index(atX: x))
+        default:
+            break
         }
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        if pill.superview != nil { updateHighlight(animated: false) }
+        if pill.superview != nil { movePill(to: activeIndex, animated: false) }
     }
 
-    // web → native: keep native highlight in sync when the web changes tab
+    // web → native: keep the native selection in sync when the web changes tab
     func userContentController(_ uc: WKUserContentController, didReceive message: WKScriptMessage) {
-        if message.name == "tabbar", let id = message.body as? String, id != activeId {
-            setActive(id, animated: true)
+        if message.name == "tabbar", let id = message.body as? String,
+           let i = tabs.firstIndex(where: { $0.id == id }), i != activeIndex {
+            selectTab(i, fromWeb: true)
         }
     }
 }
