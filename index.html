@@ -1551,7 +1551,7 @@ function HomeV1({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
           </div>
         </div>
       ))}
-      <div style={{ height:24 }}/>
+      <div style={{ height:'calc(90px + env(safe-area-inset-bottom))' }}/>
     </div>
   );
 }
@@ -2197,7 +2197,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], world
         </div>
       )}
 
-      <div style={{ height:24 }}/>
+      <div style={{ height:'calc(90px + env(safe-area-inset-bottom))' }}/>
     </div>
   );
 }
@@ -2253,7 +2253,7 @@ function HomeV3({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [] }) {
         </div>
       ))}
 
-      <div style={{ height:24 }}/>
+      <div style={{ height:'calc(90px + env(safe-area-inset-bottom))' }}/>
     </div>
   );
 }
@@ -3248,7 +3248,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
         );
       })()}
 
-      <div style={{ height:24 }}/>
+      <div style={{ height:'calc(90px + env(safe-area-inset-bottom))' }}/>
     </div>
   );
 }
@@ -3703,7 +3703,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
         </div>
       )}
 
-      <div style={{ height:24 }}/>
+      <div style={{ height:'calc(90px + env(safe-area-inset-bottom))' }}/>
     </div>
   );
 }
@@ -3940,7 +3940,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
           })
         )}
       </div>
-      <div style={{ height:24 }}/>
+      <div style={{ height:'calc(90px + env(safe-area-inset-bottom))' }}/>
       </div>
     </div>
   );
@@ -4167,7 +4167,7 @@ function NotifScreen({ notifications }) {
           ))}
         </div>
       )}
-      <div style={{ height:24 }}/>
+      <div style={{ height:'calc(90px + env(safe-area-inset-bottom))' }}/>
     </div>
   );
 }
@@ -4658,7 +4658,7 @@ function AddPlayerScreen({ followed, onToggle, onBack }) {
             </div>
           );
         })}
-        <div style={{ height:24 }}/>
+        <div style={{ height:'calc(90px + env(safe-area-inset-bottom))' }}/>
       </div>
     </div>
   );
@@ -4740,7 +4740,7 @@ function SportFeedScreen({ onBack, sportFeeds, onToggleSportFeed }) {
             </div>
           ))}
         </div>
-        <div style={{ height:24 }}/>
+        <div style={{ height:'calc(90px + env(safe-area-inset-bottom))' }}/>
       </div>
     </div>
   );
@@ -5026,7 +5026,7 @@ function MoreScreen({ sportFeeds, onToggleSportFeed, profile, onUpdateProfile })
           </div>
         </div>
       ))}
-      <div style={{ height:24 }}/>
+      <div style={{ height:'calc(90px + env(safe-area-inset-bottom))' }}/>
     </div>
   );
 }
@@ -6756,7 +6756,7 @@ function App() {
     <ToastCtx.Provider value={showToast}>
     <div style={{ '--acc': tweaks.accentColor, fontFamily:"'Noto Sans KR', system-ui, sans-serif", WebkitFontSmoothing:'antialiased' }}>
       <IOSDevice dark={true} width={deviceDimensions.width} height={deviceDimensions.height}>
-        <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'var(--bg)', paddingBottom: IS_IOS26_PLUS ? 'calc(74px + env(safe-area-inset-bottom))' : '70px', position:'relative' }}>
+        <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'var(--bg)', paddingBottom: nativeTabBar ? '0px' : (IS_IOS26_PLUS ? 'calc(74px + env(safe-area-inset-bottom))' : '70px'), position:'relative' }}>
           {toast && (
             <div key={toast.id} style={{ position:'fixed', left:'50%', bottom:'calc(78px + env(safe-area-inset-bottom))', transform:'translateX(-50%)', zIndex:200, background:'rgba(0,0,0,0.85)', color:'#fff', padding:'10px 18px', borderRadius:22, fontSize:13, fontWeight:600, letterSpacing:-0.2, whiteSpace:'nowrap', boxShadow:'0 6px 24px rgba(0,0,0,0.35)', backdropFilter:'blur(10px)', WebkitBackdropFilter:'blur(10px)', animation:'toastIn 0.22s ease-out', pointerEvents:'none' }}>
               {toast.message}
