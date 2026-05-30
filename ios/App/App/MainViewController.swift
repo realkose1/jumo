@@ -17,6 +17,8 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
         ("more",     "더보기", "ellipsis")
     ]
     private var buttons: [UIButton] = []
+    private var iconViews: [UIImageView] = []
+    private var labels: [UILabel] = []
     private var activeId = "home"
     private let pill = UIView()
     private var didSetup = false
@@ -97,24 +99,38 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
         ])
 
         for (i, t) in tabs.enumerated() {
-            var cfg = UIButton.Configuration.plain()
-            cfg.image = UIImage(systemName: t.symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .medium))
-            cfg.title = t.label
-            cfg.imagePlacement = .top
-            cfg.imagePadding = 3
-            cfg.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0)
-            cfg.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
-                var out = incoming
-                out.font = .systemFont(ofSize: 9.5, weight: .semibold)
-                return out
-            }
-            let b = UIButton(configuration: cfg)
+            // Build the icon + label manually and pin the vertical stack to the
+            // button's center — guarantees both are perfectly centered (the
+            // Configuration-based layout was drifting off-center).
+            let iv = UIImageView(image: UIImage(systemName: t.symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .medium)))
+            iv.contentMode = .center
+            iv.tintColor = .secondaryLabel
+            iv.setContentHuggingPriority(.required, for: .horizontal)
+
+            let lb = UILabel()
+            lb.text = t.label
+            lb.font = .systemFont(ofSize: 10, weight: .semibold)
+            lb.textColor = .secondaryLabel
+            lb.textAlignment = .center
+
+            let v = UIStackView(arrangedSubviews: [iv, lb])
+            v.axis = .vertical
+            v.alignment = .center
+            v.spacing = 3
+            v.isUserInteractionEnabled = false
+            v.translatesAutoresizingMaskIntoConstraints = false
+
+            let b = UIButton(type: .custom)
             b.tag = i
-            b.tintColor = .secondaryLabel
-            b.contentHorizontalAlignment = .center
-            b.contentVerticalAlignment = .center
+            b.addSubview(v)
+            NSLayoutConstraint.activate([
+                v.centerXAnchor.constraint(equalTo: b.centerXAnchor),
+                v.centerYAnchor.constraint(equalTo: b.centerYAnchor)
+            ])
             b.addTarget(self, action: #selector(tabTapped(_:)), for: .touchUpInside)
             buttons.append(b)
+            iconViews.append(iv)
+            labels.append(lb)
             stack.addArrangedSubview(b)
         }
         view.layoutIfNeeded()
@@ -134,11 +150,13 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler {
 
     private func updateHighlight(animated: Bool) {
         guard let idx = tabs.firstIndex(where: { $0.id == activeId }), idx < buttons.count else { return }
-        for (i, b) in buttons.enumerated() {
-            b.configuration?.baseForegroundColor = (i == idx) ? .label : .secondaryLabel
+        for i in buttons.indices {
+            let on = (i == idx)
+            iconViews[i].tintColor = on ? .label : .secondaryLabel
+            labels[i].textColor = on ? .label : .secondaryLabel
         }
         let target = buttons[idx]
-        let move = { self.pill.frame = target.frame.insetBy(dx: 5, dy: 4) }
+        let move = { self.pill.frame = target.frame.insetBy(dx: 6, dy: 4) }
         if animated {
             UIView.animate(withDuration: 0.24, delay: 0, usingSpringWithDamping: 0.82, initialSpringVelocity: 0.3, options: [.curveEaseOut], animations: move)
         } else {
