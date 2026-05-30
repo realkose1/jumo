@@ -102,6 +102,8 @@ html.light-mode body { background: #e5e5ea; }
 @keyframes toastIn { from{transform:translate(-50%, 12px);opacity:0} to{transform:translate(-50%, 0);opacity:1} }
 @keyframes slideInRight { from{transform:translateX(100%)} to{transform:translateX(0)} }
 .screen-slide-in { animation: slideInRight 0.52s cubic-bezier(0.32, 0.72, 0, 1); }
+@keyframes slideOutRight { from{transform:translateX(0)} to{transform:translateX(100%)} }
+.screen-slide-out { animation: slideOutRight 0.34s cubic-bezier(0.4, 0, 0.6, 1) forwards; will-change: transform; }
 @keyframes fadeIn { from{opacity:0} to{opacity:1} }
 @keyframes ripple { 0%{transform:scale(1);opacity:0.6} 100%{transform:scale(2.5);opacity:0} }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -6720,7 +6722,12 @@ function App() {
     setLastNotifViewedAt(now);
     localStorage.setItem('jumo_lastNotifViewedAt', String(now));
   };
-  const goBack = () => setScreen('main');
+  const [closing, setClosing] = React.useState(false);
+  const goBack = () => {
+    if (closing) return;
+    setClosing(true); // slide the detail out to the right, revealing main behind
+    setTimeout(() => { setScreen('main'); setClosing(false); }, 330);
+  };
 
   const [tabScrollKeys, setTabScrollKeys] = React.useState({ home:0, schedule:0, players:0, news:0, more:0 });
   const handleTab = React.useCallback((t) => {
@@ -6782,7 +6789,7 @@ function App() {
               {toast.message}
             </div>
           )}
-          {screen === 'main' && (
+          {(screen === 'main' || closing) && (
             <>
               <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} tweaks={tweaks} liveApiMatches={filteredLiveMatches} worldCupMatches={worldCupMatches} isLoading={isInitialLoad && apiLoading} scrollTopKey={tabScrollKeys.home} onRefresh={fetchLiveMatches} unreadCount={unreadCount}/></div>
               <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
@@ -6791,6 +6798,8 @@ function App() {
               <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed} profile={profile} onUpdateProfile={updateProfile}/></div>
             </>
           )}
+          {screen !== 'main' && (
+          <div className={closing ? 'screen-slide-out' : ''} style={{ position:'absolute', inset:0, zIndex:50, background:'var(--bg)', display:'flex', flexDirection:'column' }}>
           {screen === 'match' && selectedMatch && (
             <LiveDetailScreen match={selectedMatch} onBack={goBack} liveApiMatches={liveMatches} onPlayer={goPlayer}/>
           )}
@@ -6810,6 +6819,8 @@ function App() {
               </div>
               <NotifScreen notifications={notifications}/>
             </div>
+          )}
+          </div>
           )}
           {!nativeTabBar && <TabBar active={tab} onTab={handleTab}/>}
         </div>

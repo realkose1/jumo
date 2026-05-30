@@ -24,8 +24,6 @@ final class TabBarModel: ObservableObject {
 struct GlassTabBar: View {
     @ObservedObject var model: TabBarModel
     @Namespace private var ns
-    @State private var dragX: CGFloat? = nil
-    @State private var pressed = false
     private let accent = Color(red: 0.961, green: 0.769, blue: 0.0)   // #f5c400 — glyph only
     private let barHeight: CGFloat = 56
 
@@ -33,14 +31,12 @@ struct GlassTabBar: View {
         GeometryReader { geo in
             let n = max(1, model.tabs.count)
             let cellW = geo.size.width / CGFloat(n)
-            let selW = cellW - 6
-            let half = selW / 2
-            let rest = cellW * (CGFloat(model.selected) + 0.5)
-            let center = min(max(dragX ?? rest, half + 4), geo.size.width - half - 4)
+            let center = cellW * (CGFloat(model.selected) + 0.5)
             ZStack {
-                // ── Glass: native frosted bar + clear selection window that
-                //    refracts the content behind and morphs as it moves ───────
-                GlassEffectContainer(spacing: 26) {
+                // ① Glass layer: frosted bar + interactive selection pill. The pill
+                //    sits BELOW the glyphs and receives touches itself, so its
+                //    .interactive() glass lifts/expands natively on press.
+                GlassEffectContainer(spacing: 24) {
                     ZStack(alignment: .leading) {
                         Capsule(style: .continuous).fill(Color.clear)
                             .glassEffect(.regular, in: .capsule)
@@ -48,12 +44,14 @@ struct GlassTabBar: View {
                         Capsule(style: .continuous).fill(Color.clear)
                             .glassEffect(.clear.interactive(), in: .capsule)
                             .glassEffectID("sel", in: ns)
-                            .frame(width: selW + (pressed ? 18 : 0), height: geo.size.height - (pressed ? 2 : 10))
+                            .frame(width: cellW - 6, height: geo.size.height - 10)
                             .position(x: center, y: geo.size.height / 2)
+                            .onTapGesture { model.onSelect?(model.selected) }
                     }
                 }
+                .animation(.spring(response: 0.42, dampingFraction: 0.7), value: model.selected)
 
-                // ── Bright icons + labels on top ─────────────────────────────
+                // ② Crisp glyphs on top (kept OUT of the glass so they stay sharp).
                 HStack(spacing: 0) {
                     ForEach(Array(model.tabs.enumerated()), id: \.element.id) { idx, tab in
                         VStack(spacing: 3) {
@@ -66,35 +64,27 @@ struct GlassTabBar: View {
                 }
                 .allowsHitTesting(false)
 
-                // ── Gesture overlay (reliable tap + drag across the whole bar) ─
-                Color.clear.contentShape(Rectangle())
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { v in
-                                if !pressed { withAnimation(.spring(response: 0.28, dampingFraction: 0.6)) { pressed = true } }
-                                let moved = abs(v.translation.width) + abs(v.translation.height)
-                                if moved > 6 { dragX = min(max(v.location.x, half + 4), geo.size.width - half - 4) }
-                                let i = clamp(Int(v.location.x / cellW), n)
-                                if i != model.selected {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.74)) { model.selected = i }
+                // ③ Hit layer: unselected cells select on tap; the selected cell is
+                //    transparent (non-hittable) so its touch falls through to the
+                //    interactive pill in ① for the native expand.
+                HStack(spacing: 0) {
+                    ForEach(Array(model.tabs.enumerated()), id: \.element.id) { idx, tab in
+                        if idx == model.selected {
+                            Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
+                        } else {
+                            Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    withAnimation(.spring(response: 0.42, dampingFraction: 0.7)) { model.selected = idx }
+                                    model.onSelect?(idx)
                                 }
-                            }
-                            .onEnded { v in
-                                let i = clamp(Int(v.location.x / cellW), n)
-                                withAnimation(.spring(response: 0.34, dampingFraction: 0.72)) {
-                                    dragX = nil
-                                    pressed = false
-                                    model.selected = i
-                                }
-                                model.onSelect?(i)
-                            }
-                    )
+                        }
+                    }
+                }
             }
         }
         .frame(height: barHeight)
     }
-
-    private func clamp(_ i: Int, _ n: Int) -> Int { max(0, min(n - 1, i)) }
 }
 
 class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGestureRecognizerDelegate {
