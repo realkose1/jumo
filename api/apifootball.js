@@ -8,7 +8,7 @@
 //
 // Required env var on Vercel: APIFOOTBALL_KEY
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   const key = process.env.APIFOOTBALL_KEY;
   if (!key) {
     res.status(500).json({ error: 'APIFOOTBALL_KEY not configured' });
