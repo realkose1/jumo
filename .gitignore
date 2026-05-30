@@ -7,6 +7,7 @@ uploads/
 # Capacitor
 node_modules/
 www/
+build/
 ios/App/Pods/
 ios/App/build/
 ios/App/Podfile.lock
