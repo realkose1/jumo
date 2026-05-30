@@ -1173,10 +1173,14 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
     const minutes = String(date.getMinutes()).padStart(2, '0');
     const isToday = date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
 
+    const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1);
+    const isTomorrow = date.getDate() === tomorrow.getDate() && date.getMonth() === tomorrow.getMonth() && date.getFullYear() === tomorrow.getFullYear();
     if (isToday) {
       timeLabel = hours < 12 ? '오전' : '오후';
-    } else {
+    } else if (isTomorrow) {
       timeLabel = '내일';
+    } else {
+      timeLabel = `${date.getMonth() + 1}월 ${date.getDate()}일`;
     }
 
     const displayHours = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
@@ -2145,32 +2149,37 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], world
             const resultTag = !showScore || m.live ? '' : draw ? '무' : koreaWon ? '승' : '패';
             const resultColor = resultTag === '승' ? 'var(--acc)' : resultTag === '패' ? 'var(--text4)' : 'var(--text3)';
             return (
-              <div key={m.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 0', borderBottom:'0.5px solid var(--border)' }}>
-                <div style={{ width:78, flexShrink:0 }}>
-                  {m.live ? (
-                    <span style={{ fontSize:11, fontWeight:800, color:'var(--acc)' }}>● LIVE</span>
+              <div key={m.id} onClick={() => onMatch && onMatch(m)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', cursor:'pointer', borderBottom:'0.5px solid var(--border)' }}>
+                {/* home: name + badge (right-aligned, mirrors 오늘/내일 rows) */}
+                <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, justifyContent:'flex-end', minWidth:0 }}>
+                  <span style={{ fontSize:14, fontWeight: m.koreaIsHome ? 800 : 600, color:'var(--text)', textAlign:'right', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.home.koName}</span>
+                  <TeamBadge code={m.home.code} size={24} logo={m.home.logo}/>
+                </div>
+                {/* middle: score (live/finished) or date+time (upcoming) */}
+                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, flexShrink:0, padding:'0 14px', minWidth:74 }}>
+                  {showScore ? (
+                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      <span style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text)' }}>{m.home.score}</span>
+                      <span style={{ fontSize:14, color:'var(--text5)' }}>-</span>
+                      <span style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text)' }}>{m.away.score}</span>
+                    </div>
                   ) : (
                     <>
-                      <div style={{ fontSize:12, fontWeight:700, color:'var(--text)' }}>{dateStr}</div>
-                      <div style={{ ...NUM, fontSize:10, color:'var(--text4)' }}>{m.state === 'post' ? '경기 종료' : timeStr}</div>
+                      <span style={{ fontSize:11, fontWeight:700, color:'var(--text4)' }}>{dateStr}</span>
+                      <span style={{ ...NUM, fontSize:13, fontWeight:700, color:'var(--text3)' }}>{timeStr}</span>
                     </>
                   )}
+                  {m.live ? (
+                    <span style={{ fontSize:9, fontWeight:800, color:'var(--acc)', letterSpacing:0.5 }}>● LIVE</span>
+                  ) : resultTag ? (
+                    <span style={{ fontSize:10, fontWeight:800, color:resultColor }}>{resultTag}</span>
+                  ) : null}
                 </div>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5 }}>
-                    <TeamBadge code={m.home.code} size={18} logo={m.home.logo}/>
-                    <span style={{ fontSize:13, fontWeight: m.koreaIsHome ? 800 : 600, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.home.koName}</span>
-                    {showScore && <span style={{ ...NUM, marginLeft:'auto', fontSize:15, fontWeight:800, color:'var(--text)' }}>{m.home.score}</span>}
-                  </div>
-                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                    <TeamBadge code={m.away.code} size={18} logo={m.away.logo}/>
-                    <span style={{ fontSize:13, fontWeight: !m.koreaIsHome ? 800 : 600, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.away.koName}</span>
-                    {showScore && <span style={{ ...NUM, marginLeft:'auto', fontSize:15, fontWeight:800, color:'var(--text-70)' }}>{m.away.score}</span>}
-                  </div>
+                {/* away: badge + name */}
+                <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, minWidth:0 }}>
+                  <TeamBadge code={m.away.code} size={24} logo={m.away.logo}/>
+                  <span style={{ fontSize:14, fontWeight: !m.koreaIsHome ? 800 : 600, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.away.koName}</span>
                 </div>
-                {resultTag && (
-                  <span style={{ fontSize:12, fontWeight:800, color:resultColor, width:16, textAlign:'center', flexShrink:0 }}>{resultTag}</span>
-                )}
               </div>
             );
           })}
@@ -2279,7 +2288,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
     }
   };
 
-  const player = ALL_PLAYERS.find(p => p.name === match.koreanPlayer.name);
+  const player = ALL_PLAYERS.find(p => p.name === match.koreanPlayer?.name);
   const isLive = match.live;
   const isFinished = match.status === 'STATUS_FINAL' || match.status === 'STATUS_FULL_TIME' || match.status === 'final' || match.status === 'STATUS_END_PERIOD' || match.status === 'STATUS_FINAL_PEN';
   const [lineupsData, setLineupsData] = React.useState(null);
@@ -2465,10 +2474,14 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
     const minutes = String(date.getMinutes()).padStart(2, '0');
     const isToday = date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
 
+    const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1);
+    const isTomorrow = date.getDate() === tomorrow.getDate() && date.getMonth() === tomorrow.getMonth() && date.getFullYear() === tomorrow.getFullYear();
     if (isToday) {
       timeLabel = hours < 12 ? '오전' : '오후';
-    } else {
+    } else if (isTomorrow) {
       timeLabel = '내일';
+    } else {
+      timeLabel = `${date.getMonth() + 1}월 ${date.getDate()}일`;
     }
 
     const displayHours = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
@@ -2529,6 +2542,17 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
           </div>
           {/* Korean player highlight */}
           {(() => {
+            // National-team (World Cup) matches have no per-player record — show a
+            // simple team chip instead of the player performance card.
+            if (match.koreanPlayer?.isNationalTeam) {
+              return (
+                <div style={{ marginTop:12, display:'inline-flex', alignItems:'center', gap:8, background:'rgba(245,196,0,0.08)', border:'0.5px solid rgba(245,196,0,0.3)', borderRadius:10, padding:'10px 14px' }}>
+                  <span style={{ fontSize:18 }}>🇰🇷</span>
+                  <span style={{ fontSize:14, fontWeight:800, color:'var(--text)' }}>대한민국 대표팀</span>
+                  <span style={{ fontSize:11, fontWeight:700, color:'var(--text4)' }}>FIFA 월드컵</span>
+                </div>
+              );
+            }
             const koreans = match.koreanPlayers || [match.koreanPlayer];
             const renderKoreanCard = (kp, idx) => {
               const playerObj = ALL_PLAYERS.find(p => p.name === kp.name);
@@ -6010,15 +6034,26 @@ function App() {
               name: c?.team?.displayName || '', koName: KO_NAME[c?.team?.displayName] || c?.team?.displayName || '',
               code: c?.team?.abbreviation || '', score: parseInt(c?.score) || 0, logo: logo(c),
             });
+            const koreaIsHome = /korea/i.test(home?.team?.displayName || '');
+            const koreaCode = (koreaIsHome ? home : away)?.team?.abbreviation || 'KOR';
             return {
               id: e.id,
               fullDate: e.date,
               state: st.state,                       // 'pre' | 'in' | 'post'
               live: st.state === 'in',
+              status: st.name || (st.state === 'post' ? 'STATUS_FINAL' : st.state === 'in' ? 'STATUS_IN_PROGRESS' : 'STATUS_SCHEDULED'),
               statusDetail: st.shortDetail || st.detail || '',
-              koreaIsHome: /korea/i.test(home?.team?.displayName || ''),
+              koreaIsHome,
               home: side(home),
               away: side(away),
+              // Fields the shared match-detail screen reads. The synthetic
+              // koreanPlayer (isNationalTeam) lets WC matches flow through the
+              // detail view without a per-player record; the detail guards on it.
+              sport: '⚽ 월드컵',
+              competition: 'FIFA 월드컵',
+              venue: comp.venue?.fullName || '',
+              events: [],
+              koreanPlayer: { name: '대한민국', nameEn: 'South Korea', team: koreaCode, number: null, position: '대표팀', isNationalTeam: true, event: '' },
             };
           })
           .sort((a, b) => new Date(a.fullDate) - new Date(b.fullDate));
