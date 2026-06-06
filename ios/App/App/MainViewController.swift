@@ -108,6 +108,8 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
     ]
     private lazy var model = TabBarModel(tabs: tabs)
     private var hostView: UIView?
+    private var bellHost: UIView?
+    private var bellBadge: UILabel?
     private var didSetup = false
     private var wk: WKWebView? { self.webView as? WKWebView }
 
@@ -117,7 +119,9 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
         didSetup = true
         if #available(iOS 26.0, *) {
             wk?.configuration.userContentController.add(self, name: "tabbar")
+            wk?.configuration.userContentController.add(self, name: "bell")
             setupTabBar()
+            setupNotifBell()
             enableWebNativeTabBar()
         }
         // iOS < 26: keep the web app's own CSS tab bar.
@@ -155,6 +159,87 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
     }
 
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
+
+    // MARK: - Native Liquid Glass notification bell (top-right, home only)
+
+    @available(iOS 26.0, *)
+    private func setupNotifBell() {
+        let size: CGFloat = 38
+
+        let e = UIGlassEffect(style: .regular)
+        e.isInteractive = true
+        let glass = UIVisualEffectView(effect: e)
+        glass.translatesAutoresizingMaskIntoConstraints = false
+        glass.layer.cornerRadius = size / 2
+        glass.layer.cornerCurve = .continuous
+        glass.clipsToBounds = true
+
+        let icon = UIImageView(image: UIImage(systemName: "bell.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)))
+        icon.tintColor = UIColor.white.withAlphaComponent(0.92)
+        icon.contentMode = .center
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        glass.contentView.addSubview(icon)
+        NSLayoutConstraint.activate([
+            icon.centerXAnchor.constraint(equalTo: glass.contentView.centerXAnchor),
+            icon.centerYAnchor.constraint(equalTo: glass.contentView.centerYAnchor)
+        ])
+
+        // Container lets the unread badge overflow the circular glass.
+        let container = UIView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(glass)
+        NSLayoutConstraint.activate([
+            glass.topAnchor.constraint(equalTo: container.topAnchor),
+            glass.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            glass.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            glass.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+        ])
+
+        let badge = UILabel()
+        badge.translatesAutoresizingMaskIntoConstraints = false
+        badge.backgroundColor = UIColor(red: 0.9, green: 0.19, blue: 0.19, alpha: 1)
+        badge.textColor = .white
+        badge.font = .systemFont(ofSize: 10, weight: .bold)
+        badge.textAlignment = .center
+        badge.layer.cornerRadius = 8
+        badge.layer.borderWidth = 1.5
+        badge.layer.borderColor = UIColor.black.withAlphaComponent(0.4).cgColor
+        badge.clipsToBounds = true
+        badge.isHidden = true
+        container.addSubview(badge)
+        NSLayoutConstraint.activate([
+            badge.topAnchor.constraint(equalTo: container.topAnchor, constant: -4),
+            badge.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: 4),
+            badge.heightAnchor.constraint(equalToConstant: 16),
+            badge.widthAnchor.constraint(greaterThanOrEqualToConstant: 16)
+        ])
+        bellBadge = badge
+
+        view.addSubview(container)
+        NSLayoutConstraint.activate([
+            container.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            container.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            container.widthAnchor.constraint(equalToConstant: size),
+            container.heightAnchor.constraint(equalToConstant: size)
+        ])
+        container.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(bellTapped)))
+        container.alpha = 0   // shown only when the web says we're on the home screen
+        bellHost = container
+    }
+
+    @objc private func bellTapped() {
+        wk?.evaluateJavaScript("window.__jumoNotif && window.__jumoNotif()")
+    }
+
+    private func updateBell(show: Bool, unread: Int) {
+        UIView.animate(withDuration: 0.25) { self.bellHost?.alpha = show ? 1 : 0 }
+        if unread > 0 {
+            bellBadge?.text = unread > 99 ? "99+" : "\(unread)"
+            bellBadge?.isHidden = false
+        } else {
+            bellBadge?.isHidden = true
+        }
+    }
 
     @available(iOS 26.0, *)
     private func setupTabBar() {
@@ -200,6 +285,8 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
         if message.name == "tabbar", let id = message.body as? String,
            let i = tabs.firstIndex(where: { $0.id == id }), i != model.selected {
             withAnimation(.spring(response: 0.38, dampingFraction: 0.72)) { model.selected = i }
+        } else if message.name == "bell", let d = message.body as? [String: Any] {
+            updateBell(show: (d["show"] as? Bool) ?? false, unread: (d["unread"] as? Int) ?? 0)
         }
     }
 }
