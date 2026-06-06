@@ -5064,6 +5064,43 @@ function App() {
     return new Set([1,2,3,6,7,8,9,17,18,15]);
   });
 
+  // ── App push notifications (APNs via @capacitor/push-notifications) ──────
+  // Register once for remote push and persist the device's APNs token + which
+  // players it follows to Supabase. A backend cron (api/push-cron) reads this
+  // table to deliver match/goal/result pushes even when the app is closed.
+  const [pushToken, setPushToken] = React.useState(null);
+  React.useEffect(() => {
+    const Cap = window.Capacitor;
+    const Push = Cap?.Plugins?.PushNotifications;
+    if (!Cap?.isNativePlatform?.() || !Push) return; // real device only
+    const handles = [];
+    (async () => {
+      try {
+        let perm = await Push.checkPermissions();
+        if (perm.receive !== 'granted' && perm.receive !== 'denied') perm = await Push.requestPermissions();
+        if (perm.receive !== 'granted') return;
+        handles.push(await Push.addListener('registration', t => setPushToken(t?.value || null)));
+        handles.push(await Push.addListener('registrationError', e => console.warn('push reg error', e?.error || e)));
+        handles.push(await Push.addListener('pushNotificationActionPerformed', a => {
+          const d = a?.notification?.data || {};
+          try { window.__jumoPushTap && window.__jumoPushTap(d); } catch {}
+        }));
+        await Push.register();
+      } catch (e) { console.warn('push init failed', e); }
+    })();
+    return () => { handles.forEach(h => { try { h.remove(); } catch {} }); };
+  }, []);
+  // Keep the token row in sync (token + followed players) for targeting.
+  React.useEffect(() => {
+    if (!pushToken) return;
+    try {
+      SB.from('device_tokens').upsert({
+        device_id: deviceId, token: pushToken, platform: 'ios',
+        player_ids: [...followed], updated_at: new Date().toISOString(),
+      }, { onConflict: 'device_id' }).then(() => {}, () => {});
+    } catch {}
+  }, [pushToken, followed, deviceId]);
+
   // Hydrate from Supabase on mount (overrides localStorage if newer)
   React.useEffect(() => {
     let cancelled = false;
