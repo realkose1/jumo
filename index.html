@@ -108,6 +108,8 @@ html.light-mode body { background: #e5e5ea; }
 @keyframes ripple { 0%{transform:scale(1);opacity:0.6} 100%{transform:scale(2.5);opacity:0} }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes ticker { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+@keyframes cheerPop { 0%{transform:scale(1)} 35%{transform:scale(1.32)} 100%{transform:scale(1)} }
+@keyframes cheerFloat { 0%{opacity:0.95; transform:translateY(0)} 100%{opacity:0; transform:translateY(-28px)} }
 @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
 .shimmer { background:linear-gradient(90deg,var(--border) 25%,var(--border2) 50%,var(--border) 75%); background-size:200% 100%; animation:shimmer 1.4s ease-in-out infinite; }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
@@ -2269,6 +2271,113 @@ function HomeV3({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [] }) {
   );
 }
 
+// ─── TEAM CHEER METER (tap-to-cheer, proportional bar) ────────
+const CHEER_BRAND = { TOT:'#1c2a52', MCI:'#2f5d8a', PSG:'#0a2472', OL:'#2a6cb0', LAD:'#15467e', TOR:'#1a4a8a', FCB:'#7a0a2e', BVB:'#7e7000', ATL:'#a01030', GEN:'#a51a20', BAY:'#7a0a2a', FEY:'#a01818', NEW:'#222222' };
+function cheerColor(code, side) {
+  if (code && CHEER_BRAND[code]) return CHEER_BRAND[code];
+  if (!code) return side === 'home' ? '#2c313a' : '#26384e';
+  let h = 0; for (let i = 0; i < code.length; i++) h = (h * 31 + code.charCodeAt(i)) % 360;
+  return `hsl(${h}, 40%, 26%)`;
+}
+function TeamCheerMeter({ match, isLive, isFinished }) {
+  const mid = String(match.id);
+  const LSK = `jumo_cheer_${mid}`;
+  const readLS = () => { try { return JSON.parse(localStorage.getItem(LSK) || '{}'); } catch { return {}; } };
+  const [counts, setCounts] = React.useState(() => { const s = readLS(); return { home: s.home || 0, away: s.away || 0 }; });
+  const [floats, setFloats] = React.useState([]);
+  const pending = React.useRef({ home: 0, away: 0 });
+  const inFlight = React.useRef(false);
+  const timer = React.useRef(null);
+  const fid = React.useRef(0);
+  const persist = (c) => { try { localStorage.setItem(LSK, JSON.stringify(c)); } catch {} };
+
+  const flush = React.useCallback(async () => {
+    if (inFlight.current) return;
+    const n = { ...pending.current };
+    if (!n.home && !n.away) return;
+    pending.current = { home: 0, away: 0 };
+    inFlight.current = true;
+    try {
+      for (const team of ['home', 'away']) {
+        if (n[team] > 0) {
+          const { data, error } = await SB.rpc('add_cheers', { p_match_id: mid, p_team: team, p_n: n[team] });
+          if (error) throw error;
+          if (typeof data === 'number') setCounts(c => { const nc = { ...c, [team]: data + pending.current[team] }; persist(nc); return nc; });
+        }
+      }
+    } catch { /* backend not set up yet → stay local-only (optimistic counts persist) */ }
+    finally { inFlight.current = false; }
+  }, [mid]);
+
+  const tap = (team) => {
+    setCounts(c => { const nc = { ...c, [team]: c[team] + 1 }; persist(nc); return nc; });
+    pending.current[team] += 1;
+    const id = ++fid.current;
+    setFloats(f => [...f, { id, team }]);
+    setTimeout(() => setFloats(f => f.filter(x => x.id !== id)), 700);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(flush, 650);
+  };
+
+  React.useEffect(() => {
+    let alive = true;
+    const fetchCounts = async () => {
+      try {
+        const { data, error } = await SB.from('match_cheers').select('team,count').eq('match_id', mid);
+        if (error) throw error;
+        if (!alive) return;
+        const srv = { home: 0, away: 0 };
+        (data || []).forEach(r => { if (r.team === 'home' || r.team === 'away') srv[r.team] = Number(r.count) || 0; });
+        setCounts(() => { const nc = { home: srv.home + pending.current.home, away: srv.away + pending.current.away }; persist(nc); return nc; });
+      } catch { /* keep local */ }
+    };
+    fetchCounts();
+    const iv = setInterval(() => { if (!inFlight.current && !pending.current.home && !pending.current.away) fetchCounts(); }, 12000);
+    return () => { alive = false; clearInterval(iv); if (timer.current) clearTimeout(timer.current); flush(); };
+  }, [mid, flush]);
+
+  const total = counts.home + counts.away;
+  const hShare = total > 0 ? Math.max(0.28, Math.min(0.72, counts.home / total)) : 0.5;
+  const hPct = hShare * 100;
+  const statusText = isFinished ? '종료' : (isLive ? 'LIVE' : 'VS');
+  const statusColor = isLive ? 'var(--acc)' : 'rgba(255,255,255,0.6)';
+
+  const renderSide = (team, t, alignRight) => (
+    <button onClick={() => tap(team)} aria-label={`${t.name} 응원`}
+      style={{ width:`calc(${team === 'home' ? hPct : 100 - hPct}% - 3px)`, transition:'width 0.45s cubic-bezier(.4,0,.2,1)',
+        flexShrink:0, height:'100%', position:'relative', overflow:'hidden', cursor:'pointer', WebkitTapHighlightColor:'transparent',
+        background:cheerColor(t.code, team), border:'none', borderRadius:14, padding:'10px 13px',
+        display:'flex', flexDirection:'column', justifyContent:'space-between', alignItems: alignRight ? 'flex-end' : 'flex-start' }}>
+      <TeamBadge code={t.code} size={26} logo={t.logo}/>
+      <span key={counts[team]} style={{ ...NUM, fontSize:20, fontWeight:800, color:'#fff', lineHeight:1, letterSpacing:-0.5, animation:'cheerPop 0.25s ease' }}>{counts[team].toLocaleString()}</span>
+      {floats.filter(f => f.team === team).map(f => (
+        <span key={f.id} style={{ position:'absolute', bottom:30, [alignRight ? 'right' : 'left']:16, ...NUM, fontSize:15, fontWeight:800, color:'#fff', pointerEvents:'none', animation:'cheerFloat 0.7s ease-out forwards' }}>+1</span>
+      ))}
+    </button>
+  );
+
+  return (
+    <div style={{ marginTop:20 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:10 }}>
+        <div style={{ fontSize:12, color:'var(--text3)', fontWeight:600 }}>팀 응원</div>
+        <div style={{ fontSize:11, color:'var(--text5)' }}>탭해서 응원 · {total.toLocaleString()}</div>
+      </div>
+      <div style={{ position:'relative', display:'flex', gap:6, height:74 }}>
+        {renderSide('home', match.home, false)}
+        {renderSide('away', match.away, true)}
+        <div style={{ position:'absolute', left:`${hPct}%`, top:'50%', transform:'translate(-50%,-50%)', zIndex:3,
+          background:'rgba(10,10,12,0.82)', backdropFilter:'blur(6px)', WebkitBackdropFilter:'blur(6px)',
+          border:'0.5px solid rgba(255,255,255,0.14)', borderRadius:11, padding:'4px 10px', fontSize:11, fontWeight:800,
+          letterSpacing:0.3, color:statusColor, whiteSpace:'nowrap', transition:'left 0.45s cubic-bezier(.4,0,.2,1)',
+          display:'flex', alignItems:'center', gap:4 }}>
+          {isLive && <span style={{ width:5, height:5, borderRadius:'50%', background:'var(--acc)', display:'inline-block' }}/>}
+          {statusText}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── SCREEN: LIVE MATCH DETAIL ────────────────────────────────
 function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
   const goKoreanPlayer = React.useCallback((kp) => {
@@ -2278,37 +2387,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
   }, [onPlayer]);
   const [tab, setTab] = React.useState('events');
   const [countdown, setCountdown] = React.useState('');
-  const [reactions, setReactions] = React.useState({});
-  const [myReactions, setMyReactions] = React.useState(() => {
-    try { return new Set(JSON.parse(localStorage.getItem(`jumo_react_${match.id}`) || '[]')); }
-    catch { return new Set(); }
-  });
-  const REACTION_EMOJIS = ['🔥','👏','💪','❤️','😮'];
-
-  React.useEffect(() => {
-    const fetchReactions = async () => {
-      const { data } = await SB.from('match_reactions').select('emoji, count').eq('match_id', String(match.id));
-      const map = {};
-      (data || []).forEach(r => { map[r.emoji] = r.count; });
-      setReactions(map);
-    };
-    fetchReactions();
-  }, [match.id]);
-
-  const handleReaction = async (emoji) => {
-    const isToggleOff = myReactions.has(emoji);
-    const delta = isToggleOff ? -1 : 1;
-    setReactions(r => ({ ...r, [emoji]: Math.max((r[emoji] || 0) + delta, 0) }));
-    const next = new Set(myReactions);
-    if (isToggleOff) next.delete(emoji); else next.add(emoji);
-    setMyReactions(next);
-    try { localStorage.setItem(`jumo_react_${match.id}`, JSON.stringify([...next])); } catch {}
-    const rpcName = isToggleOff ? 'decrement_reaction' : 'increment_reaction';
-    const { data, error } = await SB.rpc(rpcName, { p_match_id: String(match.id), p_emoji: emoji });
-    if (!error && typeof data === 'number') {
-      setReactions(r => ({ ...r, [emoji]: data }));
-    }
-  };
+  // (emoji 응원 리액션 replaced by <TeamCheerMeter/> — see component above)
 
   const player = ALL_PLAYERS.find(p => p.name === match.koreanPlayer?.name);
   const isLive = match.live;
@@ -2755,23 +2834,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
               );
             });
           })()}
-          {/* Reactions */}
-          <div style={{ marginTop:20, padding:'14px', background:'var(--surface)', borderRadius:14, border:'0.5px solid var(--border2)' }}>
-            <div style={{ fontSize:12, color:'var(--text3)', marginBottom:10, fontWeight:600 }}>응원 리액션</div>
-            <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
-              {REACTION_EMOJIS.map(em => {
-                const ct = reactions[em] || 0;
-                const reacted = myReactions.has(em);
-                const display = ct >= 1000 ? (ct/1000).toFixed(1) + 'k' : String(ct);
-                return (
-                  <button key={em} onClick={() => handleReaction(em)} style={{ background: reacted ? 'rgba(245,196,0,0.15)' : 'var(--border)', border: reacted ? '0.5px solid rgba(245,196,0,0.4)' : '0.5px solid rgba(255,255,255,0.1)', borderRadius:20, padding:'8px 14px', cursor:'pointer', display:'flex', alignItems:'center', gap:6, transition:'all 0.15s' }}>
-                    <span style={{ fontSize:16 }}>{em}</span>
-                    <span style={{ fontSize:12, color: reacted ? 'var(--acc)' : 'var(--text2)', fontWeight:600 }}>{display}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <TeamCheerMeter match={match} isLive={isLive} isFinished={isFinished}/>
         </div>
       )}
       {tab === 'events' && !isMLBMatch && (
@@ -2918,28 +2981,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
             return incidents.map(renderInc);
           })()}
 
-          {/* Reactions */}
-          <div style={{ marginTop:20, padding:'14px', background:'var(--surface)', borderRadius:14, border:'0.5px solid var(--border2)' }}>
-            <div style={{ fontSize:12, color:'var(--text3)', marginBottom:10, fontWeight:600 }}>응원 리액션</div>
-            <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
-              {REACTION_EMOJIS.map(em => {
-                const ct = reactions[em] || 0;
-                const reacted = myReactions.has(em);
-                const display = ct >= 1000 ? (ct/1000).toFixed(1) + 'k' : String(ct);
-                return (
-                  <button key={em} onClick={() => handleReaction(em)} style={{
-                    background: reacted ? 'rgba(245,196,0,0.15)' : 'var(--border)',
-                    border: reacted ? '0.5px solid rgba(245,196,0,0.4)' : '0.5px solid rgba(255,255,255,0.1)',
-                    borderRadius:20, padding:'8px 14px', cursor:'pointer',
-                    display:'flex', alignItems:'center', gap:6, transition:'all 0.15s',
-                  }}>
-                    <span style={{ fontSize:16 }}>{em}</span>
-                    <span style={{ fontSize:12, color: reacted ? 'var(--acc)' : 'var(--text2)', fontWeight:600 }}>{display}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <TeamCheerMeter match={match} isLive={isLive} isFinished={isFinished}/>
         </div>
       )}
 
