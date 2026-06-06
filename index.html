@@ -2313,25 +2313,37 @@ function TeamCheerMeter({ match, isLive, isFinished }) {
   const fid = React.useRef(0);
   const persist = (c) => { try { localStorage.setItem(LSK, JSON.stringify(c)); } catch {} };
 
-  const flush = React.useCallback(async () => {
-    if (inFlight.current) return;
-    const n = { ...pending.current };
-    if (!n.home && !n.away) return;
-    pending.current = { home: 0, away: 0 };
-    inFlight.current = true;
+  // Cheers are stored on the SERVER (shared across all users) using the existing
+  // match_reactions table + increment_reaction RPC, keyed by '__home'/'__away'
+  // (distinct from emoji reactions). Each tap = one atomic +1 on the server;
+  // local counts are optimistic and always reconcile to the server value.
+  const CHEER_KEY = { home: '__home', away: '__away' };
+  const fetchCounts = React.useCallback(async () => {
     try {
-      for (const team of ['home', 'away']) {
-        if (n[team] > 0) {
-          const { data, error } = await SB.rpc('add_cheers', { p_match_id: mid, p_team: team, p_n: n[team] });
-          if (error) throw error;
-          if (typeof data === 'number') setCounts(c => { const nc = { ...c, [team]: data + pending.current[team] }; persist(nc); return nc; });
-        }
-      }
-    } catch { /* backend not set up yet → stay local-only (optimistic counts persist) */ }
-    finally { inFlight.current = false; }
+      const { data, error } = await SB.from('match_reactions').select('emoji,count').eq('match_id', mid).in('emoji', ['__home', '__away']);
+      if (error) throw error;
+      const srv = { home: 0, away: 0 };
+      (data || []).forEach(r => { if (r.emoji === '__home') srv.home = Number(r.count) || 0; else if (r.emoji === '__away') srv.away = Number(r.count) || 0; });
+      setCounts(() => { const nc = { home: srv.home + pending.current.home, away: srv.away + pending.current.away }; persist(nc); return nc; });
+    } catch { /* offline → keep optimistic local counts until next fetch */ }
   }, [mid]);
 
+  const flush = React.useCallback(async () => {
+    if (inFlight.current) return;
+    const n = { home: Math.min(pending.current.home, 30), away: Math.min(pending.current.away, 30) };
+    if (!n.home && !n.away) return;
+    pending.current = { home: pending.current.home - n.home, away: pending.current.away - n.away };
+    inFlight.current = true;
+    try {
+      const calls = [];
+      ['home', 'away'].forEach(team => { for (let i = 0; i < n[team]; i++) calls.push(SB.rpc('increment_reaction', { p_match_id: mid, p_emoji: CHEER_KEY[team] })); });
+      if (calls.length) { await Promise.all(calls); await fetchCounts(); }
+    } catch { /* network issue → counts already optimistic; reconcile on next fetch */ }
+    finally { inFlight.current = false; if (pending.current.home || pending.current.away) { if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(flush, 500); } }
+  }, [mid, fetchCounts]);
+
   const tap = (team) => {
+    if (pending.current[team] >= 30) return; // anti-spam cap (a human never taps this fast in one burst)
     setCounts(c => { const nc = { ...c, [team]: c[team] + 1 }; persist(nc); return nc; });
     pending.current[team] += 1;
     const id = ++fid.current;
@@ -2342,21 +2354,10 @@ function TeamCheerMeter({ match, isLive, isFinished }) {
   };
 
   React.useEffect(() => {
-    let alive = true;
-    const fetchCounts = async () => {
-      try {
-        const { data, error } = await SB.from('match_cheers').select('team,count').eq('match_id', mid);
-        if (error) throw error;
-        if (!alive) return;
-        const srv = { home: 0, away: 0 };
-        (data || []).forEach(r => { if (r.team === 'home' || r.team === 'away') srv[r.team] = Number(r.count) || 0; });
-        setCounts(() => { const nc = { home: srv.home + pending.current.home, away: srv.away + pending.current.away }; persist(nc); return nc; });
-      } catch { /* keep local */ }
-    };
     fetchCounts();
     const iv = setInterval(() => { if (!inFlight.current && !pending.current.home && !pending.current.away) fetchCounts(); }, 12000);
-    return () => { alive = false; clearInterval(iv); if (timer.current) clearTimeout(timer.current); flush(); };
-  }, [mid, flush]);
+    return () => { clearInterval(iv); if (timer.current) clearTimeout(timer.current); flush(); };
+  }, [mid, fetchCounts, flush]);
 
   const total = counts.home + counts.away;
   const hShare = total > 0 ? Math.max(0.28, Math.min(0.72, counts.home / total)) : 0.5;
@@ -2541,30 +2542,79 @@ function WCMatchPreview({ match }) {
     </div>
   );
 }
-function KoreaLineupPitch({ onPlayer }) {
-  const yFor = [88, 67, 49, 30, 11];
+function lineupShortName(name) { if (!name) return ''; const p = String(name).trim().split(/\s+/); return p[p.length - 1]; }
+// API-Football startXI (player.grid "row:col", row 1 = GK) → rows[GK..attack][cols]
+function afXIToRows(startXI) {
+  const byRow = {};
+  (startXI || []).forEach(e => {
+    const p = (e && e.player) || {};
+    const g = String(p.grid || '').split(':');
+    const row = parseInt(g[0], 10) || 1, col = parseInt(g[1], 10) || 1;
+    (byRow[row] = byRow[row] || []).push({ n: lineupShortName(p.name), num: p.number, col });
+  });
+  return Object.keys(byRow).map(Number).sort((a, b) => a - b).map(r => byRow[r].slice().sort((a, b) => a.col - b.col));
+}
+// Place a team's rows (row 0 = GK) into the bottom or top half of the pitch.
+function positionRows(rows, half) {
+  const yr = half === 'bottom' ? [94, 54] : [6, 46];
+  const n = rows.length || 1;
+  return rows.map((row, ri) => {
+    const y = yr[0] + (yr[1] - yr[0]) * (n > 1 ? ri / (n - 1) : 0);
+    return row.map((p, pi) => ({ ...p, x: row.length === 1 ? 50 : 13 + 74 * pi / (row.length - 1), y }));
+  });
+}
+function MatchLineupPitch({ match, onPlayer }) {
+  const koreaIsHome = /korea/i.test(match.home.name || '');
+  const opp = koreaIsHome ? match.away : match.home;
+  const oppAf = AF_NAT[opp.code];
+  const [oppXI, setOppXI] = React.useState(undefined); // undefined=loading, null=unavailable, {formation,rows}
+  React.useEffect(() => {
+    if (!oppAf) { setOppXI(null); return; }
+    let alive = true; setOppXI(undefined);
+    (async () => {
+      try {
+        const lf = await fetch(`${API_BASE}/api/apifootball?path=fixtures&team=${oppAf}&last=3`).then(r => r.ok ? r.json() : null);
+        const fixtures = (lf && lf.response) || [];
+        for (const fx of fixtures) {
+          const fid = fx && fx.fixture && fx.fixture.id; if (!fid) continue;
+          const lu = await fetch(`${API_BASE}/api/apifootball?path=fixtures/lineups&fixture=${fid}`).then(r => r.ok ? r.json() : null);
+          const t = ((lu && lu.response) || []).find(x => x.team && x.team.id === oppAf);
+          if (t && t.startXI && t.startXI.length >= 11) { if (alive) setOppXI({ formation: t.formation || '', rows: afXIToRows(t.startXI) }); return; }
+        }
+        if (alive) setOppXI(null);
+      } catch { if (alive) setOppXI(null); }
+    })();
+    return () => { alive = false; };
+  }, [oppAf]);
+
+  const koreaRows = positionRows(KOREA_XI.rows, 'bottom');
+  const oppRows = (oppXI && oppXI.rows) ? positionRows(oppXI.rows, 'top') : [];
+  const Dot = ({ p, fill, border, tappable, onClick }) => (
+    <div onClick={onClick} style={{ position:'absolute', left:`${p.x}%`, top:`${p.y}%`, transform:'translate(-50%,-50%)', display:'flex', flexDirection:'column', alignItems:'center', gap:2, cursor: tappable ? 'pointer' : 'default', width:60 }}>
+      <div style={{ width:30, height:30, borderRadius:'50%', background:fill, color:'#0b2018', display:'flex', alignItems:'center', justifyContent:'center', ...NUM, fontSize:12, fontWeight:800, boxShadow:'0 2px 5px rgba(0,0,0,0.45)', border }}>{p.num != null ? p.num : ''}</div>
+      <span style={{ fontSize:9.5, fontWeight:700, color:'#fff', textShadow:'0 1px 3px rgba(0,0,0,0.9)', whiteSpace:'nowrap', maxWidth:62, overflow:'hidden', textOverflow:'ellipsis' }}>{p.n}{p.c ? ' (C)' : ''}</span>
+    </div>
+  );
   return (
     <div style={{ padding:'16px' }}>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
-        <div style={{ fontSize:13, fontWeight:800, color:'var(--text)' }}>🇰🇷 대한민국 예상 라인업</div>
-        <div style={{ ...NUM, fontSize:13, fontWeight:800, color:'var(--acc)' }}>{KOREA_XI.formation}</div>
+        <div style={{ fontSize:13, fontWeight:800, color:'var(--text)' }}>예상 라인업</div>
+        <div style={{ fontSize:10, color:'var(--text5)' }}>대한민국 예상 XI · 상대 최근 출전 XI</div>
       </div>
-      <div style={{ position:'relative', width:'100%', aspectRatio:'3 / 4', borderRadius:14, overflow:'hidden', background:'linear-gradient(180deg,#10412700,#0c3420), repeating-linear-gradient(180deg,#0f3d24 0 12.5%,#0e3a22 12.5% 25%)', border:'0.5px solid rgba(255,255,255,0.08)' }}>
+      <div style={{ position:'relative', width:'100%', aspectRatio:'2 / 3', borderRadius:14, overflow:'hidden', background:'linear-gradient(180deg,#0c3420,#0f3d24), repeating-linear-gradient(180deg,#0f3d24 0 10%,#0e3a22 10% 20%)', border:'0.5px solid rgba(255,255,255,0.08)' }}>
         <div style={{ position:'absolute', left:'8%', right:'8%', top:'50%', height:0, borderTop:'1px solid rgba(255,255,255,0.13)' }}/>
-        <div style={{ position:'absolute', left:'50%', top:'50%', width:74, height:74, borderRadius:'50%', border:'1px solid rgba(255,255,255,0.13)', transform:'translate(-50%,-50%)' }}/>
-        <div style={{ position:'absolute', left:'27%', right:'27%', top:0, height:'13%', border:'1px solid rgba(255,255,255,0.13)', borderTop:'none' }}/>
-        <div style={{ position:'absolute', left:'27%', right:'27%', bottom:0, height:'13%', border:'1px solid rgba(255,255,255,0.13)', borderBottom:'none' }}/>
-        {KOREA_XI.rows.map((row, ri) => row.map((p, pi) => {
-          const x = row.length === 1 ? 50 : 13 + (74 * pi / (row.length - 1));
+        <div style={{ position:'absolute', left:'50%', top:'50%', width:64, height:64, borderRadius:'50%', border:'1px solid rgba(255,255,255,0.13)', transform:'translate(-50%,-50%)' }}/>
+        <div style={{ position:'absolute', left:'27%', right:'27%', top:0, height:'10%', border:'1px solid rgba(255,255,255,0.13)', borderTop:'none' }}/>
+        <div style={{ position:'absolute', left:'27%', right:'27%', bottom:0, height:'10%', border:'1px solid rgba(255,255,255,0.13)', borderBottom:'none' }}/>
+        <div style={{ position:'absolute', top:5, left:10, fontSize:11, fontWeight:800, color:'#fff', textShadow:'0 1px 3px rgba(0,0,0,0.9)' }}>{opp.koName || opp.name}{oppXI && oppXI.formation ? <span style={{ ...NUM, color:'rgba(255,255,255,0.7)', marginLeft:6 }}>{oppXI.formation}</span> : null}</div>
+        <div style={{ position:'absolute', bottom:5, left:10, fontSize:11, fontWeight:800, color:'var(--acc)', textShadow:'0 1px 3px rgba(0,0,0,0.9)' }}>🇰🇷 대한민국 <span style={{ ...NUM, color:'rgba(255,255,255,0.75)', marginLeft:4 }}>{KOREA_XI.formation}</span></div>
+        {oppXI === undefined && <div style={{ position:'absolute', top:'22%', left:0, right:0, textAlign:'center', color:'rgba(255,255,255,0.6)', fontSize:11 }}>상대 라인업 불러오는 중…</div>}
+        {oppXI === null && <div style={{ position:'absolute', top:'22%', left:0, right:0, textAlign:'center', color:'rgba(255,255,255,0.5)', fontSize:11, padding:'0 20px' }}>상대 예상 라인업 정보 없음</div>}
+        {oppRows.map((row, ri) => row.map((p, pi) => <Dot key={`o${ri}-${pi}`} p={p} fill="rgba(255,255,255,0.92)" border="2px solid transparent" tappable={false}/>))}
+        {koreaRows.map((row, ri) => row.map((p, pi) => {
           const playerObj = ALL_PLAYERS.find(a => a.name === p.n);
-          const tappable = playerObj && onPlayer;
-          return (
-            <div key={p.n} onClick={() => tappable && onPlayer(playerObj)}
-              style={{ position:'absolute', left:`${x}%`, top:`${yFor[ri]}%`, transform:'translate(-50%,-50%)', display:'flex', flexDirection:'column', alignItems:'center', gap:3, cursor: tappable ? 'pointer' : 'default', width:66 }}>
-              <div style={{ width:34, height:34, borderRadius:'50%', background: p.c ? 'var(--acc)' : '#f2f2f2', color:'#0b2018', display:'flex', alignItems:'center', justifyContent:'center', ...NUM, fontSize:13, fontWeight:800, boxShadow:'0 2px 6px rgba(0,0,0,0.45)', border: tappable ? '2px solid var(--acc)' : '2px solid transparent' }}>{p.num}</div>
-              <span style={{ fontSize:10, fontWeight:700, color:'#fff', textShadow:'0 1px 3px rgba(0,0,0,0.9)', whiteSpace:'nowrap' }}>{p.n}{p.c ? ' (C)' : ''}</span>
-            </div>
-          );
+          const tappable = !!(playerObj && onPlayer);
+          return <Dot key={`k${ri}-${pi}`} p={p} fill={p.c ? 'var(--acc)' : '#f2f2f2'} border={tappable ? '2px solid var(--acc)' : '2px solid transparent'} tappable={tappable} onClick={() => tappable && onPlayer(playerObj)}/>;
         }))}
       </div>
       <div style={{ fontSize:10, color:'var(--text5)', marginTop:8, textAlign:'center', lineHeight:1.5 }}>예상 라인업입니다 · 실제 라인업은 경기 시작 약 1시간 전에 발표됩니다</div>
@@ -3436,7 +3486,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
         );
       })()}
       {tab === 'lineups' && !isMLBMatch && (() => {
-        if (isNationalTeam) return <KoreaLineupPitch onPlayer={onPlayer}/>;
+        if (isNationalTeam) return <MatchLineupPitch match={match} onPlayer={onPlayer}/>;
         if (lineupsLoading) {
           return <div style={{ display:'flex', justifyContent:'center', padding:'48px 0' }}><div style={{ width:24, height:24, borderRadius:'50%', border:'2.5px solid var(--border)', borderTopColor:'var(--acc)', animation:'spin 0.8s linear infinite' }}/></div>;
         }
