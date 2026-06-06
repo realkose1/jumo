@@ -4711,7 +4711,7 @@ function NotifSettingsScreen({ onBack }) {
   return (
     <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide screen-slide-in">
       <div style={{ padding:'12px 20px 20px' }}>
-        <BackBtn onBack={onBack}/>
+        <BackBtn onBack={onBack} nativeHandled/>
         <div style={{ fontSize:22, fontWeight:800, color:'var(--text)', letterSpacing:-0.5, marginTop:14, marginBottom:6 }}>알림 설정</div>
         <div style={{ fontSize:13, color:'var(--text4)', marginBottom:20 }}>팔로우 중인 선수 경기만 알림이 옵니다</div>
         <div style={{ background:'var(--surface)', borderRadius:16, overflow:'hidden', border:'0.5px solid var(--border)' }}>
@@ -4742,7 +4742,7 @@ function SportFeedScreen({ onBack, sportFeeds, onToggleSportFeed }) {
   return (
     <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide screen-slide-in">
       <div style={{ padding:'12px 20px 20px' }}>
-        <BackBtn onBack={onBack}/>
+        <BackBtn onBack={onBack} nativeHandled/>
         <div style={{ fontSize:22, fontWeight:800, color:'var(--text)', letterSpacing:-0.5, marginTop:14, marginBottom:6 }}>종목별 피드</div>
         <div style={{ fontSize:13, color:'var(--text4)', marginBottom:20 }}>홈 피드에 표시할 종목을 선택하세요</div>
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
@@ -4912,7 +4912,9 @@ function ProfileEditScreen({ profile, onSave, onBack }) {
         />
       )}
       <div style={{ padding:'12px 20px 8px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-        <button onClick={onBack} style={{ background:'none', border:'none', color:'var(--text2)', fontSize:15, cursor:'pointer', padding:0 }}>취소</button>
+        {(typeof window !== 'undefined' && window.__nativeChrome)
+          ? <div aria-hidden style={{ width:36 }}/>
+          : <button onClick={onBack} style={{ background:'none', border:'none', color:'var(--text2)', fontSize:15, cursor:'pointer', padding:0 }}>취소</button>}
         <div style={{ fontSize:16, fontWeight:700, color:'var(--text)' }}>프로필 편집</div>
         <button onClick={save} style={{ background:'none', border:'none', color:'var(--acc)', fontSize:15, fontWeight:700, cursor:'pointer', padding:0 }}>저장</button>
       </div>
@@ -4965,7 +4967,9 @@ function FeedbackScreen({ onBack }) {
   return (
     <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide screen-slide-in">
       <div style={{ padding:'12px 20px 8px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-        <button onClick={onBack} style={{ background:'none', border:'none', color:'var(--text2)', fontSize:15, cursor:'pointer', padding:0 }}>취소</button>
+        {(typeof window !== 'undefined' && window.__nativeChrome)
+          ? <div aria-hidden style={{ width:36 }}/>
+          : <button onClick={onBack} style={{ background:'none', border:'none', color:'var(--text2)', fontSize:15, cursor:'pointer', padding:0 }}>취소</button>}
         <div style={{ fontSize:16, fontWeight:700, color:'var(--text)' }}>피드백 보내기</div>
         <button onClick={send} style={{ background:'none', border:'none', color: text.trim() ? 'var(--acc)' : 'var(--text5)', fontSize:15, fontWeight:700, cursor:'pointer', padding:0 }}>보내기</button>
       </div>
@@ -4990,8 +4994,7 @@ function FeedbackScreen({ onBack }) {
   );
 }
 
-function MoreScreen({ sportFeeds, onToggleSportFeed, profile, onUpdateProfile }) {
-  const [sub, setSub] = React.useState(null);
+function MoreScreen({ sportFeeds, onToggleSportFeed, profile, onUpdateProfile, sub, setSub }) {
   if (sub === 'notif')      return <NotifSettingsScreen onBack={() => setSub(null)}/>;
   if (sub === 'sports')     return <SportFeedScreen onBack={() => setSub(null)} sportFeeds={sportFeeds} onToggleSportFeed={onToggleSportFeed}/>;
   if (sub === 'profile')    return <ProfileEditScreen profile={profile} onSave={onUpdateProfile} onBack={() => setSub(null)}/>;
@@ -5057,6 +5060,9 @@ function App() {
   const [screen, setScreen] = React.useState('main');
   const [selectedMatch, setSelectedMatch] = React.useState(null);
   const [selectedPlayer, setSelectedPlayer] = React.useState(null);
+  // More-tab sub-view (알림설정/종목별피드/프로필/피드백) lifted to App so the
+  // native glass back overlay can drive it like other 2-depth detail screens.
+  const [moreSub, setMoreSub] = React.useState(null);
   // Device ID for cross-refresh persistence
   const deviceId = React.useMemo(() => {
     let id = localStorage.getItem('jumo_device_id');
@@ -6839,9 +6845,13 @@ function App() {
 
   // Left-edge swipe (native) → go back when on a detail screen.
   React.useEffect(() => {
-    window.__back = () => { if (screen !== 'main') { goBack(); return true; } return false; };
+    window.__back = () => {
+      if (screen !== 'main') { goBack(); return true; }
+      if (tab === 'more' && moreSub) { setMoreSub(null); return true; }
+      return false;
+    };
     return () => { try { delete window.__back; } catch {} };
-  }, [screen]);
+  }, [screen, tab, moreSub]);
 
   // Native Liquid Glass notification bell (top-right): show only on home/main,
   // mirror the unread count, and expose the tap target.
@@ -6855,12 +6865,13 @@ function App() {
   React.useEffect(() => {
     try {
       window.webkit?.messageHandlers?.detailbar?.postMessage({
-        back: ['match', 'player', 'notif', 'addplayer'].includes(screen),
+        back: ['match', 'player', 'notif', 'addplayer'].includes(screen)
+          || (tab === 'more' && screen === 'main' && !!moreSub),
         followShow: screen === 'player' && !!selectedPlayer,
         followOn: !!(selectedPlayer && followed.has(selectedPlayer.id)),
       });
     } catch {}
-  }, [screen, selectedPlayer, followed, nativeTabBar]);
+  }, [screen, selectedPlayer, followed, nativeTabBar, tab, moreSub]);
   React.useEffect(() => {
     window.__jumoFollow = () => {
       if (!selectedPlayer) return;
@@ -6895,7 +6906,7 @@ function App() {
               <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
               <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} followed={followed} statsCache={playerStatsCache} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} scrollTopKey={tabScrollKeys.players} liveApiMatches={filteredLiveMatches} sportFeeds={sportFeeds}/></div>
               <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news}/></div>
-              <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed} profile={profile} onUpdateProfile={updateProfile}/></div>
+              <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed} profile={profile} onUpdateProfile={updateProfile} sub={moreSub} setSub={setMoreSub}/></div>
             </>
           )}
           {screen !== 'main' && (
