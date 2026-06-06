@@ -1,0 +1,20 @@
+name: push-cron
+# Triggers the Jumo push sender on a schedule (Vercel Cron needs Pro, so we
+# poke the endpoint from GitHub Actions instead). Add a repo secret
+# PUSH_CRON_SECRET (Settings → Secrets and variables → Actions) matching the
+# Vercel env var. GitHub's minimum interval is ~5 min and may be delayed.
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch: {}
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call /api/push-cron
+        run: |
+          curl -fsS -m 90 \
+            "https://jumo-git-main-realkose1s-projects.vercel.app/api/push-cron?secret=${SECRET}" \
+            && echo "" && echo "ok"
+        env:
+          SECRET: ${{ secrets.PUSH_CRON_SECRET }}
