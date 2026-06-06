@@ -2421,16 +2421,38 @@ const KOREA_XI = {
     [{ n:'오현규', num:9 }],
   ],
 };
-function parseH2H(j, perspectiveCode) {
+// API-Football national-team ids (by ESPN abbreviation) — for full head-to-head.
+const AF_NAT = { MEX:16, RSA:1531, KOR:17, CZE:770, CAN:5529, BIH:1113, USA:2384, PAR:2380, QAT:1569, SUI:15, BRA:6, MAR:31, HAI:2386, SCO:1108, AUS:20, TUR:777, GER:25, CUW:5530, NED:1118, JPN:12, CIV:1501, ECU:2382, SWE:5, TUN:28, ESP:9, CPV:1533, BEL:1, EGY:32, KSA:23, URU:7, IRN:22, NZL:4673, FRA:2, SEN:13, IRQ:1567, NOR:1090, ARG:26, ALG:1532, AUT:775, JOR:1548, POR:27, COD:1508, ENG:10, CRO:3, GHA:1504, PAN:11, UZB:1568, COL:8 };
+const h2hResult = (a, b) => a > b ? 'W' : a < b ? 'L' : 'D';
+// ESPN summary head-to-head — sparse, but occasionally has older friendlies.
+function h2hFromEspn(j) {
   const blocks = (j && j.headToHeadGames) || [];
-  const blk = blocks.find(b => b.team && b.team.abbreviation === perspectiveCode) || blocks[0];
-  if (!blk) return { w:0, d:0, l:0, games:[] };
-  let w = 0, d = 0, l = 0; const games = [];
-  (blk.events || []).forEach(e => {
-    const r = e.gameResult; if (r === 'W') w++; else if (r === 'L') l++; else d++;
-    const p = (e.gameDate || '').slice(0, 10).split('-');
-    games.push({ date: p.length === 3 ? `${p[0].slice(2)}.${p[1]}.${p[2]}` : '', score: e.score || '', r, league: e.leagueName || e.competitionName || '' });
+  let blk = blocks.find(b => /korea/i.test((b.team && b.team.displayName) || ''));
+  let flip = false;
+  if (!blk) { blk = blocks[0]; flip = !!blk; } // only the opponent's block → invert to Korea's view
+  if (!blk) return [];
+  return (blk.events || []).filter(e => e.score && /^\d+-\d+$/.test(e.score)).map(e => {
+    const sc = String(e.score).split('-');
+    let ks = +sc[0], os = +sc[1];
+    if (flip) { const t = ks; ks = os; os = t; }
+    return { iso: (e.gameDate || '').slice(0, 10), ks, os, r: h2hResult(ks, os), league: e.leagueName || e.competitionName || '' };
   });
+}
+// API-Football head-to-head — full coverage of the modern era (~2011+).
+function h2hFromAf(j) {
+  return ((j && j.response) || []).filter(f => f.goals && f.goals.home != null).map(f => {
+    const kh = /korea/i.test((f.teams.home && f.teams.home.name) || '');
+    const ks = kh ? f.goals.home : f.goals.away, os = kh ? f.goals.away : f.goals.home;
+    return { iso: (f.fixture.date || '').slice(0, 10), ks, os, r: h2hResult(ks, os), league: (f.league && f.league.name) || '' };
+  });
+}
+// Merge both sources (dedupe by date, API-Football preferred), tally Korea record.
+function mergeH2H(espn, af) {
+  const seen = new Set(), games = [];
+  [...af, ...espn].forEach(g => { if (!g.iso || seen.has(g.iso)) return; seen.add(g.iso); games.push(g); });
+  games.sort((a, b) => b.iso.localeCompare(a.iso));
+  let w = 0, d = 0, l = 0;
+  games.forEach(g => { if (g.r === 'W') w++; else if (g.r === 'L') l++; else d++; });
   return { w, d, l, games };
 }
 function ResultBadge({ r, size = 18 }) {
@@ -2442,10 +2464,19 @@ function WCMatchPreview({ match }) {
   const [loading, setLoading] = React.useState(true);
   React.useEffect(() => {
     let alive = true; setLoading(true);
-    fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=${match.id}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(j => { if (!alive) return; setH2h(parseH2H(j, match.koreanPlayer && match.koreanPlayer.team)); setLoading(false); })
-      .catch(() => { if (alive) setLoading(false); });
+    // Determine Korea's side by team NAME (robust — don't trust koreanPlayer.team,
+    // which can carry the wrong code on away fixtures). Korea's perspective drives
+    // both the ESPN block lookup and the API-Football W/D/L tally.
+    const koreaIsHome = /korea/i.test(match.home.name || '');
+    const koreaTeam = koreaIsHome ? match.home : match.away;
+    const oppTeam = koreaIsHome ? match.away : match.home;
+    const koreaCode = koreaTeam.code;
+    const koreaAf = AF_NAT[koreaCode] || 17;
+    const oppAf = AF_NAT[oppTeam.code];
+    Promise.all([
+      fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=${match.id}`).then(r => r.ok ? r.json() : null).then(j => h2hFromEspn(j)).catch(() => []),
+      (koreaAf && oppAf) ? fetch(`${API_BASE}/api/apifootball?path=fixtures/headtohead&h2h=${koreaAf}-${oppAf}`).then(r => r.ok ? r.json() : null).then(j => h2hFromAf(j)).catch(() => []) : Promise.resolve([]),
+    ]).then(([e, a]) => { if (alive) { setH2h(mergeH2H(e, a)); setLoading(false); } });
     return () => { alive = false; };
   }, [match.id]);
   const card = { background:'var(--surface)', borderRadius:14, border:'0.5px solid var(--border2)', padding:'14px', marginBottom:12 };
@@ -2491,17 +2522,21 @@ function WCMatchPreview({ match }) {
                 </div>
               ))}
             </div>
-            <div style={{ fontSize:10, color:'var(--text5)', fontWeight:600, marginBottom:6 }}>최근 맞대결 (대한민국 기준)</div>
-            {h2h.games.slice(0, 5).map((g, i) => (
+            <div style={{ fontSize:10, color:'var(--text5)', fontWeight:600, marginBottom:6 }}>역대 맞대결 · 대한민국 기준 · 총 {h2h.games.length}전</div>
+            {h2h.games.map((g, i) => {
+              const p = (g.iso || '').split('-');
+              const dateLabel = p.length === 3 ? `${p[0].slice(2)}.${p[1]}.${p[2]}` : '';
+              return (
               <div key={i} style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 0', borderTop: i > 0 ? '0.5px solid var(--border2)' : 'none' }}>
-                <span style={{ fontSize:11, color:'var(--text4)', ...NUM, width:58, flexShrink:0 }}>{g.date}</span>
+                <span style={{ fontSize:11, color:'var(--text4)', ...NUM, width:58, flexShrink:0 }}>{dateLabel}</span>
                 <span style={{ fontSize:11, color:'var(--text3)', flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{g.league}</span>
-                <span style={{ ...NUM, fontSize:12, fontWeight:800, color:'var(--text)' }}>{g.score}</span>
+                <span style={{ ...NUM, fontSize:12, fontWeight:800, color:'var(--text)' }}>{g.ks}-{g.os}</span>
                 <ResultBadge r={g.r}/>
               </div>
-            ))}
+              );
+            })}
           </>
-         ) : <div style={{ fontSize:12, color:'var(--text5)', textAlign:'center', padding:'12px 0' }}>최근 맞대결 기록이 없습니다</div>}
+         ) : <div style={{ fontSize:12, color:'var(--text5)', textAlign:'center', padding:'12px 0' }}>역대 맞대결 기록이 없습니다</div>}
       </div>
     </div>
   );
