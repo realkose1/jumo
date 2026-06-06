@@ -444,7 +444,7 @@ const ALL_PLAYERS = [
   { id: 2,  name: '이강인',  nameEn: 'Lee Kang-in',     number: 19, sport: '축구',   team: 'PSG',        league: 'Ligue 1',    position: '미드필더', nation: '🇰🇷', goals: 4,  assists: 5,  matches: 37, rating: 7.4, startRate: 60, age: 25, birth: '2001.02.19', height: '173cm', espnLeague: 'fra.1',  espnId: 274197, apiFootballId: 927 },
   { id: 3,  name: '김민재',  nameEn: 'Kim Min-jae',     number: 3,  sport: '축구',   team: 'Bayern',     league: 'Bundesliga', position: '센터백',   nation: '🇰🇷', goals: 1,  assists: 1,  matches: 35, rating: 7.4, startRate: 65, age: 29, birth: '1996.11.15', height: '190cm', espnLeague: 'ger.1',  espnId: 157688, apiFootballId: 2897 },
   { id: 6,  name: '황희찬',  nameEn: 'Hwang Hee-chan',  number: 11, sport: '축구',   team: 'Wolves',     league: 'EPL',        position: '공격수',   nation: '🇰🇷', goals: 3,  assists: 1,  matches: 27, rating: 6.5, startRate: 65, age: 30, birth: '1996.01.26', height: '177cm', espnLeague: 'eng.1',  espnId: 237224, apiFootballId: 24888 },
-  { id: 7,  name: '황인범',  nameEn: 'Hwang In-beom',   number: 5,  sport: '축구',   team: 'Feyenoord',  league: 'Eredivisie', position: '미드필더', nation: '🇰🇷', goals: 1,  assists: 4,  matches: 24, rating: 7.1, startRate: 50, age: 29, birth: '1996.09.20', height: '177cm', espnLeague: 'ned.1',  espnId: 280061, apiFootballId: 2901, injury: { label:'발목 부상 회복 중', severity:'medium' } },
+  { id: 7,  name: '황인범',  nameEn: 'Hwang In-beom',   number: 5,  sport: '축구',   team: 'Feyenoord',  league: 'Eredivisie', position: '미드필더', nation: '🇰🇷', goals: 1,  assists: 4,  matches: 24, rating: 7.1, startRate: 50, age: 29, birth: '1996.09.20', height: '177cm', espnLeague: 'ned.1',  espnId: 280061, apiFootballId: 2901 },
   { id: 8,  name: '조규성',  nameEn: 'Cho Gue-sung',    number: 9,  sport: '축구',   team: 'Midtjylland',league: 'Superliga',  position: '공격수',   nation: '🇰🇷', goals: 7,  assists: 1,  matches: 38, rating: 6.8, startRate: 70, age: 28, birth: '1998.01.25', height: '190cm', espnLeague: 'den.1',  espnId: 303464, apiFootballId: 34211 },
   { id: 19, name: '오현규',  nameEn: 'Oh Hyeon-gyu',    number: 19, sport: '축구',   team: 'Besiktas',   league: 'Süper Lig',  position: '공격수',   nation: '🇰🇷', goals: 8,  assists: 1,  matches: 13, rating: 7.2, startRate: 85, age: 25, birth: '2001.04.12', height: '181cm', espnLeague: 'tur.1',  espnId: 302434, apiFootballId: 34710 },
   { id: 20, name: '양현준',  nameEn: 'Yang Hyun-jun',   number: 77, sport: '축구',   team: 'Celtic',     league: 'SPFL',       position: '공격수',   nation: '🇰🇷', goals: 9,  assists: 2,  matches: 42, rating: 7.0, startRate: 70, age: 23, birth: '2002.06.25', height: '172cm', espnLeague: 'sco.1',  espnId: 350711, apiFootballId: 304958 },
@@ -5900,7 +5900,7 @@ function App() {
   // status badges and live "not in lineup" labels stay accurate.
   React.useEffect(() => {
     let cancelled = false;
-    const KEY = 'jumoPlayerStatus';
+    const KEY = 'jumoPlayerStatus_v2'; // bumped: ESPN-based soccer status source
     const DAY = 24 * 60 * 60 * 1000;
     // Apply a name→status map onto ALL_PLAYERS. A present key with null clears any
     // (now stale) injury; an absent key leaves the existing value untouched.
@@ -5968,7 +5968,32 @@ function App() {
         }
       } catch (e) { console.warn('MLB status sync failed:', e?.message || e); }
 
-      // ── Soccer: API-Football injuries via proxy ──
+      // ── Soccer: ESPN athlete status (CORS-open, no proxy/key) ──
+      // Primary, reliable source — clears stale injuries for active players and
+      // flags ones ESPN reports as injured. Runs before API-Football so that when
+      // the proxy is unavailable, ESPN's verdict still stands.
+      try {
+        const soccerEspn = ALL_PLAYERS.filter(p => p.sport === '축구' && p.espnId && p.espnLeague);
+        await Promise.all(soccerEspn.map(async p => {
+          try {
+            const r = await fetch(`https://site.web.api.espn.com/apis/common/v3/sports/soccer/${p.espnLeague}/athletes/${p.espnId}`);
+            if (!r.ok) return; // keep existing
+            const a = (await r.json())?.athlete;
+            if (!a) return;
+            const inj = Array.isArray(a.injuries) ? a.injuries : [];
+            if (inj.length > 0) {
+              const it = inj[0] || {};
+              const detail = it?.type?.description || it?.details?.type || it?.status || it?.shortComment || '부상';
+              const susp = /suspen|red card/i.test(JSON.stringify(it));
+              map[p.name] = { label: koReason(detail), severity: susp ? 'medium' : 'high', kind: susp ? 'suspended' : 'injured', note: detail };
+            } else {
+              map[p.name] = null; // ESPN reports active / no injuries → available
+            }
+          } catch {}
+        }));
+      } catch (e) { console.warn('Soccer ESPN status sync failed:', e?.message || e); }
+
+      // ── Soccer: API-Football injuries via proxy (enriches when available) ──
       try {
         const soccer = ALL_PLAYERS.filter(p => p.sport === '축구' && p.apiFootballId);
         await Promise.all(soccer.map(async p => {
