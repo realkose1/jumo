@@ -5,8 +5,5 @@
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
-  ],
-  "crons": [
-    { "path": "/api/push-cron", "schedule": "*/2 * * * *" }
   ]
 }
