@@ -9,6 +9,12 @@
 // Required env var on Vercel: APIFOOTBALL_KEY
 
 module.exports = async function handler(req, res) {
+  // CORS: the native app (capacitor://localhost) fetches this proxy cross-origin.
+  // Without these headers WKWebView blocks the response. Public proxy → allow all.
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  if (req.method === 'OPTIONS') { res.status(204).end(); return; }
+
   const key = process.env.APIFOOTBALL_KEY;
   if (!key) {
     res.status(500).json({ error: 'APIFOOTBALL_KEY not configured' });
