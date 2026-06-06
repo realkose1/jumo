@@ -2272,12 +2272,34 @@ function HomeV3({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [] }) {
 }
 
 // ─── TEAM CHEER METER (tap-to-cheer, proportional bar) ────────
-const CHEER_BRAND = { TOT:'#1c2a52', MCI:'#2f5d8a', PSG:'#0a2472', OL:'#2a6cb0', LAD:'#15467e', TOR:'#1a4a8a', FCB:'#7a0a2e', BVB:'#7e7000', ATL:'#a01030', GEN:'#a51a20', BAY:'#7a0a2a', FEY:'#a01818', NEW:'#222222' };
-function cheerColor(code, side) {
-  if (code && CHEER_BRAND[code]) return CHEER_BRAND[code];
-  if (!code) return side === 'home' ? '#2c313a' : '#26384e';
-  let h = 0; for (let i = 0; i < code.length; i++) h = (h * 31 + code.charCodeAt(i)) % 360;
-  return `hsl(${h}, 40%, 26%)`;
+// Real team colors. Priority: color captured from the data source (ESPN
+// color/alt, SofaScore teamColors) → curated brand map → stable hash. Everything
+// is normalized to a readable dark card (white text) keeping the team's hue.
+const CHEER_BRAND = {
+  TOT:'#132257', PSG:'#004170', FCB:'#DC052D', WOL:'#FDB913', FEY:'#E2001A', NEW:'#241F20',
+  BHA:'#0057B8', MCI:'#6CABDD', MUN:'#DA291C', ARS:'#EF0107', LIV:'#C8102E', CHE:'#034694',
+  RMA:'#FEBE10', BAR:'#A50044', JUV:'#222222', INT:'#0068A8', MIL:'#FB090B', BVB:'#FDE100',
+  RBL:'#DD0741', AJX:'#D2122E', POR:'#00428C', GEN:'#1E78C8', CRV:'#ED1C24',
+  SF:'#FD5A1E', SD:'#FFC425', PIT:'#FDB827', LAD:'#005A9C', NYY:'#0C2340', BOS:'#BD3039',
+  CHC:'#0E3386', STL:'#C41E3A', ATL:'#CE1141', HOU:'#EB6E1F', SEA:'#0C2C56', BAL:'#DF4601',
+  KOR:'#CE2028', JPN:'#BC002D', CZE:'#D7141A', BRA:'#FFDF00', ARG:'#75AADB', FRA:'#21304F',
+};
+function hexRGB(x) { if (!x) return null; let h = String(x).replace('#', '').trim(); if (h.length === 3) h = h.split('').map(c => c + c).join(''); if (h.length !== 6 || /[^0-9a-f]/i.test(h)) return null; return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+function rgbToHsl(rgb) { let [r, g, b] = rgb.map(v => v / 255); const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn; let h = 0, s = 0; if (d) { s = d / (1 - Math.abs(2 * l - 1)); if (mx === r) h = ((g - b) / d + 6) % 6; else if (mx === g) h = (b - r) / d + 2; else h = (r - g) / d + 4; h *= 60; } return { h, s, l }; }
+function hueDist(a, b) { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; }
+function usableBrand(hex) { const c = hexRGB(hex); if (!c) return false; const { s, l } = rgbToHsl(c); return s > 0.18 && l < 0.93 && l > 0.05; }
+function rawBrand(t) { const cands = [t && t.color, t && t.altColor].filter(usableBrand); cands.sort((x, y) => rgbToHsl(hexRGB(y)).s - rgbToHsl(hexRGB(x)).s); if (cands[0]) return cands[0]; if (t && CHEER_BRAND[t.code]) return CHEER_BRAND[t.code]; return null; }
+function cardFromHex(hex) { const c = hexRGB(hex); if (!c) return null; const { h, s } = rgbToHsl(c); return `hsl(${Math.round(h)}, ${Math.round(Math.max(s, 0.4) * 100)}%, 30%)`; }
+function hashCard(code) { let h = 0; for (let i = 0; i < (code || '').length; i++) h = (h * 31 + code.charCodeAt(i)) % 360; return `hsl(${h}, 42%, 30%)`; }
+function deriveCardColors(home, away) {
+  const hHex = rawBrand(home), aHex = rawBrand(away);
+  let homeColor = hHex ? cardFromHex(hHex) : (home && home.code ? hashCard(home.code) : '#2c313a');
+  let awayColor = aHex ? cardFromHex(aHex) : (away && away.code ? hashCard(away.code) : '#26384e');
+  if (hHex && aHex) { // same real hue on both → keep the away card's real hue but deepen it so the two read as distinct
+    const h1 = rgbToHsl(hexRGB(hHex)).h, h2 = rgbToHsl(hexRGB(aHex)).h, s2 = rgbToHsl(hexRGB(aHex)).s;
+    if (hueDist(h1, h2) < 16) awayColor = `hsl(${Math.round(h2)}, ${Math.round(Math.max(s2, 0.4) * 100)}%, 20%)`;
+  }
+  return { homeColor, awayColor };
 }
 function TeamCheerMeter({ match, isLive, isFinished }) {
   const mid = String(match.id);
@@ -2339,14 +2361,15 @@ function TeamCheerMeter({ match, isLive, isFinished }) {
   const total = counts.home + counts.away;
   const hShare = total > 0 ? Math.max(0.28, Math.min(0.72, counts.home / total)) : 0.5;
   const hPct = hShare * 100;
-  const statusText = isFinished ? '종료' : (isLive ? 'LIVE' : 'VS');
+  const { homeColor, awayColor } = React.useMemo(() => deriveCardColors(match.home, match.away), [match.home, match.away]);
+  const statusText = isFinished ? '종료' : (isLive ? 'LIVE' : '예정');
   const statusColor = isLive ? 'var(--acc)' : 'rgba(255,255,255,0.6)';
 
   const renderSide = (team, t, alignRight) => (
     <button onClick={() => tap(team)} aria-label={`${t.name} 응원`}
       style={{ width:`calc(${team === 'home' ? hPct : 100 - hPct}% - 3px)`, transition:'width 0.45s cubic-bezier(.4,0,.2,1)',
         flexShrink:0, height:'100%', position:'relative', overflow:'hidden', cursor:'pointer', WebkitTapHighlightColor:'transparent',
-        background:cheerColor(t.code, team), border:'none', borderRadius:14, padding:'10px 13px',
+        background: team === 'home' ? homeColor : awayColor, border:'none', borderRadius:14, padding:'10px 13px',
         display:'flex', flexDirection:'column', justifyContent:'space-between', alignItems: alignRight ? 'flex-end' : 'flex-start' }}>
       <TeamBadge code={t.code} size={26} logo={t.logo}/>
       <span key={counts[team]} style={{ ...NUM, fontSize:20, fontWeight:800, color:'#fff', lineHeight:1, letterSpacing:-0.5, animation:'cheerPop 0.25s ease' }}>{counts[team].toLocaleString()}</span>
@@ -6151,6 +6174,7 @@ function App() {
             const side = (c) => ({
               name: c?.team?.displayName || '', koName: KO_NAME[c?.team?.displayName] || c?.team?.displayName || '',
               code: c?.team?.abbreviation || '', score: parseInt(c?.score) || 0, logo: logo(c),
+              color: c?.team?.color ? '#' + c.team.color : null, altColor: c?.team?.alternateColor ? '#' + c.team.alternateColor : null,
             });
             const koreaIsHome = /korea/i.test(home?.team?.displayName || '');
             const koreaCode = (koreaIsHome ? home : away)?.team?.abbreviation || 'KOR';
@@ -6440,8 +6464,8 @@ function App() {
       minute,
       sport: `⚽ ${leagueAbbr}`,
       leagueKey: '',
-      home: { name: homeTeamName, code: homeShort, score: (isLive || isFinished || isTimedOut) ? (event.homeScore?.current ?? 0) : null, logo: homeLogo },
-      away: { name: awayTeamName, code: awayShort, score: (isLive || isFinished || isTimedOut) ? (event.awayScore?.current ?? 0) : null, logo: awayLogo },
+      home: { name: homeTeamName, code: homeShort, score: (isLive || isFinished || isTimedOut) ? (event.homeScore?.current ?? 0) : null, logo: homeLogo, color: event.homeTeam?.teamColors?.primary || null, altColor: event.homeTeam?.teamColors?.secondary || null },
+      away: { name: awayTeamName, code: awayShort, score: (isLive || isFinished || isTimedOut) ? (event.awayScore?.current ?? 0) : null, logo: awayLogo, color: event.awayTeam?.teamColors?.primary || null, altColor: event.awayTeam?.teamColors?.secondary || null },
       koreanPlayer: { ...koreanPlayer, event: (isFinished || isTimedOut) ? '미출전' : '출전 예상', minutesPlayed: 0, matchGoals: 0, matchAssists: 0 },
       koreanPlayers: koreanPlayers.map(kp => ({ ...kp, event: (isFinished || isTimedOut) ? '미출전' : '출전 예상', minutesPlayed: 0, matchGoals: 0, matchAssists: 0 })),
       isKoreanDerby,
