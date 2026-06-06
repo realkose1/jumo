@@ -2526,7 +2526,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
               {isLive ? (
                 <>
                   <div style={{ ...NUM, fontSize:52, fontWeight:800, color:'var(--text)', letterSpacing:-3, lineHeight:1 }}>{match.home.score}<span style={{ color:'var(--text4)', fontWeight:400 }}>:</span>{match.away.score}</div>
-                  <div style={{ ...NUM, fontSize:14, color:'var(--text3)', marginTop:4, fontWeight:600 }}>{match.minute}'</div>
+                  <div style={{ ...NUM, fontSize:14, color:'var(--text3)', marginTop:4, fontWeight:600 }}>{liveTimeLabel(match, match.minute)}</div>
                 </>
               ) : isFinished ? (
                 <>
@@ -3919,7 +3919,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
                             <LiveDot/>
                             <span style={{ ...NUM, fontSize:15, fontWeight:800, color:'var(--text)' }}>{m.home.score}-{m.away.score}</span>
                           </div>
-                          <span style={{ fontSize:9, fontWeight:700, color:'var(--acc)' }}>{m.minute}'</span>
+                          <span style={{ fontSize:9, fontWeight:700, color:'var(--acc)' }}>{liveTimeLabel(m, m.minute)}</span>
                         </div>
                       ) : isFinished ? (
                         <span style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text)' }}>{m.home.score}-{m.away.score}</span>
