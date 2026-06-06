@@ -110,6 +110,10 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
     private var hostView: UIView?
     private var bellHost: UIView?
     private var bellBadge: UILabel?
+    private var backHost: UIView?
+    private var followHost: UIView?
+    private var followLabel: UILabel?
+    private var followIcon: UIImageView?
     private var didSetup = false
     private var wk: WKWebView? { self.webView as? WKWebView }
 
@@ -120,8 +124,10 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
         if #available(iOS 26.0, *) {
             wk?.configuration.userContentController.add(self, name: "tabbar")
             wk?.configuration.userContentController.add(self, name: "bell")
+            wk?.configuration.userContentController.add(self, name: "detailbar")
             setupTabBar()
             setupNotifBell()
+            setupDetailChrome()
             enableWebNativeTabBar()
         }
         // iOS < 26: keep the web app's own CSS tab bar.
@@ -241,6 +247,89 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
         }
     }
 
+    // MARK: - Detail-screen toolbar (glass back + follow), shown on 2-depth screens
+
+    @available(iOS 26.0, *)
+    private func glassCircle(symbol: String, size: CGFloat) -> UIVisualEffectView {
+        let e = UIGlassEffect(style: .regular); e.isInteractive = true
+        let g = UIVisualEffectView(effect: e)
+        g.translatesAutoresizingMaskIntoConstraints = false
+        g.layer.cornerRadius = size / 2; g.layer.cornerCurve = .continuous; g.clipsToBounds = true
+        let icon = UIImageView(image: UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)))
+        icon.tintColor = UIColor.white.withAlphaComponent(0.92); icon.contentMode = .center
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        g.contentView.addSubview(icon)
+        NSLayoutConstraint.activate([
+            icon.centerXAnchor.constraint(equalTo: g.contentView.centerXAnchor),
+            icon.centerYAnchor.constraint(equalTo: g.contentView.centerYAnchor)
+        ])
+        return g
+    }
+
+    @available(iOS 26.0, *)
+    private func setupDetailChrome() {
+        let bsize: CGFloat = 38
+        let back = glassCircle(symbol: "chevron.left", size: bsize)
+        back.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(backChromeTapped)))
+        view.addSubview(back)
+        NSLayoutConstraint.activate([
+            back.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            back.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            back.widthAnchor.constraint(equalToConstant: bsize),
+            back.heightAnchor.constraint(equalToConstant: bsize)
+        ])
+        back.alpha = 0
+        backHost = back
+
+        let fe = UIGlassEffect(style: .clear); fe.isInteractive = true
+        let pill = UIVisualEffectView(effect: fe)
+        pill.translatesAutoresizingMaskIntoConstraints = false
+        pill.layer.cornerRadius = 16; pill.layer.cornerCurve = .continuous; pill.clipsToBounds = true
+        let icon = UIImageView(); icon.contentMode = .center
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        let label = UILabel(); label.font = .systemFont(ofSize: 13, weight: .bold)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        let row = UIStackView(arrangedSubviews: [icon, label])
+        row.axis = .horizontal; row.spacing = 5; row.alignment = .center
+        row.translatesAutoresizingMaskIntoConstraints = false
+        pill.contentView.addSubview(row)
+        NSLayoutConstraint.activate([
+            row.centerYAnchor.constraint(equalTo: pill.contentView.centerYAnchor),
+            row.leadingAnchor.constraint(equalTo: pill.contentView.leadingAnchor, constant: 13),
+            row.trailingAnchor.constraint(equalTo: pill.contentView.trailingAnchor, constant: -13)
+        ])
+        pill.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(followTapped)))
+        view.addSubview(pill)
+        NSLayoutConstraint.activate([
+            pill.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 13),
+            pill.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            pill.heightAnchor.constraint(equalToConstant: 32)
+        ])
+        pill.alpha = 0
+        followHost = pill; followLabel = label; followIcon = icon
+    }
+
+    @objc private func backChromeTapped() { wk?.evaluateJavaScript("window.__back && window.__back()") }
+    @objc private func followTapped() { wk?.evaluateJavaScript("window.__jumoFollow && window.__jumoFollow()") }
+
+    private func updateDetailChrome(back: Bool, followShow: Bool, followOn: Bool) {
+        UIView.animate(withDuration: 0.2) {
+            self.backHost?.alpha = back ? 1 : 0
+            self.followHost?.alpha = followShow ? 1 : 0
+        }
+        let acc = UIColor(red: 0.961, green: 0.769, blue: 0.0, alpha: 1)
+        let cfg = UIImage.SymbolConfiguration(pointSize: 11, weight: .bold)
+        if followOn {
+            followIcon?.image = UIImage(systemName: "checkmark", withConfiguration: cfg)
+            followIcon?.tintColor = acc
+            followLabel?.text = "팔로우 중"; followLabel?.textColor = acc
+        } else {
+            followIcon?.image = UIImage(systemName: "plus", withConfiguration: cfg)
+            followIcon?.tintColor = .white
+            followLabel?.text = "팔로우"; followLabel?.textColor = .white
+        }
+    }
+
     @available(iOS 26.0, *)
     private func setupTabBar() {
         model.onSelect = { [weak self] i in
@@ -287,6 +376,10 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
             withAnimation(.spring(response: 0.38, dampingFraction: 0.72)) { model.selected = i }
         } else if message.name == "bell", let d = message.body as? [String: Any] {
             updateBell(show: (d["show"] as? Bool) ?? false, unread: (d["unread"] as? Int) ?? 0)
+        } else if message.name == "detailbar", let d = message.body as? [String: Any] {
+            updateDetailChrome(back: (d["back"] as? Bool) ?? false,
+                               followShow: (d["followShow"] as? Bool) ?? false,
+                               followOn: (d["followOn"] as? Bool) ?? false)
         }
     }
 }
