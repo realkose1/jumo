@@ -2401,6 +2401,142 @@ function TeamCheerMeter({ match, isLive, isFinished }) {
   );
 }
 
+// ─── WORLD CUP MATCH PREVIEW (랭킹 · 폼 · 상대전적 · 예상 라인업) ──
+// Approximate FIFA men's ranking (by ESPN abbreviation) — for preview context.
+const FIFA_RANK = {
+  ARG:1, ESP:2, FRA:3, ENG:4, BRA:5, NED:6, POR:7, BEL:8, ITA:9, GER:10,
+  CRO:11, MAR:12, COL:13, URU:14, USA:15, MEX:16, SUI:17, JPN:18, SEN:19, IRN:20,
+  DEN:21, KOR:22, ECU:23, AUS:24, AUT:25, UKR:26, SWE:27, TUR:28, WAL:29, CAN:30,
+  POL:31, SRB:32, RSA:33, EGY:34, NGA:35, PAN:36, QAT:37, NOR:38, PAR:39, CZE:40,
+  GRE:41, CIV:42, SCO:43, CRC:46, BIH:48, SVN:50, SAU:58, JOR:62, GHA:67, NZL:78,
+};
+// Korea probable XI (4-2-3-1). Names matching ALL_PLAYERS become tappable.
+const KOREA_XI = {
+  formation: '4-2-3-1',
+  rows: [
+    [{ n:'조현우', num:1 }],
+    [{ n:'설영우', num:2 }, { n:'김민재', num:4 }, { n:'정승현', num:20 }, { n:'김진수', num:3 }],
+    [{ n:'박용우', num:6 }, { n:'황인범', num:16 }],
+    [{ n:'이강인', num:18 }, { n:'손흥민', num:7, c:true }, { n:'황희찬', num:11 }],
+    [{ n:'오현규', num:9 }],
+  ],
+};
+function parseH2H(j, perspectiveCode) {
+  const blocks = (j && j.headToHeadGames) || [];
+  const blk = blocks.find(b => b.team && b.team.abbreviation === perspectiveCode) || blocks[0];
+  if (!blk) return { w:0, d:0, l:0, games:[] };
+  let w = 0, d = 0, l = 0; const games = [];
+  (blk.events || []).forEach(e => {
+    const r = e.gameResult; if (r === 'W') w++; else if (r === 'L') l++; else d++;
+    const p = (e.gameDate || '').slice(0, 10).split('-');
+    games.push({ date: p.length === 3 ? `${p[0].slice(2)}.${p[1]}.${p[2]}` : '', score: e.score || '', r, league: e.leagueName || e.competitionName || '' });
+  });
+  return { w, d, l, games };
+}
+function ResultBadge({ r, size = 18 }) {
+  const c = r === 'W' ? '#3fb950' : r === 'L' ? '#e5534b' : '#8b949e';
+  return <span style={{ width:size, height:size, borderRadius:5, background:c, color:'#0b0b0d', fontSize:size*0.55, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>{r === 'W' ? '승' : r === 'L' ? '패' : '무'}</span>;
+}
+function WCMatchPreview({ match }) {
+  const [h2h, setH2h] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  React.useEffect(() => {
+    let alive = true; setLoading(true);
+    fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=${match.id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(j => { if (!alive) return; setH2h(parseH2H(j, match.koreanPlayer && match.koreanPlayer.team)); setLoading(false); })
+      .catch(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [match.id]);
+  const card = { background:'var(--surface)', borderRadius:14, border:'0.5px solid var(--border2)', padding:'14px', marginBottom:12 };
+  const hdr = { fontSize:12, color:'var(--text3)', fontWeight:700, marginBottom:12, letterSpacing:0.3 };
+  const hr = FIFA_RANK[match.home.code] || null, ar = FIFA_RANK[match.away.code] || null;
+  const best = (hr && ar) ? Math.min(hr, ar) : null;
+  const teams = [{ t: match.home, r: hr }, { t: match.away, r: ar }];
+  const nameOf = (t) => t.koName || t.name;
+  return (
+    <div>
+      <div style={card}>
+        <div style={hdr}>FIFA 랭킹</div>
+        {teams.map((x, i) => (
+          <div key={i} style={{ display:'flex', alignItems:'center', gap:10, marginBottom: i === 0 ? 10 : 0 }}>
+            <TeamBadge code={x.t.code} size={24} logo={x.t.logo}/>
+            <span style={{ fontSize:13, fontWeight:700, color:'var(--text)', flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{nameOf(x.t)}</span>
+            {x.r ? <span style={{ ...NUM, fontSize:18, fontWeight:800, color: x.r === best ? 'var(--acc)' : 'var(--text2)' }}>{x.r}<span style={{ fontSize:11, color:'var(--text5)', fontWeight:600 }}>위</span></span>
+                 : <span style={{ fontSize:12, color:'var(--text5)' }}>—</span>}
+          </div>
+        ))}
+      </div>
+      <div style={card}>
+        <div style={hdr}>최근 폼 <span style={{ color:'var(--text5)', fontWeight:500 }}>· 최근 5경기</span></div>
+        {[match.home, match.away].map((t, i) => (
+          <div key={i} style={{ display:'flex', alignItems:'center', gap:10, marginBottom: i === 0 ? 10 : 0 }}>
+            <TeamBadge code={t.code} size={22} logo={t.logo}/>
+            <span style={{ fontSize:13, fontWeight:600, color:'var(--text2)', flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{nameOf(t)}</span>
+            {t.form ? <div style={{ display:'flex', gap:4 }}>{String(t.form).slice(-5).split('').map((c, k) => <ResultBadge key={k} r={c}/>)}</div>
+                    : <span style={{ fontSize:11, color:'var(--text5)' }}>정보 없음</span>}
+          </div>
+        ))}
+      </div>
+      <div style={card}>
+        <div style={hdr}>상대 전적</div>
+        {loading ? <div style={{ fontSize:12, color:'var(--text5)', textAlign:'center', padding:'12px 0' }}>불러오는 중…</div>
+         : (h2h && h2h.games.length) ? (
+          <>
+            <div style={{ display:'flex', justifyContent:'center', gap:22, marginBottom:14 }}>
+              {[['승', h2h.w, '#3fb950'], ['무', h2h.d, '#8b949e'], ['패', h2h.l, '#e5534b']].map(([lab, v, c]) => (
+                <div key={lab} style={{ textAlign:'center' }}>
+                  <div style={{ ...NUM, fontSize:24, fontWeight:800, color: c }}>{v}</div>
+                  <div style={{ fontSize:10, color:'var(--text4)', fontWeight:600, marginTop:2 }}>{lab}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize:10, color:'var(--text5)', fontWeight:600, marginBottom:6 }}>최근 맞대결 (대한민국 기준)</div>
+            {h2h.games.slice(0, 5).map((g, i) => (
+              <div key={i} style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 0', borderTop: i > 0 ? '0.5px solid var(--border2)' : 'none' }}>
+                <span style={{ fontSize:11, color:'var(--text4)', ...NUM, width:58, flexShrink:0 }}>{g.date}</span>
+                <span style={{ fontSize:11, color:'var(--text3)', flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{g.league}</span>
+                <span style={{ ...NUM, fontSize:12, fontWeight:800, color:'var(--text)' }}>{g.score}</span>
+                <ResultBadge r={g.r}/>
+              </div>
+            ))}
+          </>
+         ) : <div style={{ fontSize:12, color:'var(--text5)', textAlign:'center', padding:'12px 0' }}>최근 맞대결 기록이 없습니다</div>}
+      </div>
+    </div>
+  );
+}
+function KoreaLineupPitch({ onPlayer }) {
+  const yFor = [88, 67, 49, 30, 11];
+  return (
+    <div style={{ padding:'16px' }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+        <div style={{ fontSize:13, fontWeight:800, color:'var(--text)' }}>🇰🇷 대한민국 예상 라인업</div>
+        <div style={{ ...NUM, fontSize:13, fontWeight:800, color:'var(--acc)' }}>{KOREA_XI.formation}</div>
+      </div>
+      <div style={{ position:'relative', width:'100%', aspectRatio:'3 / 4', borderRadius:14, overflow:'hidden', background:'linear-gradient(180deg,#10412700,#0c3420), repeating-linear-gradient(180deg,#0f3d24 0 12.5%,#0e3a22 12.5% 25%)', border:'0.5px solid rgba(255,255,255,0.08)' }}>
+        <div style={{ position:'absolute', left:'8%', right:'8%', top:'50%', height:0, borderTop:'1px solid rgba(255,255,255,0.13)' }}/>
+        <div style={{ position:'absolute', left:'50%', top:'50%', width:74, height:74, borderRadius:'50%', border:'1px solid rgba(255,255,255,0.13)', transform:'translate(-50%,-50%)' }}/>
+        <div style={{ position:'absolute', left:'27%', right:'27%', top:0, height:'13%', border:'1px solid rgba(255,255,255,0.13)', borderTop:'none' }}/>
+        <div style={{ position:'absolute', left:'27%', right:'27%', bottom:0, height:'13%', border:'1px solid rgba(255,255,255,0.13)', borderBottom:'none' }}/>
+        {KOREA_XI.rows.map((row, ri) => row.map((p, pi) => {
+          const x = row.length === 1 ? 50 : 13 + (74 * pi / (row.length - 1));
+          const playerObj = ALL_PLAYERS.find(a => a.name === p.n);
+          const tappable = playerObj && onPlayer;
+          return (
+            <div key={p.n} onClick={() => tappable && onPlayer(playerObj)}
+              style={{ position:'absolute', left:`${x}%`, top:`${yFor[ri]}%`, transform:'translate(-50%,-50%)', display:'flex', flexDirection:'column', alignItems:'center', gap:3, cursor: tappable ? 'pointer' : 'default', width:66 }}>
+              <div style={{ width:34, height:34, borderRadius:'50%', background: p.c ? 'var(--acc)' : '#f2f2f2', color:'#0b2018', display:'flex', alignItems:'center', justifyContent:'center', ...NUM, fontSize:13, fontWeight:800, boxShadow:'0 2px 6px rgba(0,0,0,0.45)', border: tappable ? '2px solid var(--acc)' : '2px solid transparent' }}>{p.num}</div>
+              <span style={{ fontSize:10, fontWeight:700, color:'#fff', textShadow:'0 1px 3px rgba(0,0,0,0.9)', whiteSpace:'nowrap' }}>{p.n}{p.c ? ' (C)' : ''}</span>
+            </div>
+          );
+        }))}
+      </div>
+      <div style={{ fontSize:10, color:'var(--text5)', marginTop:8, textAlign:'center', lineHeight:1.5 }}>예상 라인업입니다 · 실제 라인업은 경기 시작 약 1시간 전에 발표됩니다</div>
+    </div>
+  );
+}
+
 // ─── SCREEN: LIVE MATCH DETAIL ────────────────────────────────
 function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
   const goKoreanPlayer = React.useCallback((kp) => {
@@ -2426,6 +2562,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
 
   const isSoccerMatch = !((match.sport||'').includes('MLB') || (match.sport||'').includes('⚾'));
   const isMLBMatch = !isSoccerMatch;
+  const isNationalTeam = !!match.koreanPlayer?.isNationalTeam;
 
   // MLB summary covers events + stats + lineups in one shot
   React.useEffect(() => {
@@ -2862,6 +2999,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
       )}
       {tab === 'events' && !isMLBMatch && (
         <div style={{ padding:'16px' }}>
+          {isNationalTeam && <WCMatchPreview match={match}/>}
           {isLive && (
             <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:16, padding:'10px 14px', background:'rgba(230,48,48,0.08)', borderRadius:10, border:'0.5px solid rgba(230,48,48,0.2)' }}>
               <LiveDot/>
@@ -2877,6 +3015,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
               return t === 'goal' || t === 'card' || t === 'substitution' || t === 'varDecision' || t === 'inGamePenalty' || t === 'period' || t === 'injuryTime';
             }).slice().reverse(); // newest first
             if (incidents.length === 0) {
+              if (isNationalTeam) return null; // WC preview already shown above
               return <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text5)', fontSize:14 }}>아직 주요 이벤트가 없습니다</div>;
             }
             const koreanNamesEn = (match.koreanPlayers || [match.koreanPlayer]).map(kp => kp?.nameEn).filter(Boolean);
@@ -3262,6 +3401,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
         );
       })()}
       {tab === 'lineups' && !isMLBMatch && (() => {
+        if (isNationalTeam) return <KoreaLineupPitch onPlayer={onPlayer}/>;
         if (lineupsLoading) {
           return <div style={{ display:'flex', justifyContent:'center', padding:'48px 0' }}><div style={{ width:24, height:24, borderRadius:'50%', border:'2.5px solid var(--border)', borderTopColor:'var(--acc)', animation:'spin 0.8s linear infinite' }}/></div>;
         }
@@ -6175,6 +6315,7 @@ function App() {
               name: c?.team?.displayName || '', koName: KO_NAME[c?.team?.displayName] || c?.team?.displayName || '',
               code: c?.team?.abbreviation || '', score: parseInt(c?.score) || 0, logo: logo(c),
               color: c?.team?.color ? '#' + c.team.color : null, altColor: c?.team?.alternateColor ? '#' + c.team.alternateColor : null,
+              form: c?.form || '',
             });
             const koreaIsHome = /korea/i.test(home?.team?.displayName || '');
             const koreaCode = (koreaIsHome ? home : away)?.team?.abbreviation || 'KOR';
