@@ -28,6 +28,8 @@ module.exports = async function handler(req, res) {
     'fixtures/events',
     'fixtures/statistics',
     'fixtures/players',
+    'fixtures/headtohead',
+    'teams',
     'players',
     'injuries',
     'status',
@@ -51,8 +53,11 @@ module.exports = async function handler(req, res) {
     // CDN cache: fixtures lists for a date are fairly stable, lineups/events
     // change closer to / during kickoff. Use modest TTL to keep daily call
     // count low. The client also has its own Supabase cache layer on top.
+    // teams (ids never change) and head-to-head history (past results) are very
+    // stable → cache hard. live match data is short-lived.
+    const stable = path === 'teams' || path === 'fixtures/headtohead';
     const isLive = path === 'fixtures/lineups' || path === 'fixtures/events' || path === 'fixtures/statistics';
-    const sMaxAge = isLive ? 20 : 60;
+    const sMaxAge = stable ? 86400 : (isLive ? 20 : 60);
     res.setHeader('Cache-Control', `public, s-maxage=${sMaxAge}, stale-while-revalidate=${sMaxAge * 2}`);
     res.status(r.status).json(data);
   } catch (e) {
