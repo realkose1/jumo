@@ -104,10 +104,10 @@ html.light-mode body { background: #e5e5ea; }
 @keyframes slideOutRight { from{transform:translateX(0)} to{transform:translateX(100%)} }
 .screen-slide-out { animation: slideOutRight 0.34s cubic-bezier(0.4, 0, 0.6, 1) forwards; will-change: transform; }
 @keyframes fadeIn { from{opacity:0} to{opacity:1} }
-@keyframes schedNext { from{opacity:0;transform:translateX(30px)} to{opacity:1;transform:translateX(0)} }
-@keyframes schedPrev { from{opacity:0;transform:translateX(-30px)} to{opacity:1;transform:translateX(0)} }
-.sched-slide-next { animation: schedNext 0.26s cubic-bezier(0.32,0.72,0,1); }
-.sched-slide-prev { animation: schedPrev 0.26s cubic-bezier(0.32,0.72,0,1); }
+@keyframes schedCarNext { from{transform:translateX(0)} to{transform:translateX(-50%)} }
+@keyframes schedCarPrev { from{transform:translateX(-50%)} to{transform:translateX(0)} }
+.sched-car-next { animation: schedCarNext 0.34s cubic-bezier(0.32,0.72,0,1); }
+.sched-car-prev { animation: schedCarPrev 0.34s cubic-bezier(0.32,0.72,0,1); }
 @keyframes ripple { 0%{transform:scale(1);opacity:0.6} 100%{transform:scale(2.5);opacity:0} }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes ticker { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
@@ -4057,7 +4057,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
   // Pull-to-refresh + horizontal day-swipe state
   const [pullY, setPullY] = React.useState(0);
   const [refreshing, setRefreshing] = React.useState(false);
-  const [slideDir, setSlideDir] = React.useState(0); // 1=next day, -1=prev day (drives slide animation)
+  const [trans, setTrans] = React.useState(null); // {dir:1|-1, from:dateStr} during a day-change carousel slide
   const touchStartY = React.useRef(0);
   const touchStartX = React.useRef(0);
   const touchDX = React.useRef(0);
@@ -4070,7 +4070,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
     const ci = datesList.findIndex(d => d.toDateString() === selDate);
     const ni = datesList.findIndex(d => d.toDateString() === dateStr);
     if (ni < 0 || ni === ci) return;
-    setSlideDir(ni > ci ? 1 : -1);
+    setTrans({ dir: ni > ci ? 1 : -1, from: selDate });
     setSelDate(dateStr);
   };
   const changeDay = (delta) => {
@@ -4148,12 +4148,10 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
     return matchDate >= sevenDaysAgo && matchDate <= sevenDaysLater;
   });
 
-  const selectedDateMatches = allMatches
-    .filter(m => {
-      const matchDate = new Date(m.fullDate);
-      return matchDate.toDateString() === selDate;
-    })
+  const matchesForDate = (ds) => allMatches
+    .filter(m => new Date(m.fullDate).toDateString() === ds)
     .sort((a, b) => new Date(a.fullDate) - new Date(b.fullDate));
+  const selectedDateMatches = matchesForDate(selDate);
 
   // Get label for date
   const getDateLabel = (date) => {
@@ -4187,7 +4185,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
         </div>
       </div>
       {/* Scrollable content with pull-to-refresh */}
-      <div ref={scrollRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} style={{ flex:1, overflow:'auto', background:'var(--bg)', minHeight:0 }} className="scrollbar-hide">
+      <div ref={scrollRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} style={{ flex:1, overflowX:'hidden', overflowY:'auto', background:'var(--bg)', minHeight:0 }} className="scrollbar-hide">
       {/* Pull-to-refresh indicator */}
       <div style={{ overflow:'hidden', height: pullY, transition: pullY === 0 ? 'height 0.25s ease' : 'none', display:'flex', alignItems:'center', justifyContent:'center' }}>
         <div style={{ display:'flex', alignItems:'center', gap:8, opacity: Math.min(pullY / PULL_THRESHOLD, 1) }}>
@@ -4197,20 +4195,21 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
       </div>
 
 
-      {/* Match list (slides on day change) */}
-      <div key={selDate} className={slideDir > 0 ? 'sched-slide-next' : slideDir < 0 ? 'sched-slide-prev' : ''} style={{ padding:'0 16px' }}>
-        {isLoading ? (
+      {/* Match list — 2-panel carousel slide on day change */}
+      {(() => {
+        const renderDay = (dayMatches) => (
+          isLoading ? (
           <div style={{ paddingTop:8 }}>
             {Array.from({length:9}).map((_,i) => <SkeletonScheduleItem key={i}/>)}
           </div>
-        ) : selectedDateMatches.length === 0 ? (
+        ) : dayMatches.length === 0 ? (
           <div style={{ textAlign:'center', padding:'60px 20px', color:'var(--text4)' }}>
             <div style={{ fontSize:48, marginBottom:16 }}>📅</div>
             <div style={{ fontSize:15, fontWeight:600, marginBottom:6 }}>경기가 없습니다</div>
             <div style={{ fontSize:13 }}>다른 날짜를 선택해보세요</div>
           </div>
         ) : (
-          selectedDateMatches.map(m => {
+          dayMatches.map(m => {
             const isFinished = m.status === 'STATUS_FINAL' || m.status === 'STATUS_FULL_TIME' || m.status === 'final' || m.status === 'STATUS_END_PERIOD' || m.status === 'STATUS_FINAL_PEN';
             const kp = m.koreanPlayer;
             const rawLeague = (m.competition || m.sport || '').replace(/^[⚽⚾🏀🎾]\s*/,'');
@@ -4303,8 +4302,18 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
               </React.Fragment>
             );
           })
-        )}
-      </div>
+          )
+        );
+        const panel = (ms) => <div style={{ width: trans ? '50%' : '100%', flexShrink:0, boxSizing:'border-box', padding:'0 16px' }}>{renderDay(ms)}</div>;
+        if (!trans) return panel(selectedDateMatches);
+        const l = trans.dir > 0 ? matchesForDate(trans.from) : selectedDateMatches;
+        const r = trans.dir > 0 ? selectedDateMatches : matchesForDate(trans.from);
+        return (
+          <div key={selDate} className={trans.dir > 0 ? 'sched-car-next' : 'sched-car-prev'} onAnimationEnd={() => setTrans(null)} style={{ display:'flex', width:'200%' }}>
+            {panel(l)}{panel(r)}
+          </div>
+        );
+      })()}
       <div style={{ height:'calc(96px + env(safe-area-inset-bottom))' }}/>
       </div>
     </div>
