@@ -4648,7 +4648,7 @@ function stripHtml(str) {
   return str ? str.replace(/<[^>]*>/g, '').replace(/&quot;/g,'"').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>') : '';
 }
 
-function NewsScreen({ sportFeeds, scrollTopKey = 0 }) {
+function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames }) {
   const NEWS_CATEGORIES = ['전체', '해외축구', 'MLB', '기타'];
   const [scrolled, setScrolled] = React.useState(false);
   const [category, setCategory] = React.useState('전체');
@@ -4813,7 +4813,15 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0 }) {
     return () => { cancelled = true; };
   }, [refetchTrigger]);
 
-  const allowedArticles = articles.filter(a => enabledSportTypes.has(a.sportType));
+  // Only show news that actually mentions a player the user still follows
+  // (unfollowing in 선수 편집 removes their articles here too). Filter by article
+  // CONTENT, not the fetched-for tag — Naver returns loosely-matched articles, so
+  // the tag is unreliable. followedNames undefined → show all.
+  const followedArr = followedNames ? [...followedNames] : null;
+  const allowedArticles = articles.filter(a =>
+    enabledSportTypes.has(a.sportType) &&
+    (!followedArr || followedArr.some(name => `${a.title} ${a.description || ''}`.includes(name)))
+  );
   const visibleArticles = category === '전체'
     ? allowedArticles
     : allowedArticles.filter(a => a.category === category);
@@ -7295,7 +7303,7 @@ function App() {
               <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} tweaks={tweaks} liveApiMatches={filteredLiveMatches} worldCupMatches={worldCupMatches} isLoading={isInitialLoad && apiLoading} scrollTopKey={tabScrollKeys.home} onRefresh={fetchLiveMatches} unreadCount={unreadCount} nativeTabBar={nativeTabBar}/></div>
               <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
               <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} followed={followed} statsCache={playerStatsCache} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} scrollTopKey={tabScrollKeys.players} liveApiMatches={filteredLiveMatches} sportFeeds={sportFeeds}/></div>
-              <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news}/></div>
+              <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news} followedNames={followedNames}/></div>
               <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed} profile={profile} onUpdateProfile={updateProfile} sub={moreSub} setSub={setMoreSub}/></div>
             </>
           )}
