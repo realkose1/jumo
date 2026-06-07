@@ -106,8 +106,11 @@ html.light-mode body { background: #e5e5ea; }
 @keyframes fadeIn { from{opacity:0} to{opacity:1} }
 @keyframes schedCarNext { from{transform:translateX(0)} to{transform:translateX(-50%)} }
 @keyframes schedCarPrev { from{transform:translateX(-50%)} to{transform:translateX(0)} }
-.sched-car-next { animation: schedCarNext 0.34s cubic-bezier(0.32,0.72,0,1); }
-.sched-car-prev { animation: schedCarPrev 0.34s cubic-bezier(0.32,0.72,0,1); }
+/* `forwards` holds the track at the end frame until setTrans(null) swaps in the
+   single panel — without it the track reverts to translateX(0) for a frame,
+   flashing the previous day (the ghost/afterimage). */
+.sched-car-next { animation: schedCarNext 0.34s cubic-bezier(0.32,0.72,0,1) forwards; }
+.sched-car-prev { animation: schedCarPrev 0.34s cubic-bezier(0.32,0.72,0,1) forwards; }
 @keyframes ripple { 0%{transform:scale(1);opacity:0.6} 100%{transform:scale(2.5);opacity:0} }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes ticker { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
