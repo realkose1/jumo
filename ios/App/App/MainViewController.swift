@@ -114,6 +114,9 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
     private var followHost: UIView?
     private var followLabel: UILabel?
     private var followIcon: UIImageView?
+    private var actionHost: UIView?
+    private var actionLabel: UILabel?
+    private var actionIcon: UIImageView?
     private var didSetup = false
     private var wk: WKWebView? { self.webView as? WKWebView }
 
@@ -307,15 +310,47 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
         ])
         pill.alpha = 0
         followHost = pill; followLabel = label; followIcon = icon
+
+        // Top-right action pill: '선수 편집' (선수 탭) / '완료' (선수 편집 화면).
+        // Same slot as the follow pill — only one is ever visible per screen.
+        let ae = UIGlassEffect(style: .clear); ae.isInteractive = true
+        let apill = UIVisualEffectView(effect: ae)
+        apill.translatesAutoresizingMaskIntoConstraints = false
+        apill.layer.cornerRadius = 16; apill.layer.cornerCurve = .continuous; apill.clipsToBounds = true
+        let aicon = UIImageView(); aicon.contentMode = .center
+        aicon.translatesAutoresizingMaskIntoConstraints = false
+        let alabel = UILabel(); alabel.font = .systemFont(ofSize: 13, weight: .bold)
+        alabel.translatesAutoresizingMaskIntoConstraints = false
+        let arow = UIStackView(arrangedSubviews: [aicon, alabel])
+        arow.axis = .horizontal; arow.spacing = 5; arow.alignment = .center
+        arow.translatesAutoresizingMaskIntoConstraints = false
+        apill.contentView.addSubview(arow)
+        NSLayoutConstraint.activate([
+            arow.centerYAnchor.constraint(equalTo: apill.contentView.centerYAnchor),
+            arow.leadingAnchor.constraint(equalTo: apill.contentView.leadingAnchor, constant: 13),
+            arow.trailingAnchor.constraint(equalTo: apill.contentView.trailingAnchor, constant: -13)
+        ])
+        apill.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(actionTapped)))
+        view.addSubview(apill)
+        NSLayoutConstraint.activate([
+            apill.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 13),
+            apill.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            apill.heightAnchor.constraint(equalToConstant: 32)
+        ])
+        apill.alpha = 0
+        actionHost = apill; actionLabel = alabel; actionIcon = aicon
     }
 
     @objc private func backChromeTapped() { wk?.evaluateJavaScript("window.__back && window.__back()") }
     @objc private func followTapped() { wk?.evaluateJavaScript("window.__jumoFollow && window.__jumoFollow()") }
+    @objc private func actionTapped() { wk?.evaluateJavaScript("window.__jumoTopAction && window.__jumoTopAction()") }
 
-    private func updateDetailChrome(back: Bool, followShow: Bool, followOn: Bool) {
+    private func updateDetailChrome(back: Bool, followShow: Bool, followOn: Bool,
+                                    actionShow: Bool, actionLabel: String, actionIcon: String) {
         UIView.animate(withDuration: 0.2) {
             self.backHost?.alpha = back ? 1 : 0
             self.followHost?.alpha = followShow ? 1 : 0
+            self.actionHost?.alpha = actionShow ? 1 : 0
         }
         let acc = UIColor(red: 0.961, green: 0.769, blue: 0.0, alpha: 1)
         let cfg = UIImage.SymbolConfiguration(pointSize: 11, weight: .bold)
@@ -327,6 +362,16 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
             followIcon?.image = UIImage(systemName: "plus", withConfiguration: cfg)
             followIcon?.tintColor = .white
             followLabel?.text = "팔로우"; followLabel?.textColor = .white
+        }
+        if actionShow {
+            self.actionLabel?.text = actionLabel; self.actionLabel?.textColor = acc
+            if actionIcon.isEmpty {
+                self.actionIcon?.isHidden = true; self.actionIcon?.image = nil
+            } else {
+                self.actionIcon?.isHidden = false
+                self.actionIcon?.image = UIImage(systemName: actionIcon, withConfiguration: cfg)
+                self.actionIcon?.tintColor = acc
+            }
         }
     }
 
@@ -377,9 +422,13 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
         } else if message.name == "bell", let d = message.body as? [String: Any] {
             updateBell(show: (d["show"] as? Bool) ?? false, unread: (d["unread"] as? Int) ?? 0)
         } else if message.name == "detailbar", let d = message.body as? [String: Any] {
+            let action = d["action"] as? [String: Any]
             updateDetailChrome(back: (d["back"] as? Bool) ?? false,
                                followShow: (d["followShow"] as? Bool) ?? false,
-                               followOn: (d["followOn"] as? Bool) ?? false)
+                               followOn: (d["followOn"] as? Bool) ?? false,
+                               actionShow: (action?["show"] as? Bool) ?? false,
+                               actionLabel: (action?["label"] as? String) ?? "",
+                               actionIcon: (action?["icon"] as? String) ?? "")
         }
     }
 }

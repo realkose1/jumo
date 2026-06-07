@@ -4397,7 +4397,7 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
         <div style={{ position:'sticky', top:0, zIndex:20, background: scrolled ? 'rgba(11,11,13,0.55)' : 'var(--bg)', backdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', WebkitBackdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', borderBottom: `0.5px solid ${scrolled ? 'var(--border)' : 'transparent'}`, transition: 'background 0.28s ease, backdrop-filter 0.28s ease, border-color 0.28s ease' }}>
           <div style={{ padding:'16px 20px 8px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
             <div style={{ fontSize:22, fontWeight:700, color:'var(--text)', letterSpacing:-0.5 }}>선수</div>
-            <button onClick={onAdd} style={{ display:'flex', alignItems:'center', gap:6, background:'var(--acc)', border:'none', borderRadius:20, padding:'8px 16px', color:'#000', fontSize:13, fontWeight:700, cursor:'pointer' }}>
+            <button onClick={onAdd} style={{ display:'flex', alignItems:'center', gap:6, background:'var(--acc)', border:'none', borderRadius:20, padding:'8px 16px', color:'#000', fontSize:13, fontWeight:700, cursor:'pointer', visibility: (typeof window !== 'undefined' && window.__nativeChrome) ? 'hidden' : 'visible' }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="#000"/></svg>
               선수 편집
             </button>
@@ -4985,7 +4985,7 @@ function AddPlayerScreen({ followed, onToggle, onBack }) {
       <div style={{ padding:'12px 20px 0', flexShrink:0 }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
           <BackBtn onBack={onBack} nativeHandled/>
-          <button onClick={onBack} style={{ background:'var(--acc)', border:'none', borderRadius:20, padding:'8px 18px', color:'#000', fontSize:13, fontWeight:700, cursor:'pointer' }}>
+          <button onClick={onBack} style={{ background:'var(--acc)', border:'none', borderRadius:20, padding:'8px 18px', color:'#000', fontSize:13, fontWeight:700, cursor:'pointer', visibility: (typeof window !== 'undefined' && window.__nativeChrome) ? 'hidden' : 'visible' }}>
             완료 {followed.size > 0 && `(${followed.size})`}
           </button>
         </div>
@@ -7257,6 +7257,9 @@ function App() {
           || (tab === 'more' && screen === 'main' && !!moreSub),
         followShow: screen === 'player' && !!selectedPlayer,
         followOn: !!(selectedPlayer && followed.has(selectedPlayer.id)),
+        action: (tab === 'players' && screen === 'main') ? { show: true, label: '선수 편집', icon: 'pencil' }
+              : (screen === 'addplayer') ? { show: true, label: '완료' + (followed.size > 0 ? ` (${followed.size})` : ''), icon: '' }
+              : { show: false, label: '', icon: '' },
       });
     } catch {}
   }, [screen, selectedPlayer, followed, nativeTabBar, tab, moreSub]);
@@ -7266,6 +7269,11 @@ function App() {
       const on = followed.has(selectedPlayer.id);
       if (on && !window.confirm(`${selectedPlayer.name} 선수를 팔로우 해제하시겠어요?`)) return;
       toggleFollow(selectedPlayer.id);
+    };
+    // Native top-right action pill (선수 편집 / 완료) tap → route by screen.
+    window.__jumoTopAction = () => {
+      if (tab === 'players' && screen === 'main') goAddPlayer();
+      else if (screen === 'addplayer') goBack();
     };
   });
 
