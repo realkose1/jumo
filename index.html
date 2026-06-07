@@ -7177,9 +7177,19 @@ function App() {
 
   const homeVariantNames = ['카드 스택', '에디토리얼', '컴팩트'];
 
+  // Names of currently-followed players — used to hide unfollowed players'
+  // matches from Home/Schedule/Players (unfollowing in 선수 편집 must remove
+  // their content everywhere, not just the 선수 탭).
+  const followedNames = React.useMemo(
+    () => new Set(ALL_PLAYERS.filter(p => followed.has(p.id)).map(p => p.name)),
+    [followed]
+  );
   const filteredLiveMatches = React.useMemo(
-    () => liveMatches.filter(m => isMatchAllowed(m, sportFeeds)),
-    [liveMatches, sportFeeds]
+    () => liveMatches.filter(m =>
+      isMatchAllowed(m, sportFeeds) &&
+      (m.koreanPlayers || [m.koreanPlayer]).some(kp => kp && (kp.isNationalTeam || followedNames.has(kp.name)))
+    ),
+    [liveMatches, sportFeeds, followedNames]
   );
 
   return (
