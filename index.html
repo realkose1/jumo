@@ -11,8 +11,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script type="text/babel" src="ios-frame.jsx"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -105,6 +104,10 @@ html.light-mode body { background: #e5e5ea; }
 @keyframes slideOutRight { from{transform:translateX(0)} to{transform:translateX(100%)} }
 .screen-slide-out { animation: slideOutRight 0.34s cubic-bezier(0.4, 0, 0.6, 1) forwards; will-change: transform; }
 @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+@keyframes schedNext { from{opacity:0;transform:translateX(30px)} to{opacity:1;transform:translateX(0)} }
+@keyframes schedPrev { from{opacity:0;transform:translateX(-30px)} to{opacity:1;transform:translateX(0)} }
+.sched-slide-next { animation: schedNext 0.26s cubic-bezier(0.32,0.72,0,1); }
+.sched-slide-prev { animation: schedPrev 0.26s cubic-bezier(0.32,0.72,0,1); }
 @keyframes ripple { 0%{transform:scale(1);opacity:0.6} 100%{transform:scale(2.5);opacity:0} }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes ticker { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
@@ -835,8 +838,31 @@ function BackBtn({ onBack, nativeHandled }) {
 
 // Liquid-glass segmented control (iOS 26 toolbar tabs). tabs: [{id,label}]
 function GlassSegmented({ tabs, active, onChange, sticky = false, style }) {
+  // On native, a fixed glass back (top-left) + follow pill (top-right) overlay the
+  // screen. When this sticky tab bar pins to the top it collides with them, so we
+  // detect the "stuck" state and shrink + center the bar to clear them.
+  const [stuck, setStuck] = React.useState(false);
+  const wrapRef = React.useRef(null);
+  const isNative = typeof window !== 'undefined' && !!window.__nativeChrome;
+  React.useEffect(() => {
+    if (!sticky || !isNative) { setStuck(false); return; }
+    const el = wrapRef.current; if (!el) return;
+    let sc = el.parentElement;
+    while (sc && sc !== document.body) { const oy = getComputedStyle(sc).overflowY; if (oy === 'auto' || oy === 'scroll') break; sc = sc.parentElement; }
+    const target = (sc && sc !== document.body) ? sc : window;
+    const SAFE = parseFloat(getComputedStyle(document.body).paddingTop) || 47;
+    const check = () => { const el2 = wrapRef.current; if (!el2) return; const top = el2.getBoundingClientRect().top; setStuck(p => p ? top <= SAFE + 92 : top <= SAFE + 50); };
+    check();
+    target.addEventListener('scroll', check, { passive: true });
+    window.addEventListener('resize', check);
+    return () => { target.removeEventListener('scroll', check); window.removeEventListener('resize', check); };
+  }, [sticky, isNative]);
+  // When pinned on native, drop the bar a tier below the floating back/follow
+  // buttons and paint a solid band over their row so nothing overlaps.
+  const twoTier = sticky && isNative && stuck;
   return (
-    <div style={{ position: sticky ? 'sticky' : 'static', top: 0, zIndex: 10, padding: '10px 16px', background: 'var(--bg)', ...style }}>
+    <div ref={wrapRef} style={{ position: sticky ? 'sticky' : 'static', top: twoTier ? 50 : 0, zIndex: 10, padding: '10px 16px', background: 'var(--bg)', transition: 'top 0.2s ease', ...style }}>
+      {twoTier && <div style={{ position: 'absolute', left: 0, right: 0, bottom: '100%', height: 240, background: 'var(--bg)' }}/>}
       <div style={{ display: 'flex', borderRadius: 18, padding: 4, background: 'var(--card)', border: '0.5px solid var(--border2)' }}>
         {tabs.map(t => (
           <button key={t.id} onClick={() => onChange(t.id)} style={{
@@ -4028,24 +4054,54 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
   const stripRef = React.useRef(null);
   const todayRef = React.useRef(null);
 
-  // Pull-to-refresh state
+  // Pull-to-refresh + horizontal day-swipe state
   const [pullY, setPullY] = React.useState(0);
   const [refreshing, setRefreshing] = React.useState(false);
+  const [slideDir, setSlideDir] = React.useState(0); // 1=next day, -1=prev day (drives slide animation)
   const touchStartY = React.useRef(0);
+  const touchStartX = React.useRef(0);
+  const touchDX = React.useRef(0);
+  const touchDY = React.useRef(0);
   const scrollRef = React.useRef(null);
+  const selRef = React.useRef(null);
   const PULL_THRESHOLD = 64;
+
+  const goToDate = (dateStr) => {
+    const ci = datesList.findIndex(d => d.toDateString() === selDate);
+    const ni = datesList.findIndex(d => d.toDateString() === dateStr);
+    if (ni < 0 || ni === ci) return;
+    setSlideDir(ni > ci ? 1 : -1);
+    setSelDate(dateStr);
+  };
+  const changeDay = (delta) => {
+    const ci = datesList.findIndex(d => d.toDateString() === selDate);
+    const ni = Math.max(0, Math.min(datesList.length - 1, ci + delta));
+    if (ni !== ci) goToDate(datesList[ni].toDateString());
+  };
 
   const handleTouchStart = (e) => {
     touchStartY.current = e.touches[0].clientY;
+    touchStartX.current = e.touches[0].clientX;
+    touchDX.current = 0; touchDY.current = 0;
   };
   const handleTouchMove = (e) => {
+    touchDX.current = e.touches[0].clientX - touchStartX.current;
+    touchDY.current = e.touches[0].clientY - touchStartY.current;
     if (refreshing) return;
     const scrollTop = scrollRef.current?.scrollTop || 0;
     if (scrollTop > 0) return;
-    const dy = e.touches[0].clientY - touchStartY.current;
-    if (dy > 0) setPullY(Math.min(dy * 0.45, PULL_THRESHOLD + 16));
+    const dy = touchDY.current;
+    // only show the pull indicator for a mostly-vertical drag
+    if (dy > 0 && Math.abs(dy) > Math.abs(touchDX.current)) setPullY(Math.min(dy * 0.45, PULL_THRESHOLD + 16));
   };
   const handleTouchEnd = async () => {
+    const dx = touchDX.current, dy = touchDY.current;
+    // Clearly horizontal swipe → previous / next day (left = next, right = prev).
+    if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.6) {
+      changeDay(dx < 0 ? 1 : -1);
+      setPullY(0);
+      return;
+    }
     if (pullY >= PULL_THRESHOLD && onRefresh && !refreshing) {
       setRefreshing(true);
       setPullY(PULL_THRESHOLD);
@@ -4070,6 +4126,12 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
 
   // Scroll to top when tab tapped
   React.useEffect(() => { if (scrollTopKey > 0) scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }, [scrollTopKey]);
+
+  // Keep the selected date centered in the strip when it changes (tap or swipe).
+  React.useEffect(() => {
+    const strip = stripRef.current, cell = selRef.current;
+    if (strip && cell) strip.scrollTo({ left: cell.offsetLeft - strip.clientWidth / 2 + cell.offsetWidth / 2, behavior: 'smooth' });
+  }, [selDate]);
 
   // Filter matches for selected date and within ±7 days range
   const sevenDaysAgo = new Date(now);
@@ -4115,7 +4177,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
             const isToday = dateStr === now.toDateString();
             const label = getDateLabel(date);
             return (
-              <div key={dateStr} ref={isToday ? todayRef : null} onClick={() => setSelDate(dateStr)} style={{ flexShrink:0, minWidth:64, height:72, borderRadius:12, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:3, cursor:'pointer', background: isSel ? 'var(--acc)' : isToday ? 'rgba(245,196,0,0.12)' : 'var(--border2)', border: isToday && !isSel ? '0.5px solid rgba(245,196,0,0.4)' : '0.5px solid transparent', padding:'8px 6px' }}>
+              <div key={dateStr} ref={el => { if (isToday) todayRef.current = el; if (isSel) selRef.current = el; }} onClick={() => goToDate(dateStr)} style={{ flexShrink:0, minWidth:64, height:72, borderRadius:12, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:3, cursor:'pointer', background: isSel ? 'var(--acc)' : isToday ? 'rgba(245,196,0,0.12)' : 'var(--border2)', border: isToday && !isSel ? '0.5px solid rgba(245,196,0,0.4)' : '0.5px solid transparent', padding:'8px 6px' }}>
                 <span style={{ fontSize:9, color: isSel ? 'rgba(0,0,0,0.6)' : 'var(--text5)', fontWeight:600, letterSpacing:0.3 }}>{label}</span>
                 <span style={{ ...NUM, fontSize:22, fontWeight:800, color: isSel ? '#000' : isToday ? 'var(--acc)' : 'var(--text-70)', lineHeight:1 }}>{date.getDate()}</span>
                 <span style={{ fontSize:10, color: isSel ? 'rgba(0,0,0,0.5)' : 'var(--text4)', fontWeight:600 }}>{days[dayIdx]}</span>
@@ -4135,8 +4197,8 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
       </div>
 
 
-      {/* Match list */}
-      <div style={{ padding:'0 16px' }}>
+      {/* Match list (slides on day change) */}
+      <div key={selDate} className={slideDir > 0 ? 'sched-slide-next' : slideDir < 0 ? 'sched-slide-prev' : ''} style={{ padding:'0 16px' }}>
         {isLoading ? (
           <div style={{ paddingTop:8 }}>
             {Array.from({length:9}).map((_,i) => <SkeletonScheduleItem key={i}/>)}
@@ -4444,6 +4506,8 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
 }
 
 // ─── SCREEN: NOTIFICATIONS ───────────────────────────────────
+const stripLeadEmoji = (t) => String(t || '').replace(/^[^\w가-힣]+/, '').trim();
+const pushIcon = (key, title) => { const k = String(key || ''); if (/goal/i.test(k)) return '⚽'; if (/start/i.test(k)) return '🏟️'; if (/result|end|final/i.test(k)) return '🏁'; const m = String(title || '').trim().match(/^([^\w\s가-힣])/); return (m && m[1]) || '🔔'; };
 function NotifScreen({ notifications }) {
   const notifs = notifications;
   return (
@@ -5388,9 +5452,13 @@ function App() {
         if (perm.receive !== 'granted') return;
         handles.push(await Push.addListener('registration', t => setPushToken(t?.value || null)));
         handles.push(await Push.addListener('registrationError', e => console.warn('push reg error', e?.error || e)));
+        // Foreground delivery → capture into the in-app notification center.
+        handles.push(await Push.addListener('pushNotificationReceived', n => {
+          try { window.__jumoOnPush && window.__jumoOnPush(n, false); } catch {}
+        }));
+        // Tap (from system tray) → capture + open the notification center.
         handles.push(await Push.addListener('pushNotificationActionPerformed', a => {
-          const d = a?.notification?.data || {};
-          try { window.__jumoPushTap && window.__jumoPushTap(d); } catch {}
+          try { window.__jumoOnPush && window.__jumoOnPush(a?.notification, true); } catch {}
         }));
         await Push.register();
       } catch (e) { console.warn('push init failed', e); }
@@ -5463,6 +5531,17 @@ function App() {
   const [apiLoading, setApiLoading] = React.useState(true); // Start with true for initial load
   const [isInitialLoad, setIsInitialLoad] = React.useState(true);
   const [notifications, setNotifications] = React.useState([]);
+  // Received push notifications, persisted so their content shows in the in-app
+  // notification center (the match-derived `notifications` get overwritten on
+  // every live-data refresh, so pushes are kept in a separate durable list).
+  const [pushNotifs, setPushNotifs] = React.useState(() => { try { return JSON.parse(localStorage.getItem('jumo_pushNotifs') || '[]'); } catch { return []; } });
+  const addPushNotif = React.useCallback((notif) => {
+    if (!notif) return;
+    const key = notif.data && notif.data.key;
+    const rawTitle = notif.title || '알림';
+    const item = { id: key || `push-${Date.now()}`, icon: pushIcon(key, rawTitle), title: stripLeadEmoji(rawTitle) || rawTitle, body: notif.body || '', timestamp: Date.now(), pushed: true };
+    setPushNotifs(prev => { const merged = [item, ...prev.filter(x => x.id !== item.id)].slice(0, 50); try { localStorage.setItem('jumo_pushNotifs', JSON.stringify(merged)); } catch {} return merged; });
+  }, []);
   const [playerStatsCache, setPlayerStatsCache] = React.useState({});
   const [profile, setProfile] = React.useState(() => {
     try {
@@ -7083,9 +7162,16 @@ function App() {
     const v = localStorage.getItem('jumo_lastNotifViewedAt');
     return v ? parseInt(v, 10) : 0;
   });
+  // Merge received pushes with match-derived notifications for the center.
+  const allNotifs = React.useMemo(() => {
+    const now = Date.now();
+    const m = new Map();
+    [...pushNotifs, ...notifications].forEach(n => { if (n && n.id != null && !m.has(n.id)) m.set(n.id, { ...n, time: n.time || timeAgo(n.timestamp || now) }); });
+    return Array.from(m.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 60);
+  }, [pushNotifs, notifications]);
   const unreadCount = React.useMemo(
-    () => notifications.filter(n => (n.timestamp || 0) > lastNotifViewedAt).length,
-    [notifications, lastNotifViewedAt]
+    () => allNotifs.filter(n => (n.timestamp || 0) > lastNotifViewedAt).length,
+    [allNotifs, lastNotifViewedAt]
   );
   const goNotif = () => {
     setScreen('notif');
@@ -7093,6 +7179,8 @@ function App() {
     setLastNotifViewedAt(now);
     localStorage.setItem('jumo_lastNotifViewedAt', String(now));
   };
+  // Native push bridge: foreground delivery captures into the center; a tap also opens it.
+  React.useEffect(() => { window.__jumoOnPush = (notif, tapped) => { addPushNotif(notif); if (tapped) goNotif(); }; });
   const [closing, setClosing] = React.useState(false);
   const goBack = () => {
     if (closing) return;
@@ -7230,7 +7318,7 @@ function App() {
                 </button>
                 <div style={{ fontSize:22, fontWeight:700, color:'var(--text)', letterSpacing:-0.5 }}>알림</div>
               </div>
-              <NotifScreen notifications={notifications}/>
+              <NotifScreen notifications={allNotifs}/>
             </div>
           )}
           </div>
