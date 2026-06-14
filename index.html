@@ -5670,6 +5670,7 @@ function OnboardingTour({ onDone, onTab }) {
   // 각 스텝마다 해당 탭으로 전환해 실제 화면을 뒤에 노출한다.
   React.useEffect(() => { if (onTab) onTab(ONBOARDING_STEPS[i].tab); }, [i]);
   const next = () => last ? onDone() : setI(i + 1);
+  const prev = () => { if (i > 0) setI(i - 1); };
   return (
     <div style={{ position:'absolute', inset:0, zIndex:300, display:'flex', flexDirection:'column', justifyContent:'flex-end',
                   background:'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.04) 42%, rgba(0,0,0,0.46) 100%)',
@@ -5688,9 +5689,10 @@ function OnboardingTour({ onDone, onTab }) {
           <span style={{ fontSize:18, fontWeight:800, color:'var(--text)', letterSpacing:-0.4 }}>{step.title}</span>
         </div>
         <div style={{ fontSize:13.5, lineHeight:1.65, color:'var(--text3)', whiteSpace:'pre-line', marginBottom:16 }}>{step.desc}</div>
-        <div style={{ display:'flex', alignItems:'center' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <button onClick={prev} style={{ background:'transparent', border:'none', color:'var(--text4)', fontSize:14, fontWeight:700, padding:'12px 6px', cursor:'pointer', visibility: i === 0 ? 'hidden' : 'visible' }}>이전</button>
           <span style={{ ...NUM, fontSize:12, color:'var(--text5)', fontWeight:700 }}>{i + 1} / {n}</span>
-          <button onClick={next} style={{ marginLeft:'auto', padding:'12px 24px', borderRadius:12, border:'none', background:'var(--acc)', color:'#000', fontSize:15, fontWeight:800, letterSpacing:-0.3, cursor:'pointer' }}>
+          <button onClick={next} style={{ padding:'12px 24px', borderRadius:12, border:'none', background:'var(--acc)', color:'#000', fontSize:15, fontWeight:800, letterSpacing:-0.3, cursor:'pointer' }}>
             {last ? '시작하기' : '다음'}
           </button>
         </div>
