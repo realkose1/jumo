@@ -2651,6 +2651,67 @@ function MatchLineupPitch({ match, onPlayer }) {
   );
 }
 
+// ─── 조별 순위 (이벤트 탭, 월드컵 경기) ───────────────────────────
+const COUNTRY_KO = {
+  'South Korea':'대한민국', 'Korea Republic':'대한민국', 'Mexico':'멕시코', 'Czechia':'체코',
+  'Czech Republic':'체코', 'South Africa':'남아공', 'Canada':'캐나다', 'Bosnia and Herzegovina':'보스니아',
+  'USA':'미국', 'United States':'미국', 'Paraguay':'파라과이', 'Switzerland':'스위스', 'Qatar':'카타르',
+  'Morocco':'모로코', 'Brazil':'브라질', 'Scotland':'스코틀랜드', 'Haiti':'아이티', 'Türkiye':'튀르키예',
+  'Turkey':'튀르키예', 'Australia':'호주', 'Germany':'독일', 'Curaçao':'쿠라소', 'Netherlands':'네덜란드',
+  'Japan':'일본', 'Ivory Coast':'코트디부아르', "Côte d'Ivoire":'코트디부아르', 'Ecuador':'에콰도르',
+  'Sweden':'스웨덴', 'Tunisia':'튀니지', 'Spain':'스페인', 'Cape Verde':'카보베르데', 'Belgium':'벨기에',
+  'Egypt':'이집트', 'Saudi Arabia':'사우디', 'Uruguay':'우루과이', 'Iran':'이란', 'New Zealand':'뉴질랜드',
+  'France':'프랑스', 'Senegal':'세네갈', 'Iraq':'이라크', 'Norway':'노르웨이', 'Argentina':'아르헨티나',
+  'Algeria':'알제리', 'Austria':'오스트리아', 'Jordan':'요르단', 'Portugal':'포르투갈', 'DR Congo':'DR콩고',
+  'England':'잉글랜드', 'Croatia':'크로아티아', 'Ghana':'가나', 'Panama':'파나마', 'Uzbekistan':'우즈베키스탄',
+  'Colombia':'콜롬비아', 'Italy':'이탈리아', 'Poland':'폴란드', 'Nigeria':'나이지리아', 'Denmark':'덴마크',
+  'Serbia':'세르비아', 'Wales':'웨일스', 'Peru':'페루', 'Chile':'칠레', 'Costa Rica':'코스타리카',
+  'Honduras':'온두라스', 'Jamaica':'자메이카', 'Cameroon':'카메룬',
+};
+function GroupStandings({ data, match }) {
+  if (!data || !data.rows || !data.rows.length) return null;
+  const koName = (n) => COUNTRY_KO[n] || n;
+  const sides = [match.home && match.home.name, match.away && match.away.name].filter(Boolean);
+  const isKorea = (n) => /korea/i.test(n || '');
+  const head = { ...NUM, textAlign:'center', flexShrink:0 };
+  const cell = { ...NUM, textAlign:'center', flexShrink:0, color:'var(--text3)' };
+  return (
+    <div style={{ background:'var(--surface)', borderRadius:14, border:'0.5px solid var(--border2)', padding:'14px', marginBottom:12 }}>
+      <div style={{ fontSize:12, color:'var(--text3)', fontWeight:700, marginBottom:12, letterSpacing:0.3 }}>조별 순위</div>
+      <div style={{ display:'flex', alignItems:'center', fontSize:10, color:'var(--text5)', fontWeight:700, padding:'0 4px 7px', borderBottom:'0.5px solid var(--border2)' }}>
+        <span style={{ width:16, textAlign:'center', flexShrink:0 }}>#</span>
+        <span style={{ flex:1, minWidth:0, paddingLeft:8, textAlign:'left' }}>팀</span>
+        <span style={{ ...head, width:26 }}>경기</span>
+        <span style={{ ...head, width:18 }}>승</span>
+        <span style={{ ...head, width:18 }}>무</span>
+        <span style={{ ...head, width:18 }}>패</span>
+        <span style={{ ...head, width:30 }}>득실</span>
+        <span style={{ ...head, width:28, fontWeight:800 }}>승점</span>
+      </div>
+      {data.rows.map((r, i) => {
+        const kr = isKorea(r.name);
+        const mine = !kr && sides.includes(r.name);
+        const color = kr ? 'var(--acc)' : 'var(--text)';
+        return (
+          <div key={i} style={{ display:'flex', alignItems:'center', fontSize:12, padding:'9px 4px', borderTop: i > 0 ? '0.5px solid var(--border2)' : 'none', background: kr ? 'rgba(245,196,0,0.10)' : mine ? 'rgba(255,255,255,0.035)' : 'transparent' }}>
+            <span style={{ ...NUM, width:16, textAlign:'center', flexShrink:0, fontWeight:700, color:'var(--text4)' }}>{r.rank || (i + 1)}</span>
+            <div style={{ flex:1, minWidth:0, paddingLeft:8, display:'flex', alignItems:'center', gap:7 }}>
+              {r.logo ? <img src={r.logo} alt="" style={{ width:18, height:18, objectFit:'contain', flexShrink:0 }}/> : <span style={{ width:18, flexShrink:0 }}/>}
+              <span style={{ fontWeight: kr ? 800 : 600, color, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{koName(r.name)}</span>
+            </div>
+            <span style={{ ...cell, width:26 }}>{r.gp != null ? r.gp : '-'}</span>
+            <span style={{ ...cell, width:18 }}>{r.w != null ? r.w : '-'}</span>
+            <span style={{ ...cell, width:18 }}>{r.d != null ? r.d : '-'}</span>
+            <span style={{ ...cell, width:18 }}>{r.l != null ? r.l : '-'}</span>
+            <span style={{ ...cell, width:30 }}>{r.gd != null ? r.gd : '-'}</span>
+            <span style={{ ...NUM, width:28, textAlign:'center', flexShrink:0, fontWeight:800, color }}>{r.pts != null ? r.pts : '-'}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── SCREEN: LIVE MATCH DETAIL ────────────────────────────────
 function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
   const goKoreanPlayer = React.useCallback((kp) => {
@@ -2671,6 +2732,8 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
   const [statsLoading, setStatsLoading] = React.useState(false);
   const [incidentsData, setIncidentsData] = React.useState(null);
   const [incidentsLoading, setIncidentsLoading] = React.useState(false);
+  const [wcStandings, setWcStandings] = React.useState(null);   // 월드컵 조별 순위 (ESPN)
+  const [wcLoaded, setWcLoaded] = React.useState(false);        // 월드컵 summary 1회 로드 가드
   const [mlbSummary, setMlbSummary] = React.useState(null);
   const [mlbLoading, setMlbLoading] = React.useState(false);
 
@@ -2781,9 +2844,147 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
     return { statistics: [{ period: 'ALL', groups: [{ groupName: 'Match overview', statisticsItems: items }] }] };
   };
 
+  // ── World Cup matches come from ESPN (fifa.world), so match.id is an ESPN
+  // event id — NOT an API-Football fixture id. Pull events/stats/lineups and
+  // group standings from ESPN's summary endpoint and reshape them into the same
+  // Sofascore-style structures the renderers above already consume. ESPN only
+  // carries player names inside free-text sentences, so the goal/sub/card
+  // parsers below extract them by pattern.
+  const wcClock = (cl) => {
+    const raw = String(cl || '').replace(/'/g, '').trim();      // "90'+6'" → "90+6"
+    if (!raw) return { time: undefined, addedTime: undefined };
+    if (raw.includes('+')) {
+      const [a, b] = raw.split('+');
+      return { time: parseInt(a, 10) || undefined, addedTime: parseInt(b, 10) || undefined };
+    }
+    return { time: parseInt(raw, 10) || undefined, addedTime: undefined };
+  };
+  const wcScorer = (text) => {                                   // "…N, M. Name (Team) …" → "Name"
+    const i = (text || '').indexOf(' (');
+    if (i < 0) return '';
+    const before = text.slice(0, i);
+    const dot = before.lastIndexOf('. ');
+    return (dot >= 0 ? before.slice(dot + 2) : before).trim();
+  };
+  const wcAssist = (text) => {
+    const m = (text || '').match(/Assisted by\s+(.+?)(?:\s+with\b|\s+following\b|[.,]|$)/);
+    return m ? m[1].trim() : '';
+  };
+  const wcOwnGoalName = (text) => {                              // "Own Goal by Name, Team. …"
+    const m = (text || '').match(/Own Goal by\s+([^,]+?),/);
+    return m ? m[1].trim() : wcScorer(text);
+  };
+  const wcCardName = (text) => {                                 // "Name (Team) is shown the … card…"
+    const m = (text || '').match(/^([^(]+?)\s*\(/);
+    return m ? m[1].trim() : '';
+  };
+  const transformEspnEvents = (j) => {
+    const ke = j && j.keyEvents;
+    if (!Array.isArray(ke)) return null;
+    const bs = (j.boxscore && j.boxscore.teams) || [];
+    const homeTeam = bs.find(t => t.homeAway === 'home') || {};
+    const homeId = String((homeTeam.team || {}).id ?? '');
+    const incidents = ke.map(e => {
+      const ty = e.type || {};
+      const id = String(ty.id || '');
+      const txt = e.text || '';
+      const { time, addedTime } = wcClock((e.clock || {}).displayValue);
+      const isHome = String((e.team || {}).id ?? '') === homeId;
+      const base = { time, addedTime, isHome };
+      if (id === '70' || id === '137' || id === '98' || id === '97') {       // goal variants
+        let cls = 'normal', name;
+        if (id === '97') { cls = 'ownGoal'; name = wcOwnGoalName(txt); }
+        else if (id === '98') { cls = 'penalty'; name = wcScorer(txt); }
+        else { name = wcScorer(txt); }
+        const assist = cls === 'ownGoal' ? '' : wcAssist(txt);
+        return { ...base, incidentType: 'goal', incidentClass: cls,
+          player: { name }, assist1: assist ? { name: assist } : null };
+      }
+      if (id === '94' || id === '93') {                                       // yellow / red card
+        return { ...base, incidentType: 'card', incidentClass: id === '93' ? 'red' : 'yellow',
+          player: { name: wcCardName(txt) }, reason: '' };
+      }
+      if (id === '76') {                                                      // substitution
+        const m = txt.match(/\.\s*(.+?)\s+replaces\s+(.+?)\.?\s*$/);
+        return { ...base, incidentType: 'substitution',
+          playerIn: { name: m ? m[1].trim() : '' }, playerOut: { name: m ? m[2].trim() : '' } };
+      }
+      if ((ty.type || '').indexOf('var') === 0) {                            // VAR decisions
+        const low = (ty.text || '').toLowerCase();
+        let cls = 'noCard';
+        if (low.includes('upgrade')) cls = 'cardUpgrade';
+        else if (low.includes('downgrade')) cls = 'cardDowngrade';
+        else if (low.includes('penalty')) cls = low.includes('no ') ? 'penaltyNotAwarded' : 'penaltyAwarded';
+        else if (low.includes('goal')) cls = (low.includes('no ') || low.includes('disallow')) ? 'goalNotAwarded' : 'goalAwarded';
+        return { ...base, incidentType: 'varDecision', incidentClass: cls };
+      }
+      return null;
+    }).filter(Boolean);
+    return { incidents };
+  };
+  const transformEspnStats = (j) => {
+    const teams = j && j.boxscore && j.boxscore.teams;
+    if (!Array.isArray(teams) || teams.length < 2) return null;
+    const home = teams.find(t => t.homeAway === 'home') || teams[0];
+    const away = teams.find(t => t.homeAway === 'away') || teams[1];
+    const toMap = (t) => { const m = new Map(); (t.statistics || []).forEach(s => m.set(s.name, s.displayValue)); return m; };
+    const hm = toMap(home), am = toMap(away);
+    // ESPN stat name → Sofascore-style key already covered by STAT_LABELS below.
+    const NAME_MAP = {
+      possessionPct: 'Ball possession', totalShots: 'Total shots', shotsOnTarget: 'Shots on target',
+      blockedShots: 'Blocked shots', wonCorners: 'Corner kicks', offsides: 'Offsides',
+      foulsCommitted: 'Fouls', yellowCards: 'Yellow cards', redCards: 'Red cards',
+      saves: 'Goalkeeper saves', totalPasses: 'Passes', accuratePasses: 'Accurate passes',
+      totalCrosses: 'Crosses', totalLongBalls: 'Long balls', totalTackles: 'Tackles',
+      interceptions: 'Interceptions', totalClearance: 'Clearances',
+    };
+    const fmt = (k, v) => (v == null ? '' : (k === 'possessionPct' ? `${v}%` : String(v)));
+    const items = Object.keys(NAME_MAP).filter(k => hm.has(k) || am.has(k)).map(k => ({
+      name: NAME_MAP[k], home: fmt(k, hm.get(k)), away: fmt(k, am.get(k)),
+    }));
+    if (!items.length) return null;
+    return { statistics: [{ period: 'ALL', groups: [{ groupName: 'Match overview', statisticsItems: items }] }] };
+  };
+  const transformEspnLineups = (j) => {
+    const rosters = j && j.rosters;
+    if (!Array.isArray(rosters) || rosters.length < 2) return null;
+    const mapTeam = (rt) => {
+      if (!rt) return null;
+      const players = (rt.roster || []).slice().sort((a, b) =>
+        (a.starter === b.starter)
+          ? ((parseInt(a.formationPlace, 10) || 0) - (parseInt(b.formationPlace, 10) || 0))
+          : (a.starter ? -1 : 1)
+      ).map(p => ({
+        player: { name: (p.athlete || {}).displayName, jerseyNumber: p.jersey, id: (p.athlete || {}).id },
+        substitute: !p.starter, statistics: {},                 // ESPN exposes no per-player rating
+      }));
+      return { formation: rt.formation, players };
+    };
+    const home = rosters.find(t => t.homeAway === 'home') || rosters[0];
+    const away = rosters.find(t => t.homeAway === 'away') || rosters[1];
+    const out = { home: mapTeam(home), away: mapTeam(away) };
+    if (!(out.home && out.home.players.length) && !(out.away && out.away.players.length)) return null;
+    return out;
+  };
+  const transformEspnStandings = (j) => {
+    const groups = j && j.standings && j.standings.groups;
+    if (!Array.isArray(groups) || !groups.length) return null;
+    const entries = (groups[0].standings && groups[0].standings.entries) || [];
+    if (!entries.length) return null;
+    const rows = entries.map(e => {
+      const sm = {}; (e.stats || []).forEach(s => { sm[s.type] = s.displayValue; });
+      return {
+        name: e.team, logo: (e.logo && e.logo[0] && e.logo[0].href) || null,
+        rank: sm.rank, gp: sm.gamesplayed, w: sm.wins, d: sm.ties, l: sm.losses,
+        gd: sm.pointdifferential, pts: sm.points,
+      };
+    }).sort((a, b) => (parseInt(a.rank, 10) || 99) - (parseInt(b.rank, 10) || 99));
+    return { header: groups[0].header || '', rows };
+  };
+
   React.useEffect(() => {
     if (tab !== 'events' || incidentsData || !(isFinished || isLive)) return;
-    if (!isSoccerMatch) return;
+    if (!isSoccerMatch || isNationalTeam) return;   // 월드컵(국가대표)은 아래 ESPN 이펙트가 처리
     setIncidentsLoading(true);
     fetch(`${API_BASE}/api/apifootball?path=fixtures/events&fixture=${match.id}`)
       .then(r => r.ok ? r.json() : null)
@@ -2793,7 +2994,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
 
   React.useEffect(() => {
     if (tab !== 'lineups' || lineupsData || !(isFinished || isLive)) return;
-    if (!isSoccerMatch) return;
+    if (!isSoccerMatch || isNationalTeam) return;   // 월드컵(국가대표)은 아래 ESPN 이펙트가 처리
     setLineupsLoading(true);
     Promise.all([
       fetch(`${API_BASE}/api/apifootball?path=fixtures/lineups&fixture=${match.id}`).then(r => r.ok ? r.json() : null).catch(() => null),
@@ -2806,13 +3007,31 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
 
   React.useEffect(() => {
     if (tab !== 'stats' || statsData || !(isFinished || isLive)) return;
-    if (!isSoccerMatch) return;
+    if (!isSoccerMatch || isNationalTeam) return;   // 월드컵(국가대표)은 아래 ESPN 이펙트가 처리
     setStatsLoading(true);
     fetch(`${API_BASE}/api/apifootball?path=fixtures/statistics&fixture=${match.id}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => { setStatsData(transformAfStats(data?.response)); setStatsLoading(false); })
       .catch(() => { setStatsLoading(false); });
   }, [tab, match.id, isFinished, isLive]);
+
+  // 월드컵(국가대표) 경기: ESPN summary 한 번으로 이벤트·통계·라인업·조별 순위를 모두 채운다.
+  React.useEffect(() => {
+    if (!isNationalTeam || !isSoccerMatch || wcLoaded) return;
+    if (!(isFinished || isLive)) return;
+    setWcLoaded(true);
+    setIncidentsLoading(true); setStatsLoading(true); setLineupsLoading(true);
+    fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=${match.id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(j => {
+        setIncidentsData(transformEspnEvents(j) || { incidents: [] });
+        setStatsData(transformEspnStats(j));
+        setLineupsData(transformEspnLineups(j));
+        setWcStandings(transformEspnStandings(j));
+      })
+      .catch(() => {})
+      .finally(() => { setIncidentsLoading(false); setStatsLoading(false); setLineupsLoading(false); });
+  }, [isNationalTeam, isSoccerMatch, isFinished, isLive, match.id, wcLoaded]);
   const typeColor = { goal:'var(--acc)', yellow:'#f5c518', red:'#e03030', assist:'var(--text2)' };
 
   // Countdown for upcoming matches
@@ -3113,7 +3332,6 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
       )}
       {tab === 'events' && !isMLBMatch && (
         <div style={{ padding:'16px' }}>
-          {isNationalTeam && <WCMatchPreview match={match}/>}
           {isLive && (
             <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:16, padding:'10px 14px', background:'rgba(230,48,48,0.08)', borderRadius:10, border:'0.5px solid rgba(230,48,48,0.2)' }}>
               <LiveDot/>
@@ -3256,6 +3474,9 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
             };
             return incidents.map(renderInc);
           })()}
+
+          {isNationalTeam && wcStandings && <GroupStandings data={wcStandings} match={match}/>}
+          {isNationalTeam && <WCMatchPreview match={match}/>}
 
           <TeamCheerMeter match={match} isLive={isLive} isFinished={isFinished}/>
         </div>
@@ -3515,7 +3736,8 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
         );
       })()}
       {tab === 'lineups' && !isMLBMatch && (() => {
-        if (isNationalTeam) return <MatchLineupPitch match={match} onPlayer={onPlayer}/>;
+        // 시작 전 월드컵 경기 → 예상 라인업 피치 / 진행·종료 경기 → 실제 라인업(아래 목록)
+        if (isNationalTeam && !isFinished && !isLive) return <MatchLineupPitch match={match} onPlayer={onPlayer}/>;
         if (lineupsLoading) {
           return <div style={{ display:'flex', justifyContent:'center', padding:'48px 0' }}><div style={{ width:24, height:24, borderRadius:'50%', border:'2.5px solid var(--border)', borderTopColor:'var(--acc)', animation:'spin 0.8s linear infinite' }}/></div>;
         }
