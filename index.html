@@ -4263,7 +4263,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
 }
 
 // ─── SCREEN: SCHEDULE ─────────────────────────────────────────
-function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRefresh, isActive = false, scrollTopKey = 0 }) {
+function ScheduleScreen({ onMatch, liveApiMatches = [], worldCupMatches = [], isLoading = false, onRefresh, isActive = false, scrollTopKey = 0 }) {
   const days = ['일','월','화','수','목','금','토'];
   const now = new Date();
 
@@ -4367,7 +4367,13 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
   sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
   sevenDaysLater.setHours(23, 59, 59, 999);
 
-  const allMatches = liveApiMatches.filter(m => {
+  // 월드컵(국가대표) 경기도 일정에 포함 — 합성 koreanPlayer가 있어 동일 필터를 통과한다.
+  // WC 객체엔 time이 없어 예정 경기 킥오프 시각(KST)을 채워 카드가 '예정' 대신 시각을 표시.
+  const wcForSchedule = worldCupMatches.map(m => ({
+    ...m,
+    time: m.time || new Date(m.fullDate).toLocaleTimeString('ko-KR', { timeZone:'Asia/Seoul', hour:'2-digit', minute:'2-digit', hour12:false }),
+  }));
+  const allMatches = [...liveApiMatches, ...wcForSchedule].filter(m => {
     if (!m.fullDate || !m.koreanPlayer) return false;
     const matchDate = new Date(m.fullDate);
     return matchDate >= sevenDaysAgo && matchDate <= sevenDaysLater;
@@ -7543,7 +7549,7 @@ function App() {
           {(screen === 'main' || closing) && (
             <>
               <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} tweaks={tweaks} liveApiMatches={filteredLiveMatches} worldCupMatches={worldCupMatches} isLoading={isInitialLoad && apiLoading} scrollTopKey={tabScrollKeys.home} onRefresh={fetchLiveMatches} unreadCount={unreadCount} nativeTabBar={nativeTabBar}/></div>
-              <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
+              <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} liveApiMatches={filteredLiveMatches} worldCupMatches={worldCupMatches} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
               <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} followed={followed} statsCache={playerStatsCache} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} scrollTopKey={tabScrollKeys.players} liveApiMatches={filteredLiveMatches} sportFeeds={sportFeeds}/></div>
               <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news} followedNames={followedNames}/></div>
               <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed} profile={profile} onUpdateProfile={updateProfile} sub={moreSub} setSub={setMoreSub}/></div>
