@@ -5639,7 +5639,7 @@ function FeedbackScreen({ onBack }) {
   );
 }
 
-function MoreScreen({ sportFeeds, onToggleSportFeed, profile, onUpdateProfile, sub, setSub }) {
+function MoreScreen({ sportFeeds, onToggleSportFeed, profile, onUpdateProfile, sub, setSub, onShowGuide }) {
   if (sub === 'notif')      return <NotifSettingsScreen onBack={() => setSub(null)}/>;
   if (sub === 'sports')     return <SportFeedScreen onBack={() => setSub(null)} sportFeeds={sportFeeds} onToggleSportFeed={onToggleSportFeed}/>;
   if (sub === 'profile')    return <ProfileEditScreen profile={profile} onSave={onUpdateProfile} onBack={() => setSub(null)}/>;
@@ -5651,6 +5651,7 @@ function MoreScreen({ sportFeeds, onToggleSportFeed, profile, onUpdateProfile, s
       { id:'notif',     icon:'🔔', color:'#ff9500', title:'알림 설정',     sub:'경기 시작, 이벤트 알림', chevron:true },
     ]},
     { label:'앱 정보', items:[
+      { id:'guide',    icon:'📖', color:'#48484a', title:'사용 설명 보기', sub:'온보딩 가이드 다시 보기', chevron:true, action: onShowGuide },
       { id:'version',  icon:'ℹ️', color:'#48484a', title:'버전 정보',     sub:'Jumo v1.0.0' },
       { id:'feedback', icon:'💬', color:'#48484a', title:'피드백 보내기', sub:'개선 사항을 알려주세요', chevron:true },
     ]},
@@ -5676,7 +5677,7 @@ function MoreScreen({ sportFeeds, onToggleSportFeed, profile, onUpdateProfile, s
           <div style={{ fontSize:11, fontWeight:700, color:'var(--text4)', letterSpacing:1.5, textTransform:'uppercase', padding:'0 20px', marginBottom:8 }}>{g.label}</div>
           <div style={{ margin:'0 16px', background:'var(--surface)', borderRadius:16, overflow:'hidden', border:'0.5px solid var(--border)' }}>
             {g.items.map((item, i) => (
-              <div key={item.id} onClick={() => { if (item.onToggle) item.onToggle(); else if (item.chevron) setSub(item.id); }} style={{ display:'flex', alignItems:'center', gap:12, padding:'13px 16px', borderBottom: i < g.items.length-1 ? '0.5px solid var(--border2)' : 'none', cursor:'pointer' }}>
+              <div key={item.id} onClick={() => { if (item.action) item.action(); else if (item.onToggle) item.onToggle(); else if (item.chevron) setSub(item.id); }} style={{ display:'flex', alignItems:'center', gap:12, padding:'13px 16px', borderBottom: i < g.items.length-1 ? '0.5px solid var(--border2)' : 'none', cursor:'pointer' }}>
                 <div style={{ width:32, height:32, borderRadius:8, background:item.color, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>{item.icon}</div>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:14, fontWeight:600, color:'var(--text)', marginBottom:1 }}>{item.title}</div>
@@ -7676,7 +7677,7 @@ function App() {
               <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} liveApiMatches={filteredLiveMatches} worldCupMatches={worldCupMatches} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
               <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} followed={followed} statsCache={playerStatsCache} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} scrollTopKey={tabScrollKeys.players} liveApiMatches={filteredLiveMatches} sportFeeds={sportFeeds}/></div>
               <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news} followedNames={followedNames}/></div>
-              <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed} profile={profile} onUpdateProfile={updateProfile} sub={moreSub} setSub={setMoreSub}/></div>
+              <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed} profile={profile} onUpdateProfile={updateProfile} sub={moreSub} setSub={setMoreSub} onShowGuide={() => setShowOnboarding(true)}/></div>
             </>
           )}
           {screen !== 'main' && (
