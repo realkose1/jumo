@@ -5677,7 +5677,7 @@ function OnboardingTour({ onDone, onTab }) {
   const prev = () => { if (i > 0) setI(i - 1); };
   return (
     <div style={{ position:'absolute', inset:0, zIndex:300, display:'flex', flexDirection:'column', justifyContent:'flex-end',
-                  background:'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.04) 42%, rgba(0,0,0,0.46) 100%)',
+                  background:'rgba(0,0,0,0.72)',
                   animation:'fadeIn 0.3s ease' }}>
       {/* 건너뛰기 */}
       <button onClick={onDone} style={{ position:'absolute', top:14, right:14, background:'rgba(0,0,0,0.45)', border:'none', color:'#fff', fontSize:12, fontWeight:700, padding:'7px 13px', borderRadius:20, cursor:'pointer', backdropFilter:'blur(8px)', WebkitBackdropFilter:'blur(8px)' }}>건너뛰기</button>
