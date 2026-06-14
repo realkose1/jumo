@@ -5709,8 +5709,11 @@ function App() {
   const [screen, setScreen] = React.useState('main');
   const [selectedMatch, setSelectedMatch] = React.useState(null);
   const [selectedPlayer, setSelectedPlayer] = React.useState(null);
-  // 첫 실행 온보딩 튜토리얼 — localStorage 'jumo_onboarding_seen' 으로 1회만 노출
+  // 온보딩 튜토리얼 노출 제어.
+  // ⚠️ 임시(테스트용): 매 실행마다 노출. 정식 배포 시 false 로 되돌리면 최초 1회만 노출.
+  const ONBOARDING_ALWAYS_SHOW = true;
   const [showOnboarding, setShowOnboarding] = React.useState(() => {
+    if (ONBOARDING_ALWAYS_SHOW) return true;
     try { return !localStorage.getItem('jumo_onboarding_seen'); } catch { return false; }
   });
   const finishOnboarding = () => {
