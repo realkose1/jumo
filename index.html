@@ -5715,14 +5715,39 @@ function OnboardingTour({ onDone, onTab }) {
   React.useEffect(() => { if (onTab) onTab(ONBOARDING_STEPS[i].tab); }, [i]);
   const next = () => { if (last) { onDone(); return; } setDir(1); setI(i + 1); };
   const prev = () => { if (i > 0) { setDir(-1); setI(i - 1); } };
+  const cardRef = React.useRef(null);
+  const [spot, setSpot] = React.useState(null); // 강조(딤 해제)할 본문 영역 {top,left,width,height}
+  // 활성 화면의 본문 스크롤 영역을 측정해, 그 부분만 딤을 풀고 강조한다(주변은 box-shadow 딤).
+  React.useEffect(() => {
+    let r1, r2;
+    const measure = () => {
+      try {
+        let target = null, best = 0;
+        document.querySelectorAll('.scrollbar-hide').forEach(el => {
+          if (el.offsetParent === null || el.clientHeight < 220) return;
+          const r = el.getBoundingClientRect();
+          if (r.height > best) { best = r.height; target = el; }
+        });
+        if (!target) { setSpot(null); return; }
+        const cardTop = cardRef.current ? cardRef.current.getBoundingClientRect().top : window.innerHeight;
+        const r = target.getBoundingClientRect();
+        const top = Math.max(r.top, 56);
+        const bottom = Math.min(r.bottom, cardTop - 14);
+        setSpot({ top, left: 8, width: window.innerWidth - 16, height: Math.max(90, bottom - top) });
+      } catch (e) {}
+    };
+    r1 = requestAnimationFrame(() => { r2 = requestAnimationFrame(measure); });
+    window.addEventListener('resize', measure);
+    return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2); window.removeEventListener('resize', measure); };
+  }, [i]);
   return (
-    <div style={{ position:'absolute', inset:0, zIndex:300, display:'flex', flexDirection:'column', justifyContent:'flex-end',
-                  background:'rgba(0,0,0,0.72)',
-                  animation:'fadeIn 0.3s ease' }}>
-      {/* 건너뛰기 */}
-      <button onClick={onDone} style={{ position:'absolute', top:14, right:14, background:'rgba(0,0,0,0.45)', border:'none', color:'#fff', fontSize:12, fontWeight:700, padding:'7px 13px', borderRadius:20, cursor:'pointer', backdropFilter:'blur(8px)', WebkitBackdropFilter:'blur(8px)' }}>건너뛰기</button>
-      {/* 하단 설명 카드 (탭바 위에 띄워 실제 화면이 보이게) */}
-      <div key={i} style={{ margin:'0 14px calc(env(safe-area-inset-bottom) + 86px)', background:'var(--card)', border:'0.5px solid var(--border2)', borderRadius:20, padding:'18px', boxShadow:'0 18px 55px rgba(0,0,0,0.55)', animation: (dir < 0 ? 'obSlideFromRight' : 'obSlideFromLeft') + ' 0.32s ease' }}>
+    <div style={{ position:'absolute', inset:0, zIndex:300, display:'flex', flexDirection:'column', justifyContent:'flex-end', animation:'fadeIn 0.3s ease' }}>
+      {/* 스포트라이트: 중요 본문 영역만 딤 해제 + 금색 강조 링, 주변은 box-shadow로 딤. */}
+      {spot
+        ? <div style={{ position:'absolute', top:spot.top, left:spot.left, width:spot.width, height:spot.height, borderRadius:16, boxShadow:'0 0 0 2px rgba(245,196,0,0.6), 0 0 0 2000px rgba(0,0,0,0.5)', pointerEvents:'none', transition:'top 0.3s ease, height 0.3s ease' }}/>
+        : <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.4)', pointerEvents:'none' }}/>}
+      {/* 하단 설명 카드 (건너뛰기는 카드 안에 두어 네이티브 상단 버튼과 겹치지 않게) */}
+      <div ref={cardRef} key={i} style={{ position:'relative', margin:'0 14px calc(env(safe-area-inset-bottom) + 86px)', background:'var(--card)', border:'0.5px solid var(--border2)', borderRadius:20, padding:'18px', boxShadow:'0 18px 55px rgba(0,0,0,0.55)', animation: (dir < 0 ? 'obSlideFromRight' : 'obSlideFromLeft') + ' 0.32s ease' }}>
         <div style={{ display:'flex', gap:5, marginBottom:14 }}>
           {ONBOARDING_STEPS.map((_, k) => (
             <div key={k} style={{ height:4, flex:1, borderRadius:2, background: k <= i ? 'var(--acc)' : 'var(--border2)' }}/>
@@ -5740,6 +5765,7 @@ function OnboardingTour({ onDone, onTab }) {
             {last ? '시작하기' : '다음'}
           </button>
         </div>
+        {!last && <button onClick={onDone} style={{ display:'block', margin:'14px auto 0', background:'transparent', border:'none', color:'var(--text5)', fontSize:12.5, fontWeight:600, cursor:'pointer' }}>건너뛰기</button>}
       </div>
     </div>
   );
