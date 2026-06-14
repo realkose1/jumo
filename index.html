@@ -1270,8 +1270,8 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
             </div>
           </div>
 
-          {/* Event info - TOP RIGHT */}
-          {m.koreanPlayer?.event && (
+          {/* Event info - TOP RIGHT (마이너는 우측 상단에 표시하지 않고 하단 MLB 라벨로 대체) */}
+          {m.koreanPlayer?.event && m.koreanPlayer.event !== '마이너' && (
             <div style={{
               background: isLive ? 'rgba(230,48,48,0.1)' : 'var(--btn-bg)',
               borderRadius:6, padding:'5px 8px', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center'
@@ -1359,7 +1359,7 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
                 </div>
 
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
-                  <div style={{ fontSize:11, color:'var(--text4)', minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.competition}</div>
+                  <div style={{ fontSize:11, color:'var(--text4)', minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.competition || (isMLB ? 'MLB' : '')}</div>
                   <BroadcastBadge match={m}/>
                 </div>
               </>
@@ -1435,7 +1435,7 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
             {/* Competition info */}
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
               <div style={{ fontSize:11, color:'var(--text4)', minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                {m.sport.split(' ')[1]} · {m.competition}
+                {[m.sport.split(' ')[1], m.competition].filter(Boolean).join(' · ')}
               </div>
               <BroadcastBadge match={m}/>
             </div>
