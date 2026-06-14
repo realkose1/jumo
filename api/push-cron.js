@@ -137,8 +137,12 @@ async function collectSoccer(events) {
 }
 
 async function collectBaseball(events) {
-  const today = new Date().toISOString().slice(0, 10);
-  const sched = await J(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${today}&hydrate=team,linescore`);
+  // MLB 경기는 미국 현지(주로 저녁) 기준 날짜로 등록돼 UTC 날짜와 어긋난다. UTC '오늘'만
+  // 조회하면 미국 저녁(=UTC 다음날)에 진행 중인 경기를 통째로 놓친다(soccer는 ESPN
+  // scoreboard를 날짜 없이 받아 무관). 어제~오늘(UTC) 범위로 조회해 진행/종료 경기를 모두
+  // 포착한다. 같은 경기가 여러 번 잡혀도 gamePk 기반 push_log 중복 제거로 한 번만 발송된다.
+  const ymd = (off) => new Date(Date.now() + off * 86400000).toISOString().slice(0, 10);
+  const sched = await J(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate=${ymd(-1)}&endDate=${ymd(0)}&hydrate=team,linescore`);
   for (const day of sched?.dates || []) {
     for (const g of day.games || []) {
       const home = g.teams?.home?.team?.name || '', away = g.teams?.away?.team?.name || '';
