@@ -5717,7 +5717,7 @@ function OnboardingTour({ onDone, onTab }) {
   const prev = () => { if (i > 0) { setDir(-1); setI(i - 1); } };
   return (
     <div style={{ position:'absolute', inset:0, zIndex:300, display:'flex', flexDirection:'column', justifyContent:'flex-end',
-                  background:'linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.62) 26%, rgba(0,0,0,0) 56%)',
+                  background:'linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.82) 30%, rgba(0,0,0,0.45) 58%, rgba(0,0,0,0) 82%)',
                   animation:'fadeIn 0.3s ease' }}>
       {/* 하단 설명 카드 */}
       <div key={i} style={{ position:'relative', margin:'0 14px calc(env(safe-area-inset-bottom) + 86px)', background:'var(--card)', border:'0.5px solid var(--border2)', borderRadius:20, padding:'18px', boxShadow:'0 18px 55px rgba(0,0,0,0.55)', animation: (dir < 0 ? 'obSlideFromRight' : 'obSlideFromLeft') + ' 0.32s ease' }}>
