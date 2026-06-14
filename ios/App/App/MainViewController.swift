@@ -379,6 +379,7 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
     private func setupTabBar() {
         model.onSelect = { [weak self] i in
             guard let self = self else { return }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()   // GNB 탭 햅틱
             self.wk?.evaluateJavaScript("window.__nativeTab && window.__nativeTab('\(self.tabs[i].id)')")
         }
         let hc = UIHostingController(rootView: GlassTabBar(model: model))
