@@ -5652,6 +5652,56 @@ function MoreScreen({ sportFeeds, onToggleSportFeed, profile, onUpdateProfile, s
 }
 
 // ─── MAIN APP ────────────────────────────────────────────────
+// ─── 온보딩 (첫 실행 튜토리얼) ────────────────────────────────────
+// 전체 화면 모달로 앱 핵심 기능을 안내. '다음'으로 넘기고 마지막에 '시작하기'.
+// localStorage 'jumo_onboarding_seen' 으로 최초 1회만 노출.
+const ONBOARDING_SLIDES = [
+  { icon:'⚽️', title:'주모에 오신 걸 환영해요', desc:'손흥민·이정후·김민재 등\n해외에서 뛰는 한국 선수들의 경기를\n한 곳에서 챙겨보세요.' },
+  { icon:'🏠', title:'오늘의 경기를 한눈에', desc:'홈에서 라이브 스코어와\n한국 선수의 골·도움·안타를\n실시간으로 확인해요.' },
+  { icon:'📅', title:'일정도 놓치지 않게', desc:'축구·야구는 물론\n2026 월드컵까지 날짜별 일정을\n미리 확인할 수 있어요.' },
+  { icon:'📊', title:'경기 속으로 더 깊게', desc:'경기 상세에서 통계·실제 라인업·\n주요 이벤트와 월드컵 조별 순위까지\n자세히 볼 수 있어요.' },
+  { icon:'🔔', title:'알림으로 실시간 응원', desc:'관심 선수의 경기 시작·골·결과를\n푸시 알림으로 받아보세요.\n(더보기 → 알림 설정)' },
+];
+function OnboardingModal({ onDone }) {
+  const [i, setI] = React.useState(0);
+  const n = ONBOARDING_SLIDES.length;
+  const last = i === n - 1;
+  const s = ONBOARDING_SLIDES[i];
+  const go = (k) => setI(Math.max(0, Math.min(n - 1, k)));
+  const next = () => last ? onDone() : go(i + 1);
+  const startX = React.useRef(0);
+  const onTouchStart = (e) => { startX.current = e.touches[0].clientX; };
+  const onTouchEnd = (e) => {
+    const dx = e.changedTouches[0].clientX - startX.current;
+    if (dx < -45) next(); else if (dx > 45) go(i - 1);
+  };
+  return (
+    <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}
+      style={{ position:'absolute', inset:0, zIndex:300, display:'flex', flexDirection:'column',
+               background:'radial-gradient(130% 55% at 50% 0%, rgba(245,196,0,0.16), transparent 62%), var(--bg)',
+               animation:'fadeIn 0.3s ease' }}>
+      <div style={{ display:'flex', justifyContent:'flex-end', padding:'18px 18px 0' }}>
+        <button onClick={onDone} style={{ background:'transparent', border:'none', color:'var(--text4)', fontSize:13, fontWeight:600, padding:'6px 8px', cursor:'pointer', visibility: last ? 'hidden' : 'visible' }}>건너뛰기</button>
+      </div>
+      <div key={i} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', textAlign:'center', padding:'0 32px', animation:'fadeIn 0.35s ease' }}>
+        <div style={{ width:124, height:124, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:58, marginBottom:34, background:'rgba(245,196,0,0.12)', border:'0.5px solid rgba(245,196,0,0.35)', boxShadow:'0 16px 50px rgba(245,196,0,0.18)' }}>{s.icon}</div>
+        <div style={{ fontSize:23, fontWeight:800, color:'var(--text)', letterSpacing:-0.5, marginBottom:14 }}>{s.title}</div>
+        <div style={{ fontSize:15, lineHeight:1.7, color:'var(--text3)', whiteSpace:'pre-line', maxWidth:300 }}>{s.desc}</div>
+      </div>
+      <div style={{ padding:'0 28px calc(env(safe-area-inset-bottom) + 30px)' }}>
+        <div style={{ display:'flex', justifyContent:'center', gap:7, marginBottom:24 }}>
+          {ONBOARDING_SLIDES.map((_, k) => (
+            <div key={k} onClick={() => go(k)} style={{ width: k === i ? 22 : 7, height:7, borderRadius:4, background: k === i ? 'var(--acc)' : 'var(--border2)', transition:'all 0.25s ease', cursor:'pointer' }}/>
+          ))}
+        </div>
+        <button onClick={next} style={{ width:'100%', padding:'16px', borderRadius:14, border:'none', background:'var(--acc)', color:'#000', fontSize:16, fontWeight:800, letterSpacing:-0.3, cursor:'pointer' }}>
+          {last ? '시작하기' : '다음'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [tweaks, setTweaks] = React.useState(() => {
     try { return { ...TWEAK_DEFAULTS, ...JSON.parse(localStorage.getItem('jumo_tweaks')||'{}') }; }
@@ -5662,6 +5712,14 @@ function App() {
   const [screen, setScreen] = React.useState('main');
   const [selectedMatch, setSelectedMatch] = React.useState(null);
   const [selectedPlayer, setSelectedPlayer] = React.useState(null);
+  // 첫 실행 온보딩 튜토리얼 — localStorage 'jumo_onboarding_seen' 으로 1회만 노출
+  const [showOnboarding, setShowOnboarding] = React.useState(() => {
+    try { return !localStorage.getItem('jumo_onboarding_seen'); } catch { return false; }
+  });
+  const finishOnboarding = () => {
+    try { localStorage.setItem('jumo_onboarding_seen', '1'); } catch {}
+    setShowOnboarding(false);
+  };
   // More-tab sub-view (알림설정/종목별피드/프로필/피드백) lifted to App so the
   // native glass back overlay can drive it like other 2-depth detail screens.
   const [moreSub, setMoreSub] = React.useState(null);
@@ -7580,6 +7638,7 @@ function App() {
           </div>
           )}
           {!nativeTabBar && <TabBar active={tab} onTab={handleTab}/>}
+          {showOnboarding && <OnboardingModal onDone={finishOnboarding}/>}
         </div>
       </IOSDevice>
 
