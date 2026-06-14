@@ -163,6 +163,7 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
 
     @objc private func handleEdgeBack(_ g: UIScreenEdgePanGestureRecognizer) {
         if g.state == .ended, g.translation(in: view).x > 40 {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
             wk?.evaluateJavaScript("window.__back && window.__back()")
         }
     }
@@ -237,6 +238,7 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
     }
 
     @objc private func bellTapped() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
         wk?.evaluateJavaScript("window.__jumoNotif && window.__jumoNotif()")
     }
 
@@ -341,9 +343,9 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
         actionHost = apill; actionLabel = alabel; actionIcon = aicon
     }
 
-    @objc private func backChromeTapped() { wk?.evaluateJavaScript("window.__back && window.__back()") }
-    @objc private func followTapped() { wk?.evaluateJavaScript("window.__jumoFollow && window.__jumoFollow()") }
-    @objc private func actionTapped() { wk?.evaluateJavaScript("window.__jumoTopAction && window.__jumoTopAction()") }
+    @objc private func backChromeTapped() { UIImpactFeedbackGenerator(style: .light).impactOccurred(); wk?.evaluateJavaScript("window.__back && window.__back()") }
+    @objc private func followTapped() { UIImpactFeedbackGenerator(style: .light).impactOccurred(); wk?.evaluateJavaScript("window.__jumoFollow && window.__jumoFollow()") }
+    @objc private func actionTapped() { UIImpactFeedbackGenerator(style: .light).impactOccurred(); wk?.evaluateJavaScript("window.__jumoTopAction && window.__jumoTopAction()") }
 
     private func updateDetailChrome(back: Bool, followShow: Bool, followOn: Bool,
                                     actionShow: Bool, actionLabel: String, actionIcon: String) {
