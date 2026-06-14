@@ -5694,7 +5694,7 @@ function OnboardingTour({ onDone, onTab }) {
         </div>
         <div style={{ fontSize:13.5, lineHeight:1.65, color:'var(--text3)', whiteSpace:'pre-line', marginBottom:16 }}>{step.desc}</div>
         <div style={{ position:'relative', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-          <button onClick={prev} style={{ background:'transparent', border:'none', color:'var(--text4)', fontSize:14, fontWeight:700, padding:'12px 6px', cursor:'pointer', visibility: i === 0 ? 'hidden' : 'visible' }}>이전</button>
+          <button onClick={prev} style={{ padding:'12px 22px', borderRadius:12, border:'none', background:'var(--btn-bg)', color:'var(--text)', fontSize:15, fontWeight:700, letterSpacing:-0.3, cursor:'pointer', visibility: i === 0 ? 'hidden' : 'visible' }}>이전</button>
           <span style={{ ...NUM, position:'absolute', left:'50%', transform:'translateX(-50%)', pointerEvents:'none', fontSize:12, color:'var(--text5)', fontWeight:700 }}>{i + 1} / {n}</span>
           <button onClick={next} style={{ padding:'12px 24px', borderRadius:12, border:'none', background:'var(--acc)', color:'#000', fontSize:15, fontWeight:800, letterSpacing:-0.3, cursor:'pointer' }}>
             {last ? '시작하기' : '다음'}
