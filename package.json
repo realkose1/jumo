@@ -15,5 +15,8 @@
     "@capacitor/ios": "^6.1.2",
     "@capacitor/push-notifications": "^6.0.5",
     "@capacitor/splash-screen": "^6.0.4"
+  },
+  "dependencies": {
+    "@capacitor/haptics": "^6.0.3"
   }
 }

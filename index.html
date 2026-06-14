@@ -201,6 +201,39 @@ const liveTimeLabel = (m, liveMinute) => {
   const v = liveMinute || m?.minute;
   return v ? `${v}'` : '';
 };
+
+// ─── 햅틱 피드백 ──────────────────────────────────────────────
+// 네이티브(iOS): @capacitor/haptics 의 UIImpactFeedbackGenerator. 웹/안드로이드:
+// navigator.vibrate 폴백 (iOS Safari/WKWebView는 vibrate 미지원 → 네이티브가 담당).
+function haptic(style) {
+  try {
+    const H = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Haptics;
+    if (H) {
+      if (style === 'success' || style === 'warning' || style === 'error') {
+        H.notification && H.notification({ type: style.toUpperCase() });
+      } else {
+        H.impact && H.impact({ style: style === 'medium' ? 'MEDIUM' : style === 'heavy' ? 'HEAVY' : 'LIGHT' });
+      }
+    } else if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(style === 'heavy' ? 16 : style === 'medium' ? 10 : 6);
+    }
+  } catch (e) {}
+}
+// 전역: 탭 가능한 요소(버튼/링크/role=button/포인터 커서) 클릭 시 가벼운 햅틱.
+// click 이벤트는 실제 탭에서만 발생(스크롤 시엔 미발생)하므로 스크롤 오작동이 없다.
+if (typeof document !== 'undefined') {
+  document.addEventListener('click', (e) => {
+    try {
+      let n = e.target;
+      for (let i = 0; i < 6 && n && n.nodeType === 1 && n !== document.body; i++) {
+        const tag = n.tagName;
+        if (tag === 'BUTTON' || tag === 'A' || n.getAttribute('role') === 'button' ||
+            window.getComputedStyle(n).cursor === 'pointer') { haptic('light'); return; }
+        n = n.parentElement;
+      }
+    } catch (err) {}
+  }, true);
+}
 const isPlayerAllowed = (p, feeds) => feeds?.[playerSportKey(p)] !== false;
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
@@ -1661,6 +1694,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], world
   };
   const handleHomeTouchEnd = async () => {
     if (pullY >= PULL_THRESHOLD && onRefresh && !refreshing) {
+      haptic('medium');
       setRefreshing(true);
       setPullY(PULL_THRESHOLD);
       // Safety: cap PTR spinner duration so it never sticks.
@@ -4331,6 +4365,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], worldCupMatches = [], is
       return;
     }
     if (pullY >= PULL_THRESHOLD && onRefresh && !refreshing) {
+      haptic('medium');
       setRefreshing(true);
       setPullY(PULL_THRESHOLD);
       // Safety: cap PTR spinner duration so it never sticks.
@@ -4621,6 +4656,7 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
   };
   const handleTouchEnd = async () => {
     if (pullY >= PULL_THRESHOLD && onRefresh && !refreshing) {
+      haptic('medium');
       setRefreshing(true);
       setPullY(PULL_THRESHOLD);
       // Safety: cap PTR spinner duration so it never sticks.
