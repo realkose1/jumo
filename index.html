@@ -1718,8 +1718,16 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], world
     return () => clearInterval(interval);
   }, []);
 
+  // 월드컵 진행 중(라이브/예정/최근 종료)이면 국가대표 축구 선수들은 클럽 경기에 못 나오므로
+  // 홈 풀에서 축구 클럽 경기를 제외한다(월드컵 경기는 worldCupMatches 별도 섹션에서 노출). 야구는 영향 없음.
+  const wcActive = (worldCupMatches || []).some(m => {
+    if (m.live || m.state === 'in' || m.state === 'pre') return true;
+    if (m.state === 'post' && m.fullDate) { const d = (Date.now() - new Date(m.fullDate)) / 86400000; return d >= 0 && d <= 4; }
+    return false;
+  });
+  const isHomeSoccer = m => !((m.sport || '').includes('MLB') || (m.sport || '').includes('⚾'));
   // Combine static and API matches
-  const allMatches = [...MATCHES, ...liveApiMatches];
+  const allMatches = [...MATCHES, ...liveApiMatches].filter(m => !(wcActive && isHomeSoccer(m)));
   const liveMatches = allMatches.filter(m => m.live || m.time === 'LIVE');
 
   // Filter matches for today (including past results)
