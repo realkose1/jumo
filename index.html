@@ -1909,6 +1909,8 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], world
   };
 
   const isFinishedHighlight = highlightData?.priority === 4;
+  // 히어로는 라이브(1)/종료(4) 하이라이트가 있을 때만. 예정(5)·없음이면 컴팩트 헤더만 노출.
+  const showHero = !!highlightData && (highlightData.priority === 1 || highlightData.priority === 4);
   const finishedHeadline = isFinishedHighlight ? buildFinishedHeadline(highlightMatch) : null;
 
   // landscape image map: Korean name → filename in image/landscape/
@@ -1970,8 +1972,16 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], world
         </div>
       </div>
 
-      {/* ── HIGHLIGHT CARD (finished + live/upcoming share same layout) ── */}
-      {isFinishedHighlight ? (() => {
+      {/* ── HIGHLIGHT CARD: 라이브/종료만 노출. 예정·없음이면 컴팩트 헤더(JUMO+벨)만 ── */}
+      {!showHero ? (
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'calc(env(safe-area-inset-top) + 14px) 20px 4px' }}>
+          <span style={{ fontSize:17, fontWeight:900, color:'var(--text)', letterSpacing:1.5 }}>JUMO</span>
+          <button onClick={onNotif} style={{ ...LG.base, ...LG.circle, color:'var(--text)', position:'relative', display: nativeTabBar ? 'none' : 'flex' }}>
+            <svg width="18" height="18" viewBox="0 0 22 22" fill="none"><path d="M11 2a7 7 0 00-7 7v4l-1.5 2.5h17L18 13V9a7 7 0 00-7-7z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" fill="none"/><path d="M9 18.5a2 2 0 004 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+            {unreadCount > 0 && <span style={{ position:'absolute', top:-2, right:-2, minWidth:16, height:16, padding:'0 4px', borderRadius:8, background:'#e63030', color:'#fff', fontSize:9, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 0 0 1.5px rgba(0,0,0,0.4)' }}>{unreadCount > 99 ? '99+' : unreadCount}</span>}
+          </button>
+        </div>
+      ) : isFinishedHighlight ? (() => {
         const kp = highlightMatch.koreanPlayer;
         const isMLB = (highlightMatch.sport||'').includes('MLB') || (highlightMatch.sport||'').includes('⚾');
         const homeIsKorean = kp.team === highlightMatch.home.code;
