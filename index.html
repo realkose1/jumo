@@ -2334,6 +2334,53 @@ function deriveCardColors(home, away) {
   }
   return { homeColor, awayColor };
 }
+
+// Dominant brand hue straight from the team's logo image (most accurate source —
+// the hardcoded CHEER_BRAND map only covers a handful of clubs, and Korean-player
+// teams carry a full-name code that never matches it). Reads the logo pixels on a
+// canvas, ignores transparent/washed/near-black-or-white pixels, and returns the
+// most vivid hue bucket's {h,s}. Cached per URL; resolves null on CORS/monochrome
+// failure so callers fall back to deriveCardColors.
+const LOGO_HSL_CACHE = {};
+function extractLogoHSL(url) {
+  if (!url) return Promise.resolve(null);
+  if (url in LOGO_HSL_CACHE) {
+    const v = LOGO_HSL_CACHE[url];
+    return v && typeof v.then === 'function' ? v : Promise.resolve(v);
+  }
+  const p = new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const S = 48;
+        const c = document.createElement('canvas'); c.width = S; c.height = S;
+        const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, S, S);
+        const d = ctx.getImageData(0, 0, S, S).data;
+        const buckets = {};
+        for (let i = 0; i < d.length; i += 4) {
+          if (d[i + 3] < 128) continue;                    // transparent
+          const { h, s, l } = rgbToHsl([d[i], d[i + 1], d[i + 2]]);
+          if (s < 0.25 || l > 0.9 || l < 0.12) continue;   // washed / white / black
+          const key = Math.round(h / 15);
+          const w = s * (1 - Math.abs(l - 0.5));           // vivid mid-tones weigh most
+          const bk = buckets[key] || (buckets[key] = { w: 0, r: 0, g: 0, b: 0 });
+          bk.w += w; bk.r += d[i] * w; bk.g += d[i + 1] * w; bk.b += d[i + 2] * w;
+        }
+        let best = null;
+        for (const k in buckets) if (!best || buckets[k].w > best.w) best = buckets[k];
+        if (!best) { resolve(null); return; }
+        const hsl = rgbToHsl([Math.round(best.r / best.w), Math.round(best.g / best.w), Math.round(best.b / best.w)]);
+        resolve({ h: hsl.h, s: hsl.s });
+      } catch { resolve(null); }
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  }).then((v) => { LOGO_HSL_CACHE[url] = v; return v; });
+  LOGO_HSL_CACHE[url] = p;
+  return p;
+}
+const cardFromHSL = (hsl, l = 30) => hsl ? `hsl(${Math.round(hsl.h)}, ${Math.round(Math.max(hsl.s, 0.4) * 100)}%, ${l}%)` : null;
 function TeamCheerMeter({ match, isLive, isFinished }) {
   const mid = String(match.id);
   const LSK = `jumo_cheer_${mid}`;
@@ -2395,7 +2442,25 @@ function TeamCheerMeter({ match, isLive, isFinished }) {
   const total = counts.home + counts.away;
   const hShare = total > 0 ? Math.max(0.28, Math.min(0.72, counts.home / total)) : 0.5;
   const hPct = hShare * 100;
-  const { homeColor, awayColor } = React.useMemo(() => deriveCardColors(match.home, match.away), [match.home, match.away]);
+  // Prefer team-logo colors; fall back to the brand-map/hash derivation while the
+  // logos load or if extraction fails (CORS, monochrome, or no logo URL).
+  const fallbackColors = React.useMemo(() => deriveCardColors(match.home, match.away), [match.home, match.away]);
+  const [logoHsl, setLogoHsl] = React.useState({ home: null, away: null });
+  React.useEffect(() => {
+    let alive = true;
+    Promise.all([extractLogoHSL(match.home?.logo), extractLogoHSL(match.away?.logo)])
+      .then(([h, a]) => { if (alive) setLogoHsl({ home: h, away: a }); });
+    return () => { alive = false; };
+  }, [match.home?.logo, match.away?.logo]);
+  const { homeColor, awayColor } = React.useMemo(() => {
+    let homeColor = cardFromHSL(logoHsl.home) || fallbackColors.homeColor;
+    let awayColor = cardFromHSL(logoHsl.away) || fallbackColors.awayColor;
+    // Both hues from logos and nearly identical → deepen the away side so the two read distinct.
+    if (logoHsl.home && logoHsl.away && hueDist(logoHsl.home.h, logoHsl.away.h) < 16) {
+      awayColor = cardFromHSL(logoHsl.away, 20);
+    }
+    return { homeColor, awayColor };
+  }, [logoHsl, fallbackColors]);
   const statusText = isFinished ? '종료' : (isLive ? 'LIVE' : 'VS');
   const statusColor = isLive ? 'var(--acc)' : 'rgba(255,255,255,0.6)';
 
