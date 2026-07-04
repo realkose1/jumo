@@ -411,6 +411,17 @@ function computeStartProbability(playerName, allMatches) {
   const p = ALL_PLAYERS.find(x => x.name === playerName);
   return p?.startRate ?? null;
 }
+
+// A player optioned to the minors isn't on his MLB club's active roster, so that
+// club's MLB game isn't really "his" — hide it from the followed-player lists
+// entirely (not even as '미출전'). IL/injured players stay on the 40-man roster,
+// so their team's games are still shown. 'minors' kind is set only for baseball
+// players by the daily roster sync.
+function koreanIsMinorLeaguer(m) {
+  const kp = m && m.koreanPlayer;
+  if (!kp) return false;
+  return ALL_PLAYERS.find(p => p.name === kp.name)?.injury?.kind === 'minors';
+}
 function formatExpectedEvent(kp, allMatches) {
   if (!kp) return '';
   if (kp.event === '출전 예상') {
@@ -1777,6 +1788,8 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
       // 정규 시즌 경기(리그·MLB)의 '미출전'은 계속 보여준다(왜 안 뛰었는지가 정보임).
       const isFriendly = (m.competition || '').includes('Friendlies');
       if (isFriendly && m.koreanPlayer.event === '미출전' && m.koreanPlayer.lineupConfirmed === true) return false;
+      // 마이너 강등 선수의 MLB(부모 구단) 경기는 그의 경기가 아니므로 목록에서 제외.
+      if (koreanIsMinorLeaguer(m)) return false;
       if (m.live || m.time === 'LIVE') return true;
       const matchDate = new Date(m.fullDate);
       const isFinished = isFinalStatus(m.status);
@@ -3984,6 +3997,8 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
 
   const allMatches = liveApiMatches.filter(m => {
     if (!m.fullDate || !m.koreanPlayer) return false;
+    // 마이너 강등 선수의 MLB(부모 구단) 경기는 그의 경기가 아니므로 일정에서도 제외.
+    if (koreanIsMinorLeaguer(m)) return false;
     const matchDate = new Date(m.fullDate);
     return matchDate >= sevenDaysAgo && matchDate <= sevenDaysLater;
   });
