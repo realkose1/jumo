@@ -1791,7 +1791,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
   const getHighlightMatch = () => {
     // 미참여(미출전·벤치·부상·마이너·대기)는 상단 하이라이트 후보에서 아예 제외.
     // 실제 출전(스탯 라인·출전 중·선발 등)과 시작 전(출전 예상)만 후보로 둔다.
-    const HERO_EXCLUDE = new Set(['미출전', '벤치', '부상', '마이너', '대기 명단']);
+    const HERO_EXCLUDE = new Set(['미출전', '벤치', '부상', '마이너', '대기 명단', '확인 불가']);
     const eligible = todayMatches.filter(m => !HERO_EXCLUDE.has(m.koreanPlayer?.event || ''));
     if (eligible.length === 0) return null;
 
@@ -5777,10 +5777,14 @@ function App() {
                   newEvent = '출전 예상';
                 }
               } else if (isLive) {
-                // 경기가 이미 시작됐는데도 라인업을 못 찾았으면(발표 안 된 하위 친선경기 등)
-                // '확인 중'으로 무기한 남겨두지 않고 그냥 미출전으로 본다.
+                // 경기가 이미 시작됐는데 라인업에서 못 찾은 경우 두 가지를 구분한다:
+                // - 라인업 자체가 발표됨 + 명단에 없음 → 확정 미출전
+                // - 라인업이 아예 없음(발표 안 된 하위 친선경기 등) → 모르는 것이지 미출전이
+                //   확정된 게 아니므로 '확인 불가'로 정직하게 표시(히어로에서도 제외됨).
+                const lineupAvailable = linePlayers.length > 0;
                 const onPitch = (started && minutesOff === null) || (minutesIn !== null && minutesOff === null);
-                if (!foundInRoster) newEvent = '미출전';
+                if (!foundInRoster && lineupAvailable) newEvent = '미출전';
+                else if (!foundInRoster) newEvent = '확인 불가';
                 else if (onPitch) newEvent = minutesIn !== null ? '교체 출전 중' : '출전 중';
                 else if (started && minutesOff !== null) newEvent = '교체 아웃';
                 else newEvent = '벤치';
