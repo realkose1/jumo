@@ -6684,9 +6684,12 @@ function App() {
     const home = comp.competitors.find(c => c.homeAway === 'home') || comp.competitors[0];
     const away = comp.competitors.find(c => c.homeAway === 'away') || comp.competitors[1];
     const status = event.status.type.name;
-    // If match started more than 160 min ago, ESPN API may lag — treat as not live
+    // If match started long ago, ESPN API may lag — treat as not live.
+    // 야구는 평균 3시간·연장 시 4~5시간이라 축구(160분) 기준을 쓰면 정상 진행 중인
+    // 경기가 라이브에서 탈락한다 → MLB는 330분으로 넉넉히.
     const matchStartMs = event.date ? new Date(event.date).getTime() : 0;
-    const isTimedOut = matchStartMs > 0 && (Date.now() - matchStartMs) > 160 * 60 * 1000;
+    const timeoutMin = sport === 'mlb' ? 330 : 160;
+    const isTimedOut = matchStartMs > 0 && (Date.now() - matchStartMs) > timeoutMin * 60 * 1000;
     // Check multiple live status codes
     const isLive = !isTimedOut && (
                    status === 'STATUS_IN_PROGRESS' ||
