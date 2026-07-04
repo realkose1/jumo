@@ -5777,10 +5777,10 @@ function App() {
                   newEvent = '출전 예상';
                 }
               } else if (isLive) {
-                const lineupAvailable = linePlayers.length > 0;
+                // 경기가 이미 시작됐는데도 라인업을 못 찾았으면(발표 안 된 하위 친선경기 등)
+                // '확인 중'으로 무기한 남겨두지 않고 그냥 미출전으로 본다.
                 const onPitch = (started && minutesOff === null) || (minutesIn !== null && minutesOff === null);
-                if (!foundInRoster && lineupAvailable) newEvent = '미출전';
-                else if (!foundInRoster) newEvent = '출전 예상';
+                if (!foundInRoster) newEvent = '미출전';
                 else if (onPitch) newEvent = minutesIn !== null ? '교체 출전 중' : '출전 중';
                 else if (started && minutesOff !== null) newEvent = '교체 아웃';
                 else newEvent = '벤치';
