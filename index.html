@@ -1845,13 +1845,21 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
         } else {
           const ev = m.koreanPlayer.event || '';
           const inj = highlightPlayer?.injury;
-          const notPlaying = ['', '벤치', '미출전', '마이너', '부상', '출전 예상'].includes(ev);
+          const notPlaying = ['', '벤치', '미출전', '부상', '출전 예상'].includes(ev);
+          // 마이너 리거도 다른 야구 경기와 동일하게 n타수 n안타 형식으로 노출(0이면 0타수 0안타).
+          const kp = m.koreanPlayer;
+          const mlbStatLine = () => {
+            const parts = [`${kp.atBats || 0}타수 ${kp.hits || 0}안타`];
+            if (kp.homeRuns) parts.push(`${kp.homeRuns}홈런`);
+            if (kp.rbi) parts.push(`${kp.rbi}타점`);
+            if (kp.stolenBases) parts.push(`${kp.stolenBases}도루`);
+            return parts.join(' ');
+          };
           const evLabel =
-            (notPlaying && inj?.kind === 'minors') ? '마이너 리그' :
             (notPlaying && (inj?.kind === 'il' || inj?.kind === 'injured')) ? '부상 결장' :
             ev === '교체 출전 중' ? '교체 출전 중' : ev === '교체 아웃' ? '교체 아웃' :
             ev === '벤치' ? '벤치 대기' : ev === '미출전' ? '결장' :
-            ev === '마이너' ? '마이너 리그' : ev === '부상' ? '부상 결장' :
+            ev === '마이너' ? mlbStatLine() : ev === '부상' ? '부상 결장' :
             ev === '출전 예상' ? '출전 여부 확인 중' :
             /\d+타수/.test(ev) ? ev : '출전 중';   // 라이브 야구 실시간 기록(n타수 n안타)은 그대로 노출
           return {
