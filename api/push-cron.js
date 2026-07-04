@@ -35,9 +35,9 @@ const PLAYERS = [
   { id: 22, name: '배준호', en: 'bae jun',   sport: 'soccer', team: 'Stoke',         league: 'eng.2' },
   { id: 23, name: '엄지성', en: 'eom',       sport: 'soccer', team: 'Swansea',       league: 'eng.2' },
   { id: 24, name: '설영우', en: 'seol',      sport: 'soccer', team: 'Crvena',        league: 'srb.1' },
-  { id: 9,  name: '김하성', en: 'kim',       sport: 'baseball', team: 'Pirates',     mlbTeam: 'Pittsburgh Pirates' },
-  { id: 17, name: '이정후', en: 'lee',       sport: 'baseball', team: 'Giants',      mlbTeam: 'San Francisco Giants' },
-  { id: 18, name: '김혜성', en: 'kim',       sport: 'baseball', team: 'Dodgers',     mlbTeam: 'Los Angeles Dodgers' },
+  { id: 9,  name: '김하성', en: 'kim',       sport: 'baseball', team: 'Pirates',     mlbTeam: 'Pittsburgh Pirates', mlbId: 673490 },
+  { id: 17, name: '이정후', en: 'lee',       sport: 'baseball', team: 'Giants',      mlbTeam: 'San Francisco Giants', mlbId: 808982 },
+  { id: 18, name: '김혜성', en: 'kim',       sport: 'baseball', team: 'Dodgers',     mlbTeam: 'Los Angeles Dodgers', mlbId: 808975 },
 ];
 
 const norm = (s) => (s || '').toLowerCase().replace(/[.\s-]/g, '');
@@ -137,16 +137,37 @@ async function collectSoccer(events) {
         events.push({ key: `result-${ev.id}`, players: involved.map((p) => p.id),
           title: '⚽ 경기 종료', body: `${homeTeam} ${homeC?.score ?? 0} : ${awayC?.score ?? 0} ${awayTeam}, 경기가 종료됐습니다.` });
       }
-      // Goals / assists by a Korean player (live or just-finished).
+      // Per-play events by a Korean player (goal / assist / yellow / red).
+      // ESPN lists athletesInvolved in order: [0] = primary actor (scorer / carded
+      // player), [1] (on goals) = assist provider. We only credit an assist when the
+      // Korean is NOT the scorer, so no double-fire and no false goals.
+      const nameHit = (athlete, p) => {
+        const n = norm(athlete?.displayName || '');
+        return !!n && (n.includes(norm(p.en)) || norm(p.en).split(' ').some((x) => x && n.includes(x)));
+      };
       (comp.details || []).forEach((d, i) => {
         const txt = (d.type?.text || '').toLowerCase();
-        if (!/goal/.test(txt) || /own goal/.test(txt)) return;
-        const scorers = (d.athletesInvolved || []).map((a) => norm(a.displayName));
+        const clock = d.clock?.displayValue || '';
+        const ath = d.athletesInvolved || [];
+        const isGoal = /goal/.test(txt) && !/own goal/.test(txt) && !d.ownGoal;
+        const isRed = /red card/.test(txt);                       // includes 2nd-yellow "Yellow Red Card"
+        const isYellow = /yellow card/.test(txt) && !/red/.test(txt);
         involved.forEach((p) => {
-          if (scorers.some((n) => n.includes(norm(p.en)) || norm(p.en).split(' ').some((x) => x && n.includes(x)))) {
-            const clock = d.clock?.displayValue || '';
-            events.push({ key: `goal-${ev.id}-${p.id}-${i}`, players: [p.id],
-              title: `⚽ ${p.name} 골!`, body: `${vs} 경기 ${clock}, ${p.name}${josa(p.name, '이', '가')} 골을 터뜨렸습니다!` });
+          if (isGoal) {
+            if (nameHit(ath[0], p)) {
+              const pen = d.penaltyKick ? '페널티킥으로 ' : '';
+              events.push({ key: `goal-${ev.id}-${p.id}-${i}`, players: [p.id],
+                title: `⚽ ${p.name} 골!`, body: `${vs} 경기 ${clock}, ${p.name}${josa(p.name, '이', '가')} ${pen}골을 터뜨렸습니다!` });
+            } else if (ath[1] && nameHit(ath[1], p)) {
+              events.push({ key: `assist-${ev.id}-${p.id}-${i}`, players: [p.id],
+                title: `⚽ ${p.name} 도움!`, body: `${vs} 경기 ${clock}, ${p.name}${josa(p.name, '이', '가')} 도움을 기록했습니다!` });
+            }
+          } else if (isRed && ath.some((a) => nameHit(a, p))) {
+            events.push({ key: `red-${ev.id}-${p.id}-${i}`, players: [p.id],
+              title: `⚽ ${p.name} 퇴장`, body: `${vs} 경기 ${clock}, ${p.name}${josa(p.name, '이', '가')} 퇴장당했습니다.` });
+          } else if (isYellow && ath.some((a) => nameHit(a, p))) {
+            events.push({ key: `yellow-${ev.id}-${p.id}-${i}`, players: [p.id],
+              title: `⚽ ${p.name} 경고`, body: `${vs} 경기 ${clock}, ${p.name}${josa(p.name, '이', '가')} 경고를 받았습니다.` });
           }
         });
       });
@@ -168,15 +189,46 @@ async function collectBaseball(events) {
       if (!involved.length) continue;
       const vs = `${away} vs ${home}`;
       const st = g.status?.abstractGameState; // Preview | Live | Final
+
       if (st === 'Live') {
         const names = involved.map((p) => p.name);
         events.push({ key: `mlb-start-${g.gamePk}`, players: involved.map((p) => p.id),
           title: `⚾ ${vs}`, body: `${namesWithJosa(names)} 출전하는 경기가 시작됐습니다.` });
       }
-      if (st === 'Final') {
-        const hs = g.teams?.home?.score, as = g.teams?.away?.score;
-        events.push({ key: `mlb-result-${g.gamePk}`, players: involved.map((p) => p.id),
-          title: '⚾ 경기 종료', body: `${away} ${as} : ${hs} ${home}, 경기가 종료됐습니다.` });
+
+      // Batting box → home-run moments (live) + a performance line on the result.
+      if (st === 'Live' || st === 'Final') {
+        const box = await J(`https://statsapi.mlb.com/api/v1/game/${g.gamePk}/boxscore`);
+        const batOf = (p) => {
+          for (const side of ['home', 'away']) {
+            const pl = box?.teams?.[side]?.players?.[`ID${p.mlbId}`];
+            if (pl) return pl.stats?.batting || null;
+          }
+          return null;
+        };
+        // Home runs: one push per HR, keyed by cumulative count so a 2-HR game fires twice.
+        for (const p of involved) {
+          const bat = batOf(p);
+          const hr = parseInt(bat?.homeRuns ?? 0) || 0;
+          for (let n = 1; n <= hr; n++) {
+            events.push({ key: `mlb-hr-${g.gamePk}-${p.id}-${n}`, players: [p.id],
+              title: `⚾ ${p.name} 홈런!`, body: `${vs} 경기, ${p.name}${josa(p.name, '이', '가')} 홈런을 쳤습니다!` });
+          }
+        }
+        if (st === 'Final') {
+          const hs = g.teams?.home?.score, as = g.teams?.away?.score;
+          const lines = involved.map((p) => {
+            const bat = batOf(p);
+            if (!bat) return null;
+            const ab = parseInt(bat.atBats ?? 0) || 0, h = parseInt(bat.hits ?? 0) || 0;
+            const hr = parseInt(bat.homeRuns ?? 0) || 0, rbi = parseInt(bat.rbi ?? 0) || 0;
+            const parts = [`${ab}타수 ${h}안타`]; if (hr) parts.push(`${hr}홈런`); if (rbi) parts.push(`${rbi}타점`);
+            return `${p.name} ${parts.join(' ')}`;
+          }).filter(Boolean);
+          const perf = lines.length ? ` · ${lines.join(', ')}` : '';
+          events.push({ key: `mlb-result-${g.gamePk}`, players: involved.map((p) => p.id),
+            title: '⚾ 경기 종료', body: `${away} ${as} : ${hs} ${home}, 경기가 종료됐습니다.${perf}` });
+        }
       }
     }
   }
