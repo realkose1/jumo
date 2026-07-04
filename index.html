@@ -1852,7 +1852,8 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
             ev === '교체 출전 중' ? '교체 출전 중' : ev === '교체 아웃' ? '교체 아웃' :
             ev === '벤치' ? '벤치 대기' : ev === '미출전' ? '결장' :
             ev === '마이너' ? '마이너 리그' : ev === '부상' ? '부상 결장' :
-            ev === '출전 예상' ? '출전 여부 확인 중' : '출전 중';
+            ev === '출전 예상' ? '출전 여부 확인 중' :
+            /\d+타수/.test(ev) ? ev : '출전 중';   // 라이브 야구 실시간 기록(n타수 n안타)은 그대로 노출
           return {
             status: matchSportKey(m) === 'baseball' ? `LIVE NOW · ${m.inning || ''}` : `LIVE NOW · ${hlLiveMinute || m.minute || ''}\'`,
             main: `${m.koreanPlayer.name} ${evLabel}`,
@@ -5913,7 +5914,8 @@ function App() {
               if (isFinished) {
                 newEvent = (!active && !box.starter) ? '대기 명단' : statLine();
               } else {
-                newEvent = box.starter ? '출전 중' : (active ? '교체 출전 중' : '벤치');
+                // 라이브: 타석 기록이 생기면 '출전 중' 대신 실시간 기록(n타수 n안타)을 보여준다.
+                newEvent = active ? statLine() : (box.starter ? '출전 중' : '벤치');
               }
             } else if (box && box.lineupPosted) {
               // Lineup is out and he is not in it → say WHY using the synced roster status.
@@ -5929,7 +5931,7 @@ function App() {
               runs = parseInt(gl.runs ?? 0) || 0; stolenBases = parseInt(gl.stolenBases ?? 0) || 0;
               baseOnBalls = parseInt(gl.baseOnBalls ?? 0) || 0;
               const didPlay = atBats > 0 || (parseInt(gl.plateAppearances ?? 0) || 0) > 0;
-              if (isLive) newEvent = didPlay ? '출전 중' : '벤치';
+              if (isLive) newEvent = didPlay ? statLine() : '벤치';
               else if (isFinished) newEvent = !didPlay ? '대기 명단' : statLine();
               else newEvent = '출전 예상';
             } else {
