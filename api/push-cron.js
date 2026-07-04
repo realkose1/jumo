@@ -46,6 +46,19 @@ const teamMatches = (compName, playerTeam) => {
   return a && b && (a.includes(b) || b.includes(a));
 };
 
+// ── Korean grammar: pick 이/가, 을/를 by whether the name ends in a batchim ──
+function hasBatchim(str) {
+  const ch = (str || '').trim().slice(-1).charCodeAt(0);
+  if (ch < 0xAC00 || ch > 0xD7A3) return false; // not a Hangul syllable
+  return (ch - 0xAC00) % 28 !== 0;
+}
+const josa = (str, withBatchim, withoutBatchim) => (hasBatchim(str) ? withBatchim : withoutBatchim);
+// e.g. "손흥민, 황희찬가" / "이강인이" — attaches 이/가 after the last listed name.
+const namesWithJosa = (names) => {
+  const joined = names.join(', ');
+  return joined + josa(names[names.length - 1], '이', '가');
+};
+
 // ── APNs (token-based, ES256 JWT over HTTP/2) ───────────────────────────────
 function apnsJWT() {
   const key = (process.env.APNS_KEY || '').replace(/\\n/g, '\n');
@@ -107,28 +120,33 @@ async function collectSoccer(events) {
     for (const ev of sb?.events || []) {
       const comp = ev.competitions?.[0]; if (!comp) continue;
       const state = ev.status?.type?.state; // pre | in | post
-      const teams = (comp.competitors || []).map((c) => c.team?.displayName || c.team?.name || '');
+      const homeC = (comp.competitors || []).find((c) => c.homeAway === 'home') || comp.competitors?.[0];
+      const awayC = (comp.competitors || []).find((c) => c.homeAway === 'away') || comp.competitors?.[1];
+      const homeTeam = homeC?.team?.displayName || homeC?.team?.name || '';
+      const awayTeam = awayC?.team?.displayName || awayC?.team?.name || '';
+      const teams = [homeTeam, awayTeam];
       const involved = PLAYERS.filter((p) => p.sport === 'soccer' && p.league === lg && teams.some((t) => teamMatches(t, p.team)));
       if (!involved.length) continue;
-      const vs = teams.join(' vs ');
+      const vs = `${homeTeam} vs ${awayTeam}`;
+      const names = involved.map((p) => p.name);
       if (state === 'in') {
         events.push({ key: `start-${ev.id}`, players: involved.map((p) => p.id),
-          title: '⚽ 경기 시작', body: `${vs} · ${involved.map((p) => p.name).join(', ')} 경기` });
+          title: `⚽ ${vs}`, body: `${namesWithJosa(names)} 출전하는 경기가 시작됐습니다.` });
       }
       if (state === 'post') {
-        const sc = (comp.competitors || []).map((c) => c.score).join('-');
         events.push({ key: `result-${ev.id}`, players: involved.map((p) => p.id),
-          title: '⚽ 경기 종료', body: `${vs} ${sc}` });
+          title: '⚽ 경기 종료', body: `${homeTeam} ${homeC?.score ?? 0} : ${awayC?.score ?? 0} ${awayTeam}, 경기가 종료됐습니다.` });
       }
       // Goals / assists by a Korean player (live or just-finished).
       (comp.details || []).forEach((d, i) => {
         const txt = (d.type?.text || '').toLowerCase();
         if (!/goal/.test(txt) || /own goal/.test(txt)) return;
-        const names = (d.athletesInvolved || []).map((a) => norm(a.displayName));
+        const scorers = (d.athletesInvolved || []).map((a) => norm(a.displayName));
         involved.forEach((p) => {
-          if (names.some((n) => n.includes(norm(p.en)) || norm(p.en).split(' ').some((x) => x && n.includes(x)))) {
+          if (scorers.some((n) => n.includes(norm(p.en)) || norm(p.en).split(' ').some((x) => x && n.includes(x)))) {
+            const clock = d.clock?.displayValue || '';
             events.push({ key: `goal-${ev.id}-${p.id}-${i}`, players: [p.id],
-              title: `⚽ ${p.name} 골!`, body: `${vs} · ${d.clock?.displayValue || ''}` });
+              title: `⚽ ${p.name} 골!`, body: `${vs} 경기 ${clock}, ${p.name}${josa(p.name, '이', '가')} 골을 터뜨렸습니다!` });
           }
         });
       });
@@ -150,10 +168,15 @@ async function collectBaseball(events) {
       if (!involved.length) continue;
       const vs = `${away} vs ${home}`;
       const st = g.status?.abstractGameState; // Preview | Live | Final
-      if (st === 'Live') events.push({ key: `mlb-start-${g.gamePk}`, players: involved.map((p) => p.id), title: '⚾ 경기 시작', body: `${vs} · ${involved.map((p) => p.name).join(', ')}` });
+      if (st === 'Live') {
+        const names = involved.map((p) => p.name);
+        events.push({ key: `mlb-start-${g.gamePk}`, players: involved.map((p) => p.id),
+          title: `⚾ ${vs}`, body: `${namesWithJosa(names)} 출전하는 경기가 시작됐습니다.` });
+      }
       if (st === 'Final') {
         const hs = g.teams?.home?.score, as = g.teams?.away?.score;
-        events.push({ key: `mlb-result-${g.gamePk}`, players: involved.map((p) => p.id), title: '⚾ 경기 종료', body: `${vs} ${as}-${hs}` });
+        events.push({ key: `mlb-result-${g.gamePk}`, players: involved.map((p) => p.id),
+          title: '⚾ 경기 종료', body: `${away} ${as} : ${hs} ${home}, 경기가 종료됐습니다.` });
       }
     }
   }
