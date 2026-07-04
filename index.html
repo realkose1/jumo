@@ -1353,8 +1353,10 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
             const isMLB = (m.sport||'').includes('MLB') || (m.sport||'').includes('⚾');
             const matchGoals = m.events?.filter(e => e.type==='goal' && e.player===kp.name).length || 0;
             const matchAssists = m.events?.filter(e => e.type==='assist' && e.player===kp.name).length || 0;
-            // 골/도움이 있으면 무조건 출전한 것
-            const didPlay = kp.event !== '미출전' || matchGoals > 0 || matchAssists > 0;
+            // '확인 불가'는 출전 여부 자체를 모르는 상태 → 출전으로 치지 않음(단, 골/도움이
+            // 실제로 잡혔으면 출전 확정). 골/도움이 있으면 무조건 출전한 것.
+            const isUnknown = kp.event === '확인 불가';
+            const didPlay = (kp.event !== '미출전' && !isUnknown) || matchGoals > 0 || matchAssists > 0;
 
             // Build stat pills
             const statPills = [];
@@ -1390,6 +1392,11 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
                     ) : (
                       <span style={{ fontSize:13, color:'var(--text3)', fontWeight:600 }}>출전 완료</span>
                     )
+                  ) : isUnknown ? (
+                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                      <span style={{ fontSize:13, fontWeight:700, color:'var(--text4)' }}>확인 불가</span>
+                      <span style={{ fontSize:11, color:'var(--text5)' }}>· 출전 정보 없음</span>
+                    </div>
                   ) : (
                     <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                       <span style={{ fontSize:13, fontWeight:700, color:'var(--text4)' }}>미출전</span>
@@ -5821,15 +5828,18 @@ function App() {
 
         // ── nameMatch helper ───────────────────────────────────────────────
         const nameMatch = (sfName, nameEn) => {
-          const a = sfName.toLowerCase().replace(/[-\s]/g,'');
-          const b = nameEn.toLowerCase().replace(/[-\s]/g,'');
-          if (a.includes(b) || b.includes(a) || a === b) return true;
-          // Sofascore may use Western name order (e.g. "Hee-chan Hwang" vs "Hwang Hee-chan")
+          const clean = s => (s || '').toLowerCase().replace(/[.\-\s]/g, '');
+          const a = clean(sfName), b = clean(nameEn);
+          if (!a || !b) return false;
+          // Substring match, but require the shorter side to be ≥6 chars so a bare
+          // surname (incl. "hwang", 5) can't collide with a different player's full
+          // name — every full Korean name normalizes to ≥8 chars. Prevents a
+          // teammate's goal being wrongly credited to the Korean player.
+          const softEq = (x, y) => x === y || ((x.includes(y) || y.includes(x)) && Math.min(x.length, y.length) >= 6);
+          if (softEq(a, b)) return true;
+          // Western name order fallback (e.g. "Hee-chan Hwang" vs "Hwang Hee-chan")
           const words = nameEn.toLowerCase().split(/[\s-]+/).filter(Boolean);
-          if (words.length >= 2) {
-            const reversed = words.slice(1).join('') + words[0];
-            return a.includes(reversed) || reversed.includes(a) || a === reversed;
-          }
+          if (words.length >= 2) return softEq(a, clean(words.slice(1).join('') + words[0]));
           return false;
         };
 
@@ -5922,20 +5932,26 @@ function App() {
                 }
               }
               let minutesIn = null, minutesOff = null, matchGoals = 0, matchAssists = 0;
-              for (const inc of (incidents || [])) {
-                const min = inc.time?.elapsed;
-                if (inc.type === 'subst') {
-                  // API-Football: inc.player = the one coming OFF (sub OUT),
-                  // inc.assist = the one coming ON (sub IN).
-                  if (nameMatch(inc.player?.name || '', nameEn)) minutesOff = min;
-                  if (nameMatch(inc.assist?.name || '', nameEn)) minutesIn = min;
-                }
-                if (inc.type === 'Goal' && inc.detail !== 'Missed Penalty') {
-                  if (nameMatch(inc.player?.name || '', nameEn)) {
-                    if (inc.detail === 'Own Goal') { /* skip — not their goal */ }
-                    else matchGoals++;
+              // Only attribute goals/assists/subs when the player is actually in the
+              // published squad. Otherwise (e.g. a lower-tier friendly whose lineup is
+              // never posted → '확인 불가'), fuzzy name matching against incidents can
+              // wrongly credit a teammate's goals to him (the "3골" phantom hat-trick).
+              if (foundInRoster) {
+                for (const inc of (incidents || [])) {
+                  const min = inc.time?.elapsed;
+                  if (inc.type === 'subst') {
+                    // API-Football: inc.player = the one coming OFF (sub OUT),
+                    // inc.assist = the one coming ON (sub IN).
+                    if (nameMatch(inc.player?.name || '', nameEn)) minutesOff = min;
+                    if (nameMatch(inc.assist?.name || '', nameEn)) minutesIn = min;
                   }
-                  if (inc.assist?.name && nameMatch(inc.assist.name, nameEn)) matchAssists++;
+                  if (inc.type === 'Goal' && inc.detail !== 'Missed Penalty') {
+                    if (nameMatch(inc.player?.name || '', nameEn)) {
+                      if (inc.detail === 'Own Goal') { /* skip — not their goal */ }
+                      else matchGoals++;
+                    }
+                    if (inc.assist?.name && nameMatch(inc.assist.name, nameEn)) matchAssists++;
+                  }
                 }
               }
               const didPlay = started || minutesIn !== null || matchGoals > 0 || matchAssists > 0;
@@ -5962,9 +5978,13 @@ function App() {
                 else if (started && minutesOff !== null) newEvent = '교체 아웃';
                 else newEvent = '벤치';
               } else {
+                // Finished. Mirror the live logic: no lineup ever posted → '확인 불가'
+                // (we can't claim he played OR sat), not a false '미출전'/goal count.
+                const lineupAvailable = linePlayers.length > 0;
                 if (started) minutesPlayed = minutesOff ?? 90;
                 else if (minutesIn !== null) minutesPlayed = (minutesOff ?? 90) - minutesIn;
-                newEvent = !didPlay ? '미출전'
+                newEvent = (!foundInRoster && !lineupAvailable) ? '확인 불가'
+                  : !didPlay ? '미출전'
                   : minutesPlayed >= 90 ? '풀타임'
                   : minutesPlayed > 0 ? `${minutesPlayed}분 출전`
                   : '출전 완료';
