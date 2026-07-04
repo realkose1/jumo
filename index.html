@@ -382,11 +382,16 @@ function computeStartProbability(playerName, allMatches) {
       if (!FINAL.includes(m.status)) return false;
       const allKp = m.koreanPlayers || [m.koreanPlayer];
       const kp = allKp.find(p => p?.name === playerName);
-      // Only count if we have actual lineup-parsed event (not the default '미출전')
       if (!kp) return false;
+      // Only count if we have an actual lineup-parsed event. A plain '미출전' can just
+      // mean "AF details never loaded" — but kp.lineupConfirmed=true means the real
+      // matchday squad was fetched and he genuinely wasn't in it (e.g. rested/on
+      // vacation for a preseason friendly), so that's a real 0-start data point too —
+      // otherwise recent no-shows never lower his future start%.
       const hasParsedData = kp.event === '풀타임' || kp.event === '교체 아웃'
         || kp.event === '벤치' || (typeof kp.event === 'string' && kp.event.includes('분 출전'))
-        || (kp.minutesPlayed||0) > 0 || (kp.matchGoals||0) > 0 || (kp.matchAssists||0) > 0;
+        || (kp.minutesPlayed||0) > 0 || (kp.matchGoals||0) > 0 || (kp.matchAssists||0) > 0
+        || (kp.event === '미출전' && kp.lineupConfirmed === true);
       return hasParsedData;
     })
     .sort((a, b) => new Date(b.fullDate||0) - new Date(a.fullDate||0))
@@ -1767,6 +1772,11 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
     .filter(m => {
       if (!m.koreanPlayer) return false;
       if (!m.fullDate) return false;
+      // 프리시즌 친선경기(국가대표/클럽)에서 실제 명단이 확인됐는데(lineupConfirmed)
+      // 한국 선수가 아예 빠져 있으면(휴가/로테이션) — 볼 게 없는 경기이니 제외한다.
+      // 정규 시즌 경기(리그·MLB)의 '미출전'은 계속 보여준다(왜 안 뛰었는지가 정보임).
+      const isFriendly = (m.competition || '').includes('Friendlies');
+      if (isFriendly && m.koreanPlayer.event === '미출전' && m.koreanPlayer.lineupConfirmed === true) return false;
       if (m.live || m.time === 'LIVE') return true;
       const matchDate = new Date(m.fullDate);
       const isFinished = isFinalStatus(m.status);
