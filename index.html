@@ -1779,7 +1779,10 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
   // Highlight: pick the match with the biggest Korean-player impact from today's pool.
   // Live » goals » assists » recency. Excludes matches where the Korean did not play.
   const getHighlightMatch = () => {
-    const eligible = todayMatches.filter(m => m.koreanPlayer?.event !== '미출전');
+    // 미참여(미출전·벤치·부상·마이너·대기)는 상단 하이라이트 후보에서 아예 제외.
+    // 실제 출전(스탯 라인·출전 중·선발 등)과 시작 전(출전 예상)만 후보로 둔다.
+    const HERO_EXCLUDE = new Set(['미출전', '벤치', '부상', '마이너', '대기 명단']);
+    const eligible = todayMatches.filter(m => !HERO_EXCLUDE.has(m.koreanPlayer?.event || ''));
     if (eligible.length === 0) return null;
 
     const isLive = m => m.live || m.time === 'LIVE';
@@ -1843,25 +1846,14 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
             sub: `${m.home.name} vs ${m.away.name} · ${m.competition}`
           };
         } else {
+          // 미참여 상태는 이미 히어로 후보에서 제외됐으므로, 여기선 참여/시작전 라벨만 처리.
           const ev = m.koreanPlayer.event || '';
-          const inj = highlightPlayer?.injury;
-          const notPlaying = ['', '벤치', '미출전', '부상', '출전 예상'].includes(ev);
-          // 마이너 리거도 다른 야구 경기와 동일하게 n타수 n안타 형식으로 노출(0이면 0타수 0안타).
-          const kp = m.koreanPlayer;
-          const mlbStatLine = () => {
-            const parts = [`${kp.atBats || 0}타수 ${kp.hits || 0}안타`];
-            if (kp.homeRuns) parts.push(`${kp.homeRuns}홈런`);
-            if (kp.rbi) parts.push(`${kp.rbi}타점`);
-            if (kp.stolenBases) parts.push(`${kp.stolenBases}도루`);
-            return parts.join(' ');
-          };
           const evLabel =
-            (notPlaying && (inj?.kind === 'il' || inj?.kind === 'injured')) ? '부상 결장' :
             ev === '교체 출전 중' ? '교체 출전 중' : ev === '교체 아웃' ? '교체 아웃' :
-            ev === '벤치' ? '벤치 대기' : ev === '미출전' ? '결장' :
-            ev === '마이너' ? mlbStatLine() : ev === '부상' ? '부상 결장' :
+            ev === '선발 출전' ? '선발 출전' :
             ev === '출전 예상' ? '출전 여부 확인 중' :
-            /\d+타수/.test(ev) ? ev : '출전 중';   // 라이브 야구 실시간 기록(n타수 n안타)은 그대로 노출
+            /\d+타수/.test(ev) ? ev :               // 야구 실시간/최종 스탯 라인(n타수 n안타)은 그대로
+            '출전 중';
           return {
             status: matchSportKey(m) === 'baseball' ? `LIVE NOW · ${m.inning || ''}` : `LIVE NOW · ${hlLiveMinute || m.minute || ''}\'`,
             main: `${m.koreanPlayer.name} ${evLabel}`,
@@ -5913,43 +5905,36 @@ function App() {
               return parts.join(' ');
             };
 
+            // 1) 가능한 스탯을 먼저 확보(박스스코어 우선, 없으면 시즌 게임로그).
+            //    played = 실제 타석에 섰는지(= 이 경기에 나왔는지) 여부.
+            let played = false;
             if (box && box.found) {
-              // In the lineup — take live/final numbers straight from the boxscore.
               atBats = box.atBats; hits = box.hits; homeRuns = box.homeRuns;
               rbi = box.rbi; runs = box.runs; baseOnBalls = box.baseOnBalls;
               stolenBases = parseInt(gl?.stolenBases ?? 0) || 0; // SB absent from ESPN batting box
-              const active = atBats > 0 || baseOnBalls > 0 || runs > 0;
-              if (isFinished) {
-                newEvent = (!active && !box.starter) ? '대기 명단' : statLine();
-              } else {
-                // 라이브: 타석 기록이 생기면 '출전 중' 대신 실시간 기록(n타수 n안타)을 보여준다.
-                newEvent = active ? statLine() : (box.starter ? '출전 중' : '벤치');
-              }
-            } else if (box && box.lineupPosted) {
-              // Lineup is out and he is not in it → say WHY using the synced roster status.
-              const k = ALL_PLAYERS.find(pl => pl.name === kp.name)?.injury?.kind;
-              newEvent = isFinished ? '미출전'
-                : k === 'minors' ? '마이너'
-                : (k === 'il' || k === 'injured') ? '부상'
-                : '벤치';
+              played = atBats > 0 || baseOnBalls > 0 || runs > 0;
             } else if (gl) {
-              // No boxscore needed/available — fall back to the season gameLog.
               atBats = parseInt(gl.atBats ?? 0) || 0; hits = parseInt(gl.hits ?? 0) || 0;
               homeRuns = parseInt(gl.homeRuns ?? 0) || 0; rbi = parseInt(gl.rbi ?? 0) || 0;
               runs = parseInt(gl.runs ?? 0) || 0; stolenBases = parseInt(gl.stolenBases ?? 0) || 0;
               baseOnBalls = parseInt(gl.baseOnBalls ?? 0) || 0;
-              const didPlay = atBats > 0 || (parseInt(gl.plateAppearances ?? 0) || 0) > 0;
-              if (isLive) newEvent = didPlay ? statLine() : '벤치';
-              else if (isFinished) newEvent = !didPlay ? '대기 명단' : statLine();
-              else newEvent = '출전 예상';
+              played = atBats > 0 || baseOnBalls > 0 || runs > 0 || (parseInt(gl.plateAppearances ?? 0) || 0) > 0;
+            }
+
+            // 2) 단일 기준으로 이벤트 라벨 결정.
+            //    출전함 → n타수 n안타 / 출전 안 함 → 미출전 / 라이브 선발·기록전 → 출전 중.
+            if (played) {
+              newEvent = statLine();                       // 실제 출전: 라이브·종료 공통으로 스탯 라인
             } else {
-              // Nothing resolved from boxscore/gameLog: use roster status; only a
-              // not-yet-started game with an active player stays "예상".
               const k = ALL_PLAYERS.find(pl => pl.name === kp.name)?.injury?.kind;
-              newEvent = isFinished ? '미출전'
-                : k === 'minors' ? '마이너'
-                : (k === 'il' || k === 'injured') ? '부상'
-                : (isLive ? '벤치' : '출전 예상');
+              const rosterOut = k === 'minors' || k === 'il' || k === 'injured'; // 마이너/부상 → 아예 미출전
+              if (rosterOut || isFinished) {
+                newEvent = '미출전';                        // 명단 제외거나, 경기 종료까지 무출전
+              } else if (isLive) {
+                newEvent = (box && box.found && box.starter) ? '출전 중' : '벤치'; // 라이브 선발 기록전 or 벤치
+              } else {
+                newEvent = '출전 예상';                     // 경기 시작 전
+              }
             }
 
             koreanMatches[idx] = {
