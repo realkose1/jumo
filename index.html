@@ -4037,7 +4037,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
                     <span style={{ fontSize:9, fontWeight:800, color:'#000', background:'linear-gradient(90deg, var(--acc), #ff8a3d)', borderRadius:4, padding:'2px 5px', letterSpacing:0.3, lineHeight:1 }}>🇰🇷 더비</span>
                   )}
                   {labelParts.length > 0 && (
-                    <span style={{ fontSize:11, color:'var(--text)', fontWeight:500 }}>{' · ' + labelParts.join(' · ')}</span>
+                    <span style={{ fontSize:11, color: labelParts[0] === '미출전' ? 'var(--text4)' : 'var(--text)', fontWeight:500 }}>{' · ' + labelParts.join(' · ')}</span>
                   )}
                   {isFinished && <span style={{ marginLeft:'auto', fontSize:10, fontWeight:600, color:'var(--text4)', flexShrink:0 }}>종료</span>}
                 </div>
