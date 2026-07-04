@@ -413,13 +413,15 @@ function computeStartProbability(playerName, allMatches) {
 }
 
 // A player optioned to the minors isn't on his MLB club's active roster, so that
-// club's MLB game isn't really "his" — hide it from the followed-player lists
-// entirely (not even as '미출전'). IL/injured players stay on the 40-man roster,
+// club's *MLB* game isn't really "his" — hide it. His actual minor-league games
+// (sport '⚾ AAA' etc.) are surfaced separately and must stay visible, so only
+// MLB-level games are filtered here. IL/injured players stay on the 40-man roster,
 // so their team's games are still shown. 'minors' kind is set only for baseball
 // players by the daily roster sync.
 function koreanIsMinorLeaguer(m) {
   const kp = m && m.koreanPlayer;
   if (!kp) return false;
+  if (!(m.sport || '').includes('MLB')) return false; // his minor-league games should show
   return ALL_PLAYERS.find(p => p.name === kp.name)?.injury?.kind === 'minors';
 }
 function formatExpectedEvent(kp, allMatches) {
@@ -5664,6 +5666,97 @@ function App() {
           const matches = mlbData.events.map(e => transformESPNEvent(e, 'mlb'));
           allMatches.push(...matches);
         }
+
+        // ── MLB StatsAPI: minor-league (AAA/AA/…) games for optioned-down players ──
+        // ESPN scoreboard is MLB-only. When a Korean player is in the minors his MLB
+        // club's games are hidden (koreanIsMinorLeaguer); instead we surface his real
+        // minor-league games here so followers can still track him. Cheap: one
+        // currentTeam batch + a per-minors-player (schedule + gameLog + team meta),
+        // and usually 0–1 players are down at a time.
+        try {
+          const bbPlayers = ALL_PLAYERS.filter(p => p.sport === '야구' && p.mlbId);
+          if (bbPlayers.length) {
+            const ids = bbPlayers.map(p => p.mlbId).join(',');
+            const [pplRes, mlbTeamsRes] = await Promise.all([
+              fetch(`https://statsapi.mlb.com/api/v1/people?personIds=${ids}&hydrate=currentTeam`).then(r => r.ok ? r.json() : null).catch(() => null),
+              fetch('https://statsapi.mlb.com/api/v1/teams?sportId=1').then(r => r.ok ? r.json() : null).catch(() => null),
+            ]);
+            const mlbTeamIds = new Set((mlbTeamsRes?.teams || []).map(t => t.id));
+            const minorsList = [];
+            (pplRes?.people || []).forEach(person => {
+              const ct = person.currentTeam;
+              if (!ct || mlbTeamIds.has(ct.id)) return; // on MLB roster → ESPN already covers it
+              const pl = bbPlayers.find(p => p.mlbId === person.id);
+              if (pl) minorsList.push({ player: pl, teamId: ct.id, teamName: ct.name });
+            });
+
+            const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+            const LEVEL = { 'Triple-A': 'AAA', 'Double-A': 'AA', 'High-A': 'A+', 'Single-A': 'A', 'Rookie': 'R', 'Rookie Advanced': 'R', 'Class A Short Season': 'A-' };
+            const abbrOf = (team) => team?.abbreviation || (team?.name || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 3).toUpperCase();
+            const logoOf = (id) => id ? `https://www.mlbstatic.com/team-logos/${id}.svg` : null;
+
+            await Promise.all(minorsList.map(async ({ player, teamId, teamName }) => {
+              try {
+                // The level's sportId (AAA=11, AA=12, …) must be known FIRST: both the
+                // schedule and gameLog need it, and gameLog accepts only a single
+                // sportId (a CSV or omitting it returns MLB-only, not this level).
+                const teamRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${teamId}`).then(r => r.ok ? r.json() : null).catch(() => null);
+                const teamMeta = teamRes?.teams?.[0];
+                const sportId = teamMeta?.sport?.id || 11; // default AAA
+                const [schedRes, logRes] = await Promise.all([
+                  fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=${sportId}&teamId=${teamId}&startDate=${ymd(from)}&endDate=${ymd(to)}&hydrate=team,linescore`).then(r => r.ok ? r.json() : null).catch(() => null),
+                  fetch(`https://statsapi.mlb.com/api/v1/people/${player.mlbId}/stats?stats=gameLog&season=${today.getFullYear()}&group=hitting&sportId=${sportId}`).then(r => r.ok ? r.json() : null).catch(() => null),
+                ]);
+                const level = LEVEL[teamMeta?.sport?.name] || teamMeta?.sport?.name || '마이너';
+                const myAbbr = teamMeta?.abbreviation || abbrOf({ name: teamName });
+                // Match the player's per-game stat by gamePk (exact) — NOT by date:
+                // schedule gameDate is UTC while gameLog date is the US officialDate,
+                // so they disagree for US night games.
+                const statByPk = {};
+                (logRes?.stats?.[0]?.splits || []).forEach(s => { if (s.game?.gamePk) statByPk[s.game.gamePk] = s.stat; });
+
+                (schedRes?.dates || []).forEach(dt => (dt.games || []).forEach(g => {
+                  const home = g.teams?.home, away = g.teams?.away;
+                  const isHome = home?.team?.id === teamId;
+                  const st = g.status?.abstractGameState; // Preview | Live | Final
+                  const isLive = st === 'Live', isFinished = st === 'Final';
+                  const stat = statByPk[g.gamePk];
+                  const ab = parseInt(stat?.atBats ?? 0) || 0, h = parseInt(stat?.hits ?? 0) || 0;
+                  const hr = parseInt(stat?.homeRuns ?? 0) || 0, rbi = parseInt(stat?.rbi ?? 0) || 0;
+                  const runs = parseInt(stat?.runs ?? 0) || 0, sb = parseInt(stat?.stolenBases ?? 0) || 0, bb = parseInt(stat?.baseOnBalls ?? 0) || 0;
+                  const played = ab > 0 || bb > 0 || runs > 0;
+                  const parts = [`${ab}타수 ${h}안타`]; if (hr) parts.push(`${hr}홈런`); if (rbi) parts.push(`${rbi}타점`); if (sb) parts.push(`${sb}도루`);
+                  const event = played ? parts.join(' ') : (isFinished ? '미출전' : (isLive ? '출전 중' : '출전 예상'));
+                  const half = g.linescore?.inningHalf;
+                  const inning = (isLive && g.linescore?.currentInning) ? `${g.linescore.currentInning}회${half === 'Top' ? '초' : half === 'Bottom' ? '말' : ''}` : '';
+                  const kp0 = { ...player, team: myAbbr, event, atBats: ab, hits: h, homeRuns: hr, rbi, runs, stolenBases: sb, baseOnBalls: bb };
+                  allMatches.push({
+                    id: `minor-${g.gamePk}`,
+                    source: 'statsapi-minor',
+                    live: isLive,
+                    minute: '', inning,
+                    sport: `⚾ ${level}`,
+                    leagueKey: 'minor',
+                    home: { name: home?.team?.name || '', code: isHome ? myAbbr : abbrOf(home?.team), score: (isLive || isFinished) ? (home?.score ?? 0) : null, logo: logoOf(home?.team?.id) },
+                    away: { name: away?.team?.name || '', code: !isHome ? myAbbr : abbrOf(away?.team), score: (isLive || isFinished) ? (away?.score ?? 0) : null, logo: logoOf(away?.team?.id) },
+                    koreanPlayer: kp0,
+                    koreanPlayers: [kp0],
+                    competition: level,
+                    competitionLogo: null,
+                    venue: g.venue?.name || '',
+                    time: isLive ? 'LIVE' : (!isFinished ? formatHHMM(g.gameDate) : ''),
+                    fullDate: g.gameDate,
+                    krTime: formatKRTime(g.gameDate),
+                    lineupConfirmed: isLive || isFinished,
+                    events: [], stats: null,
+                    status: isLive ? 'STATUS_IN_PROGRESS' : (isFinished ? 'STATUS_FINAL' : 'notstarted'),
+                    isTimedOut: false,
+                  });
+                }));
+              } catch (e) { console.warn('minor fetch failed for', player.name, e?.message || e); }
+            }));
+          }
+        } catch (e) { console.warn('minor-league block failed:', e?.message || e); }
 
         // ── ESPN: UEFA club competitions (Champions/Europa/Conference) ──────
         // Keyless fallback so Korean players' European nights (e.g. the Champions
