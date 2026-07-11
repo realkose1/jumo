@@ -1,17 +1,12 @@
 #!/bin/bash
-# Copy web assets into www/ for Capacitor bundling.
+# Build www/ for Capacitor iOS bundling (Apple 2.5.2 compliant).
+# Precompiles the app at build time so the native bundle ships NO remote CDN code.
 # Run before `npx cap sync ios`.
 set -e
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-WWW="$ROOT/www"
 
-rm -rf "$WWW"
-mkdir -p "$WWW"
-
-cp "$ROOT/index.html"   "$WWW/"
-cp "$ROOT/ios-frame.jsx" "$WWW/"
-cp -R "$ROOT/image"     "$WWW/"
+node "$ROOT/scripts/build-www.mjs"
 
 echo "✓ www/ rebuilt"
-ls -la "$WWW"
+ls -la "$ROOT/www"
