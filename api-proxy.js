@@ -2,13 +2,15 @@ const http = require('http');
 const https = require('https');
 const { URL } = require('url');
 
-const API_KEY = 'cd3f1051b55f13d66e4fa613bce67a4d';
+// 로컬 개발 프록시 — 자격증명은 env로만 주입한다 (리포에 하드코딩 금지).
+//   APIFOOTBALL_KEY=... NAVER_CLIENT_ID=... NAVER_CLIENT_SECRET=... node api-proxy.js
+const API_KEY = process.env.APIFOOTBALL_KEY;
 const API_BASE = 'v3.football.api-sports.io';
 const PORT = 8002;
 
-// Naver News API credentials (set these after registering at developers.naver.com)
-const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID || 'egGLPNSn105d5k_4NNZP';
-const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET || 'cu5uJKq7tS';
+// Naver News API credentials (register at developers.naver.com)
+const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID;
+const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET;
 
 function fetchFollowRedirects(urlStr, maxRedirects = 5) {
   return new Promise((resolve, reject) => {

@@ -1,11 +1,16 @@
 const https = require('https');
 
-const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID || 'egGLPNSn105d5k_4NNZP';
-const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET || 'cu5uJKq7tS';
+const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID;
+const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET;
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
+
+  if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) {
+    res.status(500).json({ error: 'missing NAVER credentials' });
+    return;
+  }
 
   const query = req.query.query || '';
   const display = req.query.display || '20';

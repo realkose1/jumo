@@ -335,7 +335,7 @@ const KOREAN_PLAYERS = {
 };
 
 // ─── KOREAN BROADCAST RIGHTS (2025-26 시즌) ──────────────────
-// Keys matched against Sofascore tournament name (m.competition).
+// Keys matched against the match's tournament/competition name (m.competition).
 // Lookup falls back to substring match for naming variants.
 const BROADCASTERS = {
   'Premier League': ['쿠팡플레이'],
@@ -2328,7 +2328,7 @@ function HomeV3({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [] }) {
 
 // ─── TEAM CHEER METER (tap-to-cheer, proportional bar) ────────
 // Real team colors. Priority: color captured from the data source (ESPN
-// color/alt, SofaScore teamColors) → curated brand map → stable hash. Everything
+// color/alt) → curated brand map → stable hash. Everything
 // is normalized to a readable dark card (white text) keeping the team's hue.
 const CHEER_BRAND = {
   TOT:'#132257', PSG:'#004170', FCB:'#DC052D', WOL:'#FDB913', FEY:'#E2001A', NEW:'#241F20',
@@ -2559,8 +2559,8 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
       .catch(() => { setMlbLoading(false); });
   }, [tab, match.id, isFinished, isLive, isMLBMatch]);
 
-  // Transform API-Football detail responses → Sofascore-shape that the existing
-  // renderers below already expect. This keeps the rendering JSX untouched.
+  // Transform API-Football detail responses → the shared match-event shape that
+  // the existing renderers below already expect. This keeps the rendering JSX untouched.
   const transformAfEvents = (afResp) => {
     if (!Array.isArray(afResp)) return null;
     const incidents = afResp.map(e => {
@@ -2632,7 +2632,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
     (home?.statistics || []).forEach(s => homeMap.set(s.type, s.value));
     const awayMap = new Map();
     (away?.statistics || []).forEach(s => awayMap.set(s.type, s.value));
-    // Translate API-Football stat names to the Sofascore-style keys that the
+    // Translate API-Football stat names to the normalized stat keys that the
     // renderer's STAT_LABELS already covers (점유율, 슈팅, 패스 등).
     const TYPE_MAP = {
       'Ball Possession':'Ball possession', 'Total Shots':'Total shots',
@@ -4953,7 +4953,8 @@ function NotifSettingsScreen({ onBack }) {
       <div style={{ padding:'12px 20px 20px' }}>
         <BackBtn onBack={onBack} nativeHandled/>
         <div style={{ fontSize:22, fontWeight:800, color:'var(--text)', letterSpacing:-0.5, marginTop:14, marginBottom:6 }}>알림 설정</div>
-        <div style={{ fontSize:13, color:'var(--text4)', marginBottom:20 }}>팔로우 중인 선수 경기만 알림이 옵니다</div>
+        <div style={{ fontSize:13, color:'var(--text4)', marginBottom:6 }}>팔로우 중인 선수 경기만 알림이 옵니다</div>
+        <div style={{ fontSize:13, color:'var(--text4)', marginBottom:20 }}>푸시 알림은 팔로우한 선수 기준으로 발송되며, 끄려면 iOS 설정 &gt; 알림을 이용하세요</div>
         <div style={{ background:'var(--surface)', borderRadius:16, overflow:'hidden', border:'0.5px solid var(--border)' }}>
           {rows.map((r, i) => (
             <div key={r.k} onClick={() => toggle(r.k)} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 16px', borderBottom: i < rows.length-1 ? '0.5px solid var(--border2)' : 'none', cursor:'pointer' }}>
@@ -5247,6 +5248,7 @@ function MoreScreen({ sportFeeds, onToggleSportFeed, profile, onUpdateProfile, s
     ]},
     { label:'앱 정보', items:[
       { id:'guide',    icon:'📖', color:'#48484a', title:'사용 설명 보기', sub:'온보딩 가이드 다시 보기', chevron:true, action: onShowGuide },
+      { id:'privacy',  icon:'🔒', color:'#48484a', title:'개인정보처리방침', sub:'수집 항목과 이용 안내', chevron:true, action: () => window.open(`${API_BASE}/privacy`, '_blank') },
       { id:'version',  icon:'ℹ️', color:'#48484a', title:'버전 정보',     sub:'Jumo v1.0.0' },
       { id:'feedback', icon:'💬', color:'#48484a', title:'피드백 보내기', sub:'개선 사항을 알려주세요', chevron:true },
     ]},
@@ -5785,7 +5787,7 @@ function App() {
           });
         } catch (e) { console.warn('ESPN UEFA fetch failed:', e?.message || e); }
 
-        // Deduplicate by id (same match can appear in multiple Sofascore date responses)
+        // Deduplicate by id (same match can appear across multiple source responses)
         const seenIds = new Set();
         const uniqueMatches = allMatches.filter(m => {
           if (seenIds.has(m.id)) return false;
@@ -5793,16 +5795,6 @@ function App() {
           return true;
         });
 
-        // For soccer: drop ESPN matches that Sofascore already covers (same teams + same date).
-        // Sofascore has lineup data; ESPN scoreboard does not.
-        const sfSoccerKeys = new Set(
-          uniqueMatches
-            .filter(m => m.source === 'sofascore')
-            .map(m => {
-              const d = m.fullDate ? new Date(m.fullDate).toDateString() : '';
-              return `${m.home.name}|${m.away.name}|${d}`;
-            })
-        );
         // ESPN UEFA matches are a fallback: if API-Football already has the same
         // Korean player's game that day, prefer it (it carries lineup data).
         const afKoreanKeys = new Set(
@@ -5816,11 +5808,8 @@ function App() {
             if (afKoreanKeys.has(k)) return false; // API-Football already covers it
             return true;
           }
-          if (m.source === 'sofascore') return true;
           if ((m.sport || '').includes('MLB')) return true; // keep MLB from ESPN
-          const d = m.fullDate ? new Date(m.fullDate).toDateString() : '';
-          const key = `${m.home.name}|${m.away.name}|${d}`;
-          return !sfSoccerKeys.has(key); // drop ESPN soccer if Sofascore covers it
+          return true;
         });
 
         // Filter for Korean players
@@ -6531,6 +6520,11 @@ function App() {
   React.useEffect(() => {
     const newNotifs = [];
     const now = new Date();
+    const notifSettings = (() => {
+      const DEFAULTS = { matchStart:true, goal:true, assist:true, result:true, highlight:false, lineup:false, injury:true };
+      try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('jumo_notif_settings') || '{}') }; }
+      catch { return DEFAULTS; }
+    })();
 
     liveMatches.forEach(match => {
       if (!match.koreanPlayer) return;
@@ -6550,7 +6544,7 @@ function App() {
       };
 
       // 1. Lineup confirmed (within 2 hours before kickoff)
-      if (matchTime && !match.live && timeDiff < 0 && timeDiff > -2 * 3600000) {
+      if (matchTime && !match.live && timeDiff < 0 && timeDiff > -2 * 3600000 && notifSettings.lineup) {
         const allKoreans = match.koreanPlayers || [match.koreanPlayer];
         allKoreans.forEach(kp => {
           if (!kp?.lineupConfirmed) return;
@@ -6597,7 +6591,7 @@ function App() {
           const koreanPlayerName = match.koreanPlayer.name;
 
           // Goals
-          if (ev.type === 'goal' && (ev.text?.includes(koreanPlayerName) || ev.detail?.includes(koreanPlayerName))) {
+          if (ev.type === 'goal' && notifSettings.goal && (ev.text?.includes(koreanPlayerName) || ev.detail?.includes(koreanPlayerName))) {
             newNotifs.push({
               id: `goal-${match.id}-${ev.min}`,
               time: getTimeAgo(timeDiff),
@@ -6611,7 +6605,7 @@ function App() {
           }
 
           // Assists
-          if (ev.type === 'assist' && (ev.text?.includes(koreanPlayerName) || ev.detail?.includes(koreanPlayerName))) {
+          if (ev.type === 'assist' && notifSettings.assist && (ev.text?.includes(koreanPlayerName) || ev.detail?.includes(koreanPlayerName))) {
             newNotifs.push({
               id: `assist-${match.id}-${ev.min}`,
               time: getTimeAgo(timeDiff),
@@ -6677,106 +6671,6 @@ function App() {
 
     setNotifications(uniqueNotifs);
   }, [liveMatches]);
-
-  const transformSofascoreEvent = (event) => {
-    // Skip women's / youth competitions (check tournament name only, not category)
-    const tourneyName = (event.tournament?.name || '').toLowerCase();
-    const homeTeamRaw = (event.homeTeam?.name || '').toLowerCase();
-    const awayTeamRaw = (event.awayTeam?.name || '').toLowerCase();
-    const WOMEN_MARKERS = ['women', 'frauen', 'féminin', 'femenin', 'dames', 'ladies', ' w ', '(w)'];
-    if (WOMEN_MARKERS.some(k => tourneyName.includes(k) || homeTeamRaw.includes(k) || awayTeamRaw.includes(k))) return null;
-
-    const homeTeamName = event.homeTeam?.name || '';
-    const awayTeamName = event.awayTeam?.name || '';
-    const homeShort = event.homeTeam?.shortName || event.homeTeam?.nameCode || homeTeamName.slice(0,3).toUpperCase();
-    const awayShort = event.awayTeam?.shortName || event.awayTeam?.nameCode || awayTeamName.slice(0,3).toUpperCase();
-
-    // Match team name against KOREAN_PLAYERS (try full name, short name, nameCode)
-    let koreanPlayer = null;
-    let koreanPlayerAway = null;
-    const tryHome = [homeTeamName, homeShort, event.homeTeam?.nameCode].filter(Boolean);
-    const tryAway = [awayTeamName, awayShort, event.awayTeam?.nameCode].filter(Boolean);
-    for (const v of tryHome) {
-      if (KOREAN_PLAYERS[v]) { koreanPlayer = { ...KOREAN_PLAYERS[v], team: homeShort }; break; }
-    }
-    for (const v of tryAway) {
-      if (KOREAN_PLAYERS[v]) { koreanPlayerAway = { ...KOREAN_PLAYERS[v], team: awayShort }; break; }
-    }
-    // If no home Korean, treat away as primary
-    if (!koreanPlayer && koreanPlayerAway) { koreanPlayer = koreanPlayerAway; koreanPlayerAway = null; }
-    if (!koreanPlayer) return null;
-    const isKoreanDerby = !!(koreanPlayerAway);
-    const koreanPlayers = isKoreanDerby ? [koreanPlayer, koreanPlayerAway] : [koreanPlayer];
-
-    const statusType = event.status?.type;
-    const isFinished = statusType === 'finished';
-    const matchDate = new Date(event.startTimestamp * 1000);
-    const isTimedOut = statusType === 'inprogress' && (Date.now() - matchDate.getTime()) > 160 * 60 * 1000;
-    const isLive = statusType === 'inprogress' && !isTimedOut;
-    const status = isLive ? 'STATUS_IN_PROGRESS' : (isFinished || isTimedOut) ? 'STATUS_FINAL' : 'notstarted';
-
-    // Store period timing for real-time minute computation in UI
-    // Sofascore status.description = "1st Half" / "2nd Half" / "Halftime" etc.
-    const desc = (event.status?.description || '').toLowerCase();
-    const sfPeriod = event.time?.period ?? (
-      (desc.includes('2nd') || desc.includes('extra') || desc.includes('penalt')) ? 2 : 1
-    );
-    const periodStartTs = event.time?.currentPeriodStartTimestamp ?? event.time?.currentPeriodStart ?? null;
-
-    // Initial minute estimate
-    let minute = '';
-    if (isLive) {
-      if (periodStartTs) {
-        const minsInPeriod = Math.floor((Date.now()/1000 - periodStartTs) / 60);
-        minute = String(Math.max(0, minsInPeriod + (sfPeriod >= 2 ? 45 : 0)));
-      } else if (event.time?.played != null) {
-        minute = String(event.time.played + (sfPeriod >= 2 ? 45 : 0));
-      }
-    }
-
-    let timeDisplay = '';
-    if (isLive) timeDisplay = 'LIVE';
-    else if (!isFinished && !isTimedOut) {
-      timeDisplay = formatHHMM(matchDate);
-    }
-
-    const homeLogo = `https://api.sofascore.com/api/v1/team/${event.homeTeam?.id}/image`;
-    const awayLogo = `https://api.sofascore.com/api/v1/team/${event.awayTeam?.id}/image`;
-    const tournamentName = event.tournament?.name || '';
-    const TOURNEY_ABBR = {
-      'Premier League':'EPL','Bundesliga':'GER','Ligue 1':'L1','Serie A':'ITA',
-      'Scottish Premiership':'SPL','Süper Lig':'TUR','Eredivisie':'NED',
-      'Belgian Pro League':'BEL','MLS':'MLS','Superliga':'DEN','La Liga':'ESP',
-    };
-    const leagueAbbr = TOURNEY_ABBR[tournamentName] || tournamentName.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,4);
-
-    return {
-      id: String(event.id),
-      source: 'sofascore',
-      live: isLive,
-      minute,
-      sport: `⚽ ${leagueAbbr}`,
-      leagueKey: '',
-      home: { name: homeTeamName, code: homeShort, score: (isLive || isFinished || isTimedOut) ? (event.homeScore?.current ?? 0) : null, logo: homeLogo, color: event.homeTeam?.teamColors?.primary || null, altColor: event.homeTeam?.teamColors?.secondary || null },
-      away: { name: awayTeamName, code: awayShort, score: (isLive || isFinished || isTimedOut) ? (event.awayScore?.current ?? 0) : null, logo: awayLogo, color: event.awayTeam?.teamColors?.primary || null, altColor: event.awayTeam?.teamColors?.secondary || null },
-      koreanPlayer: { ...koreanPlayer, event: (isFinished || isTimedOut) ? '미출전' : '출전 예상', minutesPlayed: 0, matchGoals: 0, matchAssists: 0 },
-      koreanPlayers: koreanPlayers.map(kp => ({ ...kp, event: (isFinished || isTimedOut) ? '미출전' : '출전 예상', minutesPlayed: 0, matchGoals: 0, matchAssists: 0 })),
-      isKoreanDerby,
-      competition: tournamentName,
-      competitionLogo: null,
-      venue: event.venue?.city?.name || '',
-      time: timeDisplay,
-      fullDate: matchDate.toISOString(),
-      krTime: formatKRTime(matchDate.toISOString()),
-      lineupConfirmed: isLive || isFinished,
-      events: [],
-      stats: null,
-      status,
-      isTimedOut,
-      periodStartTs,
-      sfPeriod,
-    };
-  };
 
   // ── API-Football fixture transformer ─────────────────────────────────
   // Maps a fixture object from api-sports.io to our standard match shape.
