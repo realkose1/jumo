@@ -1,12 +1,14 @@
 // Vercel Cron → APNs push sender for Jumo.
 //
-// Detects events for the Korean players (match start, goal/assist by a Korean
-// player, final result) from the same public feeds the app uses (ESPN for
-// soccer, MLB StatsAPI for baseball), de-duplicates them against a Supabase
-// `push_log` table, and delivers an APNs alert to every device whose followed
-// players are involved.
+// Detects events for the Korean players (match start, goal/assist/card by a
+// Korean player, final result) from the same sources the app uses —
+// API-Football for soccer (covers friendlies & cups that ESPN league
+// scoreboards miss; exact player-ID event attribution), MLB StatsAPI for
+// baseball — de-duplicates them against a Supabase `push_log` table, and
+// delivers an APNs alert to every device whose followed players are involved.
 //
 // Required env vars (Vercel → Project → Settings → Environment Variables):
+//   APIFOOTBALL_KEY same key the /api/apifootball proxy uses (soccer detection)
 //   APNS_KEY        contents of the AuthKey_XXXX.p8 (with real newlines or \n)
 //   APNS_KEY_ID     the 10-char Key ID of that key
 //   APNS_TEAM_ID    your Apple Developer Team ID (P7ZN2XXS75)
@@ -22,19 +24,21 @@ const http2 = require('http2');
 const crypto = require('crypto');
 
 // ── Korean player registry (mirror of the app's ALL_PLAYERS) ────────────────
+// afTeamId / afPlayerId: API-Football team & player ids — fixtures are matched by
+// team id and goals/cards by player id (exact; no fuzzy name matching).
 const PLAYERS = [
-  { id: 1,  name: '손흥민', en: 'son',       sport: 'soccer', team: 'LAFC',          league: 'usa.1' },
-  { id: 2,  name: '이강인', en: 'lee kang',  sport: 'soccer', team: 'PSG',           league: 'fra.1' },
-  { id: 3,  name: '김민재', en: 'kim min',   sport: 'soccer', team: 'Bayern',        league: 'ger.1' },
-  { id: 6,  name: '황희찬', en: 'hwang hee', sport: 'soccer', team: 'Wolves',        league: 'eng.1' },
-  { id: 7,  name: '황인범', en: 'hwang in',  sport: 'soccer', team: 'Feyenoord',     league: 'ned.1' },
-  { id: 8,  name: '조규성', en: 'cho gue',   sport: 'soccer', team: 'Midtjylland',   league: 'den.1' },
-  { id: 19, name: '오현규', en: 'oh hyeon',  sport: 'soccer', team: 'Besiktas',      league: 'tur.1' },
-  { id: 20, name: '양현준', en: 'yang hyun', sport: 'soccer', team: 'Celtic',        league: 'sco.1' },
-  { id: 21, name: '백승호', en: 'paik',      sport: 'soccer', team: 'Birmingham',    league: 'eng.2' },
-  { id: 22, name: '배준호', en: 'bae jun',   sport: 'soccer', team: 'Stoke',         league: 'eng.2' },
-  { id: 23, name: '엄지성', en: 'eom',       sport: 'soccer', team: 'Swansea',       league: 'eng.2' },
-  { id: 24, name: '설영우', en: 'seol',      sport: 'soccer', team: 'Crvena',        league: 'srb.1' },
+  { id: 1,  name: '손흥민', sport: 'soccer', team: 'LAFC',        afTeamId: 1616, afPlayerId: 186 },
+  { id: 2,  name: '이강인', sport: 'soccer', team: 'PSG',         afTeamId: 85,   afPlayerId: 927 },
+  { id: 3,  name: '김민재', sport: 'soccer', team: 'Bayern',      afTeamId: 157,  afPlayerId: 2897 },
+  { id: 6,  name: '황희찬', sport: 'soccer', team: 'Wolves',      afTeamId: 39,   afPlayerId: 24888 },
+  { id: 7,  name: '황인범', sport: 'soccer', team: 'Feyenoord',   afTeamId: 209,  afPlayerId: 2901 },
+  { id: 8,  name: '조규성', sport: 'soccer', team: 'Midtjylland', afTeamId: 397,  afPlayerId: 34211 },
+  { id: 19, name: '오현규', sport: 'soccer', team: 'Besiktas',    afTeamId: 549,  afPlayerId: 34710 },
+  { id: 20, name: '양현준', sport: 'soccer', team: 'Celtic',      afTeamId: 247,  afPlayerId: 304958 },
+  { id: 21, name: '백승호', sport: 'soccer', team: 'Birmingham',  afTeamId: 54,   afPlayerId: 2909 },
+  { id: 22, name: '배준호', sport: 'soccer', team: 'Stoke',       afTeamId: 75,   afPlayerId: 357286 },
+  { id: 23, name: '엄지성', sport: 'soccer', team: 'Swansea',     afTeamId: 76,   afPlayerId: 237050 },
+  { id: 24, name: '설영우', sport: 'soccer', team: 'Crvena',      afTeamId: 598,  afPlayerId: 197985 },
   { id: 9,  name: '김하성', en: 'kim',       sport: 'baseball', team: 'Pirates',     mlbTeam: 'Pittsburgh Pirates', mlbId: 673490 },
   { id: 17, name: '이정후', en: 'lee',       sport: 'baseball', team: 'Giants',      mlbTeam: 'San Francisco Giants', mlbId: 808982 },
   { id: 18, name: '김혜성', en: 'kim',       sport: 'baseball', team: 'Dodgers',     mlbTeam: 'Los Angeles Dodgers', mlbId: 808975 },
@@ -113,64 +117,91 @@ async function sbInsertLog(eventKey) {
 // ── Event collection ────────────────────────────────────────────────────────
 const J = (u) => fetch(u).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 
+// ── Soccer via API-Football ─────────────────────────────────────────────────
+// The app's own data source — unlike ESPN league scoreboards it includes
+// friendlies and cup ties, and events carry player IDs for exact attribution.
+// Cost per run: 2 fixtures calls (UTC yesterday+today, same boundary reason as
+// baseball) + 1 events call per live Korean fixture. Finished fixtures get one
+// events pass, then an `af-done-{id}` marker in push_log stops further calls.
+const AF_LIVE = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'INT', 'LIVE']);
+const AF_FINAL = new Set(['FT', 'AET', 'PEN']);
+
+function afGet(path) {
+  const key = process.env.APIFOOTBALL_KEY;
+  return fetch(`https://v3.football.api-sports.io${path}`, { headers: { 'x-apisports-key': key } })
+    .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+}
+
+async function alreadyLogged(eventKey) {
+  const rows = await sbSelect('push_log', `event_key=eq.${encodeURIComponent(eventKey)}&select=event_key`);
+  return Array.isArray(rows) && rows.length > 0;
+}
+
 async function collectSoccer(events) {
-  const leagues = [...new Set(PLAYERS.filter((p) => p.sport === 'soccer').map((p) => p.league))];
-  for (const lg of leagues) {
-    const sb = await J(`https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/scoreboard`);
-    for (const ev of sb?.events || []) {
-      const comp = ev.competitions?.[0]; if (!comp) continue;
-      const state = ev.status?.type?.state; // pre | in | post
-      const homeC = (comp.competitors || []).find((c) => c.homeAway === 'home') || comp.competitors?.[0];
-      const awayC = (comp.competitors || []).find((c) => c.homeAway === 'away') || comp.competitors?.[1];
-      const homeTeam = homeC?.team?.displayName || homeC?.team?.name || '';
-      const awayTeam = awayC?.team?.displayName || awayC?.team?.name || '';
-      const teams = [homeTeam, awayTeam];
-      const involved = PLAYERS.filter((p) => p.sport === 'soccer' && p.league === lg && teams.some((t) => teamMatches(t, p.team)));
+  if (!process.env.APIFOOTBALL_KEY) { console.warn('soccer: APIFOOTBALL_KEY missing'); return; }
+  const soccer = PLAYERS.filter((p) => p.sport === 'soccer');
+  const ymd = (off) => new Date(Date.now() + off * 86400000).toISOString().slice(0, 10);
+  const seenFixtures = new Set(); // a fixture can appear in both date responses
+
+  for (const date of [ymd(-1), ymd(0)]) {
+    const data = await afGet(`/fixtures?date=${date}`);
+    for (const fx of data?.response || []) {
+      const fid = fx.fixture?.id;
+      if (!fid || seenFixtures.has(fid)) continue;
+      const involved = soccer.filter((p) => fx.teams?.home?.id === p.afTeamId || fx.teams?.away?.id === p.afTeamId);
       if (!involved.length) continue;
-      const vs = `${homeTeam} vs ${awayTeam}`;
+      seenFixtures.add(fid);
+
+      const st = fx.fixture.status?.short;
+      const isLive = AF_LIVE.has(st), isFinal = AF_FINAL.has(st);
+      if (!isLive && !isFinal) continue;
+
+      const home = fx.teams.home.name, away = fx.teams.away.name;
+      const vs = `${home} vs ${away}`;
       const names = involved.map((p) => p.name);
-      if (state === 'in') {
-        events.push({ key: `start-${ev.id}`, players: involved.map((p) => p.id),
+
+      // Finished & fully processed on an earlier run → skip (saves the events call).
+      if (isFinal && await alreadyLogged(`af-done-${fid}`)) continue;
+
+      if (isLive) {
+        events.push({ key: `af-start-${fid}`, players: involved.map((p) => p.id),
           title: `⚽ ${vs}`, body: `${namesWithJosa(names)} 출전하는 경기가 시작됐습니다.` });
       }
-      if (state === 'post') {
-        events.push({ key: `result-${ev.id}`, players: involved.map((p) => p.id),
-          title: '⚽ 경기 종료', body: `${homeTeam} ${homeC?.score ?? 0} : ${awayC?.score ?? 0} ${awayTeam}, 경기가 종료됐습니다.` });
+      if (isFinal) {
+        events.push({ key: `af-result-${fid}`, players: involved.map((p) => p.id),
+          title: '⚽ 경기 종료', body: `${home} ${fx.goals?.home ?? 0} : ${fx.goals?.away ?? 0} ${away}, 경기가 종료됐습니다.` });
       }
-      // Per-play events by a Korean player (goal / assist / yellow / red).
-      // ESPN lists athletesInvolved in order: [0] = primary actor (scorer / carded
-      // player), [1] (on goals) = assist provider. We only credit an assist when the
-      // Korean is NOT the scorer, so no double-fire and no false goals.
-      const nameHit = (athlete, p) => {
-        const n = norm(athlete?.displayName || '');
-        return !!n && (n.includes(norm(p.en)) || norm(p.en).split(' ').some((x) => x && n.includes(x)));
-      };
-      (comp.details || []).forEach((d, i) => {
-        const txt = (d.type?.text || '').toLowerCase();
-        const clock = d.clock?.displayValue || '';
-        const ath = d.athletesInvolved || [];
-        const isGoal = /goal/.test(txt) && !/own goal/.test(txt) && !d.ownGoal;
-        const isRed = /red card/.test(txt);                       // includes 2nd-yellow "Yellow Red Card"
-        const isYellow = /yellow card/.test(txt) && !/red/.test(txt);
+
+      // Per-play events — matched by API-Football player id (exact, no name fuzz).
+      const evd = await afGet(`/fixtures/events?fixture=${fid}`);
+      (evd?.response || []).forEach((ev, i) => {
+        const min = ev.time?.elapsed != null ? `${ev.time.elapsed}'` : '';
         involved.forEach((p) => {
-          if (isGoal) {
-            if (nameHit(ath[0], p)) {
-              const pen = d.penaltyKick ? '페널티킥으로 ' : '';
-              events.push({ key: `goal-${ev.id}-${p.id}-${i}`, players: [p.id],
-                title: `⚽ ${p.name} 골!`, body: `${vs} 경기 ${clock}, ${p.name}${josa(p.name, '이', '가')} ${pen}골을 터뜨렸습니다!` });
-            } else if (ath[1] && nameHit(ath[1], p)) {
-              events.push({ key: `assist-${ev.id}-${p.id}-${i}`, players: [p.id],
-                title: `⚽ ${p.name} 도움!`, body: `${vs} 경기 ${clock}, ${p.name}${josa(p.name, '이', '가')} 도움을 기록했습니다!` });
+          const isPlayer = ev.player?.id === p.afPlayerId;
+          const isAssist = ev.assist?.id === p.afPlayerId;
+          if (ev.type === 'Goal' && ev.detail !== 'Missed Penalty') {
+            if (isPlayer && ev.detail !== 'Own Goal') {
+              const pen = ev.detail === 'Penalty' ? '페널티킥으로 ' : '';
+              events.push({ key: `af-goal-${fid}-${p.id}-${i}`, players: [p.id],
+                title: `⚽ ${p.name} 골!`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} ${pen}골을 터뜨렸습니다!` });
+            } else if (isAssist) {
+              events.push({ key: `af-assist-${fid}-${p.id}-${i}`, players: [p.id],
+                title: `⚽ ${p.name} 도움!`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} 도움을 기록했습니다!` });
             }
-          } else if (isRed && ath.some((a) => nameHit(a, p))) {
-            events.push({ key: `red-${ev.id}-${p.id}-${i}`, players: [p.id],
-              title: `⚽ ${p.name} 퇴장`, body: `${vs} 경기 ${clock}, ${p.name}${josa(p.name, '이', '가')} 퇴장당했습니다.` });
-          } else if (isYellow && ath.some((a) => nameHit(a, p))) {
-            events.push({ key: `yellow-${ev.id}-${p.id}-${i}`, players: [p.id],
-              title: `⚽ ${p.name} 경고`, body: `${vs} 경기 ${clock}, ${p.name}${josa(p.name, '이', '가')} 경고를 받았습니다.` });
+          } else if (ev.type === 'Card' && isPlayer) {
+            if (ev.detail === 'Red Card') {
+              events.push({ key: `af-red-${fid}-${p.id}-${i}`, players: [p.id],
+                title: `⚽ ${p.name} 퇴장`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} 퇴장당했습니다.` });
+            } else if (ev.detail === 'Yellow Card') {
+              events.push({ key: `af-yellow-${fid}-${p.id}-${i}`, players: [p.id],
+                title: `⚽ ${p.name} 경고`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} 경고를 받았습니다.` });
+            }
           }
         });
       });
+
+      // Mark finished fixtures as fully processed AFTER their events were parsed.
+      if (isFinal) events.push({ key: `af-done-${fid}`, players: [], silent: true });
     }
   }
 }
