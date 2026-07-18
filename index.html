@@ -5847,6 +5847,7 @@ function App() {
 
         if (afKorean.length > 0) {
           const detailsCache = afDetailsCacheRef.current;
+          let afFetchSeq = 0; // network-bound fetches only (cache hits don't wait)
           const afDetails = await Promise.allSettled(
             afKorean.map(async (m) => {
               const needPlayers = m.live || m.status === 'STATUS_FINAL';
@@ -5862,6 +5863,10 @@ function App() {
                   return { id: m.id, lineups: cached.lineups, events: cached.events, players: cached.players, isLive: m.live };
                 }
               }
+              // API-Sports는 순간 동시 버스트에 초당 제한을 건다(실측: 동시 16콜 중 일부
+              // 거부, 150ms 분산 시 전부 통과). 경기당 3콜 묶음을 600ms 간격으로 분산해
+              // 로드 시점 버스트를 없앤다. 캐시 히트는 위에서 이미 반환돼 대기 없음.
+              await new Promise(r => setTimeout(r, (afFetchSeq++) * 600));
               const [lineups, events, players] = await Promise.all([
                 fetch(`${AF_BASE}?path=fixtures/lineups&fixture=${m.id}`).then(r => r.ok ? r.json() : null).catch(() => null),
                 fetch(`${AF_BASE}?path=fixtures/events&fixture=${m.id}`).then(r => r.ok ? r.json() : null).catch(() => null),
@@ -6465,7 +6470,10 @@ function App() {
       // ── Soccer: API-Football injuries via proxy (enriches when available) ──
       try {
         const soccer = ALL_PLAYERS.filter(p => p.sport === '축구' && p.apiFootballId);
-        await Promise.all(soccer.map(async p => {
+        await Promise.all(soccer.map(async (p, i) => {
+          // 500ms 스태거: 12명 동시 발사가 API-Sports 초당 버스트 제한에 걸리는 것 방지
+          // (상세 fetch 스태거와 동시에 돌아도 합산 초당 ~7콜 이내).
+          if (i) await new Promise(r => setTimeout(r, i * 500));
           const season = p.league === 'MLS' ? 2026 : 2025;
           try {
             const r = await fetch(`${API_BASE}/api/apifootball?path=injuries&player=${p.apiFootballId}&season=${season}`);
