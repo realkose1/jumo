@@ -27,18 +27,18 @@ const crypto = require('crypto');
 // afTeamId / afPlayerId: API-Football team & player ids — fixtures are matched by
 // team id and goals/cards by player id (exact; no fuzzy name matching).
 const PLAYERS = [
-  { id: 1,  name: '손흥민', sport: 'soccer', team: 'LAFC',        afTeamId: 1616, afPlayerId: 186 },
-  { id: 2,  name: '이강인', sport: 'soccer', team: 'PSG',         afTeamId: 85,   afPlayerId: 927 },
-  { id: 3,  name: '김민재', sport: 'soccer', team: 'Bayern',      afTeamId: 157,  afPlayerId: 2897 },
-  { id: 6,  name: '황희찬', sport: 'soccer', team: 'Wolves',      afTeamId: 39,   afPlayerId: 24888 },
-  { id: 7,  name: '황인범', sport: 'soccer', team: 'Feyenoord',   afTeamId: 209,  afPlayerId: 2901 },
-  { id: 8,  name: '조규성', sport: 'soccer', team: 'Midtjylland', afTeamId: 397,  afPlayerId: 34211 },
-  { id: 19, name: '오현규', sport: 'soccer', team: 'Besiktas',    afTeamId: 549,  afPlayerId: 34710 },
-  { id: 20, name: '양현준', sport: 'soccer', team: 'Celtic',      afTeamId: 247,  afPlayerId: 304958 },
-  { id: 21, name: '백승호', sport: 'soccer', team: 'Birmingham',  afTeamId: 54,   afPlayerId: 2909 },
-  { id: 22, name: '배준호', sport: 'soccer', team: 'Stoke',       afTeamId: 75,   afPlayerId: 357286 },
-  { id: 23, name: '엄지성', sport: 'soccer', team: 'Swansea',     afTeamId: 76,   afPlayerId: 237050 },
-  { id: 24, name: '설영우', sport: 'soccer', team: 'Crvena',      afTeamId: 598,  afPlayerId: 197985 },
+  { id: 1,  name: '손흥민', nameEn: 'Son Heung-min', sport: 'soccer', team: 'LAFC',        afTeamId: 1616, afPlayerId: 186 },
+  { id: 2,  name: '이강인', nameEn: 'Lee Kang-in', sport: 'soccer', team: 'PSG',         afTeamId: 85,   afPlayerId: 927 },
+  { id: 3,  name: '김민재', nameEn: 'Kim Min-jae', sport: 'soccer', team: 'Bayern',      afTeamId: 157,  afPlayerId: 2897 },
+  { id: 6,  name: '황희찬', nameEn: 'Hwang Hee-chan', sport: 'soccer', team: 'Wolves',      afTeamId: 39,   afPlayerId: 24888 },
+  { id: 7,  name: '황인범', nameEn: 'Hwang In-beom', sport: 'soccer', team: 'Feyenoord',   afTeamId: 209,  afPlayerId: 2901 },
+  { id: 8,  name: '조규성', nameEn: 'Cho Gue-sung', sport: 'soccer', team: 'Midtjylland', afTeamId: 397,  afPlayerId: 34211 },
+  { id: 19, name: '오현규', nameEn: 'Oh Hyeon-gyu', sport: 'soccer', team: 'Besiktas',    afTeamId: 549,  afPlayerId: 34710 },
+  { id: 20, name: '양현준', nameEn: 'Yang Hyun-jun', sport: 'soccer', team: 'Celtic',      afTeamId: 247,  afPlayerId: 304958 },
+  { id: 21, name: '백승호', nameEn: 'Paik Seung-ho', sport: 'soccer', team: 'Birmingham',  afTeamId: 54,   afPlayerId: 2909 },
+  { id: 22, name: '배준호', nameEn: 'Bae Jun-ho', sport: 'soccer', team: 'Stoke',       afTeamId: 75,   afPlayerId: 357286 },
+  { id: 23, name: '엄지성', nameEn: 'Eom Ji-sung', sport: 'soccer', team: 'Swansea',     afTeamId: 76,   afPlayerId: 237050 },
+  { id: 24, name: '설영우', nameEn: 'Seol Young-woo', sport: 'soccer', team: 'Crvena',      afTeamId: 598,  afPlayerId: 197985 },
   { id: 9,  name: '김하성', en: 'kim',       sport: 'baseball', team: 'Pirates',     mlbTeam: 'Pittsburgh Pirates', mlbId: 673490 },
   { id: 17, name: '이정후', en: 'lee',       sport: 'baseball', team: 'Giants',      mlbTeam: 'San Francisco Giants', mlbId: 808982 },
   { id: 18, name: '김혜성', en: 'kim',       sport: 'baseball', team: 'Dodgers',     mlbTeam: 'Los Angeles Dodgers', mlbId: 808975 },
@@ -154,11 +154,42 @@ async function collectSoccer(events) {
 
       const st = fx.fixture.status?.short;
       const isLive = AF_LIVE.has(st), isFinal = AF_FINAL.has(st);
-      if (!isLive && !isFinal) continue;
 
       const home = fx.teams.home.name, away = fx.teams.away.name;
       const vs = `${home} vs ${away}`;
       const names = involved.map((p) => p.name);
+
+      // ── 라인업 발표 알림: 킥오프 80분 전부터 감시, 발표 즉시 선발/벤치/제외 푸시 ──
+      // (리그마다 60~75분 전 발표. 발표 전엔 빈 응답 → 다음 실행에서 재시도,
+      //  처리 완료되면 af-lineup-done 마커로 이후 lineups 호출 자체를 중단.)
+      if (!isLive && !isFinal) {
+        const til = new Date(fx.fixture.date).getTime() - Date.now();
+        const inWindow = (st === 'NS' || st === 'TBD') && til > 0 && til <= 80 * 60 * 1000;
+        if (inWindow && !(await alreadyLogged(`af-lineup-done-${fid}`))) {
+          const lu = await afGet(`/fixtures/lineups?fixture=${fid}`);
+          const teams = lu?.response || [];
+          if (teams.length) {
+            const clean = (s) => (s || '').toLowerCase().replace(/[.\-\s]/g, '');
+            for (const p of involved) {
+              let inXI = false, onBench = false;
+              for (const t of teams) {
+                const hit = (e) => e?.player && (e.player.id === p.afPlayerId ||
+                  (clean(e.player.name).length >= 6 && clean(e.player.name) === clean(p.nameEn || '')));
+                if ((t.startXI || []).some(hit)) inXI = true;
+                else if ((t.substitutes || []).some(hit)) onBench = true;
+              }
+              const j = josa(p.name, '이', '가');
+              const body = inXI ? `${vs} — ${p.name}${j} 선발로 나섭니다.`
+                : onBench ? `${vs} — ${p.name}${j} 벤치에서 출발합니다.`
+                : `${vs} — ${p.name}${j} 이번 경기 명단에 포함되지 않았습니다.`;
+              events.push({ key: `af-lineup-${fid}-${p.id}`, players: [p.id],
+                title: '⚽ 라인업 발표', body });
+            }
+            events.push({ key: `af-lineup-done-${fid}`, players: [] }); // 감시 종료 마커(무발송)
+          }
+        }
+        continue;
+      }
 
       // Finished & fully processed on an earlier run → skip (saves the events call).
       if (isFinal && await alreadyLogged(`af-done-${fid}`)) continue;
