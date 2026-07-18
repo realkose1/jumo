@@ -1,103 +1,27 @@
 import UIKit
 import WebKit
 import Capacitor
-import SwiftUI
 
-// Native iOS 26 Liquid Glass tab bar (SwiftUI), overlaid on the Capacitor
-// WKWebView. Built entirely from Apple's Liquid Glass primitives —
-// GlassEffectContainer + .glassEffect() + glassEffectID morphing — with NO
-// custom chrome (no borders, no tinted fills). The selection capsule samples
-// the web content behind it (the container lets glass refract content rather
-// than other glass) and morphs fluidly as it moves between tabs. Only the
-// selected icon + label are tinted brand yellow.
+// Native iOS 26 Liquid Glass tab bar, overlaid on the Capacitor WKWebView.
+// Uses a REAL UITabBarController so the system draws its own floating Liquid
+// Glass bar — geometry, typography, selection morph, scroll-edge treatment,
+// Reduce Transparency and Dynamic Type all handled by UIKit, zero custom
+// chrome. The controller's content area is transparent and a passthrough
+// wrapper forwards every touch outside the bar itself to the webview below.
 
 struct JumoTab: Identifiable { let id: String; let label: String; let symbol: String }
 
-final class TabBarModel: ObservableObject {
-    @Published var selected: Int = 0
-    let tabs: [JumoTab]
-    var onSelect: ((Int) -> Void)?
-    init(tabs: [JumoTab]) { self.tabs = tabs }
-}
-
-@available(iOS 26.0, *)
-struct GlassTabBar: View {
-    @ObservedObject var model: TabBarModel
-    @Namespace private var ns
-    @State private var dragX: CGFloat? = nil
-    @State private var pressed = false
-    private let accent = Color(red: 0.961, green: 0.769, blue: 0.0)   // #f5c400 — glyph only
-    private let barHeight: CGFloat = 56
-
-    var body: some View {
-        GeometryReader { geo in
-            let n = max(1, model.tabs.count)
-            let cellW = geo.size.width / CGFloat(n)
-            let selW = cellW - 6
-            let half = selW / 2
-            let rest = cellW * (CGFloat(model.selected) + 0.5)
-            let center = min(max(dragX ?? rest, half + 4), geo.size.width - half - 4)
-            ZStack {
-                // Frosted bar + clear selection pill (morphs via glassEffectID,
-                // grows while pressed for a liquid expand).
-                GlassEffectContainer(spacing: 26) {
-                    ZStack(alignment: .leading) {
-                        Capsule(style: .continuous).fill(Color.clear)
-                            .glassEffect(.regular, in: .capsule)
-                            .frame(width: geo.size.width, height: geo.size.height)
-                        Capsule(style: .continuous).fill(Color.clear)
-                            .glassEffect(.clear.interactive(), in: .capsule)
-                            .glassEffectID("sel", in: ns)
-                            .frame(width: selW + (pressed ? 18 : 0), height: geo.size.height - (pressed ? 2 : 10))
-                            .position(x: center, y: geo.size.height / 2)
-                    }
-                }
-
-                // Crisp glyphs on top.
-                HStack(spacing: 0) {
-                    ForEach(Array(model.tabs.enumerated()), id: \.element.id) { idx, tab in
-                        VStack(spacing: 3) {
-                            Image(systemName: tab.symbol).font(.system(size: 19, weight: .semibold))
-                            Text(tab.label).font(.system(size: 10, weight: .semibold))
-                        }
-                        .foregroundStyle(idx == model.selected ? accent : Color.white.opacity(0.92))
-                        .frame(maxWidth: .infinity)
-                    }
-                }
-                .allowsHitTesting(false)
-
-                // One reliable gesture surface for tap + drag across the whole bar.
-                Color.clear.contentShape(Rectangle())
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { v in
-                                if !pressed { withAnimation(.spring(response: 0.28, dampingFraction: 0.6)) { pressed = true } }
-                                let moved = abs(v.translation.width) + abs(v.translation.height)
-                                if moved > 6 { dragX = min(max(v.location.x, half + 4), geo.size.width - half - 4) }
-                                let i = clamp(Int(v.location.x / cellW), n)
-                                if i != model.selected {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.74)) { model.selected = i }
-                                }
-                            }
-                            .onEnded { v in
-                                let i = clamp(Int(v.location.x / cellW), n)
-                                withAnimation(.spring(response: 0.34, dampingFraction: 0.72)) {
-                                    dragX = nil
-                                    pressed = false
-                                    model.selected = i
-                                }
-                                model.onSelect?(i)
-                            }
-                    )
-            }
-        }
-        .frame(height: barHeight)
+// Full-screen overlay that only intercepts touches landing on the system tab
+// bar; everything else falls through to the webview underneath.
+private final class TabBarPassthroughView: UIView {
+    weak var passthroughTarget: UIView?
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard let v = super.hitTest(point, with: event), let bar = passthroughTarget else { return nil }
+        return v.isDescendant(of: bar) ? v : nil
     }
-
-    private func clamp(_ i: Int, _ n: Int) -> Int { max(0, min(n - 1, i)) }
 }
 
-class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGestureRecognizerDelegate {
+class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGestureRecognizerDelegate, UITabBarControllerDelegate {
 
     private let tabs: [JumoTab] = [
         JumoTab(id: "home",     label: "홈",     symbol: "house.fill"),
@@ -106,7 +30,7 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
         JumoTab(id: "news",     label: "뉴스",   symbol: "newspaper.fill"),
         JumoTab(id: "more",     label: "더보기", symbol: "ellipsis")
     ]
-    private lazy var model = TabBarModel(tabs: tabs)
+    private var tabBarVC: UITabBarController?
     private var hostView: UIView?
     private var bellHost: UIView?
     private var bellBadge: UILabel?
@@ -379,30 +303,53 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
 
     @available(iOS 26.0, *)
     private func setupTabBar() {
-        model.onSelect = { [weak self] i in
-            guard let self = self else { return }
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()   // GNB 탭 햅틱
-            self.wk?.evaluateJavaScript("window.__nativeTab && window.__nativeTab('\(self.tabs[i].id)')")
+        let tvc = UITabBarController()
+        tvc.viewControllers = tabs.enumerated().map { i, t in
+            let vc = UIViewController()
+            vc.view.backgroundColor = .clear                 // content stays see-through
+            vc.view.isUserInteractionEnabled = false
+            vc.tabBarItem = UITabBarItem(title: t.label, image: UIImage(systemName: t.symbol), tag: i)
+            return vc
         }
-        let hc = UIHostingController(rootView: GlassTabBar(model: model))
-        hc.view.backgroundColor = .clear
-        hc.view.translatesAutoresizingMaskIntoConstraints = false
-        addChild(hc)
-        view.addSubview(hc.view)
+        tvc.delegate = self
+        tvc.tabBar.tintColor = UIColor(red: 0.961, green: 0.769, blue: 0.0, alpha: 1) // #f5c400
+        tvc.view.backgroundColor = .clear
+
+        addChild(tvc)
+        let wrap = TabBarPassthroughView()
+        wrap.passthroughTarget = tvc.tabBar
+        wrap.translatesAutoresizingMaskIntoConstraints = false
+        tvc.view.translatesAutoresizingMaskIntoConstraints = false
+        wrap.addSubview(tvc.view)
+        view.addSubview(wrap)
         NSLayoutConstraint.activate([
-            hc.view.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            hc.view.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-            hc.view.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -4),
-            hc.view.heightAnchor.constraint(equalToConstant: 56)
+            // Full-screen so UIKit lays the bar out with its own safe-area rules.
+            wrap.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            wrap.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            wrap.topAnchor.constraint(equalTo: view.topAnchor),
+            wrap.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            tvc.view.leadingAnchor.constraint(equalTo: wrap.leadingAnchor),
+            tvc.view.trailingAnchor.constraint(equalTo: wrap.trailingAnchor),
+            tvc.view.topAnchor.constraint(equalTo: wrap.topAnchor),
+            tvc.view.bottomAnchor.constraint(equalTo: wrap.bottomAnchor),
         ])
-        hc.didMove(toParent: self)
-        hostView = hc.view
+        tvc.didMove(toParent: self)
+        tabBarVC = tvc
+        hostView = wrap
 
         // Stay hidden beneath the launch splash, then fade in with the app.
-        hc.view.alpha = 0
+        wrap.alpha = 0
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.9) {
-            UIView.animate(withDuration: 0.45, delay: 0, options: [.curveEaseOut]) { hc.view.alpha = 1 }
+            UIView.animate(withDuration: 0.45, delay: 0, options: [.curveEaseOut]) { wrap.alpha = 1 }
         }
+    }
+
+    // System tab bar tap → haptic + drive the web app.
+    func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
+        let i = viewController.tabBarItem.tag
+        guard i >= 0 && i < tabs.count else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()   // GNB 탭 햅틱
+        wk?.evaluateJavaScript("window.__nativeTab && window.__nativeTab('\(tabs[i].id)')")
     }
 
     private func enableWebNativeTabBar() {
@@ -420,8 +367,9 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
 
     func userContentController(_ uc: WKUserContentController, didReceive message: WKScriptMessage) {
         if message.name == "tabbar", let id = message.body as? String,
-           let i = tabs.firstIndex(where: { $0.id == id }), i != model.selected {
-            withAnimation(.spring(response: 0.38, dampingFraction: 0.72)) { model.selected = i }
+           let i = tabs.firstIndex(where: { $0.id == id }),
+           let tvc = tabBarVC, i != tvc.selectedIndex {
+            tvc.selectedIndex = i   // web-driven change (e.g. notification tap) → sync system bar
         } else if message.name == "bell", let d = message.body as? [String: Any] {
             updateBell(show: (d["show"] as? Bool) ?? false, unread: (d["unread"] as? Int) ?? 0)
         } else if message.name == "detailbar", let d = message.body as? [String: Any] {
