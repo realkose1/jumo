@@ -5611,7 +5611,10 @@ function App() {
         // calls within the Pro 7,500/day budget — today refreshes often,
         // far-future dates rarely change.
         const AF_BASE = `${API_BASE}/api/apifootball`;
-        const dateOffsets = [-2,-1,0,1,2,3,4,5,6,7];
+        // -7..+7: 일정 탭 날짜 스트립(±7일)과 동일 범위. 과거를 -2일까지만 가져오면
+        // 스트립의 3~7일 전 축구 경기가 늘 비고, 최근 결과(예: 주초 친선전)도 놓친다.
+        // 지난 날짜는 30분 TTL + sf_cache 공유 캐시라 실제 API 부하 증가는 미미.
+        const dateOffsets = [-7,-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7];
         const afDates = dateOffsets.map(offset => {
           const d = new Date(today); d.setDate(today.getDate() + offset);
           return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -5852,7 +5855,9 @@ function App() {
               // Cache TTL: finished match = forever, live = 20s, upcoming = 30s
               if (cached) {
                 const age = Date.now() - cached.fetchedAt;
-                const ttl = cached.status === 'STATUS_FINAL' ? Infinity : (cached.live ? 20000 : 30000);
+                const ttl = cached.status === 'STATUS_FINAL'
+                  ? (cached.empty ? 3 * 60 * 1000 : Infinity)  // 빈 최종 상세(레이트리밋 등)는 3분 뒤 재시도
+                  : (cached.live ? 20000 : 30000);
                 if (age < ttl) {
                   return { id: m.id, lineups: cached.lineups, events: cached.events, players: cached.players, isLive: m.live };
                 }
@@ -5873,7 +5878,11 @@ function App() {
                 live: m.live,
               };
               // Only cache successful (non-empty) responses; failed fetches shouldn't poison.
-              if (detail.lineups.length > 0 || detail.events.length > 0 || isFinalMatch) {
+              // 종료 경기도 '빈 상세'는 영구 캐시하지 않는다 — API-Football 분당 한도에
+              // 걸려 빈 응답을 받은 경우 다음 폴링에서 재시도해야 결국 채워진다.
+              // (진짜 라인업이 없는 하위 친선경기의 반복 재요청은 3분 TTL로 완화.)
+              detail.empty = detail.lineups.length === 0 && detail.events.length === 0;
+              if (!detail.empty || isFinalMatch) {
                 detailsCache[m.id] = detail;
               }
               return { id: m.id, lineups: detail.lineups, events: detail.events, players: detail.players, isLive: m.live };
