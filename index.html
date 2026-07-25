@@ -7112,8 +7112,41 @@ function App() {
     setLastNotifViewedAt(now);
     localStorage.setItem('jumo_lastNotifViewedAt', String(now));
   };
-  // Native push bridge: foreground delivery captures into the center; a tap also opens it.
-  React.useEffect(() => { window.__jumoOnPush = (notif, tapped) => { addPushNotif(notif); if (tapped) goNotif(); }; });
+  // 푸시를 눌렀을 때 그 경기 상세로 바로 이동한다. 해석 순서:
+  //  1) payload의 matchId와 경기 id 직접 대조(축구는 AF fixture id가 앱 id와 동일)
+  //  2) 실패 시 제목·본문의 팀명/선수명으로 매칭(matchForNotif) — 야구처럼 서버·앱의
+  //     경기 id 체계가 다른 경우를 커버
+  const resolvePushMatch = React.useCallback((notif) => {
+    if (!notif) return null;
+    const mid = notif.data && notif.data.matchId;
+    if (mid) {
+      const hit = liveMatches.find(m => String(m.id) === String(mid));
+      if (hit) return hit;
+    }
+    return matchForNotif(notif);
+  }, [liveMatches, matchForNotif]);
+
+  // Native push bridge: foreground delivery captures into the center; a tap opens the match.
+  const pendingPushRef = React.useRef(null);
+  React.useEffect(() => {
+    window.__jumoOnPush = (notif, tapped) => {
+      addPushNotif(notif);
+      if (!tapped) return;
+      const m = resolvePushMatch(notif);
+      if (m) { goMatch(m); return; }
+      // 콜드 스타트: 알림으로 앱이 실행되면 경기 목록이 아직 비어 매칭에 실패한다.
+      // 보류해 두고 데이터가 도착하면 이동한다. 그동안은 알림 목록을 보여준다.
+      pendingPushRef.current = { notif, at: Date.now() };
+      goNotif();
+    };
+  });
+  React.useEffect(() => {
+    const p = pendingPushRef.current;
+    if (!p || !liveMatches.length) return;
+    if (Date.now() - p.at > 30000) { pendingPushRef.current = null; return; } // 너무 늦으면 포기
+    const m = resolvePushMatch(p.notif);
+    if (m) { pendingPushRef.current = null; goMatch(m); }
+  }, [liveMatches, resolvePushMatch]);
   const [closing, setClosing] = React.useState(false);
   const goBack = () => {
     if (closing) return;

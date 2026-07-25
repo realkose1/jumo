@@ -182,7 +182,7 @@ async function collectSoccer(events) {
               const body = inXI ? `${vs} — ${p.name}${j} 선발로 나섭니다.`
                 : onBench ? `${vs} — ${p.name}${j} 벤치에서 출발합니다.`
                 : `${vs} — ${p.name}${j} 이번 경기 명단에 포함되지 않았습니다.`;
-              events.push({ key: `af-lineup-${fid}-${p.id}`, players: [p.id],
+              events.push({ key: `af-lineup-${fid}-${p.id}`, players: [p.id], matchId: String(fid),
                 title: '⚽ 라인업 발표', body });
             }
             events.push({ key: `af-lineup-done-${fid}`, players: [] }); // 감시 종료 마커(무발송)
@@ -195,11 +195,11 @@ async function collectSoccer(events) {
       if (isFinal && await alreadyLogged(`af-done-${fid}`)) continue;
 
       if (isLive) {
-        events.push({ key: `af-start-${fid}`, players: involved.map((p) => p.id),
+        events.push({ key: `af-start-${fid}`, players: involved.map((p) => p.id), matchId: String(fid),
           title: `⚽ ${vs}`, body: `${namesWithJosa(names)} 출전하는 경기가 시작됐습니다.` });
       }
       if (isFinal) {
-        events.push({ key: `af-result-${fid}`, players: involved.map((p) => p.id),
+        events.push({ key: `af-result-${fid}`, players: involved.map((p) => p.id), matchId: String(fid),
           title: '⚽ 경기 종료', body: `${home} ${fx.goals?.home ?? 0} : ${fx.goals?.away ?? 0} ${away}, 경기가 종료됐습니다.` });
       }
 
@@ -213,18 +213,18 @@ async function collectSoccer(events) {
           if (ev.type === 'Goal' && ev.detail !== 'Missed Penalty') {
             if (isPlayer && ev.detail !== 'Own Goal') {
               const pen = ev.detail === 'Penalty' ? '페널티킥으로 ' : '';
-              events.push({ key: `af-goal-${fid}-${p.id}-${i}`, players: [p.id],
+              events.push({ key: `af-goal-${fid}-${p.id}-${i}`, players: [p.id], matchId: String(fid),
                 title: `⚽ ${p.name} 골!`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} ${pen}골을 터뜨렸습니다!` });
             } else if (isAssist) {
-              events.push({ key: `af-assist-${fid}-${p.id}-${i}`, players: [p.id],
+              events.push({ key: `af-assist-${fid}-${p.id}-${i}`, players: [p.id], matchId: String(fid),
                 title: `⚽ ${p.name} 도움!`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} 도움을 기록했습니다!` });
             }
           } else if (ev.type === 'Card' && isPlayer) {
             if (ev.detail === 'Red Card') {
-              events.push({ key: `af-red-${fid}-${p.id}-${i}`, players: [p.id],
+              events.push({ key: `af-red-${fid}-${p.id}-${i}`, players: [p.id], matchId: String(fid),
                 title: `⚽ ${p.name} 퇴장`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} 퇴장당했습니다.` });
             } else if (ev.detail === 'Yellow Card') {
-              events.push({ key: `af-yellow-${fid}-${p.id}-${i}`, players: [p.id],
+              events.push({ key: `af-yellow-${fid}-${p.id}-${i}`, players: [p.id], matchId: String(fid),
                 title: `⚽ ${p.name} 경고`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} 경고를 받았습니다.` });
             }
           }
@@ -254,7 +254,7 @@ async function collectBaseball(events) {
 
       if (st === 'Live') {
         const names = involved.map((p) => p.name);
-        events.push({ key: `mlb-start-${g.gamePk}`, players: involved.map((p) => p.id),
+        events.push({ key: `mlb-start-${g.gamePk}`, players: involved.map((p) => p.id), matchId: String(g.gamePk),
           title: `⚾ ${vs}`, body: `${namesWithJosa(names)} 출전하는 경기가 시작됐습니다.` });
       }
 
@@ -273,7 +273,7 @@ async function collectBaseball(events) {
           const bat = batOf(p);
           const hr = parseInt(bat?.homeRuns ?? 0) || 0;
           for (let n = 1; n <= hr; n++) {
-            events.push({ key: `mlb-hr-${g.gamePk}-${p.id}-${n}`, players: [p.id],
+            events.push({ key: `mlb-hr-${g.gamePk}-${p.id}-${n}`, players: [p.id], matchId: String(g.gamePk),
               title: `⚾ ${p.name} 홈런!`, body: `${vs} 경기, ${p.name}${josa(p.name, '이', '가')} 홈런을 쳤습니다!` });
           }
         }
@@ -288,7 +288,7 @@ async function collectBaseball(events) {
             return `${p.name} ${parts.join(' ')}`;
           }).filter(Boolean);
           const perf = lines.length ? ` · ${lines.join(', ')}` : '';
-          events.push({ key: `mlb-result-${g.gamePk}`, players: involved.map((p) => p.id),
+          events.push({ key: `mlb-result-${g.gamePk}`, players: involved.map((p) => p.id), matchId: String(g.gamePk),
             title: '⚾ 경기 종료', body: `${away} ${as} : ${hs} ${home}, 경기가 종료됐습니다.${perf}` });
         }
       }
@@ -323,7 +323,10 @@ module.exports = async (req, res) => {
   try {
     for (const ev of fresh) {
       const targets = tokens.filter((t) => Array.isArray(t.player_ids) && ev.players.some((pid) => t.player_ids.includes(pid)));
-      const payload = { aps: { alert: { title: ev.title, body: ev.body }, sound: 'default' }, data: { key: ev.key } };
+      // matchId를 함께 보내면 앱이 알림 탭 시 해당 경기 상세로 바로 이동한다.
+      // (축구=AF fixture id로 앱 경기 id와 일치. 야구는 gamePk라 앱 id와 달라
+      //  앱이 제목·본문의 팀명으로 폴백 매칭한다.)
+      const payload = { aps: { alert: { title: ev.title, body: ev.body }, sound: 'default' }, data: { key: ev.key, matchId: ev.matchId || null } };
       for (const t of targets) {
         const r = await sendOne(client, t.token, payload, jwt);
         if (r.status === 200) sent++; else failed++;
