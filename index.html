@@ -283,9 +283,12 @@ const ESPN_API = {
 const KOREAN_PLAYERS = {
   // 손흥민 — LAFC (MLS)
   'Los Angeles FC': { name: '손흥민', nameEn: 'Son Heung-min', number: 7, position: '공격수' },
-  // 이강인 — PSG (Ligue 1)
-  'Paris Saint-Germain': { name: '이강인', nameEn: 'Lee Kang-in', number: 19, position: '미드필더' },
-  'Paris Saint Germain': { name: '이강인', nameEn: 'Lee Kang-in', number: 19, position: '미드필더' },
+  // 이강인 — Atlético Madrid (La Liga) · 2026-07 이적. 등번호 7은 잠정값이며
+  // 라인업이 뜨면 실제 번호로 자동 교정된다(아래 AF 상세 처리 참조).
+  'Atletico Madrid': { name: '이강인', nameEn: 'Lee Kang-in', number: 7, position: '미드필더' },
+  'Atlético Madrid': { name: '이강인', nameEn: 'Lee Kang-in', number: 7, position: '미드필더' },
+  'Atletico de Madrid': { name: '이강인', nameEn: 'Lee Kang-in', number: 7, position: '미드필더' },
+  'Club Atletico de Madrid': { name: '이강인', nameEn: 'Lee Kang-in', number: 7, position: '미드필더' },
   // 김민재 — Bayern Munich (Bundesliga)
   'Bayern Munich': { name: '김민재', nameEn: 'Kim Min-jae', number: 3, position: '센터백' },
   'Bayern München': { name: '김민재', nameEn: 'Kim Min-jae', number: 3, position: '센터백' },
@@ -502,7 +505,7 @@ const MATCHES = [];
 const ALL_PLAYERS = [
   // 축구 - 유럽리그 (2025-26 시즌)
   { id: 1,  name: '손흥민',  nameEn: 'Son Heung-min',   number: 7,  sport: '축구',   team: 'LAFC',       league: 'MLS',        position: '공격수',   nation: '🇰🇷', goals: 2,  assists: 6,  matches: 16, rating: 7.3, startRate: 90, age: 33, birth: '1992.07.08', height: '183cm', espnLeague: 'usa.1',  espnId: 149945, apiFootballId: 186 },
-  { id: 2,  name: '이강인',  nameEn: 'Lee Kang-in',     number: 19, sport: '축구',   team: 'PSG',        league: 'Ligue 1',    position: '미드필더', nation: '🇰🇷', goals: 4,  assists: 5,  matches: 37, rating: 7.4, startRate: 60, age: 25, birth: '2001.02.19', height: '173cm', espnLeague: 'fra.1',  espnId: 274197, apiFootballId: 927 },
+  { id: 2,  name: '이강인',  nameEn: 'Lee Kang-in',     number: 7,  sport: '축구',   team: 'Atletico',   league: 'La Liga',    position: '미드필더', nation: '🇰🇷', goals: 4,  assists: 5,  matches: 37, rating: 7.4, startRate: 60, age: 25, birth: '2001.02.19', height: '173cm', espnLeague: 'esp.1',  espnId: 274197, apiFootballId: 927 },
   { id: 3,  name: '김민재',  nameEn: 'Kim Min-jae',     number: 3,  sport: '축구',   team: 'Bayern',     league: 'Bundesliga', position: '센터백',   nation: '🇰🇷', goals: 1,  assists: 1,  matches: 35, rating: 7.4, startRate: 65, age: 29, birth: '1996.11.15', height: '190cm', espnLeague: 'ger.1',  espnId: 157688, apiFootballId: 2897 },
   { id: 6,  name: '황희찬',  nameEn: 'Hwang Hee-chan',  number: 11, sport: '축구',   team: 'Wolves',     league: 'EPL',        position: '공격수',   nation: '🇰🇷', goals: 3,  assists: 1,  matches: 27, rating: 6.5, startRate: 65, age: 30, birth: '1996.01.26', height: '177cm', espnLeague: 'eng.1',  espnId: 237224, apiFootballId: 24888 },
   { id: 7,  name: '황인범',  nameEn: 'Hwang In-beom',   number: 5,  sport: '축구',   team: 'Feyenoord',  league: 'Eredivisie', position: '미드필더', nation: '🇰🇷', goals: 1,  assists: 4,  matches: 24, rating: 7.1, startRate: 50, age: 29, birth: '1996.09.20', height: '177cm', espnLeague: 'ned.1',  espnId: 280061, apiFootballId: 2901 },
@@ -609,7 +612,8 @@ const PLAYER_EXTRA = {
       { opp:'Nice',       result:'L', score:'0-1', contrib:'-',    date:'3.16' },
     ],
     career: [
-      { year:'2023–',    team:'PSG',      league:'리그앙', flag:'🇫🇷' },
+      { year:'2026–',    team:'Atlético Madrid', league:'라리가', flag:'🇪🇸' },
+      { year:'2023–26',  team:'PSG',      league:'리그앙', flag:'🇫🇷' },
       { year:'2022–23',  team:'Mallorca', league:'라리가', flag:'🇪🇸' },
       { year:'2019–22',  team:'Valencia', league:'라리가', flag:'🇪🇸' },
     ],
@@ -787,7 +791,7 @@ function LiveDot() {
 const teamLogoCache = {};
 
 function TeamBadge({ code, size=36, logo }) {
-  const colors = { TOT:'#132257', MCI:'#6CABDD', PSG:'#003399', OL:'#FFFFFF', LAD:'#005A9C', TOR:'#134A8E', FCB:'#DC052D', BVB:'#FDE100', T1:'#C89B3C', GEN:'#EC1C24' };
+  const colors = { TOT:'#132257', MCI:'#6CABDD', PSG:'#003399', Atletico:'#CB3524', ATM:'#CB3524', OL:'#FFFFFF', LAD:'#005A9C', TOR:'#134A8E', FCB:'#DC052D', BVB:'#FDE100', T1:'#C89B3C', GEN:'#EC1C24' };
   const textColors = { MCI:'#132257', OL:'#1B3A6B', BVB:'#1B1B1B' };
   const bg = colors[code] || '#333';
   const tc = textColors[code] || '#fff';
@@ -821,7 +825,10 @@ function TeamBadge({ code, size=36, logo }) {
 
 function PlayerPhoto({ player, style={}, tint='var(--bg)' }) {
   const num = player.number;
-  const imageMap = { '손흥민': 'heungmin.png', '이강인': 'kangin.png', '김민재': 'minjae.png', '조규성': 'guesung.png', '황희찬': 'heechan.png', '황인범': 'inbeom.png', '김하성': 'haseong.png', '이정후': 'junghoo.png', '김혜성': 'hyeseong.png', '오현규': 'hyungyu.png', '양현준': 'hyunjun.png', '백승호': 'seungho.webp', '배준호': 'junho.webp', '엄지성': 'jisung.webp', '설영우': 'youngwoo.webp' };
+  // 값이 절대 URL이면 그대로 사용, 아니면 번들 image/ 경로. 이강인은 2026-07 이적으로
+  // 번들 사진(PSG 유니폼)이 낡아 데이터 제공처의 유니폼 중립 헤드샷을 쓴다 — 이적에
+  // 영향받지 않고 자동으로 최신 상태를 유지한다.
+  const imageMap = { '손흥민': 'heungmin.png', '이강인': 'https://media.api-sports.io/football/players/927.png', '김민재': 'minjae.png', '조규성': 'guesung.png', '황희찬': 'heechan.png', '황인범': 'inbeom.png', '김하성': 'haseong.png', '이정후': 'junghoo.png', '김혜성': 'hyeseong.png', '오현규': 'hyungyu.png', '양현준': 'hyunjun.png', '백승호': 'seungho.webp', '배준호': 'junho.webp', '엄지성': 'jisung.webp', '설영우': 'youngwoo.webp' };
   // For full-body source images, zoom into the face area
   const PHOTO_ZOOM = {
     '백승호': { scale: 2.75, originX: '45%', originY: '16%' },
@@ -830,7 +837,8 @@ function PlayerPhoto({ player, style={}, tint='var(--bg)' }) {
     '설영우': { scale: 1.9, originX: '50%', originY: '15%' },
   };
   const zoom = PHOTO_ZOOM[player.name];
-  const imagePath = imageMap[player.name] ? `image/${imageMap[player.name]}` : null;
+  const mapped = imageMap[player.name];
+  const imagePath = mapped ? (/^https?:\/\//.test(mapped) ? mapped : `image/${mapped}`) : null;
 
   return (
     <div style={{ position:'relative', overflow:'hidden', ...style }}>
@@ -1948,7 +1956,9 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
 
   // landscape image map: Korean name → filename in image/landscape/
   const LANDSCAPE_MAP = {
-    '손흥민': 'heungmin.jpg', '이강인': 'kangin.png', '김민재': 'minjae.jpeg',
+    // 이강인: 2026-07 이적으로 번들 landscape 사진(PSG 유니폼)이 낡음 → 항목 제외.
+    // 히어로는 그라데이션 + 팀 엠블럼 워터마크 폴백으로 렌더된다.
+    '손흥민': 'heungmin.jpg', '김민재': 'minjae.jpeg',
     '조규성': 'guesung.jpeg', '황희찬': 'heechan.jpeg', '황인범': 'inbeom.png',
     '김하성': 'haseong.jpeg', '이정후': 'junghoo.jpeg', '김혜성': 'hyesung.jpeg',
     '오현규': 'hyeongyu.jpeg', '양현준': 'hyunjun.jpeg',
@@ -2331,7 +2341,7 @@ function HomeV3({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [] }) {
 // color/alt) → curated brand map → stable hash. Everything
 // is normalized to a readable dark card (white text) keeping the team's hue.
 const CHEER_BRAND = {
-  TOT:'#132257', PSG:'#004170', FCB:'#DC052D', WOL:'#FDB913', FEY:'#E2001A', NEW:'#241F20',
+  TOT:'#132257', PSG:'#004170', Atletico:'#CB3524', ATM:'#CB3524', FCB:'#DC052D', WOL:'#FDB913', FEY:'#E2001A', NEW:'#241F20',
   BHA:'#0057B8', MCI:'#6CABDD', MUN:'#DA291C', ARS:'#EF0107', LIV:'#C8102E', CHE:'#034694',
   RMA:'#FEBE10', BAR:'#A50044', JUV:'#222222', INT:'#0068A8', MIL:'#FB090B', BVB:'#FDE100',
   RBL:'#DD0741', AJX:'#D2122E', POR:'#00428C', GEN:'#1E78C8', CRV:'#ED1C24',
@@ -3592,7 +3602,8 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
       <div style={{ position:'relative', height:320, overflow:'hidden' }}>
         {(() => {
           const LANDSCAPE = {
-            '손흥민':'heungmin.jpg','이강인':'kangin.png','김민재':'minjae.jpeg',
+            // 이강인 제외 — 이적으로 번들 사진이 낡음(PlayerPhoto 폴백 사용)
+            '손흥민':'heungmin.jpg','김민재':'minjae.jpeg',
             '조규성':'guesung.jpeg','황희찬':'heechan.jpeg','황인범':'inbeom.png',
             '김하성':'haseong.jpeg','이정후':'junghoo.jpeg','김혜성':'hyesung.jpeg',
             '오현규':'hyeongyu.jpeg','양현준':'hyunjun.jpeg',
@@ -4189,7 +4200,7 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
   // Static fallback team logo URLs by player name (used when no recent match cached)
   const TEAM_LOGO_FALLBACK = {
     '손흥민':'https://a.espncdn.com/i/teamlogos/soccer/500/18966.png',
-    '이강인':'https://a.espncdn.com/i/teamlogos/soccer/500/160.png',
+    '이강인':'https://a.espncdn.com/i/teamlogos/soccer/500/1068.png',
     '김민재':'https://a.espncdn.com/i/teamlogos/soccer/500/132.png',
     '황희찬':'https://a.espncdn.com/i/teamlogos/soccer/500/380.png',
     '황인범':'https://a.espncdn.com/i/teamlogos/soccer/500/142.png',
@@ -4438,7 +4449,7 @@ const NEWS_PLAYERS = [
 const newsImageCache = {};
 
 const NEWS_PLAYER_IMG = {
-  '손흥민': 'image/heungmin.png', '이강인': 'image/kangin.png',
+  '손흥민': 'image/heungmin.png', '이강인': 'https://media.api-sports.io/football/players/927.png',
   '김민재': 'image/minjae.png',   '황희찬': 'image/heechan.png',
   '황인범': 'image/inbeom.png',   '조규성': 'image/guesung.png',
   '김하성': 'image/haseong.png',  '이정후': 'image/junghoo.png',
@@ -5917,11 +5928,14 @@ function App() {
 
             const computeFor = (kp) => {
               const nameEn = kp.nameEn;
-              let started = false, foundInRoster = false, sfRating = null;
+              let started = false, foundInRoster = false, sfRating = null, rosterNumber = null;
               for (const entry of linePlayers) {
                 const n = entry.player?.name || '';
                 if (nameMatch(n, nameEn)) {
                   foundInRoster = true;
+                  // 실제 스쿼드 번호를 그대로 쓴다 — 이적 직후처럼 하드코딩 번호가
+                  // 아직 틀릴 수 있는 경우를 라인업이 뜨는 즉시 자동 교정.
+                  if (entry.player?.number != null) rosterNumber = entry.player.number;
                   if (entry.substitute === false) started = true;
                 }
               }
@@ -5992,7 +6006,7 @@ function App() {
                   : minutesPlayed > 0 ? `${minutesPlayed}분 출전`
                   : '출전 완료';
               }
-              return { ...kp, event: newEvent, minutesPlayed, matchGoals, matchAssists, sfRating, lineupConfirmed };
+              return { ...kp, number: rosterNumber ?? kp.number, event: newEvent, minutesPlayed, matchGoals, matchAssists, sfRating, lineupConfirmed };
             };
 
             const updatedKoreans = allKoreans.map(computeFor);

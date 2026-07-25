@@ -28,7 +28,7 @@ const crypto = require('crypto');
 // team id and goals/cards by player id (exact; no fuzzy name matching).
 const PLAYERS = [
   { id: 1,  name: '손흥민', nameEn: 'Son Heung-min', sport: 'soccer', team: 'LAFC',        afTeamId: 1616, afPlayerId: 186 },
-  { id: 2,  name: '이강인', nameEn: 'Lee Kang-in', sport: 'soccer', team: 'PSG',         afTeamId: 85,   afPlayerId: 927 },
+  { id: 2,  name: '이강인', nameEn: 'Lee Kang-in', sport: 'soccer', team: 'Atletico',    afTeamId: 530,  afPlayerId: 927 },
   { id: 3,  name: '김민재', nameEn: 'Kim Min-jae', sport: 'soccer', team: 'Bayern',      afTeamId: 157,  afPlayerId: 2897 },
   { id: 6,  name: '황희찬', nameEn: 'Hwang Hee-chan', sport: 'soccer', team: 'Wolves',      afTeamId: 39,   afPlayerId: 24888 },
   { id: 7,  name: '황인범', nameEn: 'Hwang In-beom', sport: 'soccer', team: 'Feyenoord',   afTeamId: 209,  afPlayerId: 2901 },
