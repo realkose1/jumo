@@ -6696,7 +6696,23 @@ function App() {
       timeoutId = setTimeout(tick, wasFirst ? 800 : computeNextDelay());
     };
     tick();
-    return () => { cancelled = true; clearTimeout(timeoutId); };
+
+    // 앱이 다시 활성화되면 즉시 갱신한다.
+    // iOS는 앱을 메모리에 유지하므로 '앱을 다시 실행'해도 실제로는 이전 WebView가
+    // 복원된다 → 스켈레톤 없이 옛 화면이 그대로 보이고(캐싱처럼 느껴지는 이유),
+    // 백그라운드에선 폴링 타이머도 지연돼 한동안 낡은 정보가 남아 있었다.
+    const onVisible = () => {
+      if (cancelled || document.visibilityState !== 'visible') return;
+      clearTimeout(timeoutId);   // 예약된 폴링과 중복 실행 방지
+      tick();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [fetchLiveMatches]);
 
   // Generate notifications from match data
