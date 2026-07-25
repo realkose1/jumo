@@ -44,6 +44,15 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
     private var didSetup = false
     private var wk: WKWebView? { self.webView as? WKWebView }
 
+    // 스플래시가 걷히기 전에는 네이티브 크롬(벨·상세 툴바)을 띄우지 않는다.
+    // 웹은 마운트 직후 "홈이다/상세다"를 알려오는데, 그 시점엔 아직 스플래시가
+    // 보이는 중이라 버튼만 먼저 떠 보이는 문제가 있었다. 준비되기 전 상태는
+    // 보류해 두고 전환이 끝난 뒤 한 번에 반영한다.
+    private var chromeReady = false
+    private var pendingBell: (show: Bool, unread: Int)?
+    private var pendingDetail: (back: Bool, followShow: Bool, followOn: Bool,
+                               actionShow: Bool, actionLabel: String, actionIcon: String)?
+
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         guard !didSetup else { return }
@@ -167,6 +176,7 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
     }
 
     private func updateBell(show: Bool, unread: Int) {
+        guard chromeReady else { pendingBell = (show, unread); return }
         UIView.animate(withDuration: 0.25) { self.bellHost?.alpha = show ? 1 : 0 }
         if unread > 0 {
             bellBadge?.text = unread > 99 ? "99+" : "\(unread)"
@@ -273,6 +283,12 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
 
     private func updateDetailChrome(back: Bool, followShow: Bool, followOn: Bool,
                                     actionShow: Bool, actionLabel: String, actionIcon: String) {
+        guard chromeReady else {
+            // 알림 탭으로 상세 화면부터 시작하는 경우에도 스플래시 위에 뒤로가기/팔로우가
+            // 먼저 뜨지 않도록 보류한다.
+            pendingDetail = (back, followShow, followOn, actionShow, actionLabel, actionIcon)
+            return
+        }
         UIView.animate(withDuration: 0.2) {
             self.backHost?.alpha = back ? 1 : 0
             self.followHost?.alpha = followShow ? 1 : 0
@@ -339,8 +355,17 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
 
         // Stay hidden beneath the launch splash, then fade in with the app.
         wrap.alpha = 0
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.9) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.9) { [weak self] in
             UIView.animate(withDuration: 0.45, delay: 0, options: [.curveEaseOut]) { wrap.alpha = 1 }
+            // 전환이 끝난 지금부터 웹이 요청한 크롬 상태를 반영한다.
+            guard let self = self else { return }
+            self.chromeReady = true
+            if let b = self.pendingBell { self.pendingBell = nil; self.updateBell(show: b.show, unread: b.unread) }
+            if let d = self.pendingDetail {
+                self.pendingDetail = nil
+                self.updateDetailChrome(back: d.back, followShow: d.followShow, followOn: d.followOn,
+                                        actionShow: d.actionShow, actionLabel: d.actionLabel, actionIcon: d.actionIcon)
+            }
         }
     }
 
