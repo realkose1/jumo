@@ -340,33 +340,46 @@ const KOREAN_PLAYERS = {
 // ─── KOREAN BROADCAST RIGHTS (2025-26 시즌) ──────────────────
 // Keys matched against the match's tournament/competition name (m.competition).
 // Lookup falls back to substring match for naming variants.
+// 값은 배열 — 한 대회를 여러 곳에서 중계하면 전부 표시된다(BroadcastBadge가 ' · '로 연결).
+// 국내 중계가 확인되지 않은 대회는 빈 배열로 둔다: 틀린 채널명을 보여주는 것보다
+// 아무것도 표시하지 않는 편이 낫다.
 const BROADCASTERS = {
+  // 쿠팡플레이 — 2025-26시즌 EPL 독점 + 라리가·분데스리가·리그앙,
+  // 그리고 잉글랜드 패키지(챔피언십·리그원·FA컵·카라바오컵).
   'Premier League': ['쿠팡플레이'],
   'Bundesliga': ['쿠팡플레이'],
   'Ligue 1': ['쿠팡플레이'],
-  'Serie A': ['스포티비 NOW'],
   'LaLiga': ['쿠팡플레이'],
   'La Liga': ['쿠팡플레이'],
-  'Eredivisie': ['스포티비 NOW'],
-  'MLS': ['Apple TV'],
-  'Championship': ['스포티비 NOW'],
-  'Scottish Premiership': ['스포티비 NOW'],
-  'Süper Lig': ['스포티비 NOW'],
-  'Super Lig': ['스포티비 NOW'],
-  'Superliga': ['스포티비 NOW'],
-  'Serbian SuperLiga': [],
-  'UEFA Champions League': ['스포티비 NOW'],
-  'UEFA Europa League': ['스포티비 NOW'],
-  'UEFA Conference League': ['스포티비 NOW'],
+  'Championship': ['쿠팡플레이'],
   'FA Cup': ['쿠팡플레이'],
   'EFL Cup': ['쿠팡플레이'],
   'DFB Pokal': ['쿠팡플레이'],
   'Coupe de France': ['쿠팡플레이'],
+  // 스포티비 NOW
+  'Serie A': ['스포티비 NOW'],
+  'UEFA Champions League': ['스포티비 NOW'],
+  'UEFA Europa League': ['스포티비 NOW'],
+  'UEFA Conference League': ['스포티비 NOW'],
+  // 복수 중계 — MLS는 Apple TV(MLS Season Pass)와 스포티비가 함께 중계.
+  'MLS': ['Apple TV', '스포티비'],
+  // 국내 중계 미확인 → 배지 미표시
+  'Eredivisie': [],
+  'Scottish Premiership': [],
+  'Süper Lig': [],
+  'Super Lig': [],
+  'Superliga': [],
+  'Serbian SuperLiga': [],
 };
+// MLB는 스포티비 NOW가 메인이고, 일부 경기는 Apple TV+로도 중계된다.
+const MLB_BROADCASTERS = ['스포티비 NOW', 'Apple TV+'];
 function getBroadcasters(m) {
   if (!m) return [];
   const sport = m.sport || '';
-  if (sport.includes('MLB') || sport.includes('⚾')) return ['쿠팡플레이'];
+  // 야구는 MLB만 국내 중계가 있다. 마이너리그(AAA·AA…)는 중계가 없으므로
+  // '⚾'만 보고 뭉뚱그리면 안 된다(기존엔 AAA 경기에도 배지가 붙었다).
+  if (sport.includes('MLB')) return MLB_BROADCASTERS;
+  if (m.leagueKey === 'minor' || sport.includes('⚾')) return [];
   const comp = m.competition || '';
   if (BROADCASTERS[comp]) return BROADCASTERS[comp];
   const lower = comp.toLowerCase();
@@ -526,6 +539,27 @@ const PLAYERS = ALL_PLAYERS.slice(0, 5);
 
 // ─── PLAYER EXTRA DATA ────────────────────────────────────────
 // Per-competition stats for 2025-26 season
+// ─── TRANSFER SPOTLIGHT (이적 기념 히어로) ─────────────────────
+// 지정 기간 동안 홈 히어로에 이적 발표 이미지를 띄운다. 앞으로 이적이 생기면
+// 아래 배열에 한 줄만 추가하면 된다(이미지는 image/landscape/에 넣는다).
+//   from/to: KST 기준 시각. to는 미포함(다음날 00:00을 주면 그날 하루 종일).
+// 라이브 경기가 있으면 라이브 히어로가 우선한다 — 실시간 소식이 더 급하므로.
+const TRANSFER_SPOTLIGHTS = [
+  {
+    player: '이강인',
+    image: 'image/landscape/kangin.png',
+    badge: '이적 확정',
+    headline: '이강인, 아틀레티코 마드리드로',
+    sub: '라리가 · 등번호 7번',
+    from: '2026-07-25T00:00:00+09:00',
+    to:   '2026-07-26T00:00:00+09:00',
+  },
+];
+const activeTransferSpotlight = (nowMs) => TRANSFER_SPOTLIGHTS.find(s => {
+  const a = new Date(s.from).getTime(), b = new Date(s.to).getTime();
+  return nowMs >= a && nowMs < b;
+}) || null;
+
 const PLAYER_COMP_STATS = {
   1: [ // 손흥민
     { name:'MLS 정규리그',     icon:'🇺🇸', goals:0, assists:0, matches:8 },
@@ -1945,6 +1979,17 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
     return { main, sub };
   };
 
+  // 이적 기념 히어로: 기간 내 + 라이브 경기가 없을 때만 히어로를 차지한다.
+  const isLiveHighlight = highlightData?.priority === 1;
+  const spotlight = React.useMemo(
+    () => (isLiveHighlight ? null : activeTransferSpotlight(now.getTime())),
+    [isLiveHighlight, now]
+  );
+  const spotlightPlayer = React.useMemo(
+    () => (spotlight ? ALL_PLAYERS.find(p => p.name === spotlight.player) || null : null),
+    [spotlight]
+  );
+
   const isFinishedHighlight = highlightData?.priority === 4;
   // 히어로는 라이브(1)/종료(4) 하이라이트가 있을 때만. 예정(5)·없음이면 컴팩트 헤더만 노출.
   const showHero = !!highlightData && (highlightData.priority === 1 || highlightData.priority === 4);
@@ -2009,8 +2054,29 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
         </div>
       </div>
 
-      {/* ── HIGHLIGHT CARD: 라이브/종료만 노출. 예정·없음이면 컴팩트 헤더(JUMO+벨)만 ── */}
-      {!showHero ? (
+      {/* ── HIGHLIGHT CARD: 라이브/종료만 노출. 예정·없음이면 컴팩트 헤더(JUMO+벨)만.
+             단, 이적 기념 기간이면(라이브 경기가 없을 때) 이적 히어로가 자리를 차지한다. ── */}
+      {spotlight ? (
+        <div onClick={() => spotlightPlayer && onPlayer(spotlightPlayer)}
+             style={{ position:'relative', height:260, overflow:'hidden', marginBottom:0, background:'#111', cursor: spotlightPlayer ? 'pointer' : 'default' }}>
+          <img src={spotlight.image} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'50% 20%', animation:'fadeIn 0.7s ease' }}/>
+          <div style={{ position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.18) 26%, rgba(0,0,0,0.72) 100%)' }}/>
+          <div style={{ position:'absolute', top:12, left:20, right:20, display:'flex', justifyContent:'space-between', alignItems:'center', zIndex:2 }}>
+            <span style={{ fontSize:15, fontWeight:900, color:'#fff', letterSpacing:2, textTransform:'uppercase' }}>JUMO</span>
+            <button onClick={e => { e.stopPropagation(); onNotif(); }} style={{ ...LG.base, ...LG.circle, color:'rgba(255,255,255,0.85)', position:'relative', display: nativeTabBar ? 'none' : 'flex' }}>
+              <svg width="18" height="18" viewBox="0 0 22 22" fill="none"><path d="M11 2a7 7 0 00-7 7v4l-1.5 2.5h17L18 13V9a7 7 0 00-7-7z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" fill="none"/><path d="M9 18.5a2 2 0 004 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+              {unreadCount > 0 && <span style={{ position:'absolute', top:-2, right:-2, minWidth:16, height:16, padding:'0 4px', borderRadius:8, background:'#e63030', color:'#fff', fontSize:9, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 0 0 1.5px rgba(0,0,0,0.4)' }}>{unreadCount > 99 ? '99+' : unreadCount}</span>}
+            </button>
+          </div>
+          <div style={{ position:'absolute', bottom:20, left:20, right:20, zIndex:2 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
+              <span style={{ fontSize:10, fontWeight:800, color:'#000', background:'var(--acc)', borderRadius:6, padding:'3px 7px', letterSpacing:0.4, lineHeight:1 }}>{spotlight.badge}</span>
+            </div>
+            <div style={{ fontSize:26, fontWeight:900, color:'#fff', lineHeight:1.15, letterSpacing:-0.5 }}>{spotlight.headline}</div>
+            <div style={{ fontSize:12, color:'rgba(255,255,255,0.72)', marginTop:9 }}>{spotlight.sub}</div>
+          </div>
+        </div>
+      ) : !showHero ? (
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'calc(env(safe-area-inset-top) + 14px) 20px 4px' }}>
           <span style={{ fontSize:17, fontWeight:900, color:'var(--text)', letterSpacing:1.5 }}>JUMO</span>
           <button onClick={onNotif} style={{ ...LG.base, ...LG.circle, color:'var(--text)', position:'relative', display: nativeTabBar ? 'none' : 'flex' }}>
