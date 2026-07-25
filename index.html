@@ -1952,9 +1952,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
 
   // landscape image map: Korean name → filename in image/landscape/
   const LANDSCAPE_MAP = {
-    // 이강인: 2026-07 이적으로 번들 landscape 사진(PSG 유니폼)이 낡음 → 항목 제외.
-    // 히어로는 그라데이션 + 팀 엠블럼 워터마크 폴백으로 렌더된다.
-    '손흥민': 'heungmin.jpg', '김민재': 'minjae.jpeg',
+    '손흥민': 'heungmin.jpg', '이강인': 'kangin.png', '김민재': 'minjae.jpeg',
     '조규성': 'guesung.jpeg', '황희찬': 'heechan.jpeg', '황인범': 'inbeom.png',
     '김하성': 'haseong.jpeg', '이정후': 'junghoo.jpeg', '김혜성': 'hyesung.jpeg',
     '오현규': 'hyeongyu.jpeg', '양현준': 'hyunjun.jpeg',
@@ -2065,7 +2063,9 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
                   {highlightMatch?.home?.logo && <img src={highlightMatch.home.logo} alt="" style={{ position:'absolute', right:-30, top:'50%', transform:'translateY(-50%)', width:200, height:200, objectFit:'contain', opacity:0.08, filter:'blur(2px)' }}/>}
                 </div>
             }
-            <div style={{ position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.65) 100%)' }}/>
+            {/* 상단에도 스크림: 밝은 배경 이미지(예: 구단 공식 발표 그래픽)에서
+                'LIVE NOW'·'경기 종료' 라벨이 묻히지 않게 한다. 중간은 밝게 유지. */}
+            <div style={{ position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.18) 26%, rgba(0,0,0,0.72) 100%)' }}/>
             <div style={{ position:'absolute', top:12, left:20, right:20, display:'flex', justifyContent:'space-between', alignItems:'center', zIndex:2 }}>
               <span style={{ fontSize:15, fontWeight:900, color:'#fff', letterSpacing:2, textTransform:'uppercase' }}>JUMO</span>
               <button onClick={e => { e.stopPropagation(); onNotif(); }} style={{ ...LG.base, ...LG.circle, color:'rgba(255,255,255,0.85)', position:'relative', display: nativeTabBar ? 'none' : 'flex' }}>
@@ -2095,7 +2095,8 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
               {highlightMatch?.home?.logo && <img src={highlightMatch.home.logo} alt="" style={{ position:'absolute', right:-30, top:'50%', transform:'translateY(-50%)', width:200, height:200, objectFit:'contain', opacity:0.08, filter:'blur(2px)' }}/>}
             </div>
         }
-        <div style={{ position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.65) 100%)' }}/>
+        {/* 상단 스크림 — 밝은 배경 이미지에서도 상단 라벨이 읽히도록(위와 동일 규칙) */}
+        <div style={{ position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.18) 26%, rgba(0,0,0,0.72) 100%)' }}/>
         <div style={{ position:'absolute', top:12, left:20, right:20, display:'flex', justifyContent:'space-between', alignItems:'center', zIndex:2 }}>
           <span style={{ fontSize:15, fontWeight:900, color:'#fff', letterSpacing:2, textTransform:'uppercase' }}>JUMO</span>
           <div style={{ display:'flex', gap:8 }}>
@@ -3598,8 +3599,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
       <div style={{ position:'relative', height:320, overflow:'hidden' }}>
         {(() => {
           const LANDSCAPE = {
-            // 이강인 제외 — 이적으로 번들 사진이 낡음(PlayerPhoto 폴백 사용)
-            '손흥민':'heungmin.jpg','김민재':'minjae.jpeg',
+            '손흥민':'heungmin.jpg','이강인':'kangin.png','김민재':'minjae.jpeg',
             '조규성':'guesung.jpeg','황희찬':'heechan.jpeg','황인범':'inbeom.png',
             '김하성':'haseong.jpeg','이정후':'junghoo.jpeg','김혜성':'hyesung.jpeg',
             '오현규':'hyeongyu.jpeg','양현준':'hyunjun.jpeg',
