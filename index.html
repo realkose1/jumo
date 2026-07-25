@@ -1980,12 +1980,12 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
     return { main, sub };
   };
 
-  // 이적 기념 히어로: 기간 내 + 라이브 경기가 없을 때만 히어로를 차지한다.
-  const isLiveHighlight = highlightData?.priority === 1;
-  const spotlight = React.useMemo(
-    () => (isLiveHighlight ? null : activeTransferSpotlight(now.getTime())),
-    [isLiveHighlight, now]
-  );
+  // 이적 기념 히어로: 기간 내에는 히어로를 고정한다.
+  // 처음엔 '라이브 경기가 있으면 양보'하게 했는데, 경기 데이터가 단계적으로
+  // 들어오는 동안(마이너 판정·출전 정보가 뒤늦게 반영) 하이라이트 후보가 바뀌며
+  // 히어로가 스포트라이트↔경기로 왕복해 깜빡였다. 라이브 경기는 바로 아래
+  // '오늘의 경기'와 일정 탭에서 볼 수 있으니, 기간 중엔 고정하는 편이 낫다.
+  const spotlight = React.useMemo(() => activeTransferSpotlight(now.getTime()), [now]);
   const spotlightPlayer = React.useMemo(
     () => (spotlight ? ALL_PLAYERS.find(p => p.name === spotlight.player) || null : null),
     [spotlight]
