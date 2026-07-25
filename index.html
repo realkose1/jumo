@@ -540,10 +540,12 @@ const PLAYERS = ALL_PLAYERS.slice(0, 5);
 // ─── PLAYER EXTRA DATA ────────────────────────────────────────
 // Per-competition stats for 2025-26 season
 // ─── TRANSFER SPOTLIGHT (이적 기념 히어로) ─────────────────────
-// 지정 기간 동안 홈 히어로에 이적 발표 이미지를 띄운다. 앞으로 이적이 생기면
-// 아래 배열에 한 줄만 추가하면 된다(이미지는 image/landscape/에 넣는다).
-//   from/to: KST 기준 시각. to는 미포함(다음날 00:00을 주면 그날 하루 종일).
+// 이적 발표일부터 '그 다음 날이 끝날 때까지' 홈 히어로에 발표 이미지를 띄운다.
+// 앞으로 이적이 생기면 아래 배열에 한 줄만 추가하면 된다 —
+//   announced 에 KST 기준 발표일(YYYY-MM-DD)만 쓰면 기간은 자동 계산된다.
+//   이미지는 image/landscape/ 에 넣는다.
 // 라이브 경기가 있으면 라이브 히어로가 우선한다 — 실시간 소식이 더 급하므로.
+const SPOTLIGHT_DAYS = 2;   // 발표일 + 다음날
 const TRANSFER_SPOTLIGHTS = [
   {
     player: '이강인',
@@ -551,13 +553,12 @@ const TRANSFER_SPOTLIGHTS = [
     badge: '이적 확정',
     headline: '이강인, 아틀레티코 마드리드로',
     sub: '라리가 · 등번호 7번',
-    from: '2026-07-25T00:00:00+09:00',
-    to:   '2026-07-26T00:00:00+09:00',
+    announced: '2026-07-25',
   },
 ];
 const activeTransferSpotlight = (nowMs) => TRANSFER_SPOTLIGHTS.find(s => {
-  const a = new Date(s.from).getTime(), b = new Date(s.to).getTime();
-  return nowMs >= a && nowMs < b;
+  const start = new Date(`${s.announced}T00:00:00+09:00`).getTime();   // KST 자정
+  return nowMs >= start && nowMs < start + SPOTLIGHT_DAYS * 86400000;
 }) || null;
 
 const PLAYER_COMP_STATS = {
