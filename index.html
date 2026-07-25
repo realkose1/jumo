@@ -5955,7 +5955,26 @@ function App() {
         // 제한 때문에 요청을 분산시켜 수 초가 걸리는데, 그때까지 '오늘의 경기'가
         // 비어 보이던 문제가 있었다(예전엔 모든 보강이 끝난 뒤 한 번만 반영).
         // 보강이 끝나면 아래에서 같은 배열을 다시 반영한다.
-        setLiveMatches([...koreanMatches]);
+        //
+        // ⚠ 단, 이 기본 목록의 출전 정보는 아직 '출전 예상'(초기값)이다. 그대로
+        // 덮어쓰면 이전 폴링에서 이미 확정된 정보('미출전'·'풀타임'·스탯 라인 등)가
+        // 되돌아가, 라이브 경기 카드가 '출전 예상 65%'로 보이거나 조건에 걸려
+        // 나타났다 사라졌다 했다. 같은 경기(id)에 확정 정보가 있으면 유지한다.
+        setLiveMatches(prev => {
+          if (!prev.length) return [...koreanMatches];
+          const prevById = new Map(prev.map(m => [m.id, m]));
+          return koreanMatches.map(m => {
+            const old = prevById.get(m.id);
+            const oldEv = old?.koreanPlayer?.event;
+            const keepOld = oldEv && oldEv !== '출전 예상';
+            return keepOld
+              ? { ...m,
+                  koreanPlayer: old.koreanPlayer,
+                  koreanPlayers: old.koreanPlayers || m.koreanPlayers,
+                  events: (old.events && old.events.length) ? old.events : m.events }
+              : m;
+          });
+        });
         setIsInitialLoad(false);   // 스켈레톤 → 실제 목록으로 즉시 전환
 
         // ── nameMatch helper ───────────────────────────────────────────────
