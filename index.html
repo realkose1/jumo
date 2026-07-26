@@ -4876,12 +4876,12 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames }) {
         ).sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
 
         if (!cancelled) {
-          // 풀을 넉넉히 남겨두고(최신순 120개) 회차마다 40개를 다르게 큐레이션한다.
-          const pool = unique.slice(0, 120).map(item => {
+          // 풀을 넉넉히 남겨둔다(최신순 120개). 실제 큐레이션은 팔로우·종목 필터를
+          // 거친 뒤 렌더 단계에서 회차별로 수행한다.
+          setArticles(unique.slice(0, 120).map(item => {
             const meta = detectCategory(item);
             return { ...item, category: meta.category, sportType: meta.sportType };
-          });
-          setArticles(curateNews(pool, refetchTrigger, 40));
+          }));
         }
       } catch {
         if (!cancelled) setError('프록시 서버에 연결할 수 없습니다');
@@ -4903,10 +4903,16 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames }) {
   // CONTENT, not the fetched-for tag — Naver returns loosely-matched articles, so
   // the tag is unreliable. followedNames undefined → show all.
   const followedArr = followedNames ? [...followedNames] : null;
-  const allowedArticles = articles.filter(a =>
-    enabledSportTypes.has(a.sportType) &&
-    (!followedArr || followedArr.some(name => `${a.title} ${a.description || ''}`.includes(name)))
-  );
+  // 큐레이션은 팔로우·종목 필터를 통과한 기사에 대해 마지막에 수행한다.
+  // (필터 전에 40개로 줄이면, 그 중 필터를 통과한 것만 남아 회차마다 노출 수가
+  //  들쭉날쭉해진다 — 실측에서 29건 → 25건으로 줄었다.)
+  const allowedArticles = React.useMemo(() => {
+    const pool = articles.filter(a =>
+      enabledSportTypes.has(a.sportType) &&
+      (!followedArr || followedArr.some(name => `${a.title} ${a.description || ''}`.includes(name)))
+    );
+    return curateNews(pool, refetchTrigger, 40);
+  }, [articles, refetchTrigger, enabledSportTypes, followedNames]);
   const visibleArticles = category === '전체'
     ? allowedArticles
     : allowedArticles.filter(a => a.category === category);
