@@ -298,9 +298,9 @@ const KOREAN_PLAYERS = {
   'Wolves': { name: '황희찬', nameEn: 'Hwang Hee-chan', number: 11, position: '공격수' },
   'Wolverhampton Wanderers': { name: '황희찬', nameEn: 'Hwang Hee-chan', number: 11, position: '공격수' },
   'Wolverhampton': { name: '황희찬', nameEn: 'Hwang Hee-chan', number: 11, position: '공격수' },
-  // 조규성 — FC Midtjylland (Danish Superliga)
-  'Midtjylland': { name: '조규성', nameEn: 'Cho Gue-sung', number: 9, position: '공격수' },
-  'FC Midtjylland': { name: '조규성', nameEn: 'Cho Gue-sung', number: 9, position: '공격수' },
+  // 조규성 — FC Midtjylland (Danish Superliga). 등번호 10 (라인업 확인)
+  'Midtjylland': { name: '조규성', nameEn: 'Cho Gue-sung', number: 10, position: '공격수' },
+  'FC Midtjylland': { name: '조규성', nameEn: 'Cho Gue-sung', number: 10, position: '공격수' },
   // 황인범 — FC Porto (Primeira Liga), 2026-07 이적
   'FC Porto': { name: '황인범', nameEn: 'Hwang In-beom', number: 16, position: '미드필더' },
   'Porto': { name: '황인범', nameEn: 'Hwang In-beom', number: 16, position: '미드필더' },
@@ -338,6 +338,21 @@ const KOREAN_PLAYERS = {
   'Crvena zvezda': { name: '설영우', nameEn: 'Seol Young-woo', number: 26, position: '풀백' },
   'Red Star Belgrade': { name: '설영우', nameEn: 'Seol Young-woo', number: 26, position: '풀백' },
 };
+
+// KOREAN_PLAYERS는 팀명 → 선수 1명 구조라 같은 팀에 한국 선수가 둘 이상이면
+// 한 명만 잡힌다(미트윌란: 조규성 + 이한범). 추가 선수는 여기에 둔다.
+const KOREAN_PLAYERS_EXTRA = {
+  'Midtjylland':    [{ name: '이한범', nameEn: 'Lee Han-Beom', number: 3, position: '센터백' }],
+  'FC Midtjylland': [{ name: '이한범', nameEn: 'Lee Han-Beom', number: 3, position: '센터백' }],
+};
+
+// 팀명으로 그 팀의 한국 선수 전원을 돌려준다(0~N명). team 코드는 카드·스코어 비교에
+// 쓰이므로 함께 붙인다.
+function koreansForTeam(teamName, teamCode) {
+  const primary = KOREAN_PLAYERS[teamName];
+  const extras = KOREAN_PLAYERS_EXTRA[teamName] || [];
+  return [...(primary ? [primary] : []), ...extras].map(p => ({ ...p, team: teamCode }));
+}
 
 // ─── KOREAN BROADCAST RIGHTS (2025-26 시즌) ──────────────────
 // Keys matched against the match's tournament/competition name (m.competition).
@@ -533,6 +548,7 @@ const ALL_PLAYERS = [
   { id: 6,  name: '황희찬',  nameEn: 'Hwang Hee-chan',  number: 11, sport: '축구',   team: 'Wolves',     league: 'EPL',        position: '공격수',   nation: '🇰🇷', goals: 3,  assists: 1,  matches: 27, rating: 6.5, startRate: 65, age: 30, birth: '1996.01.26', height: '177cm', espnLeague: 'eng.1',  espnId: 237224, apiFootballId: 24888 },
   { id: 7,  name: '황인범',  nameEn: 'Hwang In-beom',   number: 16, sport: '축구',   team: 'Porto',      league: 'Primeira Liga', position: '미드필더', nation: '🇰🇷', goals: 1,  assists: 4,  matches: 24, rating: 7.1, startRate: 50, age: 29, birth: '1996.09.20', height: '177cm', espnLeague: 'por.1',  espnId: 280061, apiFootballId: 2901 },
   { id: 8,  name: '조규성',  nameEn: 'Cho Gue-sung',    number: 9,  sport: '축구',   team: 'Midtjylland',league: 'Superliga',  position: '공격수',   nation: '🇰🇷', goals: 7,  assists: 1,  matches: 38, rating: 6.8, startRate: 70, age: 28, birth: '1998.01.25', height: '190cm', espnLeague: 'den.1',  espnId: 303464, apiFootballId: 34211 },
+  { id: 25, name: '이한범',  nameEn: 'Lee Han-Beom',   number: 3,  sport: '축구',   team: 'Midtjylland',league: 'Superliga',  position: '센터백',   nation: '🇰🇷', goals: 0,  assists: 1,  matches: 43, rating: 6.9, startRate: 85, age: 24, birth: '2002.06.17', height: '190cm', espnLeague: 'den.1',  apiFootballId: 237218 },
   { id: 19, name: '오현규',  nameEn: 'Oh Hyeon-gyu',    number: 19, sport: '축구',   team: 'Besiktas',   league: 'Süper Lig',  position: '공격수',   nation: '🇰🇷', goals: 8,  assists: 1,  matches: 13, rating: 7.2, startRate: 85, age: 25, birth: '2001.04.12', height: '181cm', espnLeague: 'tur.1',  espnId: 302434, apiFootballId: 34710 },
   { id: 20, name: '양현준',  nameEn: 'Yang Hyun-jun',   number: 77, sport: '축구',   team: 'Celtic',     league: 'SPFL',       position: '공격수',   nation: '🇰🇷', goals: 9,  assists: 2,  matches: 42, rating: 7.0, startRate: 70, age: 23, birth: '2002.06.25', height: '172cm', espnLeague: 'sco.1',  espnId: 350711, apiFootballId: 304958 },
   { id: 21, name: '백승호',  nameEn: 'Paik Seung-ho',   number: 17, sport: '축구',   team: 'Birmingham', league: 'Championship', position: '미드필더', nation: '🇰🇷', goals: 4,  assists: 4,  matches: 42, rating: 7.0, startRate: 95, age: 29, birth: '1997.03.17', height: '183cm', espnLeague: 'eng.2', apiFootballId: 2909 },
@@ -871,7 +887,7 @@ function TeamBadge({ code, size=36, logo }) {
 
 function PlayerPhoto({ player, style={}, tint='var(--bg)' }) {
   const num = player.number;
-  const imageMap = { '손흥민': 'heungmin.png', '이강인': 'kangin.png', '김민재': 'minjae.png', '조규성': 'guesung.png', '황희찬': 'heechan.png', '황인범': 'inbeom.png', '김하성': 'haseong.png', '이정후': 'junghoo.png', '김혜성': 'hyeseong.png', '오현규': 'hyungyu.png', '양현준': 'hyunjun.png', '백승호': 'seungho.webp', '배준호': 'junho.webp', '엄지성': 'jisung.webp', '설영우': 'youngwoo.webp' };
+  const imageMap = { '손흥민': 'heungmin.png', '이강인': 'kangin.png', '김민재': 'minjae.png', '조규성': 'guesung.png', '황희찬': 'heechan.png', '황인범': 'inbeom.png', '김하성': 'haseong.png', '이정후': 'junghoo.png', '김혜성': 'hyeseong.png', '오현규': 'hyungyu.png', '양현준': 'hyunjun.png', '백승호': 'seungho.webp', '배준호': 'junho.webp', '엄지성': 'jisung.webp', '설영우': 'youngwoo.webp', '이한범': 'hanbeom.png' };
   // For full-body source images, zoom into the face area
   const PHOTO_ZOOM = {
     '백승호': { scale: 2.75, originX: '45%', originY: '16%' },
@@ -4594,7 +4610,7 @@ const newsImageCache = {};
 const NEWS_PLAYER_IMG = {
   '손흥민': 'image/heungmin.png', '이강인': 'image/kangin.png',
   '김민재': 'image/minjae.png',   '황희찬': 'image/heechan.png',
-  '황인범': 'image/inbeom.png',   '조규성': 'image/guesung.png',
+  '황인범': 'image/inbeom.png',   '이한범': 'image/hanbeom.png',   '조규성': 'image/guesung.png',
   '김하성': 'image/haseong.png',  '이정후': 'image/junghoo.png',
   '김혜성': 'image/hyeseong.png', '오현규': 'image/hyungyu.png',
   '양현준': 'image/hyunjun.png',
@@ -6935,26 +6951,25 @@ function App() {
 
     // Match against KOREAN_PLAYERS map. Use ONLY the full team name to avoid
     // false positives like Wolfsberg→WOL→황희찬 from the 3-letter slice.
-    const homeKoreanInfo = KOREAN_PLAYERS[homeTeamName] || null;
-    const awayKoreanInfo = KOREAN_PLAYERS[awayTeamName] || null;
-    if (!homeKoreanInfo && !awayKoreanInfo) return null;
+    const homeHasKo = !!(KOREAN_PLAYERS[homeTeamName] || KOREAN_PLAYERS_EXTRA[homeTeamName]);
+    const awayHasKo = !!(KOREAN_PLAYERS[awayTeamName] || KOREAN_PLAYERS_EXTRA[awayTeamName]);
+    if (!homeHasKo && !awayHasKo) return null;
 
     // Use player's canonical team abbrev from ALL_PLAYERS for both card display
     // and home.code/away.code comparisons (which key off Korean player's team).
-    let homeCode = homeShort, awayCode = awayShort;
-    if (homeKoreanInfo) {
-      const info = ALL_PLAYERS.find(p => p.name === homeKoreanInfo.name);
-      if (info?.team) homeCode = info.team;
-    }
-    if (awayKoreanInfo) {
-      const info = ALL_PLAYERS.find(p => p.name === awayKoreanInfo.name);
-      if (info?.team) awayCode = info.team;
-    }
-    let koreanPlayer = homeKoreanInfo ? { ...homeKoreanInfo, team: homeCode } : null;
-    let koreanPlayerAway = awayKoreanInfo ? { ...awayKoreanInfo, team: awayCode } : null;
-    if (!koreanPlayer && koreanPlayerAway) { koreanPlayer = koreanPlayerAway; koreanPlayerAway = null; }
-    const isKoreanDerby = !!koreanPlayerAway;
-    const koreanPlayers = isKoreanDerby ? [koreanPlayer, koreanPlayerAway] : [koreanPlayer];
+    const codeFor = (teamName, fallback) => {
+      const first = KOREAN_PLAYERS[teamName] || (KOREAN_PLAYERS_EXTRA[teamName] || [])[0];
+      const info = first && ALL_PLAYERS.find(p => p.name === first.name);
+      return info?.team || fallback;
+    };
+    const homeCode = homeHasKo ? codeFor(homeTeamName, homeShort) : homeShort;
+    const awayCode = awayHasKo ? codeFor(awayTeamName, awayShort) : awayShort;
+    // 같은 팀에 한국 선수가 둘 이상일 수 있다(미트윌란: 조규성+이한범).
+    const homeKoreans = koreansForTeam(homeTeamName, homeCode);
+    const awayKoreans = koreansForTeam(awayTeamName, awayCode);
+    const koreanPlayers = [...homeKoreans, ...awayKoreans];
+    const koreanPlayer = koreanPlayers[0];
+    const isKoreanDerby = homeKoreans.length > 0 && awayKoreans.length > 0;
 
     // API-Football status codes
     const sShort = fx.fixture.status?.short || 'NS';
@@ -7049,21 +7064,19 @@ function App() {
     const awayVariations = [awayTeam, awayAbbr, away.team.name, away.team.shortDisplayName].filter(Boolean);
 
 
+    // 같은 팀에 한국 선수가 둘 이상일 수 있어(미트윌란: 조규성+이한범) 전원 수집한다.
+    let espnKoreans = [];
     for (const variation of homeVariations) {
-      if (KOREAN_PLAYERS[variation]) {
-        koreanPlayer = { ...KOREAN_PLAYERS[variation], team: homeAbbr };
-        break;
-      }
+      const found = koreansForTeam(variation, homeAbbr);
+      if (found.length) { espnKoreans = found; break; }
     }
-
-    if (!koreanPlayer) {
+    if (!espnKoreans.length) {
       for (const variation of awayVariations) {
-        if (KOREAN_PLAYERS[variation]) {
-          koreanPlayer = { ...KOREAN_PLAYERS[variation], team: awayAbbr };
-          break;
-        }
+        const found = koreansForTeam(variation, awayAbbr);
+        if (found.length) { espnKoreans = found; break; }
       }
     }
+    koreanPlayer = espnKoreans[0] || null;
 
     // Check lineup confirmation only 1 hour before match start
     const matchDate = new Date(event.date);
@@ -7255,6 +7268,8 @@ function App() {
       home: { name: homeTeam, code: home.team.abbreviation, score: parseInt(home.score) || 0, logo: homeLogo },
       away: { name: awayTeam, code: away.team.abbreviation, score: parseInt(away.score) || 0, logo: awayLogo },
       koreanPlayer: koreanPlayer ? { ...koreanPlayer, event: playerEventText, ...playerStats } : null,
+      // 같은 팀 복수 선수(미트윌란 등)도 일정 탭 등에서 함께 보이도록 전원 실어 보낸다.
+      koreanPlayers: espnKoreans.length ? espnKoreans.map(kp => ({ ...kp, event: playerEventText, ...playerStats })) : undefined,
       competition: event.competitions[0].league?.name || '',
       competitionLogo: event.competitions[0].league?.logos?.[0]?.href || null,
       venue: event.competitions[0].venue?.fullName || '',
