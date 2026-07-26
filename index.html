@@ -440,6 +440,13 @@ function koreanIsMinorLeaguer(m) {
   if (!(m.sport || '').includes('MLB')) return false; // his minor-league games should show
   return ALL_PLAYERS.find(p => p.name === kp.name)?.injury?.kind === 'minors';
 }
+// 카드 우측 상단 배지는 폭이 좁다. 야구 스탯 라인이 길면(예: '3타수 2안타 1홈런
+// 3타점') 선수 이름이 줄바꿈되고, 홈런·타점은 카드 안쪽 알약으로 이미 보여주고
+// 있어 중복이다 → 배지에는 '몇타수 몇안타'까지만 남긴다.
+function compactBadgeEvent(ev) {
+  const m = /^(\d+타수\s*\d+안타)/.exec(ev || '');
+  return m ? m[1] : (ev || '');
+}
 function formatExpectedEvent(kp, allMatches) {
   if (!kp) return '';
   if (kp.event === '출전 예상') {
@@ -1370,7 +1377,7 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
               borderRadius:6, padding:'5px 8px', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center'
             }}>
               <span style={{ fontSize:10, fontWeight:600, color: isLive ? 'var(--acc)' : 'var(--text2)', whiteSpace:'nowrap', lineHeight:1 }}>
-                {formatExpectedEvent(m.koreanPlayer, allMatches)}
+                {compactBadgeEvent(formatExpectedEvent(m.koreanPlayer, allMatches))}
               </span>
             </div>
           )}
@@ -5607,6 +5614,9 @@ function App() {
   const [liveMatches, setLiveMatches] = React.useState([]);
   const [apiLoading, setApiLoading] = React.useState(true); // Start with true for initial load
   const [isInitialLoad, setIsInitialLoad] = React.useState(true);
+  // 마지막으로 경기 목록을 화면에 반영한 시각. 앱 복귀 시 데이터가 얼마나 낡았는지
+  // 판단해 스켈레톤을 다시 띄울지 결정한다.
+  const lastPublishAtRef = React.useRef(0);
   const [notifications, setNotifications] = React.useState([]);
   // Received push notifications, persisted so their content shows in the in-app
   // notification center (the match-derived `notifications` get overwritten on
@@ -5976,6 +5986,7 @@ function App() {
           });
         });
         setIsInitialLoad(false);   // 스켈레톤 → 실제 목록으로 즉시 전환
+        lastPublishAtRef.current = Date.now();
 
         // ── nameMatch helper ───────────────────────────────────────────────
         const nameMatch = (sfName, nameEn) => {
@@ -6421,6 +6432,7 @@ function App() {
         clearTimeout(safetyTimer);
         setApiLoading(false);
         setIsInitialLoad(false);
+        lastPublishAtRef.current = Date.now();   // 복귀 시 낡음 판단 기준
       }
   }, []);
 
@@ -6701,9 +6713,15 @@ function App() {
     // iOS는 앱을 메모리에 유지하므로 '앱을 다시 실행'해도 실제로는 이전 WebView가
     // 복원된다 → 스켈레톤 없이 옛 화면이 그대로 보이고(캐싱처럼 느껴지는 이유),
     // 백그라운드에선 폴링 타이머도 지연돼 한동안 낡은 정보가 남아 있었다.
+    const STALE_MS = 60 * 1000;
     const onVisible = () => {
       if (cancelled || document.visibilityState !== 'visible') return;
       clearTimeout(timeoutId);   // 예약된 폴링과 중복 실행 방지
+      // 오래 백그라운드에 있었다면 화면에 남은 옛 데이터를 그대로 두지 않고
+      // 스켈레톤부터 다시 보여준다. isInitialLoad는 첫 로드 후 계속 false라
+      // 그냥 두면 낡은 화면이 갱신될 때까지 그대로 노출된다.
+      // (잠깐 앱을 전환한 정도면 깜빡임 없이 조용히 갱신한다.)
+      if (Date.now() - lastPublishAtRef.current > STALE_MS) setIsInitialLoad(true);
       tick();
     };
     document.addEventListener('visibilitychange', onVisible);
