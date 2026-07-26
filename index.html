@@ -301,9 +301,9 @@ const KOREAN_PLAYERS = {
   // 조규성 — FC Midtjylland (Danish Superliga)
   'Midtjylland': { name: '조규성', nameEn: 'Cho Gue-sung', number: 9, position: '공격수' },
   'FC Midtjylland': { name: '조규성', nameEn: 'Cho Gue-sung', number: 9, position: '공격수' },
-  // 황인범 — Feyenoord (Eredivisie)
-  'Feyenoord': { name: '황인범', nameEn: 'Hwang In-beom', number: 5, position: '미드필더' },
-  'Feyenoord Rotterdam': { name: '황인범', nameEn: 'Hwang In-beom', number: 5, position: '미드필더' },
+  // 황인범 — FC Porto (Primeira Liga), 2026-07 이적
+  'FC Porto': { name: '황인범', nameEn: 'Hwang In-beom', number: 5, position: '미드필더' },
+  'Porto': { name: '황인범', nameEn: 'Hwang In-beom', number: 5, position: '미드필더' },
   // 김하성 — Atlanta Braves (MLB)
   // 김하성 — 2026-07 기준 애틀랜타 브레이브스 산하(AAA 귀넷 스트라이퍼스).
   // statsapi currentTeam 확인: Gwinnett Stripers / parentOrgId 144 = Atlanta Braves.
@@ -367,6 +367,7 @@ const BROADCASTERS = {
   'MLS': ['Apple TV', '스포티비'],
   // 국내 중계 미확인 → 배지 미표시
   'Eredivisie': [],
+  'Primeira Liga': [],
   'Scottish Premiership': [],
   'Süper Lig': [],
   'Super Lig': [],
@@ -530,7 +531,7 @@ const ALL_PLAYERS = [
   { id: 2,  name: '이강인',  nameEn: 'Lee Kang-in',     number: 7,  sport: '축구',   team: 'Atletico',   league: 'La Liga',    position: '미드필더', nation: '🇰🇷', goals: 4,  assists: 5,  matches: 37, rating: 7.4, startRate: 60, age: 25, birth: '2001.02.19', height: '173cm', espnLeague: 'esp.1',  espnId: 274197, apiFootballId: 927 },
   { id: 3,  name: '김민재',  nameEn: 'Kim Min-jae',     number: 3,  sport: '축구',   team: 'Bayern',     league: 'Bundesliga', position: '센터백',   nation: '🇰🇷', goals: 1,  assists: 1,  matches: 35, rating: 7.4, startRate: 65, age: 29, birth: '1996.11.15', height: '190cm', espnLeague: 'ger.1',  espnId: 157688, apiFootballId: 2897 },
   { id: 6,  name: '황희찬',  nameEn: 'Hwang Hee-chan',  number: 11, sport: '축구',   team: 'Wolves',     league: 'EPL',        position: '공격수',   nation: '🇰🇷', goals: 3,  assists: 1,  matches: 27, rating: 6.5, startRate: 65, age: 30, birth: '1996.01.26', height: '177cm', espnLeague: 'eng.1',  espnId: 237224, apiFootballId: 24888 },
-  { id: 7,  name: '황인범',  nameEn: 'Hwang In-beom',   number: 5,  sport: '축구',   team: 'Feyenoord',  league: 'Eredivisie', position: '미드필더', nation: '🇰🇷', goals: 1,  assists: 4,  matches: 24, rating: 7.1, startRate: 50, age: 29, birth: '1996.09.20', height: '177cm', espnLeague: 'ned.1',  espnId: 280061, apiFootballId: 2901 },
+  { id: 7,  name: '황인범',  nameEn: 'Hwang In-beom',   number: 5,  sport: '축구',   team: 'Porto',      league: 'Primeira Liga', position: '미드필더', nation: '🇰🇷', goals: 1,  assists: 4,  matches: 24, rating: 7.1, startRate: 50, age: 29, birth: '1996.09.20', height: '177cm', espnLeague: 'por.1',  espnId: 280061, apiFootballId: 2901 },
   { id: 8,  name: '조규성',  nameEn: 'Cho Gue-sung',    number: 9,  sport: '축구',   team: 'Midtjylland',league: 'Superliga',  position: '공격수',   nation: '🇰🇷', goals: 7,  assists: 1,  matches: 38, rating: 6.8, startRate: 70, age: 28, birth: '1998.01.25', height: '190cm', espnLeague: 'den.1',  espnId: 303464, apiFootballId: 34211 },
   { id: 19, name: '오현규',  nameEn: 'Oh Hyeon-gyu',    number: 19, sport: '축구',   team: 'Besiktas',   league: 'Süper Lig',  position: '공격수',   nation: '🇰🇷', goals: 8,  assists: 1,  matches: 13, rating: 7.2, startRate: 85, age: 25, birth: '2001.04.12', height: '181cm', espnLeague: 'tur.1',  espnId: 302434, apiFootballId: 34710 },
   { id: 20, name: '양현준',  nameEn: 'Yang Hyun-jun',   number: 77, sport: '축구',   team: 'Celtic',     league: 'SPFL',       position: '공격수',   nation: '🇰🇷', goals: 9,  assists: 2,  matches: 42, rating: 7.0, startRate: 70, age: 23, birth: '2002.06.25', height: '172cm', espnLeague: 'sco.1',  espnId: 350711, apiFootballId: 304958 },
@@ -694,7 +695,8 @@ const PLAYER_EXTRA = {
     form: [7.0, 7.4, 7.2, 6.8, 7.5, 7.1, 7.3],
     recentMatches: [],
     career: [
-      { year:'2024–',    team:'Feyenoord',          league:'에레디비시',  flag:'🇳🇱' },
+      { year:'2026–',    team:'FC Porto',           league:'프리메이라리가', flag:'🇵🇹' },
+      { year:'2024–26',  team:'Feyenoord',          league:'에레디비시',  flag:'🇳🇱' },
       { year:'2022–24',  team:'Crvena Zvezda',      league:'세르비아 SL', flag:'🇷🇸' },
       { year:'2022',     team:'Olympiacos (임대)',   league:'그리스',      flag:'🇬🇷' },
       { year:'2021–22',  team:'Rubin Kazan',        league:'러시아 PL',   flag:'🇷🇺' },
@@ -4344,7 +4346,7 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
     '이강인':'https://a.espncdn.com/i/teamlogos/soccer/500/1068.png',
     '김민재':'https://a.espncdn.com/i/teamlogos/soccer/500/132.png',
     '황희찬':'https://a.espncdn.com/i/teamlogos/soccer/500/380.png',
-    '황인범':'https://a.espncdn.com/i/teamlogos/soccer/500/142.png',
+    '황인범':'https://a.espncdn.com/i/teamlogos/soccer/500/437.png',
     '조규성':'https://a.espncdn.com/i/teamlogos/soccer/500/304.png',
     '오현규':'https://a.espncdn.com/i/teamlogos/soccer/500/113.png',
     '양현준':'https://a.espncdn.com/i/teamlogos/soccer/500/256.png',
@@ -6476,6 +6478,7 @@ function App() {
       'Serie A': { name: '세리에A', icon: '🇮🇹' },
       'La Liga': { name: '라리가', icon: '🇪🇸' },
       'Eredivisie': { name: '에레디비시', icon: '🇳🇱' },
+      'Primeira Liga': { name: '프리메이라리가', icon: '🇵🇹' },
       'Süper Lig': { name: '쉬페르리그', icon: '🇹🇷' },
       'Championship': { name: '챔피언십', icon: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
       'Premiership': { name: '스코티시 PL', icon: '🏴󠁧󠁢󠁳󠁣󠁴󠁿' },
@@ -6977,7 +6980,7 @@ function App() {
     const tournamentName = fx.league?.name || '';
     const TOURNEY_ABBR = {
       'Premier League':'EPL','Bundesliga':'GER','Ligue 1':'L1','Serie A':'ITA',
-      'Premiership':'SPL','Süper Lig':'TUR','Eredivisie':'NED',
+      'Premiership':'SPL','Süper Lig':'TUR','Eredivisie':'NED','Primeira Liga':'POR',
       'Jupiler Pro League':'BEL','Major League Soccer':'MLS','Superliga':'DEN','La Liga':'ESP',
       'Championship':'CHA','Serbian SuperLiga':'SRB','UEFA Champions League':'UCL',
       'UEFA Europa League':'UEL','UEFA Conference League':'UECL',

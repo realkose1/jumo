@@ -31,7 +31,7 @@ const PLAYERS = [
   { id: 2,  name: '이강인', nameEn: 'Lee Kang-in', sport: 'soccer', team: 'Atletico',    afTeamId: 530,  afPlayerId: 927 },
   { id: 3,  name: '김민재', nameEn: 'Kim Min-jae', sport: 'soccer', team: 'Bayern',      afTeamId: 157,  afPlayerId: 2897 },
   { id: 6,  name: '황희찬', nameEn: 'Hwang Hee-chan', sport: 'soccer', team: 'Wolves',      afTeamId: 39,   afPlayerId: 24888 },
-  { id: 7,  name: '황인범', nameEn: 'Hwang In-beom', sport: 'soccer', team: 'Feyenoord',   afTeamId: 209,  afPlayerId: 2901 },
+  { id: 7,  name: '황인범', nameEn: 'Hwang In-beom', sport: 'soccer', team: 'Porto',       afTeamId: 212,  afPlayerId: 2901 },
   { id: 8,  name: '조규성', nameEn: 'Cho Gue-sung', sport: 'soccer', team: 'Midtjylland', afTeamId: 397,  afPlayerId: 34211 },
   { id: 19, name: '오현규', nameEn: 'Oh Hyeon-gyu', sport: 'soccer', team: 'Besiktas',    afTeamId: 549,  afPlayerId: 34710 },
   { id: 20, name: '양현준', nameEn: 'Yang Hyun-jun', sport: 'soccer', team: 'Celtic',      afTeamId: 247,  afPlayerId: 304958 },
