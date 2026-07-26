@@ -543,18 +543,18 @@ const MATCHES = [];
 const ALL_PLAYERS = [
   // 축구 - 유럽리그 (2025-26 시즌)
   { id: 1,  name: '손흥민',  nameEn: 'Son Heung-min',   number: 7,  sport: '축구',   team: 'LAFC',       league: 'MLS',        position: '공격수',   nation: '🇰🇷', goals: 2,  assists: 6,  matches: 16, rating: 7.3, startRate: 90, age: 33, birth: '1992.07.08', height: '183cm', espnLeague: 'usa.1',  espnId: 149945, apiFootballId: 186 },
-  { id: 2,  name: '이강인',  nameEn: 'Lee Kang-in',     number: 7,  sport: '축구',   team: 'Atletico',   league: 'La Liga',    position: '미드필더', nation: '🇰🇷', goals: 4,  assists: 5,  matches: 37, rating: 7.4, startRate: 60, age: 25, birth: '2001.02.19', height: '173cm', espnLeague: 'esp.1',  espnId: 274197, apiFootballId: 927 },
-  { id: 3,  name: '김민재',  nameEn: 'Kim Min-jae',     number: 3,  sport: '축구',   team: 'Bayern',     league: 'Bundesliga', position: '센터백',   nation: '🇰🇷', goals: 1,  assists: 1,  matches: 35, rating: 7.4, startRate: 65, age: 29, birth: '1996.11.15', height: '190cm', espnLeague: 'ger.1',  espnId: 157688, apiFootballId: 2897 },
-  { id: 6,  name: '황희찬',  nameEn: 'Hwang Hee-chan',  number: 11, sport: '축구',   team: 'Wolves',     league: 'EPL',        position: '공격수',   nation: '🇰🇷', goals: 3,  assists: 1,  matches: 27, rating: 6.5, startRate: 65, age: 30, birth: '1996.01.26', height: '177cm', espnLeague: 'eng.1',  espnId: 237224, apiFootballId: 24888 },
-  { id: 7,  name: '황인범',  nameEn: 'Hwang In-beom',   number: 16, sport: '축구',   team: 'Porto',      league: 'Primeira Liga', position: '미드필더', nation: '🇰🇷', goals: 1,  assists: 4,  matches: 24, rating: 7.1, startRate: 50, age: 29, birth: '1996.09.20', height: '177cm', espnLeague: 'por.1',  espnId: 280061, apiFootballId: 2901 },
-  { id: 8,  name: '조규성',  nameEn: 'Cho Gue-sung',    number: 9,  sport: '축구',   team: 'Midtjylland',league: 'Superliga',  position: '공격수',   nation: '🇰🇷', goals: 7,  assists: 1,  matches: 38, rating: 6.8, startRate: 70, age: 28, birth: '1998.01.25', height: '190cm', espnLeague: 'den.1',  espnId: 303464, apiFootballId: 34211 },
-  { id: 25, name: '이한범',  nameEn: 'Lee Han-Beom',   number: 3,  sport: '축구',   team: 'Midtjylland',league: 'Superliga',  position: '센터백',   nation: '🇰🇷', goals: 0,  assists: 1,  matches: 43, rating: 6.9, startRate: 85, age: 24, birth: '2002.06.17', height: '190cm', espnLeague: 'den.1',  apiFootballId: 237218 },
-  { id: 19, name: '오현규',  nameEn: 'Oh Hyeon-gyu',    number: 19, sport: '축구',   team: 'Besiktas',   league: 'Süper Lig',  position: '공격수',   nation: '🇰🇷', goals: 8,  assists: 1,  matches: 13, rating: 7.2, startRate: 85, age: 25, birth: '2001.04.12', height: '181cm', espnLeague: 'tur.1',  espnId: 302434, apiFootballId: 34710 },
-  { id: 20, name: '양현준',  nameEn: 'Yang Hyun-jun',   number: 77, sport: '축구',   team: 'Celtic',     league: 'SPFL',       position: '공격수',   nation: '🇰🇷', goals: 9,  assists: 2,  matches: 42, rating: 7.0, startRate: 70, age: 23, birth: '2002.06.25', height: '172cm', espnLeague: 'sco.1',  espnId: 350711, apiFootballId: 304958 },
-  { id: 21, name: '백승호',  nameEn: 'Paik Seung-ho',   number: 17, sport: '축구',   team: 'Birmingham', league: 'Championship', position: '미드필더', nation: '🇰🇷', goals: 4,  assists: 4,  matches: 42, rating: 7.0, startRate: 95, age: 29, birth: '1997.03.17', height: '183cm', espnLeague: 'eng.2', apiFootballId: 2909 },
-  { id: 22, name: '배준호',  nameEn: 'Bae Jun-ho',      number: 17, sport: '축구',   team: 'Stoke',      league: 'Championship', position: '공격수',   nation: '🇰🇷', goals: 3,  assists: 3,  matches: 45, rating: 6.8, startRate: 85, age: 22, birth: '2003.07.21', height: '178cm', espnLeague: 'eng.2', apiFootballId: 357286 },
-  { id: 23, name: '엄지성',  nameEn: 'Eom Ji-sung',     number: 7,  sport: '축구',   team: 'Swansea',    league: 'Championship', position: '공격수',   nation: '🇰🇷', goals: 3,  assists: 4,  matches: 48, rating: 6.9, startRate: 90, age: 23, birth: '2002.05.30', height: '178cm', espnLeague: 'eng.2', apiFootballId: 237050 },
-  { id: 24, name: '설영우',  nameEn: 'Seol Young-woo',  number: 26, sport: '축구',   team: 'Crvena Zvezda', league: 'Serbian SuperLiga', position: '풀백', nation: '🇰🇷', goals: 1, assists: 2, matches: 28, rating: 7.1, startRate: 90, age: 26, birth: '1998.12.05', height: '180cm', espnLeague: 'srb.1', apiFootballId: 197985 },
+  { id: 2,  name: '이강인',  nameEn: 'Lee Kang-in',     number: 7,  sport: '축구',   team: 'Atletico',   league: 'La Liga',    position: '미드필더', nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 60, age: 25, birth: '2001.02.19', height: '173cm', espnLeague: 'esp.1',  espnId: 274197, apiFootballId: 927 },
+  { id: 3,  name: '김민재',  nameEn: 'Kim Min-jae',     number: 3,  sport: '축구',   team: 'Bayern',     league: 'Bundesliga', position: '센터백',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 65, age: 29, birth: '1996.11.15', height: '190cm', espnLeague: 'ger.1',  espnId: 157688, apiFootballId: 2897 },
+  { id: 6,  name: '황희찬',  nameEn: 'Hwang Hee-chan',  number: 11, sport: '축구',   team: 'Wolves',     league: 'EPL',        position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 65, age: 30, birth: '1996.01.26', height: '177cm', espnLeague: 'eng.1',  espnId: 237224, apiFootballId: 24888 },
+  { id: 7,  name: '황인범',  nameEn: 'Hwang In-beom',   number: 16, sport: '축구',   team: 'Porto',      league: 'Primeira Liga', position: '미드필더', nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 50, age: 29, birth: '1996.09.20', height: '177cm', espnLeague: 'por.1',  espnId: 280061, apiFootballId: 2901 },
+  { id: 8,  name: '조규성',  nameEn: 'Cho Gue-sung',    number: 9,  sport: '축구',   team: 'Midtjylland',league: 'Superliga',  position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 70, age: 28, birth: '1998.01.25', height: '190cm', espnLeague: 'den.1',  espnId: 303464, apiFootballId: 34211 },
+  { id: 25, name: '이한범',  nameEn: 'Lee Han-Beom',   number: 3,  sport: '축구',   team: 'Midtjylland',league: 'Superliga',  position: '센터백',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 85, age: 24, birth: '2002.06.17', height: '190cm', espnLeague: 'den.1',  apiFootballId: 237218 },
+  { id: 19, name: '오현규',  nameEn: 'Oh Hyeon-gyu',    number: 19, sport: '축구',   team: 'Besiktas',   league: 'Süper Lig',  position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 85, age: 25, birth: '2001.04.12', height: '181cm', espnLeague: 'tur.1',  espnId: 302434, apiFootballId: 34710 },
+  { id: 20, name: '양현준',  nameEn: 'Yang Hyun-jun',   number: 77, sport: '축구',   team: 'Celtic',     league: 'SPFL',       position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 70, age: 23, birth: '2002.06.25', height: '172cm', espnLeague: 'sco.1',  espnId: 350711, apiFootballId: 304958 },
+  { id: 21, name: '백승호',  nameEn: 'Paik Seung-ho',   number: 17, sport: '축구',   team: 'Birmingham', league: 'Championship', position: '미드필더', nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 95, age: 29, birth: '1997.03.17', height: '183cm', espnLeague: 'eng.2', apiFootballId: 2909 },
+  { id: 22, name: '배준호',  nameEn: 'Bae Jun-ho',      number: 17, sport: '축구',   team: 'Stoke',      league: 'Championship', position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 85, age: 22, birth: '2003.07.21', height: '178cm', espnLeague: 'eng.2', apiFootballId: 357286 },
+  { id: 23, name: '엄지성',  nameEn: 'Eom Ji-sung',     number: 7,  sport: '축구',   team: 'Swansea',    league: 'Championship', position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 90, age: 23, birth: '2002.05.30', height: '178cm', espnLeague: 'eng.2', apiFootballId: 237050 },
+  { id: 24, name: '설영우',  nameEn: 'Seol Young-woo',  number: 26, sport: '축구',   team: 'Crvena Zvezda', league: 'Serbian SuperLiga', position: '풀백', nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 90, age: 26, birth: '1998.12.05', height: '180cm', espnLeague: 'srb.1', apiFootballId: 197985 },
 
   // 야구 - MLB (2026 시즌)
   { id: 9,  name: '김하성',  nameEn: 'Ha-Seong Kim',    number: 4,  sport: '야구',   team: 'Braves',    league: 'MLB',        position: '유격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 0,  age: 30, birth: '1995.10.17', height: '179cm', mlbId: 673490, injury: { label:'부상자 명단 (IL)', severity:'high' } },
@@ -6524,10 +6524,10 @@ function App() {
   // (club competitions only — friendlies/international matches are excluded).
   React.useEffect(() => {
     let cancelled = false;
-    // API-Football "season" is the start year. European leagues (Aug→May)
-    // use 2025 for the 2025-26 season. MLS (Feb→Dec) uses calendar year,
-    // so the current season is 2026.
-    const seasonFor = (p) => (p.league === 'MLS' ? 2026 : 2025);
+    // API-Football "season"은 시작 연도다. 유럽 리그(8월→5월)의 2026-27 시즌은
+    // 2026, MLS(2월→12월)의 2026 시즌도 2026 → 지금은 모두 2026이다.
+    // (2025-26 시즌이 끝나 유럽 선수 기록은 새 시즌 기준으로 초기화된다)
+    const seasonFor = () => 2026;
     // Map league name → display name + icon for the player stats tab.
     const LEAGUE_DISPLAY = {
       'Major League Soccer': { name: 'MLS', icon: '🇺🇸' },
@@ -6584,13 +6584,24 @@ function App() {
           // (e.g., 'Paris Saint Germain') for club competitions including UEFA
           // Champions League, Super Cup, FIFA Intercontinental Cup, domestic
           // cups, etc. So a simple team-name check is the most accurate filter.
-          const stats = j?.response?.[0]?.statistics || [];
+          // 응답 자체가 비면(네트워크·레이트리밋 실패) 기존 값을 건드리지 않는다.
+          // 아래의 '0으로 초기화'는 응답은 왔는데 클럽 기록이 없는 경우에만 해야 한다.
+          if (!j?.response?.[0]) return;
+          const stats = j.response[0].statistics || [];
           const NATIONAL_TEAM_NAMES = new Set(['south korea', 'korea republic', 'korea']);
           const clubStats = stats.filter(s => {
             const teamName = (s.team?.name || '').toLowerCase();
             return !NATIONAL_TEAM_NAMES.has(teamName);
           });
-          if (clubStats.length === 0) return;
+          if (clubStats.length === 0) {
+            // 시즌이 막 시작해 클럽 경기 기록이 아직 없다(대표팀 경기만 잡히는 경우도
+            // 포함). 예전엔 여기서 그냥 반환해 지난 시즌 숫자가 그대로 남아 있었다
+            // → 새 시즌 기준으로 0으로 초기화한다. 평점은 UI가 0일 때 숨긴다.
+            p.goals = 0; p.assists = 0; p.matches = 0; p.rating = 0;
+            p.compStats = [];
+            delete p._baselineSnapshot;
+            return;
+          }
           let g = 0, a = 0, m = 0;
           const ratings = [];
           const compStats = [];
