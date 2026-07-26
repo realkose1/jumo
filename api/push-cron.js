@@ -39,7 +39,7 @@ const PLAYERS = [
   { id: 22, name: '배준호', nameEn: 'Bae Jun-ho', sport: 'soccer', team: 'Stoke',       afTeamId: 75,   afPlayerId: 357286 },
   { id: 23, name: '엄지성', nameEn: 'Eom Ji-sung', sport: 'soccer', team: 'Swansea',     afTeamId: 76,   afPlayerId: 237050 },
   { id: 24, name: '설영우', nameEn: 'Seol Young-woo', sport: 'soccer', team: 'Crvena',      afTeamId: 598,  afPlayerId: 197985 },
-  { id: 9,  name: '김하성', en: 'kim',       sport: 'baseball', team: 'Pirates',     mlbTeam: 'Pittsburgh Pirates', mlbId: 673490 },
+  { id: 9,  name: '김하성', en: 'kim',       sport: 'baseball', team: 'Braves',      mlbTeam: 'Atlanta Braves', mlbId: 673490 },
   { id: 17, name: '이정후', en: 'lee',       sport: 'baseball', team: 'Giants',      mlbTeam: 'San Francisco Giants', mlbId: 808982 },
   { id: 18, name: '김혜성', en: 'kim',       sport: 'baseball', team: 'Dodgers',     mlbTeam: 'Los Angeles Dodgers', mlbId: 808975 },
 ];

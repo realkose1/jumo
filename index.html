@@ -304,9 +304,11 @@ const KOREAN_PLAYERS = {
   // 황인범 — Feyenoord (Eredivisie)
   'Feyenoord': { name: '황인범', nameEn: 'Hwang In-beom', number: 5, position: '미드필더' },
   'Feyenoord Rotterdam': { name: '황인범', nameEn: 'Hwang In-beom', number: 5, position: '미드필더' },
-  // 김하성 — Pittsburgh Pirates (MLB)
-  'Pittsburgh Pirates': { name: '김하성', nameEn: 'Ha-Seong Kim', number: 4, position: '유격수' },
-  'Pirates': { name: '김하성', nameEn: 'Ha-Seong Kim', number: 4, position: '유격수' },
+  // 김하성 — Atlanta Braves (MLB)
+  // 김하성 — 2026-07 기준 애틀랜타 브레이브스 산하(AAA 귀넷 스트라이퍼스).
+  // statsapi currentTeam 확인: Gwinnett Stripers / parentOrgId 144 = Atlanta Braves.
+  'Atlanta Braves': { name: '김하성', nameEn: 'Ha-Seong Kim', number: 4, position: '유격수' },
+  'Braves': { name: '김하성', nameEn: 'Ha-Seong Kim', number: 4, position: '유격수' },
   // 이정후 — San Francisco Giants (MLB)
   'San Francisco Giants': { name: '이정후', nameEn: 'Jung Hoo Lee', number: 51, position: '중견수' },
   'Giants': { name: '이정후', nameEn: 'Jung Hoo Lee', number: 51, position: '중견수' },
@@ -538,7 +540,7 @@ const ALL_PLAYERS = [
   { id: 24, name: '설영우',  nameEn: 'Seol Young-woo',  number: 26, sport: '축구',   team: 'Crvena Zvezda', league: 'Serbian SuperLiga', position: '풀백', nation: '🇰🇷', goals: 1, assists: 2, matches: 28, rating: 7.1, startRate: 90, age: 26, birth: '1998.12.05', height: '180cm', espnLeague: 'srb.1', apiFootballId: 197985 },
 
   // 야구 - MLB (2026 시즌)
-  { id: 9,  name: '김하성',  nameEn: 'Ha-Seong Kim',    number: 4,  sport: '야구',   team: 'Pirates',    league: 'MLB',        position: '유격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 0,  age: 30, birth: '1995.10.17', height: '179cm', mlbId: 673490, injury: { label:'부상자 명단 (IL)', severity:'high' } },
+  { id: 9,  name: '김하성',  nameEn: 'Ha-Seong Kim',    number: 4,  sport: '야구',   team: 'Braves',    league: 'MLB',        position: '유격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 0,  age: 30, birth: '1995.10.17', height: '179cm', mlbId: 673490, injury: { label:'부상자 명단 (IL)', severity:'high' } },
   { id: 17, name: '이정후',  nameEn: 'Jung Hoo Lee',    number: 51, sport: '야구',   team: 'Giants',     league: 'MLB',        position: '중견수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 15, rating: 0,   startRate: 95, age: 27, birth: '1998.08.20', height: '186cm', mlbId: 808982 },
   { id: 18, name: '김혜성',  nameEn: 'Hyeseong Kim',    number: 25, sport: '야구',   team: 'Dodgers',    league: 'MLB',        position: '유격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 16, rating: 0,   startRate: 70, age: 27, birth: '1999.01.27', height: '178cm', mlbId: 808975 },
 ];
@@ -779,7 +781,7 @@ const PLAYER_EXTRA = {
     form: [6.5, 7.2, 7.8, 6.8, 7.5, 8.0, 7.0],
     recentMatches: [],
     career: [
-      { year:'2026–',   team:'Pittsburgh Pirates', league:'MLB',  flag:'🇺🇸' },
+      { year:'2026–',   team:'Atlanta Braves',     league:'MLB',  flag:'🇺🇸' },
       { year:'2024–25', team:'San Diego Padres',   league:'MLB',  flag:'🇺🇸' },
       { year:'2021–24', team:'San Diego Padres',   league:'MLB',  flag:'🇺🇸' },
       { year:'2014–20', team:'키움 히어로즈',      league:'KBO',  flag:'🇰🇷' },
@@ -2271,6 +2273,10 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
         const thisWeekMatches = allMatches
           .filter(m => {
             if (!m.koreanPlayer || !m.fullDate) return false;
+            // 마이너 강등 선수의 MLB(부모 구단) 경기는 그의 경기가 아니다.
+            // 위 '오늘의 경기'와 일정 탭엔 이미 적용돼 있는데 이 목록만 빠져 있어,
+            // 같은 화면에서 카드엔 없고 아래 목록엔 뜨는 불일치가 있었다.
+            if (koreanIsMinorLeaguer(m)) return false;
             if (seenIds.has(m.id)) return false;
             seenIds.add(m.id);
             if (m.live || m.time === 'LIVE') return true; // always show live
@@ -2307,6 +2313,16 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
               if (showHeader) lastDateLabel = thisDateLabel;
               const player = ALL_PLAYERS.find(p => p.name === m.koreanPlayer?.name);
 
+              // 한 줄에 두 팀이 같은 굵기로 나오면 우리 선수가 어느 쪽인지 한눈에
+              // 안 들어온다 → 우리 선수 팀만 볼드로 남기고 상대 팀은 일반 굵기.
+              // (더비처럼 양 팀에 한국 선수가 있으면 둘 다 볼드)
+              const koSides = (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean).map(kp => kp.team);
+              const nameStyle = (code) => ({
+                fontSize: 14,
+                fontWeight: koSides.includes(code) ? 800 : 500,
+                color: 'var(--text)',
+              });
+
               const header = showHeader ? (
                 <div key={`hdr-${thisDateLabel}`} style={{ padding:'16px 0 6px', fontSize:11, fontWeight:700, color:'var(--text4)', letterSpacing:1.2, textTransform:'uppercase' }}>
                   {thisDateLabel}
@@ -2327,7 +2343,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
                   {header}
                   <div onClick={() => onMatch(m)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', cursor:'pointer', borderBottom:'0.5px solid var(--border)' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, justifyContent:'flex-end', minWidth:0 }}>
-                      <span style={{ fontSize:14, fontWeight:600, color:'var(--text)', textAlign:'right' }}>{m.home.name}</span>
+                      <span style={{ ...nameStyle(m.home.code), textAlign:'right' }}>{m.home.name}</span>
                       <TeamBadge code={m.home.code} size={24} logo={m.home.logo}/>
                     </div>
                     <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0, padding:'0 16px' }}>
@@ -2337,7 +2353,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
                     </div>
                     <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, minWidth:0 }}>
                       <TeamBadge code={m.away.code} size={24} logo={m.away.logo}/>
-                      <span style={{ fontSize:14, fontWeight:600, color:'var(--text)' }}>{m.away.name}</span>
+                      <span style={nameStyle(m.away.code)}>{m.away.name}</span>
                     </div>
                   </div>
                   </React.Fragment>
@@ -2349,7 +2365,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
                   {header}
                   <div onClick={() => onMatch(m)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', cursor:'pointer', borderBottom:'0.5px solid var(--border)' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, justifyContent:'flex-end', minWidth:0 }}>
-                      <span style={{ fontSize:14, fontWeight:600, color:'var(--text)', textAlign:'right' }}>{m.home.name}</span>
+                      <span style={{ ...nameStyle(m.home.code), textAlign:'right' }}>{m.home.name}</span>
                       <TeamBadge code={m.home.code} size={24} logo={m.home.logo}/>
                     </div>
                     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, flexShrink:0, padding:'0 16px' }}>
@@ -2362,7 +2378,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
                     </div>
                     <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, minWidth:0 }}>
                       <TeamBadge code={m.away.code} size={24} logo={m.away.logo}/>
-                      <span style={{ fontSize:14, fontWeight:600, color:'var(--text)' }}>{m.away.name}</span>
+                      <span style={nameStyle(m.away.code)}>{m.away.name}</span>
                     </div>
                   </div>
                   </React.Fragment>
@@ -2379,7 +2395,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
                   {header}
                   <div onClick={() => onMatch(m)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', cursor:'pointer', borderBottom:'0.5px solid var(--border)' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, justifyContent:'flex-end', minWidth:0 }}>
-                      <span style={{ fontSize:14, fontWeight:600, color:'var(--text)', textAlign:'right' }}>{m.home.name}</span>
+                      <span style={{ ...nameStyle(m.home.code), textAlign:'right' }}>{m.home.name}</span>
                       <TeamBadge code={m.home.code} size={24} logo={m.home.logo}/>
                     </div>
                     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, flexShrink:0, padding:'0 16px' }}>
@@ -2387,7 +2403,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
                     </div>
                     <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, minWidth:0 }}>
                       <TeamBadge code={m.away.code} size={24} logo={m.away.logo}/>
-                      <span style={{ fontSize:14, fontWeight:600, color:'var(--text)' }}>{m.away.name}</span>
+                      <span style={nameStyle(m.away.code)}>{m.away.name}</span>
                     </div>
                   </div>
                   </React.Fragment>
@@ -5961,32 +5977,33 @@ function App() {
         // Filter for Korean players
         const koreanMatches = dedupedMatches.filter(m => m.koreanPlayer);
 
-        // 기본 목록을 먼저 화면에 내보낸다. 아래의 라인업·기록 보강은 API 분당/초당
-        // 제한 때문에 요청을 분산시켜 수 초가 걸리는데, 그때까지 '오늘의 경기'가
-        // 비어 보이던 문제가 있었다(예전엔 모든 보강이 끝난 뒤 한 번만 반영).
-        // 보강이 끝나면 아래에서 같은 배열을 다시 반영한다.
+        // 이 시점의 목록은 아직 출전 정보가 초기값('출전 예상')이다. 곧바로 화면에
+        // 내보내면 몇 초 뒤 보강 결과로 한 번 더 그려져 '떴다가 다시 갱신되는' 것이
+        // 눈에 띈다. 스켈레톤이 로딩을 이미 알려주고 있으므로, 기본 목록은 보강이
+        // 오래 걸릴 때만 쓰는 폴백으로 둔다 — 보강이 제때 끝나면 완성본 한 번만 그린다.
         //
-        // ⚠ 단, 이 기본 목록의 출전 정보는 아직 '출전 예상'(초기값)이다. 그대로
-        // 덮어쓰면 이전 폴링에서 이미 확정된 정보('미출전'·'풀타임'·스탯 라인 등)가
-        // 되돌아가, 라이브 경기 카드가 '출전 예상 65%'로 보이거나 조건에 걸려
-        // 나타났다 사라졌다 했다. 같은 경기(id)에 확정 정보가 있으면 유지한다.
-        setLiveMatches(prev => {
-          if (!prev.length) return [...koreanMatches];
-          const prevById = new Map(prev.map(m => [m.id, m]));
-          return koreanMatches.map(m => {
-            const old = prevById.get(m.id);
-            const oldEv = old?.koreanPlayer?.event;
-            const keepOld = oldEv && oldEv !== '출전 예상';
-            return keepOld
-              ? { ...m,
-                  koreanPlayer: old.koreanPlayer,
-                  koreanPlayers: old.koreanPlayers || m.koreanPlayers,
-                  events: (old.events && old.events.length) ? old.events : m.events }
-              : m;
+        // ⚠ 폴백으로 내보낼 때도, 이전 폴링에서 확정된 정보('미출전'·'풀타임'·스탯
+        // 라인)를 초기값으로 되돌리지 않도록 같은 경기(id)는 병합한다.
+        const publishBase = () => {
+          setLiveMatches(prev => {
+            if (!prev.length) return [...koreanMatches];
+            const prevById = new Map(prev.map(m => [m.id, m]));
+            return koreanMatches.map(m => {
+              const old = prevById.get(m.id);
+              const oldEv = old?.koreanPlayer?.event;
+              const keepOld = oldEv && oldEv !== '출전 예상';
+              return keepOld
+                ? { ...m,
+                    koreanPlayer: old.koreanPlayer,
+                    koreanPlayers: old.koreanPlayers || m.koreanPlayers,
+                    events: (old.events && old.events.length) ? old.events : m.events }
+                : m;
+            });
           });
-        });
-        setIsInitialLoad(false);   // 스켈레톤 → 실제 목록으로 즉시 전환
-        lastPublishAtRef.current = Date.now();
+          setIsInitialLoad(false);
+          lastPublishAtRef.current = Date.now();
+        };
+        const baseFallbackTimer = setTimeout(publishBase, 6000);
 
         // ── nameMatch helper ───────────────────────────────────────────────
         const nameMatch = (sfName, nameEn) => {
@@ -6328,7 +6345,12 @@ function App() {
           });
         }
 
+        // 보강까지 끝난 완성본을 반영한다. 폴백(기본 목록)이 아직 안 나갔으면
+        // 취소해서 '떴다가 다시 갱신되는' 두 번 그리기를 피한다.
+        clearTimeout(baseFallbackTimer);
         setLiveMatches([...koreanMatches]);
+        setIsInitialLoad(false);
+        lastPublishAtRef.current = Date.now();
 
         // Save manual baseline once (first run) so we can rebuild totals each refresh
         // by adding contributions from finished matches in the live cache.
