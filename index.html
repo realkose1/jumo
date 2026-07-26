@@ -547,7 +547,7 @@ const ALL_PLAYERS = [
   { id: 3,  name: '김민재',  nameEn: 'Kim Min-jae',     number: 3,  sport: '축구',   team: 'Bayern',     league: 'Bundesliga', position: '센터백',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 65, age: 29, birth: '1996.11.15', height: '190cm', espnLeague: 'ger.1',  espnId: 157688, apiFootballId: 2897 },
   { id: 6,  name: '황희찬',  nameEn: 'Hwang Hee-chan',  number: 11, sport: '축구',   team: 'Wolves',     league: 'EPL',        position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 65, age: 30, birth: '1996.01.26', height: '177cm', espnLeague: 'eng.1',  espnId: 237224, apiFootballId: 24888 },
   { id: 7,  name: '황인범',  nameEn: 'Hwang In-beom',   number: 16, sport: '축구',   team: 'Porto',      league: 'Primeira Liga', position: '미드필더', nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 50, age: 29, birth: '1996.09.20', height: '177cm', espnLeague: 'por.1',  espnId: 280061, apiFootballId: 2901 },
-  { id: 8,  name: '조규성',  nameEn: 'Cho Gue-sung',    number: 9,  sport: '축구',   team: 'Midtjylland',league: 'Superliga',  position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 70, age: 28, birth: '1998.01.25', height: '190cm', espnLeague: 'den.1',  espnId: 303464, apiFootballId: 34211 },
+  { id: 8,  name: '조규성',  nameEn: 'Cho Gue-sung',    number: 10,  sport: '축구',   team: 'Midtjylland',league: 'Superliga',  position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 70, age: 28, birth: '1998.01.25', height: '190cm', espnLeague: 'den.1',  espnId: 303464, apiFootballId: 34211 },
   { id: 25, name: '이한범',  nameEn: 'Lee Han-Beom',   number: 3,  sport: '축구',   team: 'Midtjylland',league: 'Superliga',  position: '센터백',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 85, age: 24, birth: '2002.06.17', height: '190cm', espnLeague: 'den.1',  apiFootballId: 237218 },
   { id: 19, name: '오현규',  nameEn: 'Oh Hyeon-gyu',    number: 19, sport: '축구',   team: 'Besiktas',   league: 'Süper Lig',  position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 85, age: 25, birth: '2001.04.12', height: '181cm', espnLeague: 'tur.1',  espnId: 302434, apiFootballId: 34710 },
   { id: 20, name: '양현준',  nameEn: 'Yang Hyun-jun',   number: 77, sport: '축구',   team: 'Celtic',     league: 'SPFL',       position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 70, age: 23, birth: '2002.06.25', height: '172cm', espnLeague: 'sco.1',  espnId: 350711, apiFootballId: 304958 },
@@ -2037,7 +2037,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
     '손흥민': 'heungmin.jpg', '이강인': 'kangin.png', '김민재': 'minjae.jpeg',
     '조규성': 'guesung.jpeg', '황희찬': 'heechan.jpeg', '황인범': 'inbeom.jpg',
     '김하성': 'haseong.jpeg', '이정후': 'junghoo.jpeg', '김혜성': 'hyesung.jpeg',
-    '오현규': 'hyeongyu.jpeg', '양현준': 'hyunjun.jpeg',
+    '오현규': 'hyeongyu.jpeg', '양현준': 'hyunjun.jpeg', '이한범': 'hanbeom.png',
     '백승호': 'seungho.png', '배준호': 'junho.jpeg', '엄지성': 'jisung.jpeg',
     '설영우': 'youngwoo.jpeg',
   };
@@ -3765,7 +3765,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
             '손흥민':'heungmin.jpg','이강인':'kangin.png','김민재':'minjae.jpeg',
             '조규성':'guesung.jpeg','황희찬':'heechan.jpeg','황인범':'inbeom.jpg',
             '김하성':'haseong.jpeg','이정후':'junghoo.jpeg','김혜성':'hyesung.jpeg',
-            '오현규':'hyeongyu.jpeg','양현준':'hyunjun.jpeg',
+            '오현규':'hyeongyu.jpeg','양현준':'hyunjun.jpeg','이한범':'hanbeom.png',
             '백승호':'seungho.png','배준호':'junho.jpeg','엄지성':'jisung.jpeg',
             '설영우':'youngwoo.jpeg',
           };
@@ -7531,10 +7531,22 @@ function App() {
     [followed]
   );
   const filteredLiveMatches = React.useMemo(
-    () => liveMatches.filter(m =>
-      isMatchAllowed(m, sportFeeds) &&
-      (m.koreanPlayers || [m.koreanPlayer]).some(kp => kp && followedNames.has(kp.name))
-    ),
+    () => liveMatches
+      .filter(m =>
+        isMatchAllowed(m, sportFeeds) &&
+        (m.koreanPlayers || [m.koreanPlayer]).some(kp => kp && followedNames.has(kp.name))
+      )
+      // 같은 팀에 한국 선수가 둘 이상이면(미트윌란: 조규성+이한범) 팔로우한 선수를
+      // 맨 앞으로 옮긴다. 카드 주인공·히어로·주간 목록이 모두 koreanPlayers[0]을
+      // 기준으로 그려지므로, 여기서 한 번 정렬하면 화면 전체가 함께 맞는다.
+      .map(m => {
+        const list = (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean);
+        if (list.length < 2) return m;
+        const i = list.findIndex(kp => followedNames.has(kp.name));
+        if (i <= 0) return m;
+        const reordered = [list[i], ...list.filter((_, j) => j !== i)];
+        return { ...m, koreanPlayers: reordered, koreanPlayer: reordered[0] };
+      }),
     [liveMatches, sportFeeds, followedNames]
   );
 
