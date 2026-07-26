@@ -302,8 +302,8 @@ const KOREAN_PLAYERS = {
   'Midtjylland': { name: '조규성', nameEn: 'Cho Gue-sung', number: 9, position: '공격수' },
   'FC Midtjylland': { name: '조규성', nameEn: 'Cho Gue-sung', number: 9, position: '공격수' },
   // 황인범 — FC Porto (Primeira Liga), 2026-07 이적
-  'FC Porto': { name: '황인범', nameEn: 'Hwang In-beom', number: 5, position: '미드필더' },
-  'Porto': { name: '황인범', nameEn: 'Hwang In-beom', number: 5, position: '미드필더' },
+  'FC Porto': { name: '황인범', nameEn: 'Hwang In-beom', number: 16, position: '미드필더' },
+  'Porto': { name: '황인범', nameEn: 'Hwang In-beom', number: 16, position: '미드필더' },
   // 김하성 — Atlanta Braves (MLB)
   // 김하성 — 2026-07 기준 애틀랜타 브레이브스 산하(AAA 귀넷 스트라이퍼스).
   // statsapi currentTeam 확인: Gwinnett Stripers / parentOrgId 144 = Atlanta Braves.
@@ -531,7 +531,7 @@ const ALL_PLAYERS = [
   { id: 2,  name: '이강인',  nameEn: 'Lee Kang-in',     number: 7,  sport: '축구',   team: 'Atletico',   league: 'La Liga',    position: '미드필더', nation: '🇰🇷', goals: 4,  assists: 5,  matches: 37, rating: 7.4, startRate: 60, age: 25, birth: '2001.02.19', height: '173cm', espnLeague: 'esp.1',  espnId: 274197, apiFootballId: 927 },
   { id: 3,  name: '김민재',  nameEn: 'Kim Min-jae',     number: 3,  sport: '축구',   team: 'Bayern',     league: 'Bundesliga', position: '센터백',   nation: '🇰🇷', goals: 1,  assists: 1,  matches: 35, rating: 7.4, startRate: 65, age: 29, birth: '1996.11.15', height: '190cm', espnLeague: 'ger.1',  espnId: 157688, apiFootballId: 2897 },
   { id: 6,  name: '황희찬',  nameEn: 'Hwang Hee-chan',  number: 11, sport: '축구',   team: 'Wolves',     league: 'EPL',        position: '공격수',   nation: '🇰🇷', goals: 3,  assists: 1,  matches: 27, rating: 6.5, startRate: 65, age: 30, birth: '1996.01.26', height: '177cm', espnLeague: 'eng.1',  espnId: 237224, apiFootballId: 24888 },
-  { id: 7,  name: '황인범',  nameEn: 'Hwang In-beom',   number: 5,  sport: '축구',   team: 'Porto',      league: 'Primeira Liga', position: '미드필더', nation: '🇰🇷', goals: 1,  assists: 4,  matches: 24, rating: 7.1, startRate: 50, age: 29, birth: '1996.09.20', height: '177cm', espnLeague: 'por.1',  espnId: 280061, apiFootballId: 2901 },
+  { id: 7,  name: '황인범',  nameEn: 'Hwang In-beom',   number: 16, sport: '축구',   team: 'Porto',      league: 'Primeira Liga', position: '미드필더', nation: '🇰🇷', goals: 1,  assists: 4,  matches: 24, rating: 7.1, startRate: 50, age: 29, birth: '1996.09.20', height: '177cm', espnLeague: 'por.1',  espnId: 280061, apiFootballId: 2901 },
   { id: 8,  name: '조규성',  nameEn: 'Cho Gue-sung',    number: 9,  sport: '축구',   team: 'Midtjylland',league: 'Superliga',  position: '공격수',   nation: '🇰🇷', goals: 7,  assists: 1,  matches: 38, rating: 6.8, startRate: 70, age: 28, birth: '1998.01.25', height: '190cm', espnLeague: 'den.1',  espnId: 303464, apiFootballId: 34211 },
   { id: 19, name: '오현규',  nameEn: 'Oh Hyeon-gyu',    number: 19, sport: '축구',   team: 'Besiktas',   league: 'Süper Lig',  position: '공격수',   nation: '🇰🇷', goals: 8,  assists: 1,  matches: 13, rating: 7.2, startRate: 85, age: 25, birth: '2001.04.12', height: '181cm', espnLeague: 'tur.1',  espnId: 302434, apiFootballId: 34710 },
   { id: 20, name: '양현준',  nameEn: 'Yang Hyun-jun',   number: 77, sport: '축구',   team: 'Celtic',     league: 'SPFL',       position: '공격수',   nation: '🇰🇷', goals: 9,  assists: 2,  matches: 42, rating: 7.0, startRate: 70, age: 23, birth: '2002.06.25', height: '172cm', espnLeague: 'sco.1',  espnId: 350711, apiFootballId: 304958 },
@@ -2019,7 +2019,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
   // landscape image map: Korean name → filename in image/landscape/
   const LANDSCAPE_MAP = {
     '손흥민': 'heungmin.jpg', '이강인': 'kangin.png', '김민재': 'minjae.jpeg',
-    '조규성': 'guesung.jpeg', '황희찬': 'heechan.jpeg', '황인범': 'inbeom.png',
+    '조규성': 'guesung.jpeg', '황희찬': 'heechan.jpeg', '황인범': 'inbeom.jpg',
     '김하성': 'haseong.jpeg', '이정후': 'junghoo.jpeg', '김혜성': 'hyesung.jpeg',
     '오현규': 'hyeongyu.jpeg', '양현준': 'hyunjun.jpeg',
     '백승호': 'seungho.png', '배준호': 'junho.jpeg', '엄지성': 'jisung.jpeg',
@@ -3747,7 +3747,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
         {(() => {
           const LANDSCAPE = {
             '손흥민':'heungmin.jpg','이강인':'kangin.png','김민재':'minjae.jpeg',
-            '조규성':'guesung.jpeg','황희찬':'heechan.jpeg','황인범':'inbeom.png',
+            '조규성':'guesung.jpeg','황희찬':'heechan.jpeg','황인범':'inbeom.jpg',
             '김하성':'haseong.jpeg','이정후':'junghoo.jpeg','김혜성':'hyesung.jpeg',
             '오현규':'hyeongyu.jpeg','양현준':'hyunjun.jpeg',
             '백승호':'seungho.png','배준호':'junho.jpeg','엄지성':'jisung.jpeg',
