@@ -1289,7 +1289,10 @@ function BroadcastBadge({ match }) {
 }
 
 function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
-  const player = ALL_PLAYERS.find(p => p.name === m.koreanPlayer?.name);
+  // 카드에 실을 선수들 — 팔로우한 선수 전원(코리안 더비·같은 팀 복수). 팔로우 정보가
+  // 아직 안 붙은 경로(일정 탭 등)에선 대표 선수 한 명으로 떨어진다.
+  const cardKoreans = (m.followedKoreans?.length ? m.followedKoreans : [m.koreanPlayer]).filter(Boolean);
+  const multiKorean = cardKoreans.length > 1;
   const isLive = m.live || m.time === 'LIVE';
   const isFinished = m.status === 'STATUS_FINAL' ||
                      m.status === 'STATUS_FULL_TIME' ||
@@ -1366,41 +1369,50 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
       cursor:'pointer', background:'var(--card)', border:'0.5px solid var(--border)'
     }}>
       <div style={{ position:'relative', zIndex:2, padding:'16px' }}>
-        {/* Korean player section - TOP */}
-        <div style={{ display:'flex', alignItems:'flex-start', gap:10, marginBottom:16, paddingBottom:14, borderBottom:'0.5px solid var(--border)' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:10, flex:1, minWidth:0 }}>
-            {tweaks.showPlayerPhoto && player && (
-              <div style={{
-                width:48, height:48, borderRadius:'50%', overflow:'hidden',
-                background:'#fff', flexShrink:0,
-                boxShadow:'0 2px 6px rgba(0,0,0,0.15)'
-              }}>
-                <PlayerPhoto player={player} style={{
-                  width:'100%', height:'100%'
-                }}/>
-              </div>
-            )}
-            <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ fontSize:15, fontWeight:700, color:'var(--text)', marginBottom:3 }}>
-                🇰🇷 {m.koreanPlayer?.name}
-              </div>
-              <div style={{ fontSize:11, color:'var(--text3)' }}>
-                {m.koreanPlayer?.team} #{m.koreanPlayer?.number}
-              </div>
-            </div>
-          </div>
+        {/* Korean player section - TOP.
+            코리안 더비나 같은 팀 복수 선수(미트윌란)는 한 카드에 전원을 싣는다. */}
+        <div style={{ marginBottom:16, paddingBottom:14, borderBottom:'0.5px solid var(--border)', display:'flex', flexDirection:'column', gap:10 }}>
+          {cardKoreans.map((kp, i) => {
+            const kpPlayer = ALL_PLAYERS.find(p => p.name === kp.name);
+            const photoSize = multiKorean ? 40 : 48;
+            return (
+              <div key={kp.name || i} style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:10, flex:1, minWidth:0 }}>
+                  {tweaks.showPlayerPhoto && kpPlayer && (
+                    <div style={{
+                      width:photoSize, height:photoSize, borderRadius:'50%', overflow:'hidden',
+                      background:'#fff', flexShrink:0,
+                      boxShadow:'0 2px 6px rgba(0,0,0,0.15)'
+                    }}>
+                      <PlayerPhoto player={kpPlayer} style={{
+                        width:'100%', height:'100%'
+                      }}/>
+                    </div>
+                  )}
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize: multiKorean ? 14 : 15, fontWeight:700, color:'var(--text)', marginBottom:3 }}>
+                      🇰🇷 {kp.name}
+                    </div>
+                    <div style={{ fontSize:11, color:'var(--text3)' }}>
+                      {kp.team} #{kp.number}
+                    </div>
+                  </div>
+                </div>
 
-          {/* Event info - TOP RIGHT (마이너는 우측 상단에 표시하지 않고 하단 MLB 라벨로 대체) */}
-          {m.koreanPlayer?.event && m.koreanPlayer.event !== '마이너' && (
-            <div style={{
-              background: isLive ? 'rgba(230,48,48,0.1)' : 'var(--btn-bg)',
-              borderRadius:6, padding:'5px 8px', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center'
-            }}>
-              <span style={{ fontSize:10, fontWeight:600, color: isLive ? 'var(--acc)' : 'var(--text2)', whiteSpace:'nowrap', lineHeight:1 }}>
-                {compactBadgeEvent(formatExpectedEvent(m.koreanPlayer, allMatches))}
-              </span>
-            </div>
-          )}
+                {/* Event info - TOP RIGHT (마이너는 우측 상단에 표시하지 않고 하단 MLB 라벨로 대체) */}
+                {kp.event && kp.event !== '마이너' && (
+                  <div style={{
+                    background: isLive ? 'rgba(230,48,48,0.1)' : 'var(--btn-bg)',
+                    borderRadius:6, padding:'5px 8px', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center'
+                  }}>
+                    <span style={{ fontSize:10, fontWeight:600, color: isLive ? 'var(--acc)' : 'var(--text2)', whiteSpace:'nowrap', lineHeight:1 }}>
+                      {compactBadgeEvent(formatExpectedEvent(kp, allMatches))}
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {/* Time Section or Result Section */}
@@ -7118,18 +7130,20 @@ function App() {
     const awayVariations = [awayTeam, awayAbbr, away.team.name, away.team.shortDisplayName].filter(Boolean);
 
 
-    // 같은 팀에 한국 선수가 둘 이상일 수 있어(미트윌란: 조규성+이한범) 전원 수집한다.
-    let espnKoreans = [];
+    // 같은 팀에 한국 선수가 둘 이상일 수 있고(미트윌란: 조규성+이한범), 코리안 더비면
+    // 양 팀에 나눠 있다. 홈에서 찾았다고 멈추지 말고 양쪽 다 모은다.
+    let espnHomeKoreans = [];
     for (const variation of homeVariations) {
       const found = koreansForTeam(variation, homeAbbr);
-      if (found.length) { espnKoreans = found; break; }
+      if (found.length) { espnHomeKoreans = found; break; }
     }
-    if (!espnKoreans.length) {
-      for (const variation of awayVariations) {
-        const found = koreansForTeam(variation, awayAbbr);
-        if (found.length) { espnKoreans = found; break; }
-      }
+    let espnAwayKoreans = [];
+    for (const variation of awayVariations) {
+      const found = koreansForTeam(variation, awayAbbr);
+      if (found.length) { espnAwayKoreans = found; break; }
     }
+    const espnKoreans = [...espnHomeKoreans, ...espnAwayKoreans];
+    const espnIsDerby = espnHomeKoreans.length > 0 && espnAwayKoreans.length > 0;
     koreanPlayer = espnKoreans[0] || null;
 
     // Check lineup confirmation only 1 hour before match start
@@ -7324,6 +7338,7 @@ function App() {
       koreanPlayer: koreanPlayer ? { ...koreanPlayer, event: playerEventText, ...playerStats } : null,
       // 같은 팀 복수 선수(미트윌란 등)도 일정 탭 등에서 함께 보이도록 전원 실어 보낸다.
       koreanPlayers: espnKoreans.length ? espnKoreans.map(kp => ({ ...kp, event: playerEventText, ...playerStats })) : undefined,
+      isKoreanDerby: espnIsDerby,
       competition: event.competitions[0].league?.name || '',
       competitionLogo: event.competitions[0].league?.logos?.[0]?.href || null,
       venue: event.competitions[0].venue?.fullName || '',
@@ -7536,16 +7551,16 @@ function App() {
         isMatchAllowed(m, sportFeeds) &&
         (m.koreanPlayers || [m.koreanPlayer]).some(kp => kp && followedNames.has(kp.name))
       )
-      // 같은 팀에 한국 선수가 둘 이상이면(미트윌란: 조규성+이한범) 팔로우한 선수를
-      // 맨 앞으로 옮긴다. 카드 주인공·히어로·주간 목록이 모두 koreanPlayers[0]을
-      // 기준으로 그려지므로, 여기서 한 번 정렬하면 화면 전체가 함께 맞는다.
+      // 한 경기에 우리 선수가 둘 이상일 수 있다 — 같은 팀(미트윌란: 조규성+이한범)이거나
+      // 코리안 더비(양 팀에 한 명씩). 팔로우한 선수를 앞으로 정렬해 두면 카드 주인공·
+      // 히어로·주간 목록이 모두 koreanPlayers[0] 기준이라 화면 전체가 함께 맞고,
+      // followedKoreans는 '오늘의 경기' 카드가 여러 명을 한 장에 싣는 데 쓴다.
       .map(m => {
         const list = (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean);
-        if (list.length < 2) return m;
-        const i = list.findIndex(kp => followedNames.has(kp.name));
-        if (i <= 0) return m;
-        const reordered = [list[i], ...list.filter((_, j) => j !== i)];
-        return { ...m, koreanPlayers: reordered, koreanPlayer: reordered[0] };
+        const mine = list.filter(kp => followedNames.has(kp.name));
+        if (list.length < 2) return { ...m, followedKoreans: mine };
+        const ordered = [...mine, ...list.filter(kp => !followedNames.has(kp.name))];
+        return { ...m, koreanPlayers: ordered, koreanPlayer: ordered[0], followedKoreans: mine };
       }),
     [liveMatches, sportFeeds, followedNames]
   );
