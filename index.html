@@ -4392,6 +4392,14 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
               <React.Fragment key={m.id}>
                 {/* Label above card — 좌: 선수·경기 정보, 우: 리그. ('종료'는 스코어 표시로 충분해 삭제) */}
                 <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:5, paddingLeft:2 }}>
+                  {koreans.map(k => {
+                    const kpProfile = ALL_PLAYERS.find(p => p.name === k.name);
+                    return kpProfile ? (
+                      <div key={k.name} style={{ width:16, height:16, borderRadius:'50%', overflow:'hidden', background:'#fff', flexShrink:0, marginRight:1 }}>
+                        <PlayerPhoto player={kpProfile} style={{ width:'100%', height:'100%' }}/>
+                      </div>
+                    ) : null;
+                  })}
                   <span style={{ fontSize:11, color:'var(--acc)', fontWeight:700 }}>{koreanNames}</span>
                   {m.isKoreanDerby && (
                     <span style={{ fontSize:9, fontWeight:800, color:'#000', background:'linear-gradient(90deg, var(--acc), #ff8a3d)', borderRadius:4, padding:'2px 5px', letterSpacing:0.3, lineHeight:1 }}>🇰🇷 더비</span>
