@@ -1970,7 +1970,19 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
     const best = [...eligible].sort((a, b) => score(b) - score(a))[0];
     if (!best) return null;
     if (isLive(best)) return { match: best, priority: 1 };
-    if (isFinal(best)) return { match: best, priority: 4 };
+
+    // 시간 비교: 다음 경기까지 남은 시간이 마지막 종료 경기의 경과 시간보다
+    // 짧으면 지난 결과 대신 '출격 대기' 히어로를 우선한다. 종료 후보가 아예
+    // 없으면(미출전·확인 불가 제외 등) 다음 경기가 있는 것만으로 히어로를 연다.
+    const nextUp = eligible
+      .filter(m => !isLive(m) && !isFinal(m) && m.fullDate && new Date(m.fullDate) > now)
+      .sort((a, b) => new Date(a.fullDate) - new Date(b.fullDate))[0];
+    const bestFinished = eligible.filter(isFinal).sort((a, b) => score(b) - score(a))[0];
+    if (nextUp && (!bestFinished ||
+        (new Date(nextUp.fullDate) - now) < (now - new Date(bestFinished.fullDate)))) {
+      return { match: nextUp, priority: 5 };
+    }
+    if (bestFinished) return { match: bestFinished, priority: 4 };
     return { match: best, priority: 5 };
   };
 
@@ -2088,7 +2100,8 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
 
   const isFinishedHighlight = highlightData?.priority === 4;
   // 히어로는 라이브(1)/종료(4) 하이라이트가 있을 때만. 예정(5)·없음이면 컴팩트 헤더만 노출.
-  const showHero = !!highlightData && (highlightData.priority === 1 || highlightData.priority === 4);
+  // 라이브(1)·종료(4)에 더해, 시간 비교에서 이긴 다음 경기(5, '출격 대기')도 히어로를 연다.
+  const showHero = !!highlightData && [1, 4, 5].includes(highlightData.priority);
   const finishedHeadline = isFinishedHighlight ? buildFinishedHeadline(highlightMatch) : null;
 
   // landscape image map: Korean name → filename in image/landscape/
