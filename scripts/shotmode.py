@@ -1,0 +1,124 @@
+#!/usr/bin/env python3
+"""App Store 스크린샷 촬영용 임시 패치.
+
+심사 가이드라인 4.1(a)로 한 번 반려됐다(2026-08-03): 스토어 메타데이터에
+실제 구단·리그 표기와 엠블럼이 노출된 것이 문제였다. 스크린샷은 앱 UI를
+그대로 보여주되 팀·리그·중계사만 가상 데이터로 바꿔 촬영한다.
+
+  python3 scripts/shotmode.py apply    # index.html 에 촬영 모드 주입
+  python3 scripts/shotmode.py revert   # git 으로 되돌리기
+
+apply 후 `npm run build && npx cap copy ios` → 시뮬레이터 촬영 → revert.
+촬영 모드 코드는 절대 커밋하지 않는다.
+"""
+import subprocess
+import sys
+
+SRC = 'index.html'
+
+HELPERS = '''
+// ─── App Store 스크린샷 촬영 모드 (scripts/shotmode.py 가 주입 · 커밋 금지) ───
+// 구단·리그·중계사 실명과 엠블럼을 가상 데이터로 바꾼다.
+const SHOT_MODE = true;
+const SHOT_TEAMS = ['노르드 FC', '리버사이드 SC', '웨스트포트 FC', '하버 유나이티드',
+  '그린필드 FC', '스톤브릿지 SC', '레이크뷰 FC', '아이언게이트 SC',
+  '선셋 FC', '노스우드 SC', '베이사이드 FC', '크레스트힐 SC',
+  '오크리지 FC', '실버레이크 SC', '포트힐 FC', '이스트뱅크 SC'];
+const SHOT_MAP = new Map();
+const shotName = (s) => {
+  if (!s) return s;
+  const k = String(s);
+  if (SHOT_TEAMS.includes(k)) return k;               // 이미 치환된 값은 그대로
+  if (!SHOT_MAP.has(k)) SHOT_MAP.set(k, SHOT_TEAMS[SHOT_MAP.size % SHOT_TEAMS.length]);
+  return SHOT_MAP.get(k);
+};
+const shotLogo = (s) => {
+  const n = shotName(s) || '';
+  const initial = (n.replace(/[^가-힣A-Za-z]/g, '').charAt(0) || 'F');
+  let h = 0; for (const c of n) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  const hue = [8, 210, 145, 42, 275, 190, 330][h % 7];
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
+    + '<circle cx="32" cy="32" r="30" fill="hsl(' + hue + ',56%,42%)"/>'
+    + '<text x="32" y="44" font-size="32" font-family="sans-serif" font-weight="700"'
+    + ' fill="#fff" text-anchor="middle">' + initial + '</text></svg>';
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+};
+function shotifySide(side) {
+  if (!side) return side;
+  // 선수의 kp.team 은 code 와 비교되므로 code 기준으로 한 번만 매핑해
+  // 이름·코드·선수 소속이 같은 가상 팀으로 떨어지게 한다.
+  const nm = shotName(side.code || side.name);
+  return { ...side, name: nm, code: nm, logo: shotLogo(nm) };
+}
+function shotifyMatch(m) {
+  if (!m) return m;
+  const isBall = (m.sport || '').includes('MLB') || (m.sport || '').includes('⚾');
+  return { ...m,
+    home: shotifySide(m.home), away: shotifySide(m.away),
+    competition: isBall ? '해외 야구 리그' : '해외 축구 리그', competitionLogo: null,
+    // sport 의 두 번째 토큰은 카드 하단 '국가 · 리그' 라벨에 쓰인다 —
+    // 이모지만 남겨 라벨이 '해외 축구 리그' 하나로 떨어지게 한다.
+    sport: isBall ? '⚾' : '⚽',
+    venue: '',
+    koreanPlayer: m.koreanPlayer ? { ...m.koreanPlayer, team: shotName(m.koreanPlayer.team) } : m.koreanPlayer,
+    koreanPlayers: m.koreanPlayers ? m.koreanPlayers.map(kp => ({ ...kp, team: shotName(kp.team) })) : m.koreanPlayers,
+  };
+}
+'''
+
+# 1) 헬퍼는 getBroadcasters 앞(모듈 상단)에 둬야 함수 안에서 참조할 수 있다.
+ANCHOR_HELPERS = 'function getBroadcasters(m) {'
+# 2) 중계사는 표시하지 않는다.
+ANCHOR_BROADCAST = ('function getBroadcasters(m) {', 'function getBroadcasters(m) {\n  if (SHOT_MODE) return [];')
+# 3) 선수 레지스트리의 소속팀·리그도 가상 데이터로.
+ANCHOR_PLAYERS = ("const PLAYERS = ALL_PLAYERS.slice(0, 5);",
+                  "if (SHOT_MODE) ALL_PLAYERS.forEach(p => {\n"
+                  "  p.team = shotName(p.team);\n"
+                  "  p.league = p.sport === '야구' ? '해외 야구 리그' : '해외 축구 리그';\n"
+                  "});\nconst PLAYERS = ALL_PLAYERS.slice(0, 5);")
+# 4) 선수 상세·홈 히어로의 실사(유니폼에 구단 엠블럼이 크게 보임)는 쓰지 않는다.
+ANCHOR_DETAIL_HERO = ("const file = LANDSCAPE[player.name];",
+                      "const file = SHOT_MODE ? null : LANDSCAPE[player.name];")
+ANCHOR_HOME_HERO = ("const landscapeFile = LANDSCAPE_MAP[playerName];",
+                    "const landscapeFile = SHOT_MODE ? null : LANDSCAPE_MAP[playerName];")
+# 4b) 커리어 타임라인(PLAYER_EXTRA.career)의 실제 구단·리그도 치환.
+ANCHOR_CAREER = ("function CareerTimeline({ extra }) {",
+                 """function CareerTimeline({ extra }) {
+  if (SHOT_MODE) extra = { ...extra, career: (extra.career || []).map((c, i) => ({
+    ...c, team: shotName(c.team),
+    league: /K리그|K리그1|K리그2/.test(c.league) ? c.league : '해외 리그' })) };""")
+# 5) 경기 데이터는 상태에 들어가는 길목 한 곳에서 전부 치환한다.
+ANCHOR_STATE = ("  const [liveMatches, setLiveMatches] = React.useState([]);",
+                "  const [liveMatches, setLiveMatchesRaw] = React.useState([]);\n"
+                "  const setLiveMatches = React.useCallback((v) => setLiveMatchesRaw(prev => {\n"
+                "    const next = typeof v === 'function' ? v(prev) : v;\n"
+                "    return SHOT_MODE ? next.map(shotifyMatch) : next;\n"
+                "  }), []);")
+
+
+def apply():
+    s = open(SRC).read()
+    if 'SHOT_MODE' in s:
+        sys.exit('이미 촬영 모드가 적용돼 있습니다. 먼저 revert 하세요.')
+    assert s.count(ANCHOR_HELPERS) == 1
+    s = s.replace(ANCHOR_HELPERS, HELPERS.strip() + '\n\n' + ANCHOR_BROADCAST[1], 1)
+    for old, new in (ANCHOR_PLAYERS, ANCHOR_DETAIL_HERO, ANCHOR_HOME_HERO, ANCHOR_CAREER, ANCHOR_STATE):
+        assert s.count(old) == 1, f'앵커를 찾지 못했습니다: {old[:40]}'
+        s = s.replace(old, new, 1)
+    open(SRC, 'w').write(s)
+    print('촬영 모드 적용 — npm run build && npx cap copy ios 후 시뮬레이터에서 캡처하세요.')
+
+
+def revert():
+    subprocess.run(['git', 'checkout', '--', SRC], check=True)
+    print('index.html 원복 완료.')
+
+
+if __name__ == '__main__':
+    cmd = sys.argv[1] if len(sys.argv) > 1 else ''
+    if cmd == 'apply':
+        apply()
+    elif cmd == 'revert':
+        revert()
+    else:
+        sys.exit('사용법: shotmode.py apply | revert')
