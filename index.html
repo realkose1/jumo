@@ -1996,6 +1996,9 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
 
     const m = highlightMatch;
     const isLive = m.live || m.time === 'LIVE';
+    // 코리안 더비·같은 팀 복수 선수면 팔로우한 전원을 히어로 문구에 싣는다.
+    const heroKoreans = (m.followedKoreans?.length ? m.followedKoreans : (m.koreanPlayers || [m.koreanPlayer])).filter(Boolean);
+    const heroNames = heroKoreans.map(k => k.name).join(' · ');
 
     switch (highlightData.priority) {
       case 1: // Live match (HIGHEST PRIORITY)
@@ -2013,9 +2016,12 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
           </div>
         );
         if (hasGoalEvent) {
+          // 더비에서 두 번째 선수가 넣은 골을 첫 선수 이름으로 표기하지 않도록,
+          // 이벤트의 실제 주인공을 우리 선수 목록에서 찾는다.
+          const scorer = heroKoreans.find(k => k.name === lastEvent.player) || m.koreanPlayer;
           return {
             status: matchSportKey(m) === 'baseball' ? `LIVE NOW · ${m.inning || ''}` : `LIVE NOW · ${hlLiveMinute || m.minute || ''}\'`,
-            main: lastEvent.type === 'goal' ? `⚽ ${m.koreanPlayer.name} 골!` : `${m.koreanPlayer.name} 어시스트!`,
+            main: lastEvent.type === 'goal' ? `⚽ ${scorer.name} 골!` : `${scorer.name} 어시스트!`,
             scoreNode,
             sub: `${m.home.name} vs ${m.away.name} · ${m.competition}`
           };
@@ -2030,7 +2036,8 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
             '출전 중';
           return {
             status: matchSportKey(m) === 'baseball' ? `LIVE NOW · ${m.inning || ''}` : `LIVE NOW · ${hlLiveMinute || m.minute || ''}\'`,
-            main: `${m.koreanPlayer.name} ${evLabel}`,
+            // 복수 선수(더비 등)는 개별 상태가 다를 수 있어 이름만 나열하고 상태는 생략.
+            main: heroKoreans.length > 1 ? `${heroNames} 출전 중` : `${m.koreanPlayer.name} ${evLabel}`,
             scoreNode,
             sub: `${m.home.name} vs ${m.away.name} · ${m.competition}`
           };
@@ -2045,7 +2052,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
         const statusText5 = m.lineupConfirmed ? '선발 출전' : '출격 대기';
         return {
           status: m.krTime || m.time,
-          main: `${m.koreanPlayer.name}\n${statusText5}`,
+          main: `${heroNames}\n${statusText5}`,
           sub: `${m.home.name} vs ${m.away.name} · ${m.competition}`
         };
     }
@@ -2247,8 +2254,28 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
             : ev.includes('분') ? ev : mins > 0 ? `${mins}분 출전` : ev === '출전 완료' ? '출전 완료' : '출전';
           statParts.push(minText);
         }
-        const homeColor = homeIsKorean ? 'var(--acc)' : '#fff';
-        const awayColor = !homeIsKorean ? 'var(--acc)' : '#fff';
+        // 코리안 더비·같은 팀 복수 선수: 팔로우한 전원을 '이름 핵심스탯'으로 압축 나열.
+        const finKoreans = (highlightMatch.followedKoreans?.length
+          ? highlightMatch.followedKoreans
+          : (highlightMatch.koreanPlayers || [kp])).filter(Boolean);
+        const shortFor = (k) => {
+          const g = (k.matchGoals > 0) ? k.matchGoals : (highlightMatch.events||[]).filter(e=>e.type==='goal'&&e.player===k.name).length;
+          const a = (k.matchAssists > 0) ? k.matchAssists : (highlightMatch.events||[]).filter(e=>e.type==='assist'&&e.player===k.name).length;
+          const parts = [];
+          if (g > 0) parts.push(`${g}골`);
+          if (a > 0) parts.push(`${a}도움`);
+          if (parts.length === 0) {
+            const mm = k.minutesPlayed;
+            parts.push(mm >= 90 ? '풀타임' : mm > 0 ? `${mm}분` : '출전');
+          }
+          return `${k.name} ${parts.join(' ')}`;
+        };
+        const finMain = finKoreans.length > 1
+          ? finKoreans.map(shortFor).join(' · ')
+          : `${kp.name} ${statParts.join(' · ')}`;
+        // 더비면 양 팀 모두 우리 선수 소속이므로 양쪽 다 강조된다.
+        const homeColor = finKoreans.some(k => k.team === highlightMatch.home.code) ? 'var(--acc)' : (homeIsKorean ? 'var(--acc)' : '#fff');
+        const awayColor = finKoreans.some(k => k.team === highlightMatch.away.code) ? 'var(--acc)' : (!homeIsKorean ? 'var(--acc)' : '#fff');
         const scoreNode = (
           <div style={{ display:'flex', alignItems:'center', gap:10, margin:'6px 0 2px' }}>
             <TeamBadge code={highlightMatch.home.code} size={28} logo={highlightMatch.home.logo}/>
@@ -2289,7 +2316,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
               {scoreNode}
               <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:8 }}>{highlightMatch.home.name} vs {highlightMatch.away.name} · {highlightMatch.competition}</div>
               <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:8 }}>
-                <div style={{ fontSize:24, fontWeight:900, color:'#fff', lineHeight:1.1, letterSpacing:-0.5 }}>{kp.name} {statParts.join(' · ')}</div>
+                <div style={{ fontSize: finKoreans.length > 1 ? 20 : 24, fontWeight:900, color:'#fff', lineHeight:1.2, letterSpacing:-0.5 }}>{finMain}</div>
                 {kp.sfRating && <span style={{ fontSize:12, fontWeight:700, color:'var(--acc)', background:'rgba(245,196,0,0.15)', border:'0.5px solid rgba(245,196,0,0.3)', borderRadius:8, padding:'4px 8px', flexShrink:0 }}>★ {kp.sfRating}</span>}
               </div>
             </div>
@@ -2992,6 +3019,8 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
           <div style={{ display:'flex', alignItems:'center', gap:8, margin:'12px 0 16px', flexWrap:'wrap' }}>
             {isLive && <><LiveDot/><span style={{ fontSize:11, fontWeight:700, color:'var(--acc)', letterSpacing:1.5 }}>LIVE</span></>}
             <span style={{ fontSize:11, color:'var(--text3)' }}>{match.competition}</span>
+            {/* 어디서 볼 수 있는지 — 대회의 국내 중계처(확인된 것만) */}
+            <BroadcastBadge match={match}/>
             {match.isKoreanDerby && (
               <span style={{ fontSize:10, fontWeight:800, color:'#000', background:'linear-gradient(90deg, var(--acc), #ff8a3d)', borderRadius:6, padding:'3px 8px', letterSpacing:0.5, marginLeft:'auto' }}>
                 🇰🇷 코리안 더비
@@ -4361,22 +4390,22 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
 
             return (
               <React.Fragment key={m.id}>
-                {/* Label above card */}
-                <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:5, paddingLeft:2, flexWrap:'wrap' }}>
-                  {m.competitionLogo
-                    ? <img src={m.competitionLogo} style={{ width:12, height:12, objectFit:'contain', opacity:0.55, flexShrink:0 }} alt=""/>
-                    : <span style={{ fontSize:10, flexShrink:0 }}>{m.sport?.includes('MLB')||m.sport?.includes('⚾') ? '⚾' : '⚽'}</span>
-                  }
-                  <span style={{ fontSize:11, color:'var(--text4)' }}>{leagueName}</span>
-                  <span style={{ fontSize:11, color:'var(--text5)' }}>/</span>
+                {/* Label above card — 좌: 선수·경기 정보, 우: 리그. ('종료'는 스코어 표시로 충분해 삭제) */}
+                <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:5, paddingLeft:2 }}>
                   <span style={{ fontSize:11, color:'var(--acc)', fontWeight:700 }}>{koreanNames}</span>
                   {m.isKoreanDerby && (
                     <span style={{ fontSize:9, fontWeight:800, color:'#000', background:'linear-gradient(90deg, var(--acc), #ff8a3d)', borderRadius:4, padding:'2px 5px', letterSpacing:0.3, lineHeight:1 }}>🇰🇷 더비</span>
                   )}
                   {labelParts.length > 0 && (
-                    <span style={{ fontSize:11, color: labelParts[0] === '미출전' ? 'var(--text4)' : 'var(--text)', fontWeight:500 }}>{' · ' + labelParts.join(' · ')}</span>
+                    <span style={{ fontSize:11, color: labelParts[0] === '미출전' ? 'var(--text4)' : 'var(--text)', fontWeight:500, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{' · ' + labelParts.join(' · ')}</span>
                   )}
-                  {isFinished && <span style={{ marginLeft:'auto', fontSize:10, fontWeight:600, color:'var(--text4)', flexShrink:0 }}>종료</span>}
+                  <span style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:4, flexShrink:0 }}>
+                    {m.competitionLogo
+                      ? <img src={m.competitionLogo} style={{ width:12, height:12, objectFit:'contain', opacity:0.55 }} alt=""/>
+                      : <span style={{ fontSize:10 }}>{m.sport?.includes('MLB')||m.sport?.includes('⚾') ? '⚾' : '⚽'}</span>
+                    }
+                    <span style={{ fontSize:11, color:'var(--text4)' }}>{leagueName}</span>
+                  </span>
                 </div>
                 <div onClick={() => onMatch(m)} style={{ marginBottom:20, background:'var(--surface)', borderRadius:14, padding:'12px 16px', cursor:'pointer', border: m.live ? '0.5px solid rgba(230,48,48,0.25)' : '0.5px solid var(--border2)' }}>
                   <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
