@@ -24,10 +24,11 @@ private final class TabBarPassthroughView: UIView {
 class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGestureRecognizerDelegate, UITabBarControllerDelegate {
 
     private let tabs: [JumoTab] = [
-        JumoTab(id: "home",     label: "홈",     symbol: "house.fill"),
+        // 웹 탭바와 같은 얇은 아웃라인 아이콘 — filled 변형은 시각적으로 무겁다.
+        JumoTab(id: "home",     label: "홈",     symbol: "house"),
         JumoTab(id: "schedule", label: "일정",   symbol: "calendar"),
-        JumoTab(id: "players",  label: "선수",   symbol: "person.fill"),
-        JumoTab(id: "news",     label: "뉴스",   symbol: "newspaper.fill"),
+        JumoTab(id: "players",  label: "선수",   symbol: "person"),
+        JumoTab(id: "news",     label: "뉴스",   symbol: "newspaper"),
         JumoTab(id: "more",     label: "더보기", symbol: "ellipsis")
     ]
     private var tabBarVC: UITabBarController?
@@ -324,7 +325,10 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
             let vc = UIViewController()
             vc.view.backgroundColor = .clear                 // content stays see-through
             vc.view.isUserInteractionEnabled = false
-            vc.tabBarItem = UITabBarItem(title: t.label, image: UIImage(systemName: t.symbol), tag: i)
+            let iconCfg = UIImage.SymbolConfiguration(weight: .light)
+            vc.tabBarItem = UITabBarItem(title: t.label, image: UIImage(systemName: t.symbol, withConfiguration: iconCfg), tag: i)
+            // 선택 시 filled로 자동 치환되지 않도록 동일 아웃라인을 지정
+            vc.tabBarItem.selectedImage = UIImage(systemName: t.symbol, withConfiguration: iconCfg)
             return vc
         }
         tvc.delegate = self
