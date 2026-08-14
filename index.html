@@ -1905,7 +1905,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
     // 미참여(미출전·벤치·부상·마이너·대기)는 상단 하이라이트 후보에서 아예 제외.
     // 실제 출전(스탯 라인·출전 중·선발 등)과 시작 전(출전 예상)만 후보로 둔다.
     const HERO_EXCLUDE = new Set(['미출전', '벤치', '부상', '마이너', '대기 명단', '확인 불가']);
-    const eligible = todayMatches.filter(m => {
+    const heroEligible = (m) => {
       const ev = m.koreanPlayer?.event || '';
       if (HERO_EXCLUDE.has(ev)) return false;
       // 이미 시작된(라이브·종료) 경기인데 아직 '출전 예상'이면 출전 여부를 모르는
@@ -1914,7 +1914,36 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
       const started = m.live || m.time === 'LIVE' || isFinalStatus(m.status);
       if (started && ev === '출전 예상') return false;
       return true;
+    };
+
+    // 우리 선수 팀이 이겼는지 — 종료 히어로의 '긍정적 결과' 판정과 가산점에 쓴다.
+    const koreanWon = (m) => {
+      const kp = m.koreanPlayer;
+      if (!kp) return false;
+      const isHome = kp.team === m.home.code;
+      const mine = isHome ? m.home.score : m.away.score;
+      const theirs = isHome ? m.away.score : m.home.score;
+      return (mine ?? 0) > (theirs ?? 0);
+    };
+    const isPositive = (m) => {
+      const kp = m.koreanPlayer || {};
+      return (kp.matchGoals || 0) > 0 || (kp.matchAssists || 0) > 0 ||
+             (kp.hits || 0) > 0 || (kp.homeRuns || 0) > 0 || koreanWon(m);
+    };
+
+    // 라이브가 없는 날 히어로가 자주 비지 않도록, '오늘' 밖이어도 48시간 내
+    // 종료 경기 중 긍정적 결과(골·도움·안타·홈런·팀 승리)는 후보에 추가한다.
+    // 오늘 종료분은 결과와 무관하게 그대로 후보(그날의 소식이므로).
+    const todayIds = new Set(todayMatches.map(m => m.id));
+    const recentPositiveFinished = allMatches.filter(m => {
+      if (todayIds.has(m.id)) return false;
+      if (!isFinalStatus(m.status) || !m.koreanPlayer || !m.fullDate) return false;
+      if (koreanIsMinorLeaguer(m)) return false;
+      const hoursAgo = (now - new Date(m.fullDate)) / 3600000;
+      return hoursAgo > 0 && hoursAgo <= 48 && isPositive(m);
     });
+
+    const eligible = [...todayMatches, ...recentPositiveFinished].filter(heroEligible);
     if (eligible.length === 0) return null;
 
     const isLive = m => m.live || m.time === 'LIVE';
@@ -1929,7 +1958,8 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
       s += assists(m) * 50;                 // each assist: big impact
       if (isFinal(m)) {
         const hoursAgo = (now - new Date(m.fullDate)) / 3600000;
-        s += Math.max(0, 30 - hoursAgo * 5); // recency boost: 0h→+30, 6h+→0
+        s += Math.max(0, 30 - hoursAgo * 0.625); // 신선도: 0h→+30, 48h→0
+        if (koreanWon(m)) s += 20;               // 승리한 경기를 우선
       } else if (!isLive(m)) {
         const hoursUntil = (new Date(m.fullDate) - now) / 3600000;
         s += Math.max(0, 25 - hoursUntil * 2); // imminence boost: 0h→+25, 12.5h→0
@@ -1993,8 +2023,12 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
             sub: `${m.home.name} vs ${m.away.name} · ${m.competition}`
           };
         }
-      case 4: // Finished match
-        return { status: '경기 종료', main: '', sub: '' };
+      case 4: { // Finished match — 오늘 밖(48h 내 긍정 결과)이면 언제 경기인지 밝힌다.
+        const d = new Date(m.fullDate);
+        const dayDiff = Math.floor((startOfToday - d) / 86400000) + 1;
+        const when = d >= startOfToday ? '경기 종료' : dayDiff <= 1 ? '어제 경기' : `${d.getMonth() + 1}.${d.getDate()} 경기`;
+        return { status: when, main: '', sub: '' };
+      }
       case 5: // Upcoming
         const statusText5 = m.lineupConfirmed ? '선발 출전' : '출격 대기';
         return {
@@ -2231,7 +2265,13 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
             </div>
             <div style={{ position:'absolute', bottom:20, left:20, right:20, zIndex:2 }}>
               <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
-                <span style={{ fontSize:11, fontWeight:700, color:'rgba(255,255,255,0.7)', letterSpacing:1.5 }}>경기 종료</span>
+                <span style={{ fontSize:11, fontWeight:700, color:'rgba(255,255,255,0.7)', letterSpacing:1.5 }}>{(() => {
+                  // 오늘 밖(48h 내 긍정 결과)의 경기는 언제 것인지 밝힌다.
+                  const d = new Date(highlightMatch.fullDate);
+                  if (!highlightMatch.fullDate || d >= startOfToday) return '경기 종료';
+                  const dayDiff = Math.floor((startOfToday - d) / 86400000) + 1;
+                  return dayDiff <= 1 ? '어제 경기 종료' : `${d.getMonth() + 1}.${d.getDate()} 경기 종료`;
+                })()}</span>
               </div>
               {scoreNode}
               <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:8 }}>{highlightMatch.home.name} vs {highlightMatch.away.name} · {highlightMatch.competition}</div>
