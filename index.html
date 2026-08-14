@@ -303,6 +303,9 @@ const KOREAN_PLAYERS = {
   'FC Midtjylland': { name: '조규성', nameEn: 'Cho Gue-sung', number: 10, position: '공격수' },
   // 황인범 — FC Porto (Primeira Liga), 2026-07 이적
   'FC Porto': { name: '황인범', nameEn: 'Hwang In-beom', number: 16, position: '미드필더' },
+  // 이한범 — Club Brugge (Jupiler Pro League), 2026-08 미트윌란에서 이적
+  'Club Brugge': { name: '이한범', nameEn: 'Lee Han-Beom', number: 3, position: '센터백' },
+  'Club Brugge KV': { name: '이한범', nameEn: 'Lee Han-Beom', number: 3, position: '센터백' },
   'Porto': { name: '황인범', nameEn: 'Hwang In-beom', number: 16, position: '미드필더' },
   // 김하성 — Atlanta Braves (MLB)
   // 김하성 — 2026-07 기준 애틀랜타 브레이브스 산하(AAA 귀넷 스트라이퍼스).
@@ -342,8 +345,8 @@ const KOREAN_PLAYERS = {
 // KOREAN_PLAYERS는 팀명 → 선수 1명 구조라 같은 팀에 한국 선수가 둘 이상이면
 // 한 명만 잡힌다(미트윌란: 조규성 + 이한범). 추가 선수는 여기에 둔다.
 const KOREAN_PLAYERS_EXTRA = {
-  'Midtjylland':    [{ name: '이한범', nameEn: 'Lee Han-Beom', number: 3, position: '센터백' }],
-  'FC Midtjylland': [{ name: '이한범', nameEn: 'Lee Han-Beom', number: 3, position: '센터백' }],
+  // 2026-08 이한범 미트윌란 → 클뤼프 브뤼허 이적으로 현재는 비어 있다.
+  // 같은 팀에 두 번째 한국 선수가 생기면 '팀명': [{ name, nameEn, number, position }] 로 추가.
 };
 
 // 팀명으로 그 팀의 한국 선수 전원을 돌려준다(0~N명). team 코드는 카드·스코어 비교에
@@ -548,7 +551,7 @@ const ALL_PLAYERS = [
   { id: 6,  name: '황희찬',  nameEn: 'Hwang Hee-chan',  number: 11, sport: '축구',   team: 'Wolves',     league: 'EPL',        position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 65, age: 30, birth: '1996.01.26', height: '177cm', espnLeague: 'eng.1',  espnId: 237224, apiFootballId: 24888 },
   { id: 7,  name: '황인범',  nameEn: 'Hwang In-beom',   number: 16, sport: '축구',   team: 'Porto',      league: 'Primeira Liga', position: '미드필더', nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 50, age: 29, birth: '1996.09.20', height: '177cm', espnLeague: 'por.1',  espnId: 280061, apiFootballId: 2901 },
   { id: 8,  name: '조규성',  nameEn: 'Cho Gue-sung',    number: 10,  sport: '축구',   team: 'Midtjylland',league: 'Superliga',  position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 70, age: 28, birth: '1998.01.25', height: '190cm', espnLeague: 'den.1',  espnId: 303464, apiFootballId: 34211 },
-  { id: 25, name: '이한범',  nameEn: 'Lee Han-Beom',   number: 3,  sport: '축구',   team: 'Midtjylland',league: 'Superliga',  position: '센터백',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 85, age: 24, birth: '2002.06.17', height: '190cm', espnLeague: 'den.1',  apiFootballId: 237218 },
+  { id: 25, name: '이한범',  nameEn: 'Lee Han-Beom',   number: 3,  sport: '축구',   team: 'Club Brugge',league: 'Pro League', position: '센터백',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 85, age: 24, birth: '2002.06.17', height: '190cm', espnLeague: 'bel.1',  apiFootballId: 237218 },
   { id: 19, name: '오현규',  nameEn: 'Oh Hyeon-gyu',    number: 19, sport: '축구',   team: 'Besiktas',   league: 'Süper Lig',  position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 85, age: 25, birth: '2001.04.12', height: '181cm', espnLeague: 'tur.1',  espnId: 302434, apiFootballId: 34710 },
   { id: 20, name: '양현준',  nameEn: 'Yang Hyun-jun',   number: 77, sport: '축구',   team: 'Celtic',     league: 'SPFL',       position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 70, age: 23, birth: '2002.06.25', height: '172cm', espnLeague: 'sco.1',  espnId: 350711, apiFootballId: 304958 },
   { id: 21, name: '백승호',  nameEn: 'Paik Seung-ho',   number: 17, sport: '축구',   team: 'Birmingham', league: 'Championship', position: '미드필더', nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 95, age: 29, birth: '1997.03.17', height: '183cm', espnLeague: 'eng.2', apiFootballId: 2909 },
@@ -792,6 +795,16 @@ const PLAYER_EXTRA = {
     career: [
       { year:'2024–',    team:'Crvena Zvezda', league:'세르비아 SuperLiga', flag:'🇷🇸' },
       { year:'2018–24',  team:'울산 HD',        league:'K리그1',             flag:'🇰🇷' },
+    ],
+    seasonStats: [],
+  },
+  25: { // 이한범
+    form: [6.9, 7.2, 6.8, 7.4, 7.0, 7.3, 7.1],
+    recentMatches: [],
+    career: [
+      { year:'2026–',    team:'Club Brugge',    league:'벨기에 1부',  flag:'🇧🇪' },
+      { year:'2024–26',  team:'FC Midtjylland', league:'덴마크 SL',   flag:'🇩🇰' },
+      { year:'2021–24',  team:'FC 서울',         league:'K리그1',      flag:'🇰🇷' },
     ],
     seasonStats: [],
   },
@@ -2049,7 +2062,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
     '손흥민': 'heungmin.jpg', '이강인': 'kangin.png', '김민재': 'minjae.jpeg',
     '조규성': 'guesung.jpeg', '황희찬': 'heechan.jpeg', '황인범': 'inbeom.jpg',
     '김하성': 'haseong.jpeg', '이정후': 'junghoo.jpeg', '김혜성': 'hyesung.jpeg',
-    '오현규': 'hyeongyu.jpeg', '양현준': 'hyunjun.jpeg', '이한범': 'hanbeom.png',
+    '오현규': 'hyeongyu.jpeg', '양현준': 'hyunjun.jpeg',
     '백승호': 'seungho.png', '배준호': 'junho.jpeg', '엄지성': 'jisung.jpeg',
     '설영우': 'youngwoo.jpeg',
   };
@@ -3777,7 +3790,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
             '손흥민':'heungmin.jpg','이강인':'kangin.png','김민재':'minjae.jpeg',
             '조규성':'guesung.jpeg','황희찬':'heechan.jpeg','황인범':'inbeom.jpg',
             '김하성':'haseong.jpeg','이정후':'junghoo.jpeg','김혜성':'hyesung.jpeg',
-            '오현규':'hyeongyu.jpeg','양현준':'hyunjun.jpeg','이한범':'hanbeom.png',
+            '오현규':'hyeongyu.jpeg','양현준':'hyunjun.jpeg',
             '백승호':'seungho.png','배준호':'junho.jpeg','엄지성':'jisung.jpeg',
             '설영우':'youngwoo.jpeg',
           };
