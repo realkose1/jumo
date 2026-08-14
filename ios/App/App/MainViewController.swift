@@ -325,10 +325,11 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
             let vc = UIViewController()
             vc.view.backgroundColor = .clear                 // content stays see-through
             vc.view.isUserInteractionEnabled = false
-            let iconCfg = UIImage.SymbolConfiguration(weight: .light)
-            vc.tabBarItem = UITabBarItem(title: t.label, image: UIImage(systemName: t.symbol, withConfiguration: iconCfg), tag: i)
-            // 선택 시 filled로 자동 치환되지 않도록 동일 아웃라인을 지정
-            vc.tabBarItem.selectedImage = UIImage(systemName: t.symbol, withConfiguration: iconCfg)
+            // 웹 탭바와 동일한 커스텀 SVG 아이콘(Assets: tab-*) — SF Symbol은
+            // 아웃라인이어도 내부 디테일(달력 점·신문 선)이 많아 복잡해 보인다.
+            let icon = UIImage(named: "tab-\(t.id)") ?? UIImage(systemName: t.symbol)
+            vc.tabBarItem = UITabBarItem(title: t.label, image: icon, tag: i)
+            vc.tabBarItem.selectedImage = icon
             return vc
         }
         tvc.delegate = self
