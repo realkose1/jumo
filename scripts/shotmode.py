@@ -57,6 +57,51 @@ const SHOT_PLAYER = {
   '이정후': ['유시온', 'Yoo Si-on'],     '김혜성': ['표준영', 'Pyo Jun-young'],
 };
 const shotPlayerName = (n) => (SHOT_PLAYER[n] || [n])[0];
+// 실사 대신 쓰는 플랫 일러스트 아바타 — 팀 컬러 유니폼 + 헤어 4종 + 피부톤 3종을
+// 이름 해시로 골라 선수마다 다르게 보이게 한다. 빈 실루엣보다 '의도된 디자인'으로 읽힌다.
+function ShotAvatar({ player, style = {} }) {
+  let h = 0; for (const c of String(player.team || '')) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  const hue = [8, 210, 145, 42, 275, 190, 330][h % 7];
+  let h2 = 0; for (const c of String(player.name || '')) h2 = (h2 * 33 + c.charCodeAt(0)) >>> 0;
+  const skin  = ['#e8b98f', '#f0c9a2', '#d9a97e'][h2 % 3];
+  const skinD = ['#d6a67c', '#e0b78f', '#c7976c'][h2 % 3];
+  const hairC = ['#221d1a', '#16161d', '#33261d'][(h2 >> 2) % 3];
+  const jersey  = 'hsl(' + hue + ',48%,40%)';
+  const jerseyD = 'hsl(' + hue + ',52%,29%)';
+  const HAIR = [
+    'M68,164 C68,108 90,88 120,88 C150,88 172,108 172,164 C172,130 152,118 120,118 C88,118 68,130 68,164 Z',
+    'M68,164 C68,108 90,88 120,88 C150,88 172,108 172,164 C172,126 156,112 126,114 C110,116 94,126 84,138 C76,148 71,156 68,164 Z',
+    'M68,164 C68,108 90,88 120,88 C150,88 172,108 172,164 C172,128 156,116 134,118 L120,132 L106,118 C84,116 68,128 68,164 Z',
+    'M70,156 C70,104 94,86 120,86 C146,86 170,104 170,156 C170,126 148,110 120,110 C92,110 70,126 70,156 Z',
+  ][h2 % 4];
+  const gid = 'sav' + (player.id || h2);
+  // 히어로처럼 넓은 영역(absolute inset 0)에선 확대·크롭하지 않고 인물 전체를
+  // 하단 중앙에 fit — 배경은 div 그라디언트가 채운다.
+  const isHero = style && style.position === 'absolute';
+  return (
+    <div style={{ position:'relative', overflow:'hidden',
+      background: 'linear-gradient(180deg, hsl(' + hue + ',24%,17%), hsl(' + hue + ',20%,10%))', ...style }}>
+      <svg width="100%" height="100%" viewBox="0 0 240 340"
+        preserveAspectRatio={isHero ? 'xMidYMax meet' : 'xMidYMid slice'} style={{ display:'block' }}>
+        <defs>
+          <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor={'hsl(' + hue + ',24%,17%)'}/>
+            <stop offset="1" stopColor={'hsl(' + hue + ',20%,10%)'}/>
+          </linearGradient>
+        </defs>
+        {!isHero && <rect width="240" height="340" fill={'url(#' + gid + ')'}/>}
+        <path d="M28,340 L28,306 C28,274 58,258 92,252 L148,252 C182,258 212,274 212,306 L212,340 Z" fill={jersey}/>
+        <path d="M98,252 L120,274 L142,252 L130,247 L120,258 L110,247 Z" fill={jerseyD}/>
+        <rect x="103" y="206" width="34" height="52" rx="13" fill={skinD}/>
+        <circle cx="68" cy="166" r="10" fill={skinD}/>
+        <circle cx="172" cy="166" r="10" fill={skinD}/>
+        <ellipse cx="120" cy="162" rx="52" ry="60" fill={skin}/>
+        <path d={HAIR} fill={hairC}/>
+        <text x="120" y="322" textAnchor="middle" fontFamily="'Space Grotesk',monospace" fontWeight="700" fontSize="28" fill="rgba(255,255,255,0.55)">{player.number}</text>
+      </svg>
+    </div>
+  );
+}
 const shotPlayerNameEn = (n, en) => (SHOT_PLAYER[n] || [null, en])[1];
 
 function shotifySide(side) {
@@ -106,6 +151,12 @@ ANCHOR_CAREER = ("function CareerTimeline({ extra }) {",
   if (SHOT_MODE) extra = { ...extra, career: (extra.career || []).map((c, i) => ({
     ...c, team: shotName(c.team),
     league: /K리그|K리그1|K리그2/.test(c.league) ? c.league : '해외 리그' })) };""")
+# 4d) PlayerPhoto 를 통째로 아바타로 대체 (실사·실루엣 모두 대신)
+ANCHOR_PHOTO = (
+    "function PlayerPhoto({ player, style={}, tint='var(--bg)' }) {\n  const num = player.number;",
+    "function PlayerPhoto({ player, style={}, tint='var(--bg)' }) {\n"
+    "  if (SHOT_MODE) return <ShotAvatar player={player} style={style}/>;\n"
+    "  const num = player.number;")
 # 4c) AF 상세 토큰 매칭은 원본 영문명으로 (치환된 표기로는 로스터 매칭이 안 됨)
 ANCHOR_CANONICAL = (
     "const canonical = ALL_PLAYERS.find(p => p.name === kp.name)?.nameEn || kp.nameEn || '';",
@@ -126,7 +177,7 @@ def apply():
         sys.exit('이미 촬영 모드가 적용돼 있습니다. 먼저 revert 하세요.')
     assert s.count(ANCHOR_HELPERS) == 1
     s = s.replace(ANCHOR_HELPERS, HELPERS.strip() + '\n\n' + ANCHOR_BROADCAST[1], 1)
-    for old, new in (ANCHOR_PLAYERS, ANCHOR_DETAIL_HERO, ANCHOR_HOME_HERO, ANCHOR_CAREER, ANCHOR_CANONICAL, ANCHOR_STATE):
+    for old, new in (ANCHOR_PLAYERS, ANCHOR_DETAIL_HERO, ANCHOR_HOME_HERO, ANCHOR_CAREER, ANCHOR_CANONICAL, ANCHOR_PHOTO, ANCHOR_STATE):
         assert s.count(old) == 1, f'앵커를 찾지 못했습니다: {old[:40]}'
         s = s.replace(old, new, 1)
     open(SRC, 'w').write(s)
