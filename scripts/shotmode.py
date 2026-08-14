@@ -43,6 +43,22 @@ const shotLogo = (s) => {
     + ' fill="#fff" text-anchor="middle">' + initial + '</text></svg>';
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 };
+// 실존 선수 이름·사진도 스토어 메타데이터에선 노출하지 않는다(선수 이름은 가상,
+// 사진은 imageMap 미스 → 실루엣 폴백). 영문명은 경기 데이터 매칭에 쓰여
+// KOREAN_PLAYERS 쪽은 원본을 유지하고 표시용(ALL_PLAYERS)만 바꾼다.
+const SHOT_PLAYER = {
+  '손흥민': ['김서준', 'Kim Seo-jun'],   '이강인': ['박도현', 'Park Do-hyun'],
+  '김민재': ['최태오', 'Choi Tae-oh'],   '황희찬': ['정하람', 'Jung Ha-ram'],
+  '황인범': ['한지우', 'Han Ji-woo'],    '조규성': ['서은호', 'Seo Eun-ho'],
+  '이한범': ['윤도담', 'Yoon Do-dam'],   '오현규': ['임세인', 'Lim Se-in'],
+  '양현준': ['문가온', 'Moon Ga-on'],    '백승호': ['강온유', 'Kang On-yu'],
+  '배준호': ['조하민', 'Jo Ha-min'],     '엄지성': ['신은성', 'Shin Eun-sung'],
+  '설영우': ['남기윤', 'Nam Gi-yun'],    '김하성': ['오재이', 'Oh Jae-yi'],
+  '이정후': ['유시온', 'Yoo Si-on'],     '김혜성': ['표준영', 'Pyo Jun-young'],
+};
+const shotPlayerName = (n) => (SHOT_PLAYER[n] || [n])[0];
+const shotPlayerNameEn = (n, en) => (SHOT_PLAYER[n] || [null, en])[1];
+
 function shotifySide(side) {
   if (!side) return side;
   // 선수의 kp.team 은 code 와 비교되므로 code 기준으로 한 번만 매핑해
@@ -60,8 +76,8 @@ function shotifyMatch(m) {
     // 이모지만 남겨 라벨이 '해외 축구 리그' 하나로 떨어지게 한다.
     sport: isBall ? '⚾' : '⚽',
     venue: '',
-    koreanPlayer: m.koreanPlayer ? { ...m.koreanPlayer, team: shotName(m.koreanPlayer.team) } : m.koreanPlayer,
-    koreanPlayers: m.koreanPlayers ? m.koreanPlayers.map(kp => ({ ...kp, team: shotName(kp.team) })) : m.koreanPlayers,
+    koreanPlayer: m.koreanPlayer ? { ...m.koreanPlayer, team: shotName(m.koreanPlayer.team), name: shotPlayerName(m.koreanPlayer.name) } : m.koreanPlayer,
+    koreanPlayers: m.koreanPlayers ? m.koreanPlayers.map(kp => ({ ...kp, team: shotName(kp.team), name: shotPlayerName(kp.name) })) : m.koreanPlayers,
   };
 }
 '''
@@ -75,6 +91,9 @@ ANCHOR_PLAYERS = ("const PLAYERS = ALL_PLAYERS.slice(0, 5);",
                   "if (SHOT_MODE) ALL_PLAYERS.forEach(p => {\n"
                   "  p.team = shotName(p.team);\n"
                   "  p.league = p.sport === '야구' ? '해외 야구 리그' : '해외 축구 리그';\n"
+                  "  p._origNameEn = p.nameEn;\n"
+                  "  p.nameEn = shotPlayerNameEn(p.name, p.nameEn);\n"
+                  "  p.name = shotPlayerName(p.name);\n"
                   "});\nconst PLAYERS = ALL_PLAYERS.slice(0, 5);")
 # 4) 선수 상세·홈 히어로의 실사(유니폼에 구단 엠블럼이 크게 보임)는 쓰지 않는다.
 ANCHOR_DETAIL_HERO = ("const file = LANDSCAPE[player.name];",
@@ -87,6 +106,11 @@ ANCHOR_CAREER = ("function CareerTimeline({ extra }) {",
   if (SHOT_MODE) extra = { ...extra, career: (extra.career || []).map((c, i) => ({
     ...c, team: shotName(c.team),
     league: /K리그|K리그1|K리그2/.test(c.league) ? c.league : '해외 리그' })) };""")
+# 4c) AF 상세 토큰 매칭은 원본 영문명으로 (치환된 표기로는 로스터 매칭이 안 됨)
+ANCHOR_CANONICAL = (
+    "const canonical = ALL_PLAYERS.find(p => p.name === kp.name)?.nameEn || kp.nameEn || '';",
+    "const _cp = ALL_PLAYERS.find(p => p.name === kp.name);\n"
+    "              const canonical = (_cp && (_cp._origNameEn || _cp.nameEn)) || kp.nameEn || '';")
 # 5) 경기 데이터는 상태에 들어가는 길목 한 곳에서 전부 치환한다.
 ANCHOR_STATE = ("  const [liveMatches, setLiveMatches] = React.useState([]);",
                 "  const [liveMatches, setLiveMatchesRaw] = React.useState([]);\n"
@@ -102,7 +126,7 @@ def apply():
         sys.exit('이미 촬영 모드가 적용돼 있습니다. 먼저 revert 하세요.')
     assert s.count(ANCHOR_HELPERS) == 1
     s = s.replace(ANCHOR_HELPERS, HELPERS.strip() + '\n\n' + ANCHOR_BROADCAST[1], 1)
-    for old, new in (ANCHOR_PLAYERS, ANCHOR_DETAIL_HERO, ANCHOR_HOME_HERO, ANCHOR_CAREER, ANCHOR_STATE):
+    for old, new in (ANCHOR_PLAYERS, ANCHOR_DETAIL_HERO, ANCHOR_HOME_HERO, ANCHOR_CAREER, ANCHOR_CANONICAL, ANCHOR_STATE):
         assert s.count(old) == 1, f'앵커를 찾지 못했습니다: {old[:40]}'
         s = s.replace(old, new, 1)
     open(SRC, 'w').write(s)
