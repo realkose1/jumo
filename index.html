@@ -490,6 +490,9 @@ function koreanIsMinorLeaguer(m) {
 // 카드 우측 상단 배지는 폭이 좁다. 야구 스탯 라인이 길면(예: '3타수 2안타 1홈런
 // 3타점') 선수 이름이 줄바꿈되고, 홈런·타점은 카드 안쪽 알약으로 이미 보여주고
 // 있어 중복이다 → 배지에는 '몇타수 몇안타'까지만 남긴다.
+// '미출전'·'확인 불가'는 정보가 없거나 부정적인 상태 — 배지를 덜 강조한다.
+const isMutedEvent = (ev) => ev === '미출전' || ev === '확인 불가';
+
 function compactBadgeEvent(ev) {
   const m = /^(\d+타수\s*\d+안타)/.exec(ev || '');
   return m ? m[1] : (ev || '');
@@ -1531,10 +1534,10 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
                 {/* Event info - TOP RIGHT (마이너는 우측 상단에 표시하지 않고 하단 MLB 라벨로 대체) */}
                 {kp.event && kp.event !== '마이너' && (
                   <div style={{
-                    background: isLive ? 'rgba(230,48,48,0.1)' : 'var(--btn-bg)',
+                    background: isMutedEvent(kp.event) ? 'transparent' : isLive ? 'rgba(230,48,48,0.1)' : 'var(--btn-bg)',
                     borderRadius:6, padding:'5px 8px', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center'
                   }}>
-                    <span style={{ fontSize:10, fontWeight:600, color: isLive ? 'var(--acc)' : 'var(--text2)', whiteSpace:'nowrap', lineHeight:1 }}>
+                    <span style={{ fontSize:10, fontWeight: isMutedEvent(kp.event) ? 500 : 600, color: isMutedEvent(kp.event) ? 'var(--text4)' : isLive ? 'var(--acc)' : 'var(--text2)', whiteSpace:'nowrap', lineHeight:1 }}>
                       {compactBadgeEvent(formatExpectedEvent(kp, allMatches))}
                     </span>
                   </div>
@@ -3209,8 +3212,8 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
                         <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
                           <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>{kp.name} <span style={{ ...NUM, color:'var(--text4)', fontWeight:400 }}>#{kp.number}</span></div>
                           {kp.event && !isStatLine && (
-                            <div style={{ background: isLive ? 'rgba(230,48,48,0.1)' : 'var(--btn-bg)', borderRadius:6, padding:'3px 7px', flexShrink:0, display:'inline-flex', alignItems:'center', justifyContent:'center' }}>
-                              <span style={{ fontSize:10, fontWeight:600, color: isLive ? 'var(--acc)' : 'var(--text2)', whiteSpace:'nowrap', lineHeight:1 }}>{formattedEvent}</span>
+                            <div style={{ background: isMutedEvent(kp.event) ? 'transparent' : isLive ? 'rgba(230,48,48,0.1)' : 'var(--btn-bg)', borderRadius:6, padding:'3px 7px', flexShrink:0, display:'inline-flex', alignItems:'center', justifyContent:'center' }}>
+                              <span style={{ fontSize:10, fontWeight: isMutedEvent(kp.event) ? 500 : 600, color: isMutedEvent(kp.event) ? 'var(--text4)' : isLive ? 'var(--acc)' : 'var(--text2)', whiteSpace:'nowrap', lineHeight:1 }}>{formattedEvent}</span>
                             </div>
                           )}
                           {injury && (() => { const s = injuryStyle(injury); return (
@@ -4527,7 +4530,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
                     <span style={{ fontSize:9, fontWeight:800, color:'#000', background:'linear-gradient(90deg, var(--acc), #ff8a3d)', borderRadius:4, padding:'2px 5px', letterSpacing:0.3, lineHeight:1 }}>🇰🇷 더비</span>
                   )}
                   {labelParts.length > 0 && (
-                    <span style={{ fontSize:11, color: labelParts[0] === '미출전' ? 'var(--text4)' : 'var(--text)', fontWeight:500, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{' · ' + labelParts.join(' · ')}</span>
+                    <span style={{ fontSize:11, color: isMutedEvent(labelParts[0]) ? 'var(--text4)' : 'var(--text)', fontWeight:500, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{' · ' + labelParts.join(' · ')}</span>
                   )}
                   <span style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:4, flexShrink:0 }}>
                     {m.competitionLogo
