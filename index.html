@@ -1022,15 +1022,9 @@ function TeamBadge({ code, size=36, logo }) {
 
 function PlayerPhoto({ player, style={}, tint='var(--bg)' }) {
   const num = player.number;
-  const imageMap = { '손흥민': 'heungmin.png', '이강인': 'kangin.png', '김민재': 'minjae.png', '조규성': 'guesung.png', '황희찬': 'heechan.png', '황인범': 'inbeom.png', '김하성': 'haseong.png', '이정후': 'junghoo.png', '김혜성': 'hyeseong.png', '오현규': 'hyungyu.png', '양현준': 'hyunjun.png', '백승호': 'seungho.webp', '배준호': 'junho.webp', '엄지성': 'jisung.webp', '설영우': 'youngwoo.webp', '이한범': 'hanbeom.png', '이재성': 'jaesung.png', '홍현석': 'hyunseok.png', '정우영': 'wooyeong.png', '카스트로프': 'castrop.png', '박승수': 'seungsoo.png', '김지수': 'jisoo.png', '양민혁': 'minhyeok.png', '이태석': 'taeseok.png', '송성문': 'songsm.png' };
-  // For full-body source images, zoom into the face area
-  const PHOTO_ZOOM = {
-    '백승호': { scale: 2.75, originX: '45%', originY: '16%' },
-    '배준호': { scale: 2.2, originX: '50%', originY: '6%' },
-    '엄지성': { scale: 1.8, originX: '50%', originY: '8%' },
-    '설영우': { scale: 1.9, originX: '50%', originY: '15%' },
-  };
-  const zoom = PHOTO_ZOOM[player.name];
+  const imageMap = { '손흥민': 'heungmin.png', '이강인': 'kangin.png', '김민재': 'minjae.png', '조규성': 'guesung.png', '황희찬': 'heechan.png', '황인범': 'inbeom.png', '김하성': 'haseong.png', '이정후': 'junghoo.png', '김혜성': 'hyeseong.png', '오현규': 'hyungyu.png', '양현준': 'hyunjun.png', '백승호': 'seungho.png', '배준호': 'junho.png', '엄지성': 'jisung.png', '설영우': 'youngwoo.png', '이한범': 'hanbeom.png', '이재성': 'jaesung.png', '홍현석': 'hyunseok.png', '정우영': 'wooyeong.png', '카스트로프': 'castrop.png', '박승수': 'seungsoo.png', '김지수': 'jisoo.png', '양민혁': 'minhyeok.png', '이태석': 'taeseok.png', '송성문': 'songsm.png' };
+  // 전원 동일 규격 헤드샷(얼굴+어깨)이라 별도 확대 보정이 필요 없다.
+  const zoom = null;
   const imagePath = imageMap[player.name] ? `image/${imageMap[player.name]}` : null;
 
   return (
@@ -1038,7 +1032,7 @@ function PlayerPhoto({ player, style={}, tint='var(--bg)' }) {
       {imagePath ? (
         <img src={imagePath} alt={player.name} style={{
           width:'100%', height:'100%', objectFit:'cover',
-          objectPosition: player.name === '조규성' ? '40% 50%' : '50% 50%',
+          objectPosition: '50% 50%',
           display:'block', filter:'brightness(1.1) contrast(1.05)',
           transform: zoom ? `scale(${zoom.scale})` : undefined,
           transformOrigin: zoom ? `${zoom.originX} ${zoom.originY}` : undefined,
@@ -4860,10 +4854,10 @@ const NEWS_PLAYER_IMG = {
   '이재성': 'image/jaesung.png', '홍현석': 'image/hyunseok.png', '정우영': 'image/wooyeong.png',
   '카스트로프': 'image/castrop.png', '박승수': 'image/seungsoo.png', '김지수': 'image/jisoo.png',
   '양민혁': 'image/minhyeok.png', '이태석': 'image/taeseok.png', '송성문': 'image/songsm.png',
-  '백승호': 'image/seungho.webp',
-  '배준호': 'image/junho.webp',
-  '엄지성': 'image/jisung.webp',
-  '설영우': 'image/youngwoo.webp',
+  '백승호': 'image/seungho.png',
+  '배준호': 'image/junho.png',
+  '엄지성': 'image/jisung.png',
+  '설영우': 'image/youngwoo.png',
 };
 
 function detectPlayerName(text) {
