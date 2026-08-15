@@ -4188,6 +4188,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
               ))}
             </div>
           )}
+          <PlayerNews name={player.name}/>
         </div>
       )}
 
@@ -4937,6 +4938,58 @@ function timeAgo(dateStr) {
 
 function stripHtml(str) {
   return str ? str.replace(/<[^>]*>/g, '').replace(/&quot;/g,'"').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>') : '';
+}
+
+// 선수 상세 최하단 '관련 뉴스' — 해당 선수 이름으로 네이버 뉴스를 검색해 최근 5건.
+function PlayerNews({ name }) {
+  const [items, setItems] = React.useState(null); // null=로딩 중
+  React.useEffect(() => {
+    let cancelled = false;
+    setItems(null);
+    fetch(`${API_BASE}/api/naver-news?query=${encodeURIComponent(name)}`)
+      .then(r => r.json())
+      .then(d => {
+        if (cancelled) return;
+        const list = (d.items || [])
+          .map(item => ({
+            title: stripHtml(item.title),
+            link: item.originallink || item.link,
+            pubDate: item.pubDate,
+            source: (() => {
+              try { return new URL(item.originallink || item.link).hostname.replace('www.', '').replace('m.', ''); }
+              catch { return ''; }
+            })(),
+          }))
+          .filter(a => a.title.includes(name))
+          .slice(0, 5);
+        setItems(list);
+      })
+      .catch(() => { if (!cancelled) setItems([]); });
+    return () => { cancelled = true; };
+  }, [name]);
+
+  if (items && items.length === 0) return null;   // 뉴스 없으면 섹션 자체를 숨김
+  return (
+    <div style={{ background:'var(--surface)', borderRadius:16, padding:'16px', border:'0.5px solid var(--border)', marginBottom:12 }}>
+      <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:4 }}>관련 뉴스</div>
+      {items === null ? (
+        <div style={{ display:'flex', justifyContent:'center', padding:'20px 0' }}>
+          <div style={{ width:20, height:20, borderRadius:'50%', border:'2.5px solid var(--border)', borderTopColor:'var(--acc)', animation:'spin 0.8s linear infinite' }}/>
+        </div>
+      ) : items.map((a, i) => (
+        <div key={i} onClick={() => window.open(a.link, '_blank')}
+          style={{ padding:'11px 0', borderBottom: i < items.length - 1 ? '0.5px solid var(--border2)' : 'none', cursor:'pointer' }}>
+          <div style={{ fontSize:13, fontWeight:600, color:'var(--text)', lineHeight:1.45,
+            display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>{a.title}</div>
+          <div style={{ display:'flex', gap:6, marginTop:5 }}>
+            <span style={{ fontSize:11, color:'var(--text4)' }}>{a.source.split('.')[0]}</span>
+            <span style={{ fontSize:11, color:'var(--text5)' }}>·</span>
+            <span style={{ fontSize:11, color:'var(--text4)' }}>{timeAgo(a.pubDate)}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 // 새로고침할 때마다 다른 조합을 보여준다.
