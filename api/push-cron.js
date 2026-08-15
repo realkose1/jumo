@@ -40,9 +40,18 @@ const PLAYERS = [
   { id: 22, name: '배준호', nameEn: 'Bae Jun-ho', sport: 'soccer', team: 'Stoke',       afTeamId: 75,   afPlayerId: 357286 },
   { id: 23, name: '엄지성', nameEn: 'Eom Ji-sung', sport: 'soccer', team: 'Swansea',     afTeamId: 76,   afPlayerId: 237050 },
   { id: 24, name: '설영우', nameEn: 'Seol Young-woo', sport: 'soccer', team: 'Crvena',      afTeamId: 598,  afPlayerId: 197985 },
+  { id: 26, name: '이재성', nameEn: 'Lee Jae-sung', sport: 'soccer', team: 'Mainz',        afTeamId: 164,  afPlayerId: 2906 },
+  { id: 27, name: '홍현석', nameEn: 'Hong Hyun-seok', sport: 'soccer', team: 'Mainz',        afTeamId: 164,  afPlayerId: 26519 },
+  { id: 28, name: '정우영', nameEn: 'Jeong Woo-yeong', sport: 'soccer', team: 'Union Berlin', afTeamId: 182,  afPlayerId: 512 },
+  { id: 29, name: '카스트로프', nameEn: 'Jens Castrop', sport: 'soccer', team: 'Gladbach',   afTeamId: 163,  afPlayerId: 280358 },
+  { id: 30, name: '박승수', nameEn: 'Park Seung-soo', sport: 'soccer', team: 'Newcastle',    afTeamId: 34,   afPlayerId: 423714 },
+  { id: 31, name: '김지수', nameEn: 'Kim Ji-soo', sport: 'soccer', team: 'Brentford',    afTeamId: 55,   afPlayerId: 356237 },
+  { id: 32, name: '양민혁', nameEn: 'Yang Min-hyeok', sport: 'soccer', team: 'Westerlo',     afTeamId: 261,  afPlayerId: 423708 },
+  { id: 33, name: '이태석', nameEn: 'Lee Tae-seok', sport: 'soccer', team: 'Austria Wien', afTeamId: 601,  afPlayerId: 237220 },
   { id: 9,  name: '김하성', en: 'kim',       sport: 'baseball', team: 'Braves',      mlbTeam: 'Atlanta Braves', mlbId: 673490 },
   { id: 17, name: '이정후', en: 'lee',       sport: 'baseball', team: 'Giants',      mlbTeam: 'San Francisco Giants', mlbId: 808982 },
   { id: 18, name: '김혜성', en: 'kim',       sport: 'baseball', team: 'Dodgers',     mlbTeam: 'Los Angeles Dodgers', mlbId: 808975 },
+  { id: 34, name: '송성문', en: 'song',      sport: 'baseball', team: 'Padres',      mlbTeam: 'San Diego Padres', mlbId: 823550 },
 ];
 
 const norm = (s) => (s || '').toLowerCase().replace(/[.\s-]/g, '');

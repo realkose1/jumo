@@ -269,6 +269,8 @@ const ESPN_API = {
     den: 'https://site.api.espn.com/apis/site/v2/sports/soccer/den.1/scoreboard',
     ned: 'https://site.api.espn.com/apis/site/v2/sports/soccer/ned.1/scoreboard',
     bel: 'https://site.api.espn.com/apis/site/v2/sports/soccer/bel.1/scoreboard',
+    esp: 'https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/scoreboard',
+    aut: 'https://site.api.espn.com/apis/site/v2/sports/soccer/aut.1/scoreboard',
     // UEFA club competitions — NOT covered by API-Football reliably and absent
     // from the domestic feeds, so we pull them from ESPN (keyless) to guarantee
     // big nights (e.g. the Champions League final) always appear.
@@ -306,6 +308,28 @@ const KOREAN_PLAYERS = {
   // 이한범 — Club Brugge (Jupiler Pro League), 2026-08 미트윌란에서 이적
   'Club Brugge': { name: '이한범', nameEn: 'Lee Han-Beom', number: 3, position: '센터백' },
   'Club Brugge KV': { name: '이한범', nameEn: 'Lee Han-Beom', number: 3, position: '센터백' },
+  // ── 2026-08 추가 확장 로스터 ──
+  // 이재성 — Mainz 05 (분데스리가). 같은 팀 홍현석은 KOREAN_PLAYERS_EXTRA에.
+  'Mainz': { name: '이재성', nameEn: 'Lee Jae-sung', number: 7, position: '미드필더' },
+  'FSV Mainz 05': { name: '이재성', nameEn: 'Lee Jae-sung', number: 7, position: '미드필더' },
+  '1. FSV Mainz 05': { name: '이재성', nameEn: 'Lee Jae-sung', number: 7, position: '미드필더' },
+  // 정우영 — Union Berlin (분데스리가)
+  'Union Berlin': { name: '정우영', nameEn: 'Jeong Woo-yeong', number: 11, position: '미드필더' },
+  '1. FC Union Berlin': { name: '정우영', nameEn: 'Jeong Woo-yeong', number: 11, position: '미드필더' },
+  // 옌스 카스트로프 — Borussia Mönchengladbach (분데스리가), 한국 국대
+  'Borussia Mönchengladbach': { name: '카스트로프', nameEn: 'Jens Castrop', number: 17, position: '미드필더' },
+  'Borussia Monchengladbach': { name: '카스트로프', nameEn: 'Jens Castrop', number: 17, position: '미드필더' },
+  // 박승수 — Newcastle United (EPL)
+  'Newcastle': { name: '박승수', nameEn: 'Park Seung-soo', number: 64, position: '윙어' },
+  'Newcastle United': { name: '박승수', nameEn: 'Park Seung-soo', number: 64, position: '윙어' },
+  // 김지수 — Brentford (EPL), 카이저슬라우테른 임대 복귀
+  'Brentford': { name: '김지수', nameEn: 'Kim Ji-soo', number: 36, position: '센터백' },
+  // 양민혁 — KVC Westerlo (벨기에, 토트넘에서 임대)
+  'Westerlo': { name: '양민혁', nameEn: 'Yang Min-hyeok', number: 47, position: '윙어' },
+  'KVC Westerlo': { name: '양민혁', nameEn: 'Yang Min-hyeok', number: 47, position: '윙어' },
+  // 이태석 — Austria Wien (오스트리아 분데스리가)
+  'Austria Vienna': { name: '이태석', nameEn: 'Lee Tae-seok', number: 17, position: '풀백' },
+  'Austria Wien': { name: '이태석', nameEn: 'Lee Tae-seok', number: 17, position: '풀백' },
   'Porto': { name: '황인범', nameEn: 'Hwang In-beom', number: 16, position: '미드필더' },
   // 김하성 — Atlanta Braves (MLB)
   // 김하성 — 2026-07 기준 애틀랜타 브레이브스 산하(AAA 귀넷 스트라이퍼스).
@@ -345,8 +369,10 @@ const KOREAN_PLAYERS = {
 // KOREAN_PLAYERS는 팀명 → 선수 1명 구조라 같은 팀에 한국 선수가 둘 이상이면
 // 한 명만 잡힌다(미트윌란: 조규성 + 이한범). 추가 선수는 여기에 둔다.
 const KOREAN_PLAYERS_EXTRA = {
-  // 2026-08 이한범 미트윌란 → 클뤼프 브뤼허 이적으로 현재는 비어 있다.
-  // 같은 팀에 두 번째 한국 선수가 생기면 '팀명': [{ name, nameEn, number, position }] 로 추가.
+  // 마인츠: 이재성 + 홍현석
+  'Mainz':           [{ name: '홍현석', nameEn: 'Hong Hyun-seok', number: 13, position: '미드필더' }],
+  'FSV Mainz 05':    [{ name: '홍현석', nameEn: 'Hong Hyun-seok', number: 13, position: '미드필더' }],
+  '1. FSV Mainz 05': [{ name: '홍현석', nameEn: 'Hong Hyun-seok', number: 13, position: '미드필더' }],
 };
 
 // 팀명으로 그 팀의 한국 선수 전원을 돌려준다(0~N명). team 코드는 카드·스코어 비교에
@@ -563,6 +589,16 @@ const ALL_PLAYERS = [
   { id: 9,  name: '김하성',  nameEn: 'Ha-Seong Kim',    number: 4,  sport: '야구',   team: 'Braves',    league: 'MLB',        position: '유격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 0,  age: 30, birth: '1995.10.17', height: '179cm', mlbId: 673490, injury: { label:'부상자 명단 (IL)', severity:'high' } },
   { id: 17, name: '이정후',  nameEn: 'Jung Hoo Lee',    number: 51, sport: '야구',   team: 'Giants',     league: 'MLB',        position: '중견수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 15, rating: 0,   startRate: 95, age: 27, birth: '1998.08.20', height: '186cm', mlbId: 808982 },
   { id: 18, name: '김혜성',  nameEn: 'Hyeseong Kim',    number: 25, sport: '야구',   team: 'Dodgers',    league: 'MLB',        position: '유격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 16, rating: 0,   startRate: 70, age: 27, birth: '1999.01.27', height: '178cm', mlbId: 808975 },
+  // ── 2026-08 확장 로스터 ──
+  { id: 26, name: '이재성',  nameEn: 'Lee Jae-sung',   number: 7,  sport: '축구',   team: 'Mainz',      league: '분데스리가',  position: '미드필더', nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 80, age: 34, birth: '1992.08.10', height: '180cm', espnLeague: 'ger.1', espnId: 134103, apiFootballId: 2906 },
+  { id: 27, name: '홍현석',  nameEn: 'Hong Hyun-seok', number: 13, sport: '축구',   team: 'Mainz',      league: '분데스리가',  position: '미드필더', nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 60, age: 27, birth: '1999.06.16', height: '175cm', espnLeague: 'ger.1', espnId: 271701, apiFootballId: 26519 },
+  { id: 28, name: '정우영',  nameEn: 'Jeong Woo-yeong',number: 11, sport: '축구',   team: 'Union Berlin',league: '분데스리가', position: '미드필더', nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 55, age: 26, birth: '1999.09.20', height: '179cm', espnLeague: 'ger.1', espnId: 276323, apiFootballId: 512 },
+  { id: 29, name: '카스트로프', nameEn: 'Jens Castrop', number: 17, sport: '축구',   team: 'Gladbach',   league: '분데스리가',  position: '미드필더', nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 55, age: 23, birth: '2003.07.29', height: '178cm', espnLeague: 'ger.1', espnId: 304793, apiFootballId: 280358 },
+  { id: 30, name: '박승수',  nameEn: 'Park Seung-soo', number: 64, sport: '축구',   team: 'Newcastle',  league: 'EPL',        position: '윙어',     nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 25, age: 19, birth: '2007.03.17', height: '183cm', espnLeague: 'eng.1', espnId: 371584, apiFootballId: 423714 },
+  { id: 31, name: '김지수',  nameEn: 'Kim Ji-soo',     number: 36, sport: '축구',   team: 'Brentford',  league: 'EPL',        position: '센터백',   nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 30, age: 21, birth: '2004.12.24', height: '192cm', espnLeague: 'eng.1', espnId: 362203, apiFootballId: 356237 },
+  { id: 32, name: '양민혁',  nameEn: 'Yang Min-hyeok', number: 47, sport: '축구',   team: 'Westerlo',   league: 'Pro League', position: '윙어',     nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 60, age: 20, birth: '2006.04.16', height: '172cm', espnLeague: 'bel.1', espnId: 371578, apiFootballId: 423708 },
+  { id: 33, name: '이태석',  nameEn: 'Lee Tae-seok',   number: 17, sport: '축구',   team: 'Austria Wien',league: '오스트리아 BL',position: '풀백',    nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 75, age: 24, birth: '2002.07.28', height: '177cm', espnLeague: 'aut.1', espnId: 297270, apiFootballId: 237220 },
+  { id: 34, name: '송성문',  nameEn: 'Sung-Mun Song',  number: 24,  sport: '야구',   team: 'Padres',     league: 'MLB',        position: '내야수',   nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 40, age: 29, birth: '1996.08.29', height: '182cm', mlbId: 823550 },
 ];
 const PLAYERS = ALL_PLAYERS.slice(0, 5);
 
@@ -798,6 +834,92 @@ const PLAYER_EXTRA = {
     ],
     seasonStats: [],
   },
+  26: { // 이재성
+    form: [7.1, 7.3, 6.9, 7.2, 7.4, 7.0, 7.2],
+    recentMatches: [],
+    career: [
+      { year:'2021–',    team:'Mainz 05',      league:'분데스리가',  flag:'🇩🇪' },
+      { year:'2018–21',  team:'Holstein Kiel', league:'분데스리가 2', flag:'🇩🇪' },
+      { year:'2014–18',  team:'전북 현대 모터스', league:'K리그1',     flag:'🇰🇷' },
+    ],
+    seasonStats: [],
+  },
+  27: { // 홍현석
+    form: [6.8, 7.0, 6.7, 7.1, 6.9, 7.2, 6.8],
+    recentMatches: [],
+    career: [
+      { year:'2024–',    team:'Mainz 05',   league:'분데스리가',  flag:'🇩🇪' },
+      { year:'2023–24',  team:'KAA Gent',   league:'벨기에 1부',  flag:'🇧🇪' },
+      { year:'2021–23',  team:'LASK',       league:'오스트리아 BL', flag:'🇦🇹' },
+    ],
+    seasonStats: [],
+  },
+  28: { // 정우영
+    form: [6.7, 6.9, 7.1, 6.8, 7.0, 6.9, 7.0],
+    recentMatches: [],
+    career: [
+      { year:'2024–',    team:'Union Berlin',  league:'분데스리가',  flag:'🇩🇪' },
+      { year:'2023–24',  team:'VfB Stuttgart', league:'분데스리가',  flag:'🇩🇪' },
+      { year:'2019–23',  team:'SC Freiburg',   league:'분데스리가',  flag:'🇩🇪' },
+    ],
+    seasonStats: [],
+  },
+  29: { // 카스트로프
+    form: [6.8, 7.0, 6.9, 7.1, 6.8, 7.0, 7.1],
+    recentMatches: [],
+    career: [
+      { year:'2025–',    team:'Borussia Mönchengladbach', league:'분데스리가', flag:'🇩🇪' },
+      { year:'2022–25',  team:'1. FC Nürnberg',           league:'분데스리가 2', flag:'🇩🇪' },
+    ],
+    seasonStats: [],
+  },
+  30: { // 박승수
+    form: [6.6, 6.9, 7.2, 6.8, 7.0, 7.3, 7.0],
+    recentMatches: [],
+    career: [
+      { year:'2025–',    team:'Newcastle United', league:'EPL',    flag:'🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
+      { year:'2024–25',  team:'수원 삼성 블루윙즈',  league:'K리그2',  flag:'🇰🇷' },
+    ],
+    seasonStats: [],
+  },
+  31: { // 김지수
+    form: [6.7, 6.9, 6.8, 7.0, 6.9, 7.1, 6.9],
+    recentMatches: [],
+    career: [
+      { year:'2023–',    team:'Brentford',        league:'EPL',       flag:'🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
+      { year:'2025–26',  team:'Kaiserslautern (임대)', league:'분데스리가 2', flag:'🇩🇪' },
+      { year:'2021–23',  team:'성남 FC',           league:'K리그',      flag:'🇰🇷' },
+    ],
+    seasonStats: [],
+  },
+  32: { // 양민혁
+    form: [6.9, 7.1, 6.8, 7.2, 7.0, 7.3, 7.1],
+    recentMatches: [],
+    career: [
+      { year:'2026–',    team:'KVC Westerlo (임대)', league:'벨기에 1부', flag:'🇧🇪' },
+      { year:'2025–',    team:'Tottenham Hotspur',  league:'EPL',       flag:'🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
+      { year:'2023–24',  team:'강원 FC',            league:'K리그1',     flag:'🇰🇷' },
+    ],
+    seasonStats: [],
+  },
+  33: { // 이태석
+    form: [7.0, 7.2, 6.9, 7.1, 7.3, 7.0, 7.2],
+    recentMatches: [],
+    career: [
+      { year:'2025–',    team:'Austria Wien', league:'오스트리아 BL', flag:'🇦🇹' },
+      { year:'2021–24',  team:'FC 서울',       league:'K리그1',       flag:'🇰🇷' },
+    ],
+    seasonStats: [],
+  },
+  34: { // 송성문
+    form: [],
+    recentMatches: [],
+    career: [
+      { year:'2026–',    team:'San Diego Padres', league:'MLB',  flag:'🇺🇸' },
+      { year:'2015–25',  team:'키움 히어로즈',      league:'KBO',  flag:'🇰🇷' },
+    ],
+    seasonStats: [],
+  },
   25: { // 이한범
     form: [6.9, 7.2, 6.8, 7.4, 7.0, 7.3, 7.1],
     recentMatches: [],
@@ -900,7 +1022,7 @@ function TeamBadge({ code, size=36, logo }) {
 
 function PlayerPhoto({ player, style={}, tint='var(--bg)' }) {
   const num = player.number;
-  const imageMap = { '손흥민': 'heungmin.png', '이강인': 'kangin.png', '김민재': 'minjae.png', '조규성': 'guesung.png', '황희찬': 'heechan.png', '황인범': 'inbeom.png', '김하성': 'haseong.png', '이정후': 'junghoo.png', '김혜성': 'hyeseong.png', '오현규': 'hyungyu.png', '양현준': 'hyunjun.png', '백승호': 'seungho.webp', '배준호': 'junho.webp', '엄지성': 'jisung.webp', '설영우': 'youngwoo.webp', '이한범': 'hanbeom.png' };
+  const imageMap = { '손흥민': 'heungmin.png', '이강인': 'kangin.png', '김민재': 'minjae.png', '조규성': 'guesung.png', '황희찬': 'heechan.png', '황인범': 'inbeom.png', '김하성': 'haseong.png', '이정후': 'junghoo.png', '김혜성': 'hyeseong.png', '오현규': 'hyungyu.png', '양현준': 'hyunjun.png', '백승호': 'seungho.webp', '배준호': 'junho.webp', '엄지성': 'jisung.webp', '설영우': 'youngwoo.webp', '이한범': 'hanbeom.png', '이재성': 'jaesung.png', '홍현석': 'hyunseok.png', '정우영': 'wooyeong.png', '카스트로프': 'castrop.png', '박승수': 'seungsoo.png', '김지수': 'jisoo.png', '양민혁': 'minhyeok.png', '이태석': 'taeseok.png', '송성문': 'songsm.png' };
   // For full-body source images, zoom into the face area
   const PHOTO_ZOOM = {
     '백승호': { scale: 2.75, originX: '45%', originY: '16%' },
@@ -2117,6 +2239,9 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
     '조규성': 'guesung.jpeg', '황희찬': 'heechan.jpeg', '황인범': 'inbeom.jpg',
     '김하성': 'haseong.jpeg', '이정후': 'junghoo.jpeg', '김혜성': 'hyesung.jpeg',
     '오현규': 'hyeongyu.jpeg', '양현준': 'hyunjun.jpeg', '이한범': 'hanbeom.jpg',
+    '이재성': 'jaesung.jpg', '홍현석': 'hyunseok.jpg', '정우영': 'wooyeong.jpg',
+    '카스트로프': 'castrop.jpg', '박승수': 'seungsoo.jpg', '김지수': 'jisoo.jpg',
+    '양민혁': 'minhyeok.jpg', '이태석': 'taeseok.jpg', '송성문': 'songsm.jpg',
     '백승호': 'seungho.png', '배준호': 'junho.jpeg', '엄지성': 'jisung.jpeg',
     '설영우': 'youngwoo.jpeg',
   };
@@ -3873,6 +3998,9 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
             '조규성':'guesung.jpeg','황희찬':'heechan.jpeg','황인범':'inbeom.jpg',
             '김하성':'haseong.jpeg','이정후':'junghoo.jpeg','김혜성':'hyesung.jpeg',
             '오현규':'hyeongyu.jpeg','양현준':'hyunjun.jpeg','이한범':'hanbeom.jpg',
+            '이재성':'jaesung.jpg','홍현석':'hyunseok.jpg','정우영':'wooyeong.jpg',
+            '카스트로프':'castrop.jpg','박승수':'seungsoo.jpg','김지수':'jisoo.jpg',
+            '양민혁':'minhyeok.jpg','이태석':'taeseok.jpg','송성문':'songsm.jpg',
             '백승호':'seungho.png','배준호':'junho.jpeg','엄지성':'jisung.jpeg',
             '설영우':'youngwoo.jpeg',
           };
@@ -4729,6 +4857,9 @@ const NEWS_PLAYER_IMG = {
   '김하성': 'image/haseong.png',  '이정후': 'image/junghoo.png',
   '김혜성': 'image/hyeseong.png', '오현규': 'image/hyungyu.png',
   '양현준': 'image/hyunjun.png',
+  '이재성': 'image/jaesung.png', '홍현석': 'image/hyunseok.png', '정우영': 'image/wooyeong.png',
+  '카스트로프': 'image/castrop.png', '박승수': 'image/seungsoo.png', '김지수': 'image/jisoo.png',
+  '양민혁': 'image/minhyeok.png', '이태석': 'image/taeseok.png', '송성문': 'image/songsm.png',
   '백승호': 'image/seungho.webp',
   '배준호': 'image/junho.webp',
   '엄지성': 'image/jisung.webp',
