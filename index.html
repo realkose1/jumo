@@ -2231,17 +2231,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
   const finishedHeadline = isFinishedHighlight ? buildFinishedHeadline(highlightMatch) : null;
 
   // landscape image map: Korean name → filename in image/landscape/
-  const LANDSCAPE_MAP = {
-    '손흥민': 'heungmin.jpg', '이강인': 'kangin.png', '김민재': 'minjae.jpeg',
-    '조규성': 'guesung.jpeg', '황희찬': 'heechan.jpeg', '황인범': 'inbeom.jpg',
-    '김하성': 'haseong.jpeg', '이정후': 'junghoo.jpeg', '김혜성': 'hyesung.jpeg',
-    '오현규': 'hyeongyu.jpeg', '양현준': 'hyunjun.jpeg', '이한범': 'hanbeom.jpg',
-    '이재성': 'jaesung.jpg', '홍현석': 'hyunseok.jpg', '정우영': 'wooyeong.jpg',
-    '카스트로프': 'castrop.jpg', '박승수': 'seungsoo.jpg', '김지수': 'jisoo.jpg',
-    '양민혁': 'minhyeok.jpg', '이태석': 'taeseok.jpg', '송성문': 'songsm.jpg',
-    '백승호': 'seungho.png', '배준호': 'junho.jpeg', '엄지성': 'jisung.jpeg',
-    '설영우': 'youngwoo.jpeg',
-  };
+  const LANDSCAPE_MAP = { '손흥민': 'heungmin.jpg', '이강인': 'kangin.jpg', '김민재': 'minjae.jpg', '황희찬': 'heechan.jpg', '황인범': 'inbeom.jpg', '조규성': 'guesung.jpg', '이한범': 'hanbeom.jpg', '오현규': 'hyungyu.jpg', '양현준': 'hyunjun.jpg', '백승호': 'seungho.jpg', '배준호': 'junho.jpg', '엄지성': 'jisung.jpg', '설영우': 'youngwoo.jpg', '김하성': 'haseong.jpg', '이정후': 'junghoo.jpg', '김혜성': 'hyeseong.jpg', '이재성': 'jaesung.jpg', '홍현석': 'hyunseok.jpg', '정우영': 'wooyeong.jpg', '카스트로프': 'castrop.jpg', '박승수': 'seungsoo.jpg', '김지수': 'jisoo.jpg', '양민혁': 'minhyeok.jpg', '이태석': 'taeseok.jpg', '송성문': 'songsm.jpg' };
   React.useEffect(() => {
     const playerName = highlightMatch?.koreanPlayer?.name;
     const landscapeFile = LANDSCAPE_MAP[playerName];
@@ -4098,17 +4088,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
       {/* Hero */}
       <div style={{ position:'relative', height:320, overflow:'hidden' }}>
         {(() => {
-          const LANDSCAPE = {
-            '손흥민':'heungmin.jpg','이강인':'kangin.png','김민재':'minjae.jpeg',
-            '조규성':'guesung.jpeg','황희찬':'heechan.jpeg','황인범':'inbeom.jpg',
-            '김하성':'haseong.jpeg','이정후':'junghoo.jpeg','김혜성':'hyesung.jpeg',
-            '오현규':'hyeongyu.jpeg','양현준':'hyunjun.jpeg','이한범':'hanbeom.jpg',
-            '이재성':'jaesung.jpg','홍현석':'hyunseok.jpg','정우영':'wooyeong.jpg',
-            '카스트로프':'castrop.jpg','박승수':'seungsoo.jpg','김지수':'jisoo.jpg',
-            '양민혁':'minhyeok.jpg','이태석':'taeseok.jpg','송성문':'songsm.jpg',
-            '백승호':'seungho.png','배준호':'junho.jpeg','엄지성':'jisung.jpeg',
-            '설영우':'youngwoo.jpeg',
-          };
+          const LANDSCAPE = { '손흥민': 'heungmin.jpg', '이강인': 'kangin.jpg', '김민재': 'minjae.jpg', '황희찬': 'heechan.jpg', '황인범': 'inbeom.jpg', '조규성': 'guesung.jpg', '이한범': 'hanbeom.jpg', '오현규': 'hyungyu.jpg', '양현준': 'hyunjun.jpg', '백승호': 'seungho.jpg', '배준호': 'junho.jpg', '엄지성': 'jisung.jpg', '설영우': 'youngwoo.jpg', '김하성': 'haseong.jpg', '이정후': 'junghoo.jpg', '김혜성': 'hyeseong.jpg', '이재성': 'jaesung.jpg', '홍현석': 'hyunseok.jpg', '정우영': 'wooyeong.jpg', '카스트로프': 'castrop.jpg', '박승수': 'seungsoo.jpg', '김지수': 'jisoo.jpg', '양민혁': 'minhyeok.jpg', '이태석': 'taeseok.jpg', '송성문': 'songsm.jpg' };
           const file = LANDSCAPE[player.name];
           return file
             ? <img src={`image/landscape/${file}`} alt={player.name} style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'50% 25%' }}/>
