@@ -6475,6 +6475,37 @@ function App() {
           return 2 + Math.abs(Date.now() - new Date(m.fullDate).getTime()) / 86400000; // 최근 종료 우선
         };
         const afSorted = [...afKorean].sort((a, b) => afPriority(a) - afPriority(b));
+
+        // 상세도 Supabase sf_cache 로 공유한다(키: 'af-detail-{fixtureId}') —
+        // 여러 기기·푸시크론이 같은 경기를 각자 fetch 하지 않도록. 사용자가 늘어도
+        // API 콜이 사용자 수에 비례해 늘지 않는다. 로컬 캐시가 없는 항목만 조회.
+        const detailTtl = (d, empty) => d.status === 'STATUS_FINAL'
+          ? (empty ? 3 * 60 * 1000 : Infinity)
+          : (d.live ? 15000 : 60000);
+        const needShared = afSorted.filter(m => {
+          const c = detailsCacheForSort[m.id];
+          return !(c && (Date.now() - c.fetchedAt) < detailTtl(c, c.empty));
+        });
+        if (needShared.length > 0) {
+          try {
+            const keys = needShared.map(m => `af-detail-${m.id}`);
+            const r = await SB.from('sf_cache').select('date,events,updated_at').in('date', keys);
+            (r?.data || []).forEach(row => {
+              const d = row.events;
+              if (!d) return;
+              const id = String(row.date).replace('af-detail-', '');
+              const empty = (d.lineups || []).length === 0 && (d.events || []).length === 0;
+              const age = Date.now() - new Date(row.updated_at).getTime();
+              if (age < detailTtl(d, empty)) {
+                detailsCacheForSort[id] = {
+                  lineups: d.lineups || [], events: d.events || [], players: d.players || [],
+                  fetchedAt: Date.now() - age, status: d.status, live: d.live, empty,
+                };
+              }
+            });
+          } catch (e) { /* 공유 캐시 불가 시 개별 fetch 로 진행 */ }
+        }
+
         const AF_FETCH_LIMIT = 8;
         let afNetBudget = AF_FETCH_LIMIT;
         const afTargets = afSorted.filter(m => {
@@ -6529,6 +6560,20 @@ function App() {
               detail.empty = detail.lineups.length === 0 && detail.events.length === 0;
               if (!detail.empty || isFinalMatch) {
                 detailsCache[m.id] = detail;
+              }
+              if (!detail.empty) {
+                // players 원본은 팀 전체 스탯이라 크다 — 매칭에 쓰는 id·이름·평점만 남긴다.
+                const slimPlayers = (detail.players || []).map(team => ({
+                  players: (team.players || []).map(e => ({
+                    player: { id: e.player?.id, name: e.player?.name },
+                    statistics: [{ games: { rating: (e.statistics || [{}])[0]?.games?.rating } }],
+                  })),
+                }));
+                SB.from('sf_cache').upsert({
+                  date: `af-detail-${m.id}`,
+                  events: { lineups: detail.lineups, events: detail.events, players: slimPlayers, status: m.status, live: m.live },
+                  updated_at: new Date().toISOString(),
+                }).then(() => {}, () => {});
               }
               return { id: m.id, lineups: detail.lineups, events: detail.events, players: detail.players, isLive: m.live };
             })
