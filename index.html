@@ -4928,6 +4928,14 @@ function NewsImage({ url, fallbackPlayer }) {
   );
 }
 
+// 외부 링크: 네이티브에선 인앱 브라우저(SFSafariViewController)로, 웹에선 새 탭.
+// 앱 밖(Safari)으로 튕기지 않아 돌아오기가 자연스럽다.
+function openExternal(url) {
+  const B = window.Capacitor?.Plugins?.Browser;
+  if (B) { B.open({ url }); return; }
+  window.open(url, '_blank', 'noopener');
+}
+
 function timeAgo(dateStr) {
   const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
   if (diff < 60) return '방금';
@@ -4977,7 +4985,7 @@ function PlayerNews({ name }) {
           <div style={{ width:20, height:20, borderRadius:'50%', border:'2.5px solid var(--border)', borderTopColor:'var(--acc)', animation:'spin 0.8s linear infinite' }}/>
         </div>
       ) : items.map((a, i) => (
-        <div key={i} onClick={() => window.open(a.link, '_blank')}
+        <div key={i} onClick={() => openExternal(a.link)}
           style={{ padding:'11px 0', borderBottom: i < items.length - 1 ? '0.5px solid var(--border2)' : 'none', cursor:'pointer' }}>
           <div style={{ fontSize:13, fontWeight:600, color:'var(--text)', lineHeight:1.45,
             display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>{a.title}</div>
@@ -5292,7 +5300,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames }) {
           if (i === 0) {
             // Hero article — large image on top, headline overlaid
             return (
-              <a key={i} href={a.naverLink || a.link} target="_blank" rel="noopener noreferrer" style={{ textDecoration:'none' }}>
+              <a key={i} href={a.naverLink || a.link} onClick={e => { e.preventDefault(); openExternal(a.naverLink || a.link); }} target="_blank" rel="noopener noreferrer" style={{ textDecoration:'none' }}>
                 <div style={{ background:'var(--surface)', borderRadius:18, border:'0.5px solid var(--border2)', overflow:'hidden', position:'relative', minHeight:280 }}>
                   <div style={{ position:'relative', width:'100%', aspectRatio:'16/10', overflow:'hidden' }}>
                     <NewsImage url={a.link} fallbackPlayer={fallbackPlayer}/>
@@ -5320,7 +5328,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames }) {
             );
           }
           return (
-            <a key={i} href={a.naverLink || a.link} target="_blank" rel="noopener noreferrer" style={{ textDecoration:'none' }}>
+            <a key={i} href={a.naverLink || a.link} onClick={e => { e.preventDefault(); openExternal(a.naverLink || a.link); }} target="_blank" rel="noopener noreferrer" style={{ textDecoration:'none' }}>
               <div style={{ background:'var(--surface)', borderRadius:18, border:'0.5px solid var(--border2)', display:'flex', overflow:'hidden', minHeight:130 }}>
                 <div style={{ width:120, flexShrink:0, position:'relative', overflow:'hidden' }}>
                   <NewsImage url={a.link} fallbackPlayer={fallbackPlayer}/>
@@ -5757,7 +5765,7 @@ function MoreScreen({ sportFeeds, onToggleSportFeed, profile, onUpdateProfile, s
     ]},
     { label:'앱 정보', items:[
       { id:'guide',    icon:'📖', color:'#48484a', title:'사용 설명 보기', sub:'온보딩 가이드 다시 보기', chevron:true, action: onShowGuide },
-      { id:'privacy',  icon:'🔒', color:'#48484a', title:'개인정보처리방침', sub:'수집 항목과 이용 안내', chevron:true, action: () => window.open(`${API_BASE}/privacy`, '_blank') },
+      { id:'privacy',  icon:'🔒', color:'#48484a', title:'개인정보처리방침', sub:'수집 항목과 이용 안내', chevron:true, action: () => openExternal(`${API_BASE}/privacy`) },
       { id:'version',  icon:'ℹ️', color:'#48484a', title:'버전 정보',     sub:'Jumo v1.0.0' },
       { id:'feedback', icon:'💬', color:'#48484a', title:'피드백 보내기', sub:'개선 사항을 알려주세요', chevron:true },
     ]},
