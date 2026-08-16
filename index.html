@@ -3004,7 +3004,8 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
     const mapTeam = (afTeam) => {
       if (!afTeam) return null;
       const mapPlayer = (e, sub) => ({
-        player: { name: e.player?.name, jerseyNumber: e.player?.number, id: e.player?.id },
+        player: { name: e.player?.name, jerseyNumber: e.player?.number, id: e.player?.id,
+                  grid: e.player?.grid || null, pos: e.player?.pos || null },
         substitute: sub,
         statistics: ratingMap.has(e.player?.id) ? { rating: ratingMap.get(e.player.id) } : {},
       });
@@ -3781,56 +3782,122 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
         if (homePlayers.length === 0 && awayPlayers.length === 0) {
           return <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text5)', fontSize:14 }}>라인업 정보가 없습니다</div>;
         }
-        const koreanName = match.koreanPlayer?.nameEn || '';
-        const renderColumn = (team, teamData, players) => {
+        // 코리안 더비 대응: 팀별로 그 팀 소속 한국 선수 전원과 매칭한다.
+        const allKp = (match.koreanPlayers || [match.koreanPlayer]).filter(Boolean);
+        const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z\s]/g,'').trim();
+        const findKp = (name, kps) => kps.find(kp => {
+          const a = norm(name), b = norm(kp.nameEn || '');
+          return !!(a && b && (a === b || a.includes(b) || b.includes(a) || a.split(/\s+/).some(t => b.split(/\s+/).includes(t) && t.length >= 3)));
+        }) || null;
+        const kpsFor = (team) => allKp.filter(kp => kp.team === team.code);
+
+        const renderTeam = (team, teamData, players) => {
           const starters = players.filter(p => p.substitute === false);
           const subs = players.filter(p => p.substitute === true);
+          const kps = kpsFor(team);
           const formation = teamData?.formation;
-          const renderPlayer = (entry, i) => {
+          const hasGrid = starters.length >= 10 && starters.every(e => e.player?.grid);
+
+          const node = (entry, i, small) => {
             const p = entry.player || {};
-            const num = p.jerseyNumber || '';
-            const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z\s]/g,'').trim();
-            const a = norm(p.name), b = norm(koreanName);
-            const isKorean = !!(a && b && (a === b || a.includes(b) || b.includes(a) || a.split(/\s+/).some(t => b.split(/\s+/).includes(t) && t.length >= 3)));
+            const kp = findKp(p.name, kps);
             const rating = entry.statistics?.rating;
+            const D = small ? 30 : 40;
             return (
-              <div key={i} onClick={isKorean ? () => goKoreanPlayer(match.koreanPlayer) : undefined} style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 8px', borderRadius:8, background: isKorean ? 'rgba(245,196,0,0.12)' : 'transparent', border: isKorean ? '0.5px solid rgba(245,196,0,0.3)' : '0.5px solid transparent', marginBottom:4, cursor: isKorean && onPlayer ? 'pointer' : 'default' }}>
-                <span style={{ ...NUM, fontSize:11, fontWeight:700, color:'var(--text4)', width:20, textAlign:'center', flexShrink:0 }}>{num}</span>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontSize:12, fontWeight: isKorean ? 700 : 600, color: isKorean ? 'var(--acc)' : 'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                    {isKorean ? `🇰🇷 ${p.name}` : p.name}
-                  </div>
+              <div key={i} onClick={kp ? () => goKoreanPlayer(kp) : undefined}
+                style={{ width: small ? 74 : 78, display:'flex', flexDirection:'column', alignItems:'center', gap:3, cursor: kp && onPlayer ? 'pointer' : 'default' }}>
+                <div style={{ position:'relative', width:D, height:D, borderRadius:'50%', background:'rgba(255,255,255,0.14)',
+                  border: kp ? '2px solid var(--acc)' : '1.5px solid rgba(255,255,255,0.35)',
+                  display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden', flexShrink:0 }}>
+                  <span style={{ fontSize: small ? 10 : 12, fontWeight:800, color:'#fff' }}>{p.jerseyNumber || ''}</span>
+                  {p.id && <img src={`https://media.api-sports.io/football/players/${p.id}.png`} alt=""
+                    onError={e => { e.target.style.display = 'none'; }}
+                    style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }}/>}
+                </div>
+                <div style={{ fontSize:9.5, fontWeight: kp ? 800 : 600, color: kp ? 'var(--acc)' : '#fff',
+                  maxWidth:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
+                  textShadow:'0 1px 2px rgba(0,0,0,0.6)' }}>
+                  {kp ? `🇰🇷 ${kp.name}` : p.name}
                 </div>
                 {rating != null && (
-                  <span style={{ ...NUM, fontSize:10, fontWeight:700, color:'var(--acc)', background:'rgba(245,196,0,0.15)', border:'0.5px solid rgba(245,196,0,0.3)', borderRadius:6, padding:'2px 6px', flexShrink:0 }}>
+                  <span style={{ ...NUM, fontSize:9, fontWeight:800, color:'#000', background:'var(--acc)', borderRadius:5, padding:'1.5px 5px', lineHeight:1 }}>
                     {parseFloat(rating).toFixed(1)}
                   </span>
                 )}
               </div>
             );
           };
-          return (
-            <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
-                <TeamBadge code={team.code} size={20} logo={team.logo}/>
-                <span style={{ fontSize:12, fontWeight:700, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{team.name}</span>
-                {formation && <span style={{ ...NUM, fontSize:10, color:'var(--text4)', flexShrink:0 }}>{formation}</span>}
+
+          let body;
+          if (hasGrid) {
+            // grid "행:열" — 행1이 GK. 공격 라인이 위, GK가 아래로 오도록 역순 배치.
+            const rows = new Map();
+            starters.forEach(e => {
+              const r = parseInt(e.player.grid.split(':')[0], 10) || 1;
+              if (!rows.has(r)) rows.set(r, []);
+              rows.get(r).push(e);
+            });
+            const ordered = [...rows.entries()].sort((a, b) => b[0] - a[0]);
+            ordered.forEach(([, list]) => list.sort((a, b) => (parseInt(a.player.grid.split(':')[1],10)||0) - (parseInt(b.player.grid.split(':')[1],10)||0)));
+            body = (
+              <div style={{ position:'relative', borderRadius:14, overflow:'hidden', padding:'14px 4px',
+                background:'linear-gradient(180deg, #17683a 0%, #115530 100%)' }}>
+                {/* 피치 라인 */}
+                <div style={{ position:'absolute', inset:10, border:'1px solid rgba(255,255,255,0.18)', borderRadius:8, pointerEvents:'none' }}/>
+                <div style={{ position:'absolute', left:10, right:10, top:'50%', height:1, background:'rgba(255,255,255,0.14)', pointerEvents:'none' }}/>
+                <div style={{ position:'absolute', left:'50%', top:'46%', width:74, height:74, marginLeft:-37, border:'1px solid rgba(255,255,255,0.14)', borderRadius:'50%', pointerEvents:'none' }}/>
+                <div style={{ position:'relative', display:'flex', flexDirection:'column', gap:16 }}>
+                  {ordered.map(([r, list]) => (
+                    <div key={r} style={{ display:'flex', justifyContent:'space-evenly', alignItems:'flex-start' }}>
+                      {list.map((e, i) => node(e, `${r}-${i}`, list.length >= 5))}
+                    </div>
+                  ))}
+                </div>
               </div>
-              {starters.map(renderPlayer)}
+            );
+          } else {
+            body = (
+              <div style={{ display:'flex', flexWrap:'wrap', gap:8, justifyContent:'center', background:'var(--surface)', borderRadius:14, padding:'12px 6px', border:'0.5px solid var(--border)' }}>
+                {starters.map((e, i) => node(e, i, true))}
+              </div>
+            );
+          }
+          return (
+            <div style={{ marginBottom:18 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8, paddingLeft:2 }}>
+                <TeamBadge code={team.code} size={20} logo={team.logo}/>
+                <span style={{ fontSize:13, fontWeight:700, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{team.name}</span>
+                {formation && <span style={{ ...NUM, fontSize:11, color:'var(--text4)', flexShrink:0 }}>{formation}</span>}
+              </div>
+              {body}
               {subs.length > 0 && (
                 <>
-                  <div style={{ fontSize:10, fontWeight:700, color:'var(--text4)', letterSpacing:1, marginTop:12, marginBottom:6, paddingLeft:8 }}>SUBS</div>
-                  {subs.map(renderPlayer)}
+                  <div style={{ fontSize:10, fontWeight:700, color:'var(--text4)', letterSpacing:1, marginTop:10, marginBottom:6, paddingLeft:2 }}>SUBS</div>
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:4 }}>
+                    {subs.map((e, i) => {
+                      const p = e.player || {};
+                      const kp = findKp(p.name, kps);
+                      return (
+                        <span key={i} onClick={kp ? () => goKoreanPlayer(kp) : undefined}
+                          style={{ fontSize:11, fontWeight: kp ? 800 : 500, color: kp ? 'var(--acc)' : 'var(--text2)',
+                            background: kp ? 'rgba(245,196,0,0.12)' : 'var(--btn-bg)',
+                            border: kp ? '0.5px solid rgba(245,196,0,0.35)' : '0.5px solid transparent',
+                            borderRadius:8, padding:'5px 9px', cursor: kp && onPlayer ? 'pointer' : 'default' }}>
+                          <span style={{ ...NUM, color: kp ? 'var(--acc)' : 'var(--text4)', fontWeight:700, marginRight:4 }}>{p.jerseyNumber}</span>
+                          {kp ? `🇰🇷 ${kp.name}` : p.name}
+                        </span>
+                      );
+                    })}
+                  </div>
                 </>
               )}
             </div>
           );
         };
         return (
-          <div style={{ padding:'14px 12px', display:'flex', gap:10, alignItems:'flex-start' }}>
-            {renderColumn(match.home, lineupsData?.home, homePlayers)}
-            <div style={{ width:'0.5px', alignSelf:'stretch', background:'var(--border)', flexShrink:0 }}/>
-            {renderColumn(match.away, lineupsData?.away, awayPlayers)}
+          <div style={{ padding:'14px 12px' }}>
+            {renderTeam(match.home, lineupsData?.home, homePlayers)}
+            {renderTeam(match.away, lineupsData?.away, awayPlayers)}
           </div>
         );
       })()}
