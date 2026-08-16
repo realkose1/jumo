@@ -6464,11 +6464,32 @@ function App() {
           return tilStart > -10 * 60 * 1000 && tilStart <= 90 * 60 * 1000;
         });
 
-        if (afKorean.length > 0) {
+        // 선수 확장으로 상세 대상이 많아지면 경기당 3콜이 API-Sports 분당 한도를
+        // 넘겨 빈 응답('확인 불가')이 쏟아진다. 우선순위(라이브 > 임박 > 최근 종료)로
+        // 정렬해 네트워크 fetch는 사이클당 8경기까지만 — 나머지는 다음 폴링에서
+        // 이어서 채우고, 성공분은 영구 캐시라 결국 전부 소화된다.
+        const detailsCacheForSort = afDetailsCacheRef.current;
+        const afPriority = (m) => {
+          if (m.live) return 0;
+          if (m.status !== 'STATUS_FINAL') return 1;                       // 임박(킥오프 전 창)
+          return 2 + Math.abs(Date.now() - new Date(m.fullDate).getTime()) / 86400000; // 최근 종료 우선
+        };
+        const afSorted = [...afKorean].sort((a, b) => afPriority(a) - afPriority(b));
+        const AF_FETCH_LIMIT = 8;
+        let afNetBudget = AF_FETCH_LIMIT;
+        const afTargets = afSorted.filter(m => {
+          const c = detailsCacheForSort[m.id];
+          const cacheFresh = c && (Date.now() - c.fetchedAt) < (c.status === 'STATUS_FINAL' ? (c.empty ? 3*60*1000 : Infinity) : (c.live ? 20000 : 30000));
+          if (cacheFresh) return true;              // 캐시 히트는 예산 소모 없음
+          if (afNetBudget <= 0) return false;
+          afNetBudget--; return true;
+        });
+
+        if (afTargets.length > 0) {
           const detailsCache = afDetailsCacheRef.current;
           let afFetchSeq = 0; // network-bound fetches only (cache hits don't wait)
           const afDetails = await Promise.allSettled(
-            afKorean.map(async (m) => {
+            afTargets.map(async (m) => {
               const needPlayers = m.live || m.status === 'STATUS_FINAL';
               const isFinalMatch = m.status === 'STATUS_FINAL';
               const cached = detailsCache[m.id];
@@ -6536,10 +6557,13 @@ function App() {
 
             const computeFor = (kp) => {
               const nameEn = kp.nameEn;
+              // AF 선수 ID 정확 매칭 — 로마자 표기 변형('Gue-Sung'/'Gue-sung')이나
+              // 축약형('J. Castrop')은 이름 매칭이 놓칠 수 있다. ID 일치 우선, 이름 폴백.
+              const afId = ALL_PLAYERS.find(p => p.name === kp.name)?.apiFootballId || null;
+              const isKp = (pl) => !!pl && ((afId && pl.id === afId) || nameMatch(pl.name || '', nameEn));
               let started = false, foundInRoster = false, sfRating = null, rosterNumber = null;
               for (const entry of linePlayers) {
-                const n = entry.player?.name || '';
-                if (nameMatch(n, nameEn)) {
+                if (isKp(entry.player)) {
                   foundInRoster = true;
                   // 실제 스쿼드 번호를 그대로 쓴다 — 이적 직후처럼 하드코딩 번호가
                   // 아직 틀릴 수 있는 경우를 라인업이 뜨는 즉시 자동 교정.
@@ -6550,7 +6574,7 @@ function App() {
               // Pull rating from /fixtures/players (only fetched for live/finished).
               for (const team of (playerStats || [])) {
                 for (const entry of (team.players || [])) {
-                  if (nameMatch(entry.player?.name || '', nameEn)) {
+                  if (isKp(entry.player)) {
                     const r = (entry.statistics || [{}])[0]?.games?.rating;
                     if (r != null) sfRating = parseFloat(r).toFixed(1);
                   }
@@ -6567,15 +6591,15 @@ function App() {
                   if (inc.type === 'subst') {
                     // API-Football: inc.player = the one coming OFF (sub OUT),
                     // inc.assist = the one coming ON (sub IN).
-                    if (nameMatch(inc.player?.name || '', nameEn)) minutesOff = min;
-                    if (nameMatch(inc.assist?.name || '', nameEn)) minutesIn = min;
+                    if (isKp(inc.player)) minutesOff = min;
+                    if (isKp(inc.assist)) minutesIn = min;
                   }
                   if (inc.type === 'Goal' && inc.detail !== 'Missed Penalty') {
-                    if (nameMatch(inc.player?.name || '', nameEn)) {
+                    if (isKp(inc.player)) {
                       if (inc.detail === 'Own Goal') { /* skip — not their goal */ }
                       else matchGoals++;
                     }
-                    if (inc.assist?.name && nameMatch(inc.assist.name, nameEn)) matchAssists++;
+                    if (inc.assist?.name && isKp(inc.assist)) matchAssists++;
                   }
                 }
               }
