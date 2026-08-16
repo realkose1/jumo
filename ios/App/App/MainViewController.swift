@@ -1,6 +1,7 @@
 import UIKit
 import WebKit
 import Capacitor
+import SafariServices
 
 // Native iOS 26 Liquid Glass tab bar, overlaid on the Capacitor WKWebView.
 // Uses a REAL UITabBarController so the system draws its own floating Liquid
@@ -62,6 +63,7 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
             wk?.configuration.userContentController.add(self, name: "tabbar")
             wk?.configuration.userContentController.add(self, name: "bell")
             wk?.configuration.userContentController.add(self, name: "detailbar")
+            wk?.configuration.userContentController.add(self, name: "openurl")
             setupTabBar()
             setupNotifBell()
             setupDetailChrome()
@@ -410,6 +412,26 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
                                actionShow: (action?["show"] as? Bool) ?? false,
                                actionLabel: (action?["label"] as? String) ?? "",
                                actionIcon: (action?["icon"] as? String) ?? "")
+        } else if message.name == "openurl", let urlStr = message.body as? String,
+                  let url = URL(string: urlStr), url.scheme?.hasPrefix("http") == true {
+            presentInAppBrowser(url)
         }
+    }
+
+    /// 인앱 브라우저를 시트로 띄운다. @capacitor/browser 는 fullScreen/popover 만
+    /// 지원해 아래로 스와이프해 닫을 수 없다 — pageSheet 로 직접 표시해
+    /// '아래에서 위로 등장 + 스와이프 다운으로 닫기'를 얻는다.
+    private func presentInAppBrowser(_ url: URL) {
+        let cfg = SFSafariViewController.Configuration()
+        cfg.entersReaderIfAvailable = false
+        let vc = SFSafariViewController(url: url, configuration: cfg)
+        vc.modalPresentationStyle = .pageSheet
+        vc.preferredControlTintColor = UIColor(red: 0.96, green: 0.77, blue: 0.0, alpha: 1)
+        if let sheet = vc.sheetPresentationController {
+            sheet.detents = [.large()]
+            sheet.prefersGrabberVisible = true
+            sheet.preferredCornerRadius = 16
+        }
+        (presentedViewController ?? self).present(vc, animated: true)
     }
 }

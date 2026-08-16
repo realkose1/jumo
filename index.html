@@ -5039,6 +5039,11 @@ function NewsImage({ url, fallbackPlayer }) {
 // 외부 링크: 네이티브에선 인앱 브라우저(SFSafariViewController)로, 웹에선 새 탭.
 // 앱 밖(Safari)으로 튕기지 않아 돌아오기가 자연스럽다.
 function openExternal(url) {
+  // 네이티브(iOS): 시트로 띄우는 커스텀 핸들러 — 아래에서 위로 올라오고
+  // 아래로 스와이프해 닫힌다. @capacitor/browser 는 fullScreen/popover 만
+  // 지원해 스와이프 닫기가 안 되므로 MainViewController 쪽에서 처리한다.
+  const mh = window.webkit?.messageHandlers?.openurl;
+  if (mh) { mh.postMessage(url); return; }
   const B = window.Capacitor?.Plugins?.Browser;
   if (B) { B.open({ url }); return; }
   window.open(url, '_blank', 'noopener');
@@ -5086,7 +5091,7 @@ function PlayerNews({ name }) {
 
   if (items && items.length === 0) return null;   // 뉴스 없으면 섹션 자체를 숨김
   return (
-    <div style={{ background:'var(--surface)', borderRadius:16, padding:'16px', border:'0.5px solid var(--border)', marginBottom:12 }}>
+    <div style={{ background:'var(--surface)', borderRadius:16, padding:'16px', border:'0.5px solid var(--border)', marginTop:20, marginBottom:12 }}>
       <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:4 }}>관련 뉴스</div>
       {items === null ? (
         <div style={{ display:'flex', justifyContent:'center', padding:'20px 0' }}>
