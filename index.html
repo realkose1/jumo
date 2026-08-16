@@ -3798,7 +3798,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
           const formation = teamData?.formation;
           const hasGrid = starters.length >= 10 && starters.every(e => e.player?.grid);
 
-          const node = (entry, i, small) => {
+          const node = (entry, i, small, onPitch = true) => {
             const p = entry.player || {};
             const kp = findKp(p.name, kps);
             const rating = entry.statistics?.rating;
@@ -3806,17 +3806,17 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
             return (
               <div key={i} onClick={kp ? () => goKoreanPlayer(kp) : undefined}
                 style={{ width: small ? 74 : 78, display:'flex', flexDirection:'column', alignItems:'center', gap:3, cursor: kp && onPlayer ? 'pointer' : 'default' }}>
-                <div style={{ position:'relative', width:D, height:D, borderRadius:'50%', background:'rgba(255,255,255,0.14)',
-                  border: kp ? '2px solid var(--acc)' : '1.5px solid rgba(255,255,255,0.35)',
+                <div style={{ position:'relative', width:D, height:D, borderRadius:'50%', background: onPitch ? 'rgba(255,255,255,0.14)' : 'var(--btn-bg)',
+                  border: kp ? '2px solid var(--acc)' : (onPitch ? '1.5px solid rgba(255,255,255,0.35)' : '1px solid var(--border2)'),
                   display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden', flexShrink:0 }}>
-                  <span style={{ fontSize: small ? 10 : 12, fontWeight:800, color:'#fff' }}>{p.jerseyNumber || ''}</span>
+                  <span style={{ fontSize: small ? 10 : 12, fontWeight:800, color: onPitch ? '#fff' : 'var(--text3)' }}>{p.jerseyNumber || ''}</span>
                   {p.id && <img src={`https://media.api-sports.io/football/players/${p.id}.png`} alt=""
                     onError={e => { e.target.style.display = 'none'; }}
                     style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }}/>}
                 </div>
-                <div style={{ fontSize:9.5, fontWeight: kp ? 800 : 600, color: kp ? 'var(--acc)' : '#fff',
+                <div style={{ fontSize:9.5, fontWeight: kp ? 800 : 600, color: kp ? 'var(--acc)' : (onPitch ? '#fff' : 'var(--text)'),
                   maxWidth:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
-                  textShadow:'0 1px 2px rgba(0,0,0,0.6)' }}>
+                  textShadow: onPitch ? '0 1px 2px rgba(0,0,0,0.6)' : 'none' }}>
                   {kp ? `🇰🇷 ${kp.name}` : p.name}
                 </div>
                 {rating != null && (
@@ -3856,9 +3856,50 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
               </div>
             );
           } else {
-            body = (
-              <div style={{ display:'flex', flexWrap:'wrap', gap:8, justifyContent:'center', background:'var(--surface)', borderRadius:14, padding:'12px 6px', border:'0.5px solid var(--border)' }}>
-                {starters.map((e, i) => node(e, i, true))}
+            // grid가 없는 경기(AF가 좌표를 안 주는 리그)에는 포메이션 문자열이나
+            // 포지션(G/D/M/F)으로 라인을 만든다. 둘 다 없으면 그때만 단순 그리드.
+            let lines = null;
+            const fm = (formation || '').match(/^\d+(-\d+)+$/) ? formation.split('-').map(Number) : null;
+            if (fm && fm.reduce((a, b) => a + b, 0) === starters.length - 1) {
+              // 포메이션 숫자대로 GK 다음부터 순서대로 끊는다(응답이 GK→수비→… 순).
+              lines = [];
+              let i = 1;
+              fm.forEach(n => { lines.push(starters.slice(i, i + n)); i += n; });
+              lines.push([starters[0]]);                       // GK
+              lines.reverse();                                  // 공격이 위, GK 최하단
+            } else {
+              const byPos = { G: [], D: [], M: [], F: [] };
+              let ok = true;
+              starters.forEach(e => {
+                const p = (e.player?.pos || '').toUpperCase();
+                if (byPos[p]) byPos[p].push(e); else ok = false;
+              });
+              if (ok && byPos.G.length === 1 && byPos.D.length && byPos.M.length) {
+                lines = [byPos.F, byPos.M, byPos.D, byPos.G].filter(l => l.length);
+              }
+            }
+            body = lines ? (
+              <div style={{ position:'relative', borderRadius:14, overflow:'hidden', padding:'14px 4px',
+                background:'linear-gradient(180deg, #17683a 0%, #115530 100%)' }}>
+                <div style={{ position:'absolute', inset:10, border:'1px solid rgba(255,255,255,0.18)', borderRadius:8, pointerEvents:'none' }}/>
+                <div style={{ position:'absolute', left:10, right:10, top:'50%', height:1, background:'rgba(255,255,255,0.14)', pointerEvents:'none' }}/>
+                <div style={{ position:'absolute', left:'50%', top:'46%', width:74, height:74, marginLeft:-37, border:'1px solid rgba(255,255,255,0.14)', borderRadius:'50%', pointerEvents:'none' }}/>
+                <div style={{ position:'relative', display:'flex', flexDirection:'column', gap:16 }}>
+                  {lines.map((list, li) => (
+                    <div key={li} style={{ display:'flex', justifyContent:'space-evenly', alignItems:'flex-start' }}>
+                      {list.map((e, i) => node(e, `${li}-${i}`, list.length >= 5))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              // 포메이션 정보가 아예 없는 경기 — 피치에 임의 배치하면 실제와 다른
+              // 대형(4-4-3 등)으로 오해되므로, 3열 격자 '선발 명단'으로 정직하게 보인다.
+              <div style={{ background:'var(--surface)', borderRadius:14, padding:'12px 8px 14px', border:'0.5px solid var(--border)' }}>
+                <div style={{ fontSize:10, fontWeight:700, color:'var(--text4)', letterSpacing:1, marginBottom:10, textAlign:'center' }}>선발 명단</div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', rowGap:14, columnGap:4, justifyItems:'center' }}>
+                  {starters.map((e, i) => node(e, i, true, false))}
+                </div>
               </div>
             );
           }
