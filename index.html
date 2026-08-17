@@ -2401,7 +2401,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
         return (
           <div onClick={() => onMatch(highlightMatch)} style={{ position:'relative', height:260, overflow:'hidden', cursor:'pointer', background:'#111' }}>
             {hlBgImg
-              ? <img key={hlBgImg} src={hlBgImg} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'50% 20%', animation:'fadeIn 0.7s ease' }}/>
+              ? <img key={hlBgImg} src={hlBgImg} alt="" style={{ position:'absolute', top:0, left:0, bottom:0, width:'113%', height:'100%', objectFit:'cover', objectPosition:'left 20%', animation:'fadeIn 0.7s ease' }}/>
               : <div style={{ position:'absolute', inset:0, background:'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)' }}>
                   {highlightMatch?.home?.logo && <img src={highlightMatch.home.logo} alt="" style={{ position:'absolute', right:-30, top:'50%', transform:'translateY(-50%)', width:200, height:200, objectFit:'contain', opacity:0.08, filter:'blur(2px)' }}/>}
                 </div>
@@ -2439,7 +2439,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
       <div onClick={() => highlightMatch && onMatch(highlightMatch)} style={{ position:'relative', height:260, overflow:'hidden', marginBottom:0, background:'#111', cursor: highlightMatch ? 'pointer' : 'default' }}>
         {/* Background */}
         {hlBgImg
-          ? <img key={hlBgImg} src={hlBgImg} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'50% 20%', animation:'fadeIn 0.7s ease' }}/>
+          ? <img key={hlBgImg} src={hlBgImg} alt="" style={{ position:'absolute', top:0, left:0, bottom:0, width:'113%', height:'100%', objectFit:'cover', objectPosition:'left 20%', animation:'fadeIn 0.7s ease' }}/>
           : <div style={{ position:'absolute', inset:0, background:'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)' }}>
               {highlightMatch?.home?.logo && <img src={highlightMatch.home.logo} alt="" style={{ position:'absolute', right:-30, top:'50%', transform:'translateY(-50%)', width:200, height:200, objectFit:'contain', opacity:0.08, filter:'blur(2px)' }}/>}
             </div>
