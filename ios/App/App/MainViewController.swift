@@ -38,6 +38,9 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
     private var bellBadge: UILabel?
     private var backHost: UIView?
     private var followHost: UIView?
+    private var muteHost: UIVisualEffectView?
+    private var pendingMute: (Bool, Bool)?
+    private var muteIcon: UIImageView?
     private var followLabel: UILabel?
     private var followIcon: UIImageView?
     private var actionHost: UIView?
@@ -250,6 +253,22 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
         pill.alpha = 0
         followHost = pill; followLabel = label; followIcon = icon
 
+        // 선수별 알림 on/off — 팔로우 알약 왼쪽에 글래스 원형으로. 웹 버튼과 자리가
+        // 겹치지 않게 네이티브에서 그린다(웹 쪽은 __nativeChrome 일 때 숨김).
+        let msize: CGFloat = 34
+        let mute = glassCircle(symbol: "bell.fill", size: msize)
+        mute.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(muteTapped)))
+        view.addSubview(mute)
+        NSLayoutConstraint.activate([
+            mute.centerYAnchor.constraint(equalTo: pill.centerYAnchor),
+            mute.trailingAnchor.constraint(equalTo: pill.leadingAnchor, constant: -8),
+            mute.widthAnchor.constraint(equalToConstant: msize),
+            mute.heightAnchor.constraint(equalToConstant: msize)
+        ])
+        mute.alpha = 0
+        muteHost = mute
+        muteIcon = mute.contentView.subviews.compactMap { $0 as? UIImageView }.first
+
         // Top-right action pill: '선수 편집' (선수 탭) / '완료' (선수 편집 화면).
         // Same slot as the follow pill — only one is ever visible per screen.
         let ae = UIGlassEffect(style: .clear); ae.isInteractive = true
@@ -281,22 +300,35 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
     }
 
     @objc private func backChromeTapped() { UIImpactFeedbackGenerator(style: .light).impactOccurred(); wk?.evaluateJavaScript("window.__back && window.__back()") }
+    @objc private func muteTapped() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        wk?.evaluateJavaScript("window.__jumoMuteToggle && window.__jumoMuteToggle()")
+    }
+
     @objc private func followTapped() { UIImpactFeedbackGenerator(style: .light).impactOccurred(); wk?.evaluateJavaScript("window.__jumoFollow && window.__jumoFollow()") }
     @objc private func actionTapped() { UIImpactFeedbackGenerator(style: .light).impactOccurred(); wk?.evaluateJavaScript("window.__jumoTopAction && window.__jumoTopAction()") }
 
     private func updateDetailChrome(back: Bool, followShow: Bool, followOn: Bool,
-                                    actionShow: Bool, actionLabel: String, actionIcon: String) {
+                                    actionShow: Bool, actionLabel: String, actionIcon: String,
+                                    muteShow: Bool = false, muteOn: Bool = false) {
         guard chromeReady else {
             // 알림 탭으로 상세 화면부터 시작하는 경우에도 스플래시 위에 뒤로가기/팔로우가
             // 먼저 뜨지 않도록 보류한다.
             pendingDetail = (back, followShow, followOn, actionShow, actionLabel, actionIcon)
+            pendingMute = (muteShow, muteOn)
             return
         }
         UIView.animate(withDuration: 0.2) {
             self.backHost?.alpha = back ? 1 : 0
             self.followHost?.alpha = followShow ? 1 : 0
             self.actionHost?.alpha = actionShow ? 1 : 0
+            self.muteHost?.alpha = muteShow ? 1 : 0
         }
+        // 켜짐이면 브랜드 옐로 벨, 꺼짐이면 사선 벨(회색)
+        let mcfg = UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)
+        muteIcon?.image = UIImage(systemName: muteOn ? "bell.slash.fill" : "bell.fill", withConfiguration: mcfg)
+        muteIcon?.tintColor = muteOn ? UIColor.white.withAlphaComponent(0.55)
+                                     : UIColor(red: 0.96, green: 0.77, blue: 0.0, alpha: 1)
         let acc = UIColor(red: 0.961, green: 0.769, blue: 0.0, alpha: 1)
         let cfg = UIImage.SymbolConfiguration(pointSize: 11, weight: .bold)
         if followOn {
@@ -411,7 +443,9 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
                                followOn: (d["followOn"] as? Bool) ?? false,
                                actionShow: (action?["show"] as? Bool) ?? false,
                                actionLabel: (action?["label"] as? String) ?? "",
-                               actionIcon: (action?["icon"] as? String) ?? "")
+                               actionIcon: (action?["icon"] as? String) ?? "",
+                               muteShow: (d["muteShow"] as? Bool) ?? false,
+                               muteOn: (d["muteOn"] as? Bool) ?? false)
         } else if message.name == "openurl", let urlStr = message.body as? String,
                   let url = URL(string: urlStr), url.scheme?.hasPrefix("http") == true {
             presentInAppBrowser(url)

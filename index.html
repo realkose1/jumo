@@ -4100,7 +4100,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
           <BackBtn onBack={onBack} nativeHandled/>
           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           {/* 선수별 알림 on/off — 팔로우한 선수만 의미가 있어 팔로우 중일 때만 노출 */}
-          {followed && onToggleMute && (
+          {followed && onToggleMute && !(typeof window !== 'undefined' && window.__nativeChrome) && (
             <button onClick={onToggleMute} aria-label={muted ? '알림 켜기' : '알림 끄기'}
               style={{ width:34, height:34, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
                 background: muted ? 'rgba(0,0,0,0.35)' : 'rgba(245,196,0,0.18)',
@@ -8046,18 +8046,26 @@ function App() {
           || (tab === 'more' && screen === 'main' && !!moreSub),
         followShow: screen === 'player' && !!selectedPlayer,
         followOn: !!(selectedPlayer && followed.has(selectedPlayer.id)),
+        // 선수별 알림 벨 — 팔로우 중인 선수 상세에서만
+        muteShow: screen === 'player' && !!selectedPlayer && followed.has(selectedPlayer.id),
+        muteOn: !!(selectedPlayer && mutedPlayers.has(selectedPlayer.id)),
         action: (tab === 'players' && screen === 'main') ? { show: true, label: '선수 편집', icon: 'pencil' }
               : (screen === 'addplayer') ? { show: true, label: '완료' + (followed.size > 0 ? ` (${followed.size})` : ''), icon: '' }
               : { show: false, label: '', icon: '' },
       });
     } catch {}
-  }, [screen, selectedPlayer, followed, nativeTabBar, tab, moreSub]);
+  }, [screen, selectedPlayer, followed, nativeTabBar, tab, moreSub, mutedPlayers]);
   React.useEffect(() => {
     window.__jumoFollow = () => {
       if (!selectedPlayer) return;
       const on = followed.has(selectedPlayer.id);
       if (on && !window.confirm(`${selectedPlayer.name} 선수를 팔로우 해제하시겠어요?`)) return;
       toggleFollow(selectedPlayer.id);
+    };
+    // 네이티브 알림 벨 탭 → 선수별 음소거 토글
+    window.__jumoMuteToggle = () => {
+      if (screen !== 'player' || !selectedPlayer) return;
+      togglePlayerMute(selectedPlayer.id);
     };
     // Native top-right action pill (선수 편집 / 완료) tap → route by screen.
     window.__jumoTopAction = () => {
