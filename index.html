@@ -1913,7 +1913,8 @@ function TodayMatchesCarousel({ todayMatches, matches, now, onMatch, tweaks }) {
 // ─── SCREEN: HOME V2 — Editorial ─────────────────────────────
 function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoading = false, scrollTopKey = 0, onRefresh, unreadCount = 0, nativeTabBar = false }) {
   const homeScrollRef = React.useRef(null);
-  React.useEffect(() => { if (scrollTopKey > 0) homeScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }, [scrollTopKey]);
+  React.useEffect(() => { if (scrollTopKey > 0) { SCROLL_MEM.home = 0; homeScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } }, [scrollTopKey]);
+  useScrollMemory('home', homeScrollRef);
   // Pull-to-refresh
   const [pullY, setPullY] = React.useState(0);
   const [refreshing, setRefreshing] = React.useState(false);
@@ -4478,7 +4479,8 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
   }, [isActive]);
 
   // Scroll to top when tab tapped
-  React.useEffect(() => { if (scrollTopKey > 0) scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }, [scrollTopKey]);
+  React.useEffect(() => { if (scrollTopKey > 0) { SCROLL_MEM.schedule = 0; scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } }, [scrollTopKey]);
+  useScrollMemory('schedule', scrollRef);
 
   // Keep the selected date centered in the strip when it changes (tap or swipe).
   React.useEffect(() => {
@@ -4738,7 +4740,8 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
   const touchStartY = React.useRef(0);
   const scrollRef = React.useRef(null);
   const PULL_THRESHOLD = 64;
-  React.useEffect(() => { if (scrollTopKey > 0) scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }, [scrollTopKey]);
+  React.useEffect(() => { if (scrollTopKey > 0) { SCROLL_MEM.players = 0; scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } }, [scrollTopKey]);
+  useScrollMemory('players', scrollRef);
 
   const handleTouchStart = (e) => { touchStartY.current = e.touches[0].clientY; };
   const handleTouchMove = (e) => {
@@ -5018,6 +5021,29 @@ function NewsImage({ url, fallbackPlayer }) {
 
 // 외부 링크: 네이티브에선 인앱 브라우저(SFSafariViewController)로, 웹에선 새 탭.
 // 앱 밖(Safari)으로 튕기지 않아 돌아오기가 자연스럽다.
+// 탭 화면은 상세로 들어갈 때 언마운트된다 — 스크롤 위치를 기억했다가 돌아오면 복원.
+const SCROLL_MEM = {};
+function useScrollMemory(key, ref) {
+  React.useLayoutEffect(() => {
+    const el = ref.current;
+    const saved = SCROLL_MEM[key];
+    if (el && saved) {
+      el.scrollTop = saved;
+      // 데이터가 늦게 채워져 높이가 아직 모자란 경우를 위해 몇 프레임 더 시도
+      let tries = 0;
+      const retry = () => {
+        if (!ref.current || tries++ > 8) return;
+        if (Math.abs(ref.current.scrollTop - saved) > 2 && ref.current.scrollHeight > saved) {
+          ref.current.scrollTop = saved;
+        }
+        requestAnimationFrame(retry);
+      };
+      requestAnimationFrame(retry);
+    }
+    return () => { if (ref.current) SCROLL_MEM[key] = ref.current.scrollTop; };
+  }, [key]);
+}
+
 function openExternal(url) {
   // 네이티브(iOS): 시트로 띄우는 커스텀 핸들러 — 아래에서 위로 올라오고
   // 아래로 스와이프해 닫힌다. @capacitor/browser 는 fullScreen/popover 만
@@ -5142,7 +5168,8 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames }) {
   const touchStartY = React.useRef(0);
   const scrollRef = React.useRef(null);
   const PULL_THRESHOLD = 64;
-  React.useEffect(() => { if (scrollTopKey > 0) scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }, [scrollTopKey]);
+  React.useEffect(() => { if (scrollTopKey > 0) { SCROLL_MEM.news = 0; scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } }, [scrollTopKey]);
+  useScrollMemory('news', scrollRef);
 
   const handleTouchStart = (e) => { touchStartY.current = e.touches[0].clientY; };
   const handleTouchMove = (e) => {
