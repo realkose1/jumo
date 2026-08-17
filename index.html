@@ -5485,6 +5485,17 @@ function AddPlayerScreen({ followed, onToggle, onBack }) {
   const sportMap = { '전체': null, '⚽ 축구':'축구', '⚾ 야구':'야구' };
   const [filter, setFilter] = React.useState('전체');
   const [query, setQuery] = React.useState('');
+  // 아래로 스크롤하면 검색창을 접고, 위로 올리면 다시 편다(목록 공간 확보).
+  const [searchHidden, setSearchHidden] = React.useState(false);
+  const lastYRef = React.useRef(0);
+  const onListScroll = React.useCallback((e) => {
+    const y = e.currentTarget.scrollTop;
+    const prev = lastYRef.current;
+    if (y < 8) setSearchHidden(false);            // 최상단이면 항상 노출
+    else if (y - prev > 6) setSearchHidden(true); // 아래로
+    else if (prev - y > 6) setSearchHidden(false);// 위로
+    lastYRef.current = y;
+  }, []);
 
   const filtered = ALL_PLAYERS.filter(p => {
     const sportMatch = filter === '전체' ? true : p.sport === sportMap[filter];
@@ -5505,7 +5516,7 @@ function AddPlayerScreen({ followed, onToggle, onBack }) {
           </button>
         </div>
         <div style={{ fontSize:22, fontWeight:800, color:'var(--text)', letterSpacing:-0.5, marginBottom:14 }}>선수 편집</div>
-        <div style={{ position:'relative', marginBottom:12 }}>
+        <div style={{ position:'relative', marginBottom: searchHidden ? 0 : 12, maxHeight: searchHidden ? 0 : 60, opacity: searchHidden ? 0 : 1, overflow:'hidden', pointerEvents: searchHidden ? 'none' : 'auto', transition:'max-height 0.22s ease, opacity 0.18s ease, margin-bottom 0.22s ease' }}>
           <div style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', pointerEvents:'none' }}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="var(--text4)" strokeWidth="1.6"/><path d="M10.5 10.5L14 14" stroke="var(--text4)" strokeWidth="1.6" strokeLinecap="round"/></svg>
           </div>
@@ -5521,7 +5532,7 @@ function AddPlayerScreen({ followed, onToggle, onBack }) {
       <div style={{ padding:'0 20px 8px', flexShrink:0 }}>
         <span style={{ fontSize:11, color:'var(--text4)', fontWeight:600 }}>{filtered.length}명의 선수</span>
       </div>
-      <div style={{ flex:1, overflow:'auto', padding:'0 16px' }} className="scrollbar-hide">
+      <div onScroll={onListScroll} style={{ flex:1, overflow:'auto', padding:'0 16px' }} className="scrollbar-hide">
         {filtered.map(p => {
           const isFollowed = followed.has(p.id);
           return (
