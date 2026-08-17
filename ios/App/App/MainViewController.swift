@@ -318,7 +318,12 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
             pendingMute = (muteShow, muteOn)
             return
         }
-        UIView.animate(withDuration: 0.2) {
+        // 사라질 때는 빠르게(0.14s), 나타날 때는 기존 속도(0.2s).
+        // 뒤로가기 슬라이드(0.34s) 도중 상단 버튼이 남아 겹쳐 보이던 문제 보정.
+        let anyHiding = (!back && (backHost?.alpha ?? 0) > 0)
+            || (!followShow && (followHost?.alpha ?? 0) > 0)
+            || (!muteShow && (muteHost?.alpha ?? 0) > 0)
+        UIView.animate(withDuration: anyHiding ? 0.14 : 0.2) {
             self.backHost?.alpha = back ? 1 : 0
             self.followHost?.alpha = followShow ? 1 : 0
             self.actionHost?.alpha = actionShow ? 1 : 0
