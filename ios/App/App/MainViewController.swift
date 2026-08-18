@@ -115,16 +115,17 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
     private func setupNotifBell() {
         let size: CGFloat = 38
 
-        let e = UIGlassEffect(style: .regular)
+        let e = UIGlassEffect(style: .clear)
         e.isInteractive = true
         let glass = UIVisualEffectView(effect: e)
         glass.translatesAutoresizingMaskIntoConstraints = false
         glass.layer.cornerRadius = size / 2
         glass.layer.cornerCurve = .continuous
         glass.clipsToBounds = true
+        addGlassScrim(glass)
 
         let icon = UIImageView(image: UIImage(systemName: "bell.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)))
-        icon.tintColor = UIColor.white.withAlphaComponent(0.92)
+        icon.tintColor = .white
         icon.contentMode = .center
         icon.translatesAutoresizingMaskIntoConstraints = false
         glass.contentView.addSubview(icon)
@@ -196,7 +197,7 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
 
     // 글래스는 뒤 배경색을 그대로 흡수한다 — 히어로가 밝은 팀(울버햄튼 골드 등)이면
     // 흰 글씨/아이콘도 묻힌다. 유리 안쪽에 옅은 검정 스크림을 깔아 대비를 고정한다.
-    private func addGlassScrim(_ v: UIVisualEffectView, _ alpha: CGFloat = 0.22) {
+    private func addGlassScrim(_ v: UIVisualEffectView, _ alpha: CGFloat = 0.28) {
         let scrim = UIView()
         scrim.backgroundColor = UIColor.black.withAlphaComponent(alpha)
         scrim.isUserInteractionEnabled = false
@@ -212,13 +213,15 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
 
     @available(iOS 26.0, *)
     private func glassCircle(symbol: String, size: CGFloat) -> UIVisualEffectView {
-        let e = UIGlassEffect(style: .regular); e.isInteractive = true
+        // 팔로우 알약과 같은 .clear 재질을 쓴다. .regular 는 뒤 배경을 흡수·증폭해서
+        // 히어로 그라데이션이 밝은 지점(중앙부) 위에 오면 혼자 하얗게 떠버린다.
+        let e = UIGlassEffect(style: .clear); e.isInteractive = true
         let g = UIVisualEffectView(effect: e)
         g.translatesAutoresizingMaskIntoConstraints = false
         g.layer.cornerRadius = size / 2; g.layer.cornerCurve = .continuous; g.clipsToBounds = true
         addGlassScrim(g)
         let icon = UIImageView(image: UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)))
-        icon.tintColor = UIColor.white.withAlphaComponent(0.92); icon.contentMode = .center
+        icon.tintColor = .white; icon.contentMode = .center
         icon.translatesAutoresizingMaskIntoConstraints = false
         g.contentView.addSubview(icon)
         NSLayoutConstraint.activate([
