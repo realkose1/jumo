@@ -244,6 +244,10 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 }/*EDITMODE-END*/;
 
 // ─── LIQUID GLASS ────────────────────────────────────────────
+// 앱 전역 컨트롤 높이. 네이티브 상단 크롬(MainViewController.chromeH = 38pt)과
+// 같은 값을 쓴다 — 칩·세그먼트·알약·박스 버튼이 전부 이 높이로 선다.
+const CTRL_H = 38;
+
 const LG = {
   base: {
     background: 'rgba(255,255,255,0.10)',
@@ -252,8 +256,8 @@ const LG = {
     border: '0.5px solid rgba(255,255,255,0.22)',
     boxShadow: '0 4px 24px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -0.5px 0 rgba(0,0,0,0.08)',
   },
-  circle: { width:36, height:36, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', flexShrink:0, padding:0, border:'none' },
-  pill:   { borderRadius:20, padding:'7px 14px', display:'flex', alignItems:'center', gap:6, cursor:'pointer', border:'none' },
+  circle: { width:CTRL_H, height:CTRL_H, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', flexShrink:0, padding:0, border:'none' },
+  pill:   { height:CTRL_H, boxSizing:'border-box', borderRadius:CTRL_H/2, padding:'0 14px', display:'flex', alignItems:'center', gap:6, cursor:'pointer', border:'none' },
 };
 
 // ─── API CONFIG ──────────────────────────────────────────────
@@ -1120,11 +1124,11 @@ function GlassSegmented({ tabs, active, onChange, sticky = false, style }) {
   return (
     <div ref={wrapRef} style={{ position: sticky ? 'sticky' : 'static', top: twoTier ? 50 : 0, zIndex: 10, padding: '10px 16px', background: 'var(--bg)', transition: 'top 0.2s ease', ...style }}>
       {twoTier && <div style={{ position: 'absolute', left: 0, right: 0, bottom: '100%', height: 240, background: 'var(--bg)' }}/>}
-      <div style={{ display: 'flex', borderRadius: 18, padding: 4, background: 'var(--card)', border: '0.5px solid var(--border2)' }}>
+      <div style={{ display: 'flex', borderRadius: CTRL_H/2, padding: 4, background: 'var(--card)', border: '0.5px solid var(--border2)' }}>
         {tabs.map(t => (
           <button key={t.id} onClick={() => onChange(t.id)} style={{
-            flex: 1, border: 'none', cursor: 'pointer', padding: '9px 4px', fontSize: 13, fontWeight: 700,
-            borderRadius: 14, letterSpacing: 0.2, whiteSpace: 'nowrap', transition: 'color 0.15s, background 0.15s',
+            flex: 1, border: 'none', cursor: 'pointer', height: CTRL_H - 8, padding: '0 4px', fontSize: 13, fontWeight: 700,
+            borderRadius: (CTRL_H - 8) / 2, letterSpacing: 0.2, whiteSpace: 'nowrap', transition: 'color 0.15s, background 0.15s',
             background: active === t.id ? 'rgba(255,255,255,0.14)' : 'transparent',
             boxShadow: active === t.id ? '0 1px 2px rgba(0,0,0,0.2)' : 'none',
             color: active === t.id ? '#fff' : 'var(--text3)',
@@ -4105,7 +4109,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
           {/* 선수별 알림 on/off — 팔로우한 선수만 의미가 있어 팔로우 중일 때만 노출 */}
           {followed && onToggleMute && !(typeof window !== 'undefined' && window.__nativeChrome) && (
             <button onClick={onToggleMute} aria-label={muted ? '알림 켜기' : '알림 끄기'}
-              style={{ width:38, height:38, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
+              style={{ width:CTRL_H, height:CTRL_H, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
                 background:'rgba(0,0,0,0.35)',
                 backdropFilter:'blur(10px)', WebkitBackdropFilter:'blur(10px)',
                 border:'0.5px solid rgba(255,255,255,0.28)',
@@ -4118,7 +4122,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
             </button>
           )}
           {!(typeof window !== 'undefined' && window.__nativeChrome) && (
-          <button onClick={handleFollowClick} style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(0,0,0,0.35)', backdropFilter:'blur(10px)', border:'0.5px solid rgba(255,255,255,0.28)', height:38, boxSizing:'border-box', borderRadius:19, padding:'0 14px', color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', transition:'all 0.2s' }}>
+          <button onClick={handleFollowClick} style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(0,0,0,0.35)', backdropFilter:'blur(10px)', border:'0.5px solid rgba(255,255,255,0.28)', height:CTRL_H, boxSizing:'border-box', borderRadius:CTRL_H/2, padding:'0 14px', color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', transition:'all 0.2s' }}>
             {followed
               ? <><svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5L4.5 8.5L11 1" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>팔로우 중</>
               : <>+ 팔로우</>}
@@ -4793,14 +4797,14 @@ function PlayersScreen({ onPlayer, onAdd, followed, statsCache = {}, isLoading =
         <div style={{ position:'sticky', top:0, zIndex:20, background: scrolled ? 'rgba(11,11,13,0.55)' : 'var(--bg)', backdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', WebkitBackdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', borderBottom: `0.5px solid ${scrolled ? 'var(--border)' : 'transparent'}`, transition: 'background 0.28s ease, backdrop-filter 0.28s ease, border-color 0.28s ease' }}>
           <div style={{ padding:'16px 20px 8px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
             <div style={{ fontSize:22, fontWeight:700, color:'var(--text)', letterSpacing:-0.5 }}>선수</div>
-            <button onClick={onAdd} style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(255,255,255,0.10)', border:'0.5px solid rgba(255,255,255,0.22)', height:38, boxSizing:'border-box', borderRadius:19, padding:'0 16px', color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', visibility: (typeof window !== 'undefined' && window.__nativeChrome) ? 'hidden' : 'visible' }}>
+            <button onClick={onAdd} style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(255,255,255,0.10)', border:'0.5px solid rgba(255,255,255,0.22)', height:CTRL_H, boxSizing:'border-box', borderRadius:CTRL_H/2, padding:'0 16px', color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', visibility: (typeof window !== 'undefined' && window.__nativeChrome) ? 'hidden' : 'visible' }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="#fff"/></svg>
               선수 편집
             </button>
           </div>
           <div style={{ display:'flex', gap:8, padding:'0 16px 14px', overflowX:'auto' }} className="scrollbar-hide">
             {sports.map(s => (
-              <button key={s} onClick={() => setFilter(s)} style={{ flexShrink:0, background: filter===s ? 'var(--acc)' : 'var(--border)', border:'none', borderRadius:20, padding:'7px 16px', color: filter===s ? '#000' : 'var(--text2)', fontSize:13, fontWeight:600, cursor:'pointer' }}>{s}</button>
+              <button key={s} onClick={() => setFilter(s)} style={{ flexShrink:0, background: filter===s ? 'var(--acc)' : 'var(--border)', border:'none', height:CTRL_H, boxSizing:'border-box', borderRadius:CTRL_H/2, padding:'0 16px', color: filter===s ? '#000' : 'var(--text2)', fontSize:13, fontWeight:600, cursor:'pointer' }}>{s}</button>
             ))}
           </div>
         </div>
@@ -5390,8 +5394,10 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames }) {
                 flexShrink:0,
                 background: category === c ? 'var(--acc)' : 'var(--border)',
                 border:'none',
-                borderRadius:20,
-                padding:'7px 16px',
+                height:CTRL_H,
+                boxSizing:'border-box',
+                borderRadius:CTRL_H/2,
+                padding:'0 16px',
                 fontSize:13,
                 fontWeight:600,
                 color: category === c ? '#000' : 'var(--text2)',
@@ -5531,7 +5537,7 @@ function AddPlayerScreen({ followed, onToggle, onBack }) {
       <div style={{ padding:'12px 20px 0', flexShrink:0 }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
           <BackBtn onBack={onBack} nativeHandled/>
-          <button onClick={onBack} style={{ background:'var(--acc)', border:'none', height:38, boxSizing:'border-box', borderRadius:19, padding:'0 18px', color:'#000', fontSize:13, fontWeight:700, cursor:'pointer', visibility: (typeof window !== 'undefined' && window.__nativeChrome) ? 'hidden' : 'visible' }}>
+          <button onClick={onBack} style={{ background:'var(--acc)', border:'none', height:CTRL_H, boxSizing:'border-box', borderRadius:CTRL_H/2, padding:'0 18px', color:'#000', fontSize:13, fontWeight:700, cursor:'pointer', visibility: (typeof window !== 'undefined' && window.__nativeChrome) ? 'hidden' : 'visible' }}>
             완료 {followed.size > 0 && `(${followed.size})`}
           </button>
         </div>
@@ -5545,7 +5551,7 @@ function AddPlayerScreen({ followed, onToggle, onBack }) {
         </div>
         <div style={{ display:'flex', gap:8, overflowX:'auto', paddingBottom:12 }} className="scrollbar-hide">
           {sports.map(s => (
-            <button key={s} onClick={() => setFilter(s)} style={{ flexShrink:0, background: filter===s ? 'var(--acc)' : 'var(--border)', border:'none', borderRadius:20, padding:'7px 14px', color: filter===s ? '#000' : 'var(--text2)', fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap', transition:'all 0.15s' }}>{s}</button>
+            <button key={s} onClick={() => setFilter(s)} style={{ flexShrink:0, background: filter===s ? 'var(--acc)' : 'var(--border)', border:'none', height:CTRL_H, boxSizing:'border-box', borderRadius:CTRL_H/2, padding:'0 14px', color: filter===s ? '#000' : 'var(--text2)', fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap', transition:'all 0.15s' }}>{s}</button>
           ))}
         </div>
       </div>
@@ -5934,7 +5940,7 @@ function MoreScreen({ sportFeeds, onToggleSportFeed, profile, onUpdateProfile, s
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ fontSize:16, fontWeight:800, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{profile.nickname}</div>
         </div>
-        <button onClick={() => setSub('profile')} style={{ background:'var(--border)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:10, padding:'7px 12px', color:'var(--text-60)', fontSize:12, fontWeight:600, cursor:'pointer' }}>편집</button>
+        <button onClick={() => setSub('profile')} style={{ background:'var(--border)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:10, height:CTRL_H, boxSizing:'border-box', padding:'0 14px', color:'var(--text-60)', fontSize:12, fontWeight:600, cursor:'pointer' }}>편집</button>
       </div>
 
       {groups.map(g => (
@@ -5998,9 +6004,9 @@ function OnboardingTour({ onDone, onTab }) {
         </div>
         <div style={{ fontSize:13.5, lineHeight:1.65, color:'var(--text3)', whiteSpace:'pre-line', marginBottom:16 }}>{step.desc}</div>
         <div style={{ position:'relative', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-          <button onClick={prev} style={{ padding:'12px 22px', borderRadius:12, border:'none', background:'var(--btn-bg)', color:'var(--text)', fontSize:15, fontWeight:700, letterSpacing:-0.3, cursor:'pointer', visibility: i === 0 ? 'hidden' : 'visible' }}>이전</button>
+          <button onClick={prev} style={{ height:CTRL_H, boxSizing:'border-box', padding:'0 22px', borderRadius:12, border:'none', background:'var(--btn-bg)', color:'var(--text)', fontSize:15, fontWeight:700, letterSpacing:-0.3, cursor:'pointer', visibility: i === 0 ? 'hidden' : 'visible' }}>이전</button>
           <span style={{ ...NUM, position:'absolute', left:'50%', transform:'translateX(-50%)', pointerEvents:'none', fontSize:12, color:'var(--text5)', fontWeight:700 }}>{i + 1} / {n}</span>
-          <button onClick={next} style={{ padding:'12px 24px', borderRadius:12, border:'none', background:'var(--acc)', color:'#000', fontSize:15, fontWeight:800, letterSpacing:-0.3, cursor:'pointer' }}>
+          <button onClick={next} style={{ height:CTRL_H, boxSizing:'border-box', padding:'0 24px', borderRadius:12, border:'none', background:'var(--acc)', display:'flex', alignItems:'center', gap:6, color:'#000', fontSize:15, fontWeight:800, letterSpacing:-0.3, cursor:'pointer' }}>
             {last ? '시작하기' : '다음'}
           </button>
         </div>
@@ -8170,7 +8176,7 @@ function App() {
             <div style={{ fontSize:12, color:'var(--text3)', marginBottom:8, fontWeight:600 }}>홈 스타일</div>
             <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
               {homeVariantNames.map((name, i) => (
-                <button key={i} onClick={() => updateTweaks('homeVariant', i)} style={{ background: tweaks.homeVariant===i ? 'var(--acc)' : 'var(--border)', border:'none', borderRadius:10, padding:'10px 14px', color: tweaks.homeVariant===i ? '#000' : 'var(--text-60)', fontSize:13, fontWeight:600, cursor:'pointer', textAlign:'left' }}>
+                <button key={i} onClick={() => updateTweaks('homeVariant', i)} style={{ background: tweaks.homeVariant===i ? 'var(--acc)' : 'var(--border)', border:'none', borderRadius:10, height:CTRL_H, boxSizing:'border-box', padding:'0 14px', color: tweaks.homeVariant===i ? '#000' : 'var(--text-60)', fontSize:13, fontWeight:600, cursor:'pointer', textAlign:'left' }}>
                   {i===0 ? '1️⃣' : i===1 ? '2️⃣' : '3️⃣'} {name}
                 </button>
               ))}
