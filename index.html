@@ -5828,10 +5828,10 @@ function ProfileEditScreen({ profile, onSave, onBack }) {
       )}
       <div style={{ padding:'12px 20px 8px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         {(typeof window !== 'undefined' && window.__nativeChrome)
-          ? <div aria-hidden style={{ width:36 }}/>
+          ? <div aria-hidden style={{ width:CTRL_H }}/>
           : <button onClick={onBack} style={{ background:'none', border:'none', color:'var(--text2)', fontSize:15, cursor:'pointer', padding:0 }}>취소</button>}
         <div style={{ fontSize:16, fontWeight:700, color:'var(--text)' }}>프로필 편집</div>
-        <button onClick={save} style={{ background:'none', border:'none', color:'var(--acc)', fontSize:15, fontWeight:700, cursor:'pointer', padding:0 }}>저장</button>
+        <button onClick={save} style={{ ...LG.base, ...LG.pill, border:'0.5px solid rgba(255,255,255,0.22)', boxSizing:'border-box', justifyContent:'center', color:'var(--acc)', fontSize:14, fontWeight:700 }}>저장</button>
       </div>
 
       <div style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'28px 20px 20px' }}>
@@ -5883,10 +5883,10 @@ function FeedbackScreen({ onBack }) {
     <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide screen-slide-in">
       <div style={{ padding:'12px 20px 8px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         {(typeof window !== 'undefined' && window.__nativeChrome)
-          ? <div aria-hidden style={{ width:36 }}/>
+          ? <div aria-hidden style={{ width:CTRL_H }}/>
           : <button onClick={onBack} style={{ background:'none', border:'none', color:'var(--text2)', fontSize:15, cursor:'pointer', padding:0 }}>취소</button>}
         <div style={{ fontSize:16, fontWeight:700, color:'var(--text)' }}>피드백 보내기</div>
-        <button onClick={send} style={{ background:'none', border:'none', color: text.trim() ? 'var(--acc)' : 'var(--text5)', fontSize:15, fontWeight:700, cursor:'pointer', padding:0 }}>보내기</button>
+        <button onClick={send} style={{ ...LG.base, ...LG.pill, border:'0.5px solid rgba(255,255,255,0.22)', boxSizing:'border-box', justifyContent:'center', color: text.trim() ? 'var(--acc)' : 'var(--text5)', fontSize:14, fontWeight:700, opacity: text.trim() ? 1 : 0.55 }}>보내기</button>
       </div>
 
       <div style={{ padding:'16px' }}>
