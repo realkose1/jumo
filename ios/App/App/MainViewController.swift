@@ -36,6 +36,11 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
     private var hostView: UIView?
     private var bellHost: UIView?
     private var bellBadge: UILabel?
+    /// 상단 크롬(홈 벨·뒤로가기·알림 벨·팔로우/액션 알약) 공통 높이.
+    /// 원형은 지름, 알약은 높이로 쓴다. 세로 위치도 이 값 기준으로 맞춘다.
+    static let chromeH: CGFloat = 36
+    static let chromeTop: CGFloat = 12
+
     private var backHost: UIView?
     private var followHost: UIView?
     private var muteHost: UIVisualEffectView?
@@ -114,7 +119,7 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
 
     @available(iOS 26.0, *)
     private func setupNotifBell() {
-        let size: CGFloat = 38
+        let size: CGFloat = Self.chromeH
 
         let e = UIGlassEffect(style: .clear)
         e.isInteractive = true
@@ -168,7 +173,7 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
 
         view.addSubview(container)
         NSLayoutConstraint.activate([
-            container.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            container.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: Self.chromeTop),
             container.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
             container.widthAnchor.constraint(equalToConstant: size),
             container.heightAnchor.constraint(equalToConstant: size)
@@ -234,12 +239,12 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
 
     @available(iOS 26.0, *)
     private func setupDetailChrome() {
-        let bsize: CGFloat = 38
+        let bsize: CGFloat = Self.chromeH
         let back = glassCircle(symbol: "chevron.left", size: bsize)
         back.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(backChromeTapped)))
         view.addSubview(back)
         NSLayoutConstraint.activate([
-            back.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            back.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: Self.chromeTop),
             back.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             back.widthAnchor.constraint(equalToConstant: bsize),
             back.heightAnchor.constraint(equalToConstant: bsize)
@@ -250,7 +255,7 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
         let fe = UIGlassEffect(style: .clear); fe.isInteractive = true
         let pill = UIVisualEffectView(effect: fe)
         pill.translatesAutoresizingMaskIntoConstraints = false
-        pill.layer.cornerRadius = 16; pill.layer.cornerCurve = .continuous; pill.clipsToBounds = true
+        pill.layer.cornerRadius = Self.chromeH / 2; pill.layer.cornerCurve = .continuous; pill.clipsToBounds = true
         addGlassScrim(pill)
         let icon = UIImageView(); icon.contentMode = .center
         icon.translatesAutoresizingMaskIntoConstraints = false
@@ -268,16 +273,16 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
         pill.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(followTapped)))
         view.addSubview(pill)
         NSLayoutConstraint.activate([
-            pill.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 13),
+            pill.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: Self.chromeTop),
             pill.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-            pill.heightAnchor.constraint(equalToConstant: 32)
+            pill.heightAnchor.constraint(equalToConstant: Self.chromeH)
         ])
         pill.alpha = 0
         followHost = pill; followLabel = label; followIcon = icon
 
         // 선수별 알림 on/off — 팔로우 알약 왼쪽에 글래스 원형으로. 웹 버튼과 자리가
         // 겹치지 않게 네이티브에서 그린다(웹 쪽은 __nativeChrome 일 때 숨김).
-        let msize: CGFloat = 34
+        let msize: CGFloat = Self.chromeH
         let mute = glassCircle(symbol: "bell.fill", size: msize)
         mute.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(muteTapped)))
         view.addSubview(mute)
@@ -296,7 +301,7 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
         let ae = UIGlassEffect(style: .clear); ae.isInteractive = true
         let apill = UIVisualEffectView(effect: ae)
         apill.translatesAutoresizingMaskIntoConstraints = false
-        apill.layer.cornerRadius = 16; apill.layer.cornerCurve = .continuous; apill.clipsToBounds = true
+        apill.layer.cornerRadius = Self.chromeH / 2; apill.layer.cornerCurve = .continuous; apill.clipsToBounds = true
         addGlassScrim(apill)
         let aicon = UIImageView(); aicon.contentMode = .center
         aicon.translatesAutoresizingMaskIntoConstraints = false
@@ -314,9 +319,9 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
         apill.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(actionTapped)))
         view.addSubview(apill)
         NSLayoutConstraint.activate([
-            apill.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 13),
+            apill.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: Self.chromeTop),
             apill.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-            apill.heightAnchor.constraint(equalToConstant: 32)
+            apill.heightAnchor.constraint(equalToConstant: Self.chromeH)
         ])
         apill.alpha = 0
         actionHost = apill; actionLabel = alabel; actionIcon = aicon
