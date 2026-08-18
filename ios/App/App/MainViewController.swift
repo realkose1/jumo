@@ -38,7 +38,7 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
     private var bellBadge: UILabel?
     /// 상단 크롬(홈 벨·뒤로가기·알림 벨·팔로우/액션 알약) 공통 높이.
     /// 원형은 지름, 알약은 높이로 쓴다. 세로 위치도 이 값 기준으로 맞춘다.
-    static let chromeH: CGFloat = 36
+    static let chromeH: CGFloat = 38
     static let chromeTop: CGFloat = 12
 
     private var backHost: UIView?
