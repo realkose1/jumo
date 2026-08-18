@@ -56,7 +56,8 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
     private var chromeReady = false
     private var pendingBell: (show: Bool, unread: Int)?
     private var pendingDetail: (back: Bool, followShow: Bool, followOn: Bool,
-                               actionShow: Bool, actionLabel: String, actionIcon: String)?
+                               actionShow: Bool, actionLabel: String, actionIcon: String,
+                               actionAccent: Bool)?
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
@@ -332,11 +333,12 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
 
     private func updateDetailChrome(back: Bool, followShow: Bool, followOn: Bool,
                                     actionShow: Bool, actionLabel: String, actionIcon: String,
+                                    actionAccent: Bool,
                                     muteShow: Bool = false, muteOn: Bool = false) {
         guard chromeReady else {
             // 알림 탭으로 상세 화면부터 시작하는 경우에도 스플래시 위에 뒤로가기/팔로우가
             // 먼저 뜨지 않도록 보류한다.
-            pendingDetail = (back, followShow, followOn, actionShow, actionLabel, actionIcon)
+            pendingDetail = (back, followShow, followOn, actionShow, actionLabel, actionIcon, actionAccent)
             pendingMute = (muteShow, muteOn)
             return
         }
@@ -368,14 +370,16 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
             followLabel?.text = "팔로우"; followLabel?.textColor = .white
         }
         if actionShow {
-            // 상단 크롬은 전부 흰색으로 통일 — 브랜드 옐로는 밝은 배경에서 묻힌다.
-            self.actionLabel?.text = actionLabel; self.actionLabel?.textColor = .white
+            // 상단 크롬은 기본 흰색. '완료'처럼 저장·확정 성격의 액션만 브랜드 옐로.
+            let tint: UIColor = actionAccent
+                ? UIColor(red: 0.961, green: 0.769, blue: 0.0, alpha: 1) : .white
+            self.actionLabel?.text = actionLabel; self.actionLabel?.textColor = tint
             if actionIcon.isEmpty {
                 self.actionIcon?.isHidden = true; self.actionIcon?.image = nil
             } else {
                 self.actionIcon?.isHidden = false
                 self.actionIcon?.image = UIImage(systemName: actionIcon, withConfiguration: cfg)
-                self.actionIcon?.tintColor = .white
+                self.actionIcon?.tintColor = tint
             }
         }
     }
@@ -431,7 +435,8 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
             if let d = self.pendingDetail {
                 self.pendingDetail = nil
                 self.updateDetailChrome(back: d.back, followShow: d.followShow, followOn: d.followOn,
-                                        actionShow: d.actionShow, actionLabel: d.actionLabel, actionIcon: d.actionIcon)
+                                        actionShow: d.actionShow, actionLabel: d.actionLabel, actionIcon: d.actionIcon,
+                                        actionAccent: d.actionAccent)
             }
         }
     }
@@ -472,6 +477,7 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
                                actionShow: (action?["show"] as? Bool) ?? false,
                                actionLabel: (action?["label"] as? String) ?? "",
                                actionIcon: (action?["icon"] as? String) ?? "",
+                               actionAccent: (action?["accent"] as? Bool) ?? false,
                                muteShow: (d["muteShow"] as? Bool) ?? false,
                                muteOn: (d["muteOn"] as? Bool) ?? false)
         } else if message.name == "openurl", let urlStr = message.body as? String,
