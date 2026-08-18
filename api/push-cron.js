@@ -204,12 +204,26 @@ async function collectSoccer(events) {
       // Finished & fully processed on an earlier run → skip (saves the events call).
       if (isFinal && await alreadyLogged(`af-done-${fid}`)) continue;
 
-      if (isLive) {
-        events.push({ key: `af-start-${fid}`, players: involved.map((p) => p.id), matchId: String(fid),
-          title: `⚽ ${vs}`, body: `${namesWithJosa(names)} 출전하는 경기가 시작됐습니다.` });
+      // 야구와 같은 이유 — 팀 경기라고 다 뛰는 게 아니다. 라인업으로 실제 출전을
+      // 확인한 뒤 대상을 좁힌다. 라인업이 아직/끝내 없으면 사실을 단정하지 않고 건너뛴다.
+      let starters = null, squad = null;
+      if (isLive || isFinal) {
+        const lu = await afGet(`/fixtures/lineups?fixture=${fid}`);
+        const teams = lu?.response || [];
+        if (teams.length && teams.some((t) => (t.startXI || []).length)) {
+          const inList = (list, p) => (list || []).some((e) => e.player?.id === p.afPlayerId);
+          starters = involved.filter((p) => teams.some((t) => inList(t.startXI, p)));
+          squad = involved.filter((p) => teams.some((t) => inList(t.startXI, p) || inList(t.substitutes, p)));
+        }
       }
-      if (isFinal) {
-        events.push({ key: `af-result-${fid}`, players: involved.map((p) => p.id), matchId: String(fid),
+
+      if (isLive && starters && starters.length) {
+        const sNames = starters.map((p) => p.name);
+        events.push({ key: `af-start-${fid}`, players: starters.map((p) => p.id), matchId: String(fid),
+          title: `⚽ ${vs}`, body: `${namesWithJosa(sNames)} 출전하는 경기가 시작됐습니다.` });
+      }
+      if (isFinal && squad && squad.length) {
+        events.push({ key: `af-result-${fid}`, players: squad.map((p) => p.id), matchId: String(fid),
           title: '⚽ 경기 종료', body: `${home} ${fx.goals?.home ?? 0} : ${fx.goals?.away ?? 0} ${away}, 경기가 종료됐습니다.` });
       }
 
@@ -261,23 +275,41 @@ async function collectBaseball(events) {
       if (!involved.length) continue;
       const vs = `${away} vs ${home}`;
       const st = g.status?.abstractGameState; // Preview | Live | Final
+      if (st !== 'Live' && st !== 'Final') continue;
+
+      // 팀이 경기한다고 선수가 뛰는 건 아니다 — 박스스코어로 실제 출전을 확인한 뒤
+      // 발송한다(엔트리 제외·부상·벤치인데 '출전' 알림이 가던 문제).
+      const box = await J(`https://statsapi.mlb.com/api/v1/game/${g.gamePk}/boxscore`);
+      const entryOf = (p) => {
+        for (const side of ['home', 'away']) {
+          const pl = box?.teams?.[side]?.players?.[`ID${p.mlbId}`];
+          if (pl) return pl;
+        }
+        return null;
+      };
+      const batOf = (p) => entryOf(p)?.stats?.batting || null;
+      const isStarter = (p) => !!entryOf(p)?.battingOrder;          // 선발 라인업
+      const didPlay = (p) => {
+        const e = entryOf(p);
+        if (!e) return false;
+        if (e.battingOrder) return true;
+        const b = e.stats?.batting || {};
+        const pit = e.stats?.pitching || {};
+        return (parseInt(b.gamesPlayed ?? 0) || 0) > 0 || (parseInt(b.plateAppearances ?? 0) || 0) > 0
+            || (parseInt(b.atBats ?? 0) || 0) > 0 || (parseInt(pit.gamesPlayed ?? 0) || 0) > 0;
+      };
 
       if (st === 'Live') {
-        const names = involved.map((p) => p.name);
-        events.push({ key: `mlb-start-${g.gamePk}`, players: involved.map((p) => p.id), matchId: String(g.gamePk),
-          title: `⚾ ${vs}`, body: `${namesWithJosa(names)} 출전하는 경기가 시작됐습니다.` });
+        const starters = involved.filter(isStarter);
+        if (starters.length) {
+          const names = starters.map((p) => p.name);
+          events.push({ key: `mlb-start-${g.gamePk}`, players: starters.map((p) => p.id), matchId: String(g.gamePk),
+            title: `⚾ ${vs}`, body: `${namesWithJosa(names)} 출전하는 경기가 시작됐습니다.` });
+        }
       }
 
       // Batting box → home-run moments (live) + a performance line on the result.
-      if (st === 'Live' || st === 'Final') {
-        const box = await J(`https://statsapi.mlb.com/api/v1/game/${g.gamePk}/boxscore`);
-        const batOf = (p) => {
-          for (const side of ['home', 'away']) {
-            const pl = box?.teams?.[side]?.players?.[`ID${p.mlbId}`];
-            if (pl) return pl.stats?.batting || null;
-          }
-          return null;
-        };
+      {
         // Home runs: one push per HR, keyed by cumulative count so a 2-HR game fires twice.
         for (const p of involved) {
           const bat = batOf(p);
@@ -288,8 +320,10 @@ async function collectBaseball(events) {
           }
         }
         if (st === 'Final') {
+          const played = involved.filter(didPlay);
+          if (!played.length) continue;      // 아무도 안 뛴 경기는 알리지 않는다
           const hs = g.teams?.home?.score, as = g.teams?.away?.score;
-          const lines = involved.map((p) => {
+          const lines = played.map((p) => {
             const bat = batOf(p);
             if (!bat) return null;
             const ab = parseInt(bat.atBats ?? 0) || 0, h = parseInt(bat.hits ?? 0) || 0;
@@ -298,7 +332,7 @@ async function collectBaseball(events) {
             return `${p.name} ${parts.join(' ')}`;
           }).filter(Boolean);
           const perf = lines.length ? ` · ${lines.join(', ')}` : '';
-          events.push({ key: `mlb-result-${g.gamePk}`, players: involved.map((p) => p.id), matchId: String(g.gamePk),
+          events.push({ key: `mlb-result-${g.gamePk}`, players: played.map((p) => p.id), matchId: String(g.gamePk),
             title: '⚾ 경기 종료', body: `${away} ${as} : ${hs} ${home}, 경기가 종료됐습니다.${perf}` });
         }
       }
