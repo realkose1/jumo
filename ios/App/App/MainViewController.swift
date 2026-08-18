@@ -357,7 +357,6 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
         // 히어로 배경색이 팀마다 달라(예: 울버햄튼 골드) 옐로는 묻힌다 → 흰색 고정,
         // 켜짐/꺼짐은 아이콘 모양(bell / bell.slash)과 불투명도로 구분한다.
         muteIcon?.tintColor = muteOn ? UIColor.white.withAlphaComponent(0.6) : .white
-        let acc = UIColor(red: 0.961, green: 0.769, blue: 0.0, alpha: 1)
         let cfg = UIImage.SymbolConfiguration(pointSize: 11, weight: .bold)
         if followOn {
             followIcon?.image = UIImage(systemName: "checkmark", withConfiguration: cfg)
@@ -369,13 +368,14 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
             followLabel?.text = "팔로우"; followLabel?.textColor = .white
         }
         if actionShow {
-            self.actionLabel?.text = actionLabel; self.actionLabel?.textColor = acc
+            // 상단 크롬은 전부 흰색으로 통일 — 브랜드 옐로는 밝은 배경에서 묻힌다.
+            self.actionLabel?.text = actionLabel; self.actionLabel?.textColor = .white
             if actionIcon.isEmpty {
                 self.actionIcon?.isHidden = true; self.actionIcon?.image = nil
             } else {
                 self.actionIcon?.isHidden = false
                 self.actionIcon?.image = UIImage(systemName: actionIcon, withConfiguration: cfg)
-                self.actionIcon?.tintColor = acc
+                self.actionIcon?.tintColor = .white
             }
         }
     }
