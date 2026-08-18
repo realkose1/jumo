@@ -4106,10 +4106,10 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
           {followed && onToggleMute && !(typeof window !== 'undefined' && window.__nativeChrome) && (
             <button onClick={onToggleMute} aria-label={muted ? '알림 켜기' : '알림 끄기'}
               style={{ width:34, height:34, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
-                background: muted ? 'rgba(0,0,0,0.35)' : 'rgba(245,196,0,0.18)',
+                background:'rgba(0,0,0,0.35)',
                 backdropFilter:'blur(10px)', WebkitBackdropFilter:'blur(10px)',
-                border: muted ? '0.5px solid rgba(255,255,255,0.2)' : '0.5px solid rgba(245,196,0,0.5)',
-                color: muted ? 'rgba(255,255,255,0.65)' : 'var(--acc)', cursor:'pointer', padding:0, transition:'all 0.2s' }}>
+                border:'0.5px solid rgba(255,255,255,0.28)',
+                color: muted ? 'rgba(255,255,255,0.6)' : '#fff', cursor:'pointer', padding:0, transition:'all 0.2s' }}>
               <svg width="17" height="17" viewBox="0 0 22 22" fill="none">
                 <path d="M11 2a7 7 0 00-7 7v4l-1.5 2.5h17L18 13V9a7 7 0 00-7-7z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" fill="none"/>
                 <path d="M9 18.5a2 2 0 004 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
@@ -4118,9 +4118,9 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
             </button>
           )}
           {!(typeof window !== 'undefined' && window.__nativeChrome) && (
-          <button onClick={handleFollowClick} style={{ display:'flex', alignItems:'center', gap:6, background: followed ? 'var(--acc)' : 'rgba(0,0,0,0.35)', backdropFilter:'blur(10px)', border: followed ? 'none' : '0.5px solid rgba(255,255,255,0.2)', borderRadius:20, padding:'7px 14px', color: followed ? '#000' : '#fff', fontSize:13, fontWeight:700, cursor:'pointer', transition:'all 0.2s' }}>
+          <button onClick={handleFollowClick} style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(0,0,0,0.35)', backdropFilter:'blur(10px)', border:'0.5px solid rgba(255,255,255,0.28)', borderRadius:20, padding:'7px 14px', color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', transition:'all 0.2s' }}>
             {followed
-              ? <><svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5L4.5 8.5L11 1" stroke="#000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>팔로우 중</>
+              ? <><svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5L4.5 8.5L11 1" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>팔로우 중</>
               : <>+ 팔로우</>}
           </button>
           )}

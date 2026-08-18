@@ -194,12 +194,29 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
 
     // MARK: - Detail-screen toolbar (glass back + follow), shown on 2-depth screens
 
+    // 글래스는 뒤 배경색을 그대로 흡수한다 — 히어로가 밝은 팀(울버햄튼 골드 등)이면
+    // 흰 글씨/아이콘도 묻힌다. 유리 안쪽에 옅은 검정 스크림을 깔아 대비를 고정한다.
+    private func addGlassScrim(_ v: UIVisualEffectView, _ alpha: CGFloat = 0.22) {
+        let scrim = UIView()
+        scrim.backgroundColor = UIColor.black.withAlphaComponent(alpha)
+        scrim.isUserInteractionEnabled = false
+        scrim.translatesAutoresizingMaskIntoConstraints = false
+        v.contentView.insertSubview(scrim, at: 0)
+        NSLayoutConstraint.activate([
+            scrim.topAnchor.constraint(equalTo: v.contentView.topAnchor),
+            scrim.bottomAnchor.constraint(equalTo: v.contentView.bottomAnchor),
+            scrim.leadingAnchor.constraint(equalTo: v.contentView.leadingAnchor),
+            scrim.trailingAnchor.constraint(equalTo: v.contentView.trailingAnchor)
+        ])
+    }
+
     @available(iOS 26.0, *)
     private func glassCircle(symbol: String, size: CGFloat) -> UIVisualEffectView {
         let e = UIGlassEffect(style: .regular); e.isInteractive = true
         let g = UIVisualEffectView(effect: e)
         g.translatesAutoresizingMaskIntoConstraints = false
         g.layer.cornerRadius = size / 2; g.layer.cornerCurve = .continuous; g.clipsToBounds = true
+        addGlassScrim(g)
         let icon = UIImageView(image: UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)))
         icon.tintColor = UIColor.white.withAlphaComponent(0.92); icon.contentMode = .center
         icon.translatesAutoresizingMaskIntoConstraints = false
@@ -230,6 +247,7 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
         let pill = UIVisualEffectView(effect: fe)
         pill.translatesAutoresizingMaskIntoConstraints = false
         pill.layer.cornerRadius = 16; pill.layer.cornerCurve = .continuous; pill.clipsToBounds = true
+        addGlassScrim(pill)
         let icon = UIImageView(); icon.contentMode = .center
         icon.translatesAutoresizingMaskIntoConstraints = false
         let label = UILabel(); label.font = .systemFont(ofSize: 13, weight: .bold)
@@ -275,6 +293,7 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
         let apill = UIVisualEffectView(effect: ae)
         apill.translatesAutoresizingMaskIntoConstraints = false
         apill.layer.cornerRadius = 16; apill.layer.cornerCurve = .continuous; apill.clipsToBounds = true
+        addGlassScrim(apill)
         let aicon = UIImageView(); aicon.contentMode = .center
         aicon.translatesAutoresizingMaskIntoConstraints = false
         let alabel = UILabel(); alabel.font = .systemFont(ofSize: 13, weight: .bold)
@@ -332,14 +351,15 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
         // 켜짐이면 브랜드 옐로 벨, 꺼짐이면 사선 벨(회색)
         let mcfg = UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)
         muteIcon?.image = UIImage(systemName: muteOn ? "bell.slash.fill" : "bell.fill", withConfiguration: mcfg)
-        muteIcon?.tintColor = muteOn ? UIColor.white.withAlphaComponent(0.55)
-                                     : UIColor(red: 0.96, green: 0.77, blue: 0.0, alpha: 1)
+        // 히어로 배경색이 팀마다 달라(예: 울버햄튼 골드) 옐로는 묻힌다 → 흰색 고정,
+        // 켜짐/꺼짐은 아이콘 모양(bell / bell.slash)과 불투명도로 구분한다.
+        muteIcon?.tintColor = muteOn ? UIColor.white.withAlphaComponent(0.6) : .white
         let acc = UIColor(red: 0.961, green: 0.769, blue: 0.0, alpha: 1)
         let cfg = UIImage.SymbolConfiguration(pointSize: 11, weight: .bold)
         if followOn {
             followIcon?.image = UIImage(systemName: "checkmark", withConfiguration: cfg)
-            followIcon?.tintColor = acc
-            followLabel?.text = "팔로우 중"; followLabel?.textColor = acc
+            followIcon?.tintColor = .white
+            followLabel?.text = "팔로우 중"; followLabel?.textColor = .white
         } else {
             followIcon?.image = UIImage(systemName: "plus", withConfiguration: cfg)
             followIcon?.tintColor = .white
