@@ -4097,7 +4097,19 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
         const homePlayers = lineupsData?.home?.players || [];
         const awayPlayers = lineupsData?.away?.players || [];
         if (homePlayers.length === 0 && awayPlayers.length === 0) {
-          return <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text5)', fontSize:14 }}>라인업 정보가 없습니다</div>;
+          // 시작 전이면 '아직 안 나왔다'와 '끝내 없다'는 전혀 다른 뜻이다.
+          // 그냥 '정보 없음'이라고만 쓰면 앱이 못 가져온 것처럼 읽힌다.
+          const notStarted = !match.live && match.time !== 'LIVE' && !isFinalStatus(match.status);
+          return (
+            <div style={{ textAlign:'center', padding:'40px 20px', color:'var(--text5)', fontSize:14, lineHeight:1.6 }}>
+              {notStarted ? (
+                <>
+                  <div style={{ fontWeight:700, color:'var(--text3)', marginBottom:6 }}>라인업 발표 전</div>
+                  <div style={{ fontSize:12 }}>경기 시작 직전에 공개됩니다.<br/>나오면 알림으로 알려드릴게요.</div>
+                </>
+              ) : '라인업 정보가 없습니다'}
+            </div>
+          );
         }
         // 코리안 더비 대응: 팀별로 그 팀 소속 한국 선수 전원과 매칭한다.
         const allKp = (match.koreanPlayers || [match.koreanPlayer]).filter(Boolean);
@@ -6080,7 +6092,7 @@ function NotifSettingsScreen({ onBack }) {
     { k:'assist', label:'어시스트 알림', sub:'한국 선수 도움 시 즉시' },
     { k:'result', label:'경기 결과', sub:'경기 종료 후 최종 결과' },
     { k:'highlight', label:'하이라이트 영상', sub:'경기 후 주요 장면 영상' },
-    { k:'lineup', label:'선발 라인업', sub:'경기 시작 1시간 전' },
+    { k:'lineup', label:'선발 라인업', sub:'발표되는 대로' },
     { k:'injury', label:'부상/출장 정보', sub:'선수 컨디션 업데이트' },
   ];
   return (
