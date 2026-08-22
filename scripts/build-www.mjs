@@ -13,10 +13,15 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import fs from 'fs';
 
+import { otaParts, otaLoader } from './ota-parts.mjs';
+
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const WWW = path.join(ROOT, 'www');
+
+// 앱이 최신 app.js 를 받아올 곳. 저장소 main 이 배포되는 Vercel 도메인.
+const OTA_REMOTE = 'https://jumo-git-main-realkose1s-projects.vercel.app';
 
 // Babel standalone (build-time only; never shipped into www/)
 const Babel = require('./vendor/babel.min.js');
@@ -32,19 +37,11 @@ let html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 // ── 1) extract inline `<script type="text/babel">…</script>` app block ──
 // The inline block opens with EXACTLY `<script type="text/babel">` (no src),
 // which does not collide with `<script type="text/babel" src="ios-frame.jsx">`.
-const OPEN = '<script type="text/babel">';
-const openIdx = html.indexOf(OPEN);
-if (openIdx === -1) throw new Error('inline <script type="text/babel"> block not found');
-const contentStart = openIdx + OPEN.length;
-const closeIdx = html.indexOf('</script>', contentStart);
-if (closeIdx === -1) throw new Error('closing </script> for inline app block not found');
-const appCode = html.slice(contentStart, closeIdx);
-const blockEnd = closeIdx + '</script>'.length;
-// splice the whole <script…>…</script> span out, replace with app.js reference.
-// `defer` is REQUIRED: text/babel scripts are executed by Babel standalone at
-// DOMContentLoaded (after <div id="root"> exists). A plain sync script here would
-// run at parse time — before #root — and the app would never mount.
-html = html.slice(0, openIdx) + '<script src="app.js" defer></script>' + html.slice(blockEnd);
+const { openIdx, blockEnd, appJs, version } = otaParts();
+// 앱 블록 자리에는 OTA 로더가 들어간다. 로더는 DOMContentLoaded(= #root 존재)
+// 이후에 app.js 를 붙이므로, 기존 `defer` 가 하던 타이밍 보장을 그대로 대신한다.
+// 캐시된 원격 번들이 있으면 그걸, 없으면 번들된 app.js 를 실행한다.
+html = html.slice(0, openIdx) + otaLoader(OTA_REMOTE, version) + html.slice(blockEnd);
 
 // ── 2) ios-frame.jsx (text/babel with src) → ios-frame.js ──────
 const iosFrameSrc = fs.readFileSync(path.join(ROOT, 'ios-frame.jsx'), 'utf8');
@@ -74,7 +71,7 @@ fs.rmSync(WWW, { recursive: true, force: true });
 fs.mkdirSync(path.join(WWW, 'vendor'), { recursive: true });
 
 fs.writeFileSync(path.join(WWW, 'index.html'), html);
-fs.writeFileSync(path.join(WWW, 'app.js'), transpile(appCode, 'app.jsx'));
+fs.writeFileSync(path.join(WWW, 'app.js'), appJs);
 fs.writeFileSync(path.join(WWW, 'ios-frame.js'), iosFrameOut);
 
 // vendor copies (committed local sources)
@@ -85,4 +82,4 @@ for (const f of ['react.production.min.js', 'react-dom.production.min.js', 'supa
 // image/ assets
 fs.cpSync(path.join(ROOT, 'image'), path.join(WWW, 'image'), { recursive: true });
 
-console.log('✓ www/ built (self-contained, no remote code)');
+console.log(`✓ www/ built — 번들 v=${version.v} shell=${version.shell} (OTA 원격: ${OTA_REMOTE})`);
