@@ -445,43 +445,57 @@ function getBroadcasters(m) {
   return [];
 }
 
-// ─── HELPER: Start probability based on last 5 finished matches ─
+// ─── HELPER: 선발 확률 — 최근 경기의 선발 여부를 최신 가중으로 집계 ─
+//
+// 표본을 5 → 10경기로 늘리고 최근 경기에 더 큰 가중치를 준다(반감기 ≈ 4경기).
+// 5경기 표본은 값이 20% 단위로만 나와 해상도가 너무 거칠었다.
+// 표본이 적을 때는 ALL_PLAYERS.startRate 기준선 쪽으로 끌어당겨(축소 추정)
+// 두세 경기 결과로 0%·100% 같은 극단값이 튀지 않게 한다. 표본이 쌓이면
+// 기준선의 영향은 자연히 20% 아래로 떨어진다.
 function computeStartProbability(playerName, allMatches) {
   const FINAL = ['STATUS_FINAL','STATUS_FULL_TIME','final','STATUS_END_PERIOD','STATUS_FINAL_PEN'];
-  // Try dynamic from recent finished matches with parsed lineup data
+  const kpOf = (m) => (m.koreanPlayers || [m.koreanPlayer]).find(p => p?.name === playerName);
   const past = (allMatches || [])
     .filter(m => {
       if (!FINAL.includes(m.status)) return false;
-      const allKp = m.koreanPlayers || [m.koreanPlayer];
-      const kp = allKp.find(p => p?.name === playerName);
+      const kp = kpOf(m);
       if (!kp) return false;
-      // Only count if we have an actual lineup-parsed event. A plain '미출전' can just
-      // mean "AF details never loaded" — but kp.lineupConfirmed=true means the real
-      // matchday squad was fetched and he genuinely wasn't in it (e.g. rested/on
-      // vacation for a preseason friendly), so that's a real 0-start data point too —
-      // otherwise recent no-shows never lower his future start%.
-      const hasParsedData = kp.event === '풀타임' || kp.event === '교체 아웃'
-        || kp.event === '벤치' || (typeof kp.event === 'string' && kp.event.includes('분 출전'))
+      // 라인업이 실제로 파싱된 경기만 표본에 넣는다. 맨 '미출전'은 AF 상세를
+      // 못 받아온 경우에도 붙기 때문에, 그걸 세면 데이터 누락이 선발률 하락으로
+      // 둔갑한다. 다만 lineupConfirmed=true 인 미출전은 명단이 실제로 발표됐는데
+      // 빠진 것이므로 진짜 0점 표본으로 포함한다.
+      return kp.event === '풀타임' || kp.event === '교체 아웃' || kp.event === '벤치'
+        || (typeof kp.event === 'string' && kp.event.includes('분 출전'))
         || (kp.minutesPlayed||0) > 0 || (kp.matchGoals||0) > 0 || (kp.matchAssists||0) > 0
         || (kp.event === '미출전' && kp.lineupConfirmed === true);
-      return hasParsedData;
     })
     .sort((a, b) => new Date(b.fullDate||0) - new Date(a.fullDate||0))
-    .slice(0, 5);
-  if (past.length >= 3) {
-    let starts = 0;
-    for (const m of past) {
-      const allKp = m.koreanPlayers || [m.koreanPlayer];
-      const kp = allKp.find(p => p?.name === playerName);
-      if (!kp) continue;
-      if (kp.event === '풀타임' || kp.event === '교체 아웃') starts++;
-      else if ((kp.minutesPlayed||0) >= 60) starts++;
-    }
-    return Math.round((starts / past.length) * 100);
-  }
-  // Fallback: per-player baseline from ALL_PLAYERS.startRate
-  const p = ALL_PLAYERS.find(x => x.name === playerName);
-  return p?.startRate ?? null;
+    .slice(0, 10);
+
+  const base = ALL_PLAYERS.find(x => x.name === playerName)?.startRate;
+  if (past.length < 3) return base ?? null;   // 표본이 너무 적으면 기준선 그대로
+
+  // 반감기 ≈ 2.4경기. 축구는 로테이션이 잦아 '직전 서너 경기'가 다음 선발을 가장
+  // 잘 설명한다. 0.82(반감기 4경기)로는 최근 3연속 선발과 3연속 벤치의 결과가
+  // 10%p 밖에 안 벌어져 신호가 묻혔다.
+  const DECAY = 0.75;
+  let num = 0, den = 0;
+  past.forEach((m, i) => {
+    const kp = kpOf(m);
+    if (!kp) return;
+    const w = Math.pow(DECAY, i);
+    // 교체로 들어와 60분 이상 뛴 경우도 사실상 주전 취급.
+    const started = (kp.event === '풀타임' || kp.event === '교체 아웃' || (kp.minutesPlayed||0) >= 60) ? 1 : 0;
+    num += w * started;
+    den += w;
+  });
+  if (!den) return base ?? null;
+
+  // 축소 추정: 기준선을 '가상의 표본 K경기'로 취급해 섞는다. 표본이 쌓이면
+  // (den 이 커지면) 기준선의 영향은 자연히 사라진다.
+  const K = base != null ? 1 : 0;
+  const p = (num + (base ?? 0) / 100 * K) / (den + K);
+  return Math.max(0, Math.min(100, Math.round(p * 100 / 5) * 5));   // 5% 단위
 }
 
 // A player optioned to the minors isn't on his MLB club's active roster, so that
@@ -566,7 +580,9 @@ function formatExpectedEvent(kp, allMatches) {
   if (!kp) return '';
   if (kp.event === '출전 예상') {
     const p = computeStartProbability(kp.name, allMatches);
-    if (p != null) return `출전 예상 ${p}%`;
+    // 계산하는 값은 '선발' 확률이다. 벤치에서 늘 출전하는 선수를 '출전 예상 20%'로
+    // 적으면 사실과 어긋나므로 라벨을 실제 지표에 맞춘다.
+    if (p != null) return `선발 예상 ${p}%`;
   }
   return kp.event || '';
 }
