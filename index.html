@@ -4614,11 +4614,14 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
             const labelParts = [];
             if (isFinished || m.live) {
               // Show events aggregated across all Korean players
+              // 이름은 왼쪽에 이미 있다 — 더비(2명 이상)일 때만 누구 기록인지 밝힌다.
+              const multiKp = koreans.length > 1;
               koreans.forEach(k => {
                 const goals = (m.events||[]).filter(e=>e.type==='goal'&&e.player===k.name).length;
                 const assists = (m.events||[]).filter(e=>e.type==='assist'&&e.player===k.name).length;
-                if (goals > 0) labelParts.push(`${k.name} ${goals}골`);
-                if (assists > 0) labelParts.push(`${k.name} ${assists}도움`);
+                const who = multiKp ? `${k.name} ` : '';
+                if (goals > 0) labelParts.push(`${who}${goals}골`);
+                if (assists > 0) labelParts.push(`${who}${assists}도움`);
               });
               if (labelParts.length === 0 && kp.event) labelParts.push(formatExpectedEvent(kp, liveApiMatches));
             }
@@ -6592,12 +6595,29 @@ function App() {
         // 상세도 Supabase sf_cache 로 공유한다(키: 'af-detail-{fixtureId}') —
         // 여러 기기·푸시크론이 같은 경기를 각자 fetch 하지 않도록. 사용자가 늘어도
         // API 콜이 사용자 수에 비례해 늘지 않는다. 로컬 캐시가 없는 항목만 조회.
-        const detailTtl = (d, empty) => d.status === 'STATUS_FINAL'
-          ? (empty ? 3 * 60 * 1000 : Infinity)
-          : (d.live ? 15000 : 60000);
+        // 라인업 응답은 '팀 껍데기만 오고 startXI 가 빈' 경우가 흔하다(발표 전 조회,
+        // 순간 레이트리밋). lineups 배열 길이로 완결성을 판정하면 이런 반쪽 응답도
+        // 정상으로 보여, 종료 경기라는 이유로 영구 캐시되고 영영 '확인 불가'로 굳는다.
+        // → 실제 명단 엔트리 수로 판정한다.
+        const rosterCount = (lu) => (lu || []).reduce(
+          (n, t) => n + ((t.startXI || []).length + (t.substitutes || []).length), 0);
+        const detailIncomplete = (d) => rosterCount(d && d.lineups) === 0;
+        const kickoffById = {};
+        afKorean.forEach(m => { kickoffById[m.id] = m.fullDate ? new Date(m.fullDate).getTime() : null; });
+        const detailTtl = (d, id) => {
+          if (!d || d.status !== 'STATUS_FINAL') return d && d.live ? 15000 : 60000;
+          if (!detailIncomplete(d)) return Infinity;   // 명단이 채워졌으면 더 볼 것 없음
+          // 비어 있으면 일시적 누락(레이트리밋으로 lineups 콜만 실패 등)일 수 있다.
+          // 갓 끝난 경기는 10분, 그 뒤로는 6시간마다 느리게 재시도한다. 경기 목록
+          // 자체가 ±7일로 제한돼 있어 영구 포기 규칙은 따로 두지 않는다 —
+          // 진짜 명단이 없는 경기라도 비용은 6시간에 1콜뿐이다.
+          const ko = kickoffById[id];
+          const aged = ko && Date.now() - ko > 24 * 60 * 60 * 1000;
+          return aged ? 6 * 60 * 60 * 1000 : 10 * 60 * 1000;
+        };
         const needShared = afSorted.filter(m => {
           const c = detailsCacheForSort[m.id];
-          return !(c && (Date.now() - c.fetchedAt) < detailTtl(c, c.empty));
+          return !(c && (Date.now() - c.fetchedAt) < detailTtl(c, m.id));
         });
         if (needShared.length > 0) {
           try {
@@ -6609,7 +6629,7 @@ function App() {
               const id = String(row.date).replace('af-detail-', '');
               const empty = (d.lineups || []).length === 0 && (d.events || []).length === 0;
               const age = Date.now() - new Date(row.updated_at).getTime();
-              if (age < detailTtl(d, empty)) {
+              if (age < detailTtl(d, id)) {
                 detailsCacheForSort[id] = {
                   lineups: d.lineups || [], events: d.events || [], players: d.players || [],
                   fetchedAt: Date.now() - age, status: d.status, live: d.live, empty,
@@ -6623,7 +6643,7 @@ function App() {
         let afNetBudget = AF_FETCH_LIMIT;
         const afTargets = afSorted.filter(m => {
           const c = detailsCacheForSort[m.id];
-          const cacheFresh = c && (Date.now() - c.fetchedAt) < (c.status === 'STATUS_FINAL' ? (c.empty ? 3*60*1000 : Infinity) : (c.live ? 20000 : 30000));
+          const cacheFresh = c && (Date.now() - c.fetchedAt) < detailTtl(c, m.id);
           if (cacheFresh) return true;              // 캐시 히트는 예산 소모 없음
           if (afNetBudget <= 0) return false;
           afNetBudget--; return true;
@@ -6637,12 +6657,10 @@ function App() {
               const needPlayers = m.live || m.status === 'STATUS_FINAL';
               const isFinalMatch = m.status === 'STATUS_FINAL';
               const cached = detailsCache[m.id];
-              // Cache TTL: finished match = forever, live = 20s, upcoming = 30s
+              // TTL 은 detailTtl 한 곳에서 결정한다 — 명단이 채워진 종료 경기만 영구 캐시.
               if (cached) {
                 const age = Date.now() - cached.fetchedAt;
-                const ttl = cached.status === 'STATUS_FINAL'
-                  ? (cached.empty ? 3 * 60 * 1000 : Infinity)  // 빈 최종 상세(레이트리밋 등)는 3분 뒤 재시도
-                  : (cached.live ? 20000 : 30000);
+                const ttl = detailTtl(cached, m.id);
                 if (age < ttl) {
                   return { id: m.id, lineups: cached.lineups, events: cached.events, players: cached.players, isLive: m.live };
                 }
