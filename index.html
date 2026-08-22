@@ -1104,7 +1104,7 @@ function TeamBadge({ code, size=36, logo }) {
   );
 }
 
-function PlayerPhoto({ player, style={}, tint='var(--bg)' }) {
+function PlayerPhoto({ player, style={}, tint='var(--bg)', objectPosition='50% 50%' }) {
   const num = player.number;
   const imageMap = { '손흥민': 'heungmin.png', '이강인': 'kangin.png', '김민재': 'minjae.png', '조규성': 'guesung.png', '황희찬': 'heechan.png', '황인범': 'inbeom.png', '김하성': 'haseong.png', '이정후': 'junghoo.png', '김혜성': 'hyeseong.png', '오현규': 'hyungyu.png', '양현준': 'hyunjun.png', '백승호': 'seungho.png', '배준호': 'junho.png', '엄지성': 'jisung.png', '설영우': 'youngwoo.png', '이한범': 'hanbeom.png', '이재성': 'jaesung.png', '홍현석': 'hyunseok.png', '정우영': 'wooyeong.png', '카스트로프': 'castrop.png', '박승수': 'seungsoo.png', '김지수': 'jisoo.png', '양민혁': 'minhyeok.png', '이태석': 'taeseok.png', '송성문': 'songsm.png' };
   // 전원 동일 규격 헤드샷(얼굴+어깨)이라 별도 확대 보정이 필요 없다.
@@ -1116,7 +1116,7 @@ function PlayerPhoto({ player, style={}, tint='var(--bg)' }) {
       {imagePath ? (
         <img src={imagePath} alt={player.name} style={{
           width:'100%', height:'100%', objectFit:'cover',
-          objectPosition: '50% 50%',
+          objectPosition,
           display:'block', filter:'brightness(1.1) contrast(1.05)',
           transform: zoom ? `scale(${zoom.scale})` : undefined,
           transformOrigin: zoom ? `${zoom.originX} ${zoom.originY}` : undefined,
@@ -5073,7 +5073,7 @@ function extractSource(description) {
   return parts[1]?.trim() || '';
 }
 
-function NewsImage({ url, fallbackPlayer }) {
+function NewsImage({ url, fallbackPlayer , variant = 'row' }) {
   const cached = newsImageCache[url];
   const [imgSrc, setImgSrc] = React.useState(cached || null);
   const [loading, setLoading] = React.useState(cached === undefined);
@@ -5099,6 +5099,7 @@ function NewsImage({ url, fallbackPlayer }) {
   }, [url]);
 
   const fallbackSrc = fallbackPlayer ? NEWS_PLAYER_IMG[fallbackPlayer] : null;
+  const fallbackPlayerObj = fallbackPlayer ? ALL_PLAYERS.find(p => p.name === fallbackPlayer) : null;
 
   if (loading) {
     return (
@@ -5132,6 +5133,22 @@ function NewsImage({ url, fallbackPlayer }) {
         }}
         onError={e => { e.target.style.display='none'; }}
       />
+    );
+  }
+
+  // 기사 사진이 없을 때: 44px 동그라미는 빈 박스에 점 하나 찍은 꼴이라 초라했다.
+  // 선수 목록 카드와 똑같이 헤드샷(어깨~얼굴)으로 박스를 채운다.
+  // 히어로는 16:10 가로 박스라 그대로 채우면 얼굴만 확대된 띠가 되므로
+  // 크롭 기준점을 위로 올려 머리부터 들어오게 한다.
+  if (fallbackPlayerObj) {
+    return (
+      <div style={{ width:'100%', height:'100%', position:'relative', overflow:'hidden', background:'var(--border)' }}>
+        <PlayerPhoto
+          player={fallbackPlayerObj}
+          style={{ position:'absolute', inset:0 }}
+          objectPosition={variant === 'hero' ? '50% 28%' : '50% 45%'}
+        />
+      </div>
     );
   }
 
@@ -5551,7 +5568,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames }) {
               <a key={i} href={a.naverLink || a.link} onClick={e => { e.preventDefault(); openExternal(a.naverLink || a.link); }} target="_blank" rel="noopener noreferrer" style={{ textDecoration:'none' }}>
                 <div style={{ background:'var(--surface)', borderRadius:18, border:'0.5px solid var(--border2)', overflow:'hidden', position:'relative', minHeight:280 }}>
                   <div style={{ position:'relative', width:'100%', aspectRatio:'16/10', overflow:'hidden' }}>
-                    <NewsImage url={a.link} fallbackPlayer={fallbackPlayer}/>
+                    <NewsImage url={a.link} fallbackPlayer={fallbackPlayer} variant="hero"/>
                     <div style={{ position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,0.0) 30%, rgba(0,0,0,0.85) 100%)', pointerEvents:'none' }}/>
                     <div style={{ position:'absolute', left:0, right:0, bottom:0, padding:'14px 16px 16px', color:'#fff' }}>
                       <div style={{ fontSize:18, fontWeight:800, lineHeight:1.35, color:'#fff', letterSpacing:-0.3, textShadow:'0 1px 6px rgba(0,0,0,0.5)', display:'-webkit-box', WebkitLineClamp:3, WebkitBoxOrient:'vertical', overflow:'hidden' }}>
