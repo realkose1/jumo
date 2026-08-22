@@ -5107,7 +5107,32 @@ function NewsImage({ url, fallbackPlayer }) {
   }
 
   if (imgSrc) {
-    return <img src={imgSrc} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} onError={e => { e.target.style.display='none'; }}/>;
+    // 뉴스 사진은 인물 위주라 세로가 긴 원본을 가로 박스에 cover 로 넣으면
+    // 기본값(50% 50%)이 위아래를 똑같이 깎아 머리가 잘린다(목만 남는 사진).
+    // 원본이 박스보다 세로로 길 때만 위쪽으로 당겨 얼굴을 살린다 — 가로로 긴
+    // 사진은 좌우가 깎이는 것이라 그대로 두는 게 맞다.
+    return (
+      <img
+        src={imgSrc}
+        alt=""
+        style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'50% 50%' }}
+        onLoad={e => {
+          const img = e.target;
+          // 레이아웃이 아직 안 잡혔으면(높이 0) 판단하지 않는다 — 잘못된 비율로
+          // 엉뚱하게 당겨질 수 있다.
+          if (img.clientHeight < 10 || !img.naturalHeight) return;
+          const nat = img.naturalWidth / img.naturalHeight;
+          const box = img.clientWidth / img.clientHeight;
+          if (nat < box * 0.95) {
+            // 세로로 잘리는 정도에 비례해 위로 당긴다(최대 20%). 인물 사진의
+            // 얼굴은 대체로 상단 1/3 안에 있다.
+            const excess = Math.min(1, (box - nat) / box);      // 0~1
+            img.style.objectPosition = `50% ${Math.round(50 - 30 * excess)}%`;
+          }
+        }}
+        onError={e => { e.target.style.display='none'; }}
+      />
+    );
   }
 
   return (
