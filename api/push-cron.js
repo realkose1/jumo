@@ -178,7 +178,11 @@ async function collectSoccer(events) {
         if (inWindow && !(await alreadyLogged(`af-lineup-done-${fid}`))) {
           const lu = await afGet(`/fixtures/lineups?fixture=${fid}`);
           const teams = lu?.response || [];
-          if (teams.length) {
+          // API-Football 은 발표 전에도 '팀 껍데기'(startXI 가 빈 배열)를 돌려줄 때가
+          // 있다. teams.length 만 보면 그걸 발표로 오인해 전원을 '명단 제외'로 잘못
+          // 알리고, af-lineup-done 마커까지 남겨 진짜 발표를 영영 놓친다.
+          // → 실제 선발 명단이 채워졌을 때만 발표로 본다.
+          if (teams.some((t) => (t.startXI || []).length)) {
             const clean = (s) => (s || '').toLowerCase().replace(/[.\-\s]/g, '');
             for (const p of involved) {
               let inXI = false, onBench = false;
