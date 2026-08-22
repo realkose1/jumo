@@ -1,5 +1,5 @@
 {
-  "buildCommand": "mkdir -p ota && date -u > ota/stamp.txt && node -v >> ota/stamp.txt && (node scripts/build-ota.mjs > ota/log.txt 2>&1 || echo 'BUILD FAILED' >> ota/log.txt)",
+  "buildCommand": "mkdir -p ota && (node scripts/build-ota.mjs > ota/log.txt 2>&1 || echo 'OTA BUILD FAILED — 원격 번들 미갱신' >> ota/log.txt)",
   "installCommand": "echo 'no dependencies needed for web deploy'",
   "outputDirectory": ".",
   "rewrites": [

@@ -12,7 +12,12 @@ package-lock.json
 
 # iOS-only / local-only, not used by the web deploy
 ios
-scripts
+# scripts/ 는 통째로 빼되 OTA 빌드에 필요한 것만 되살린다. 디렉터리째 제외하면
+# (`scripts`) 하위 재포함(!)이 먹지 않으므로 `scripts/*` 로 직접 자식만 제외한다.
+scripts/*
+!scripts/build-ota.mjs
+!scripts/ota-parts.mjs
+!scripts/vendor
 screenshots
 scraps
 uploads
