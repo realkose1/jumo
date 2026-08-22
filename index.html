@@ -435,6 +435,30 @@ function useEdgeFade(ref, fade = 28) {
   };
 }
 
+// 한 종목 안에서만 순서를 바꾸는 그룹. 종목 경계를 넘는 드래그는 애초에
+// 불가능하게 만든다 — 선수 목록이 종목별로 묶여 나오므로, 편집 화면에서만
+// 섞을 수 있게 두면 옮겨도 반영되지 않아 사용자를 속이게 된다.
+// (훅은 조건부·반복 호출이 안 되므로 그룹마다 별도 컴포넌트로 분리한다.)
+function ReorderPlayerGroup({ sport, icon, players, onReorder, renderRow }) {
+  const drag = useTouchReorder(onReorder);
+  return (
+    <>
+      <div style={{ display:'flex', alignItems:'center', gap:6, margin:'10px 2px 8px' }}>
+        <span style={{ fontSize:13 }}>{icon}</span>
+        <span style={{ fontSize:11, fontWeight:700, color:'var(--text3)', letterSpacing:0.6 }}>{sport}</span>
+        <span style={{ fontSize:10, color:'var(--text5)', fontWeight:600 }}>{players.length}명</span>
+      </div>
+      {players.map((p, i) => renderRow(p, {
+        rowRef: drag.registerRow(i),
+        style: drag.rowStyle(i),
+        hold: drag.holdProps(i, players.length),
+        onGuardedClick: drag.suppressClick,
+        handle: <DragHandle onStart={drag.startDrag(i, players.length)} active={drag.dragging}/>,
+      }))}
+    </>
+  );
+}
+
 // 드래그 손잡이. touchAction:'none' 이라 이 영역에서 시작한 제스처는
 // 목록 스크롤로 넘어가지 않는다.
 function DragHandle({ onStart, active }) {
@@ -5890,16 +5914,17 @@ function AddPlayerScreen({ followed, onToggle, onBack, playerOrder = [], setPlay
     ...sportOrder.filter(sp => myPlayers.some(p => p.sport === sp)),
     ...[...new Set(myPlayers.map(p => p.sport))].filter(sp => !sportOrder.includes(sp)),
   ];
-  const reorderPlayers = React.useCallback((from, to) => {
-    const next = moveItem(myPlayers, from, to).map(p => p.id);
-    setPlayerOrder && setPlayerOrder(next);
-  }, [myPlayers, setPlayerOrder]);
+  // 종목 안에서만 이동시키고, 전체 순서는 '종목 순서 × 그룹 내 순서'로 다시 만든다.
+  const reorderInSport = React.useCallback((sport) => (from, to) => {
+    const moved = moveItem(myPlayers.filter(p => p.sport === sport), from, to);
+    const next = mySports.flatMap(sp => sp === sport ? moved : myPlayers.filter(p => p.sport === sp));
+    setPlayerOrder && setPlayerOrder(next.map(p => p.id));
+  }, [myPlayers, mySports, setPlayerOrder]);
   const reorderSports = React.useCallback((from, to) => {
     const next = moveItem(mySports, from, to);
     setSportOrder && setSportOrder(next);
   }, [mySports, setSportOrder]);
-  const playerDrag = useTouchReorder(reorderPlayers);
-  const sportDrag  = useTouchReorder(reorderSports);
+  const sportDrag = useTouchReorder(reorderSports);
   const notFollowed = filtered.filter(p => !followed.has(p.id));
 
   return (
@@ -5937,7 +5962,9 @@ function AddPlayerScreen({ followed, onToggle, onBack, playerOrder = [], setPlay
             return (
               <div key={p.id} ref={rowRef} {...(hold || {})}
                    onClick={() => { if (onGuardedClick && onGuardedClick()) return; onToggle(p.id); }}
-                   style={{ display:'flex', alignItems:'center', gap:12, marginBottom:8, background: isFollowed ? 'rgba(245,196,0,0.10)' : 'var(--surface)', borderRadius:16, padding:10, border: isFollowed ? '0.5px solid rgba(245,196,0,0.28)' : '0.5px solid var(--border2)', cursor:'pointer', ...style }}>
+                   style={{ display:'flex', alignItems:'center', gap:12, marginBottom:8,
+                     // 길게 눌러 드래그하므로 텍스트 선택·확대경이 뜨지 않게 막는다
+                     userSelect:'none', WebkitUserSelect:'none', WebkitTouchCallout:'none', background: isFollowed ? 'rgba(245,196,0,0.10)' : 'var(--surface)', borderRadius:16, padding:10, border: isFollowed ? '0.5px solid rgba(245,196,0,0.28)' : '0.5px solid var(--border2)', cursor:'pointer', ...style }}>
                 {handle}
                 <div style={{ width:56, height:68, borderRadius:12, overflow:'hidden', background:'var(--card)', flexShrink:0, position:'relative' }}>
                   <PlayerPhoto player={p} style={{ position:'absolute', inset:0 }} tint="var(--surface)"/>
@@ -5982,6 +6009,7 @@ function AddPlayerScreen({ followed, onToggle, onBack, playerOrder = [], setPlay
                   {mySports.map((sp, i) => (
                     <div key={sp} ref={sportDrag.registerRow(i)} {...sportDrag.holdProps(i, mySports.length)}
                          style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8,
+                                  userSelect:'none', WebkitUserSelect:'none', WebkitTouchCallout:'none',
                                   background:'var(--surface)', borderRadius:14, padding:'10px 12px',
                                   border:'0.5px solid var(--border2)', ...(sportDrag.rowStyle(i) || {}) }}>
                       <DragHandle onStart={sportDrag.startDrag(i, mySports.length)} active={sportDrag.dragging}/>
@@ -5997,15 +6025,17 @@ function AddPlayerScreen({ followed, onToggle, onBack, playerOrder = [], setPlay
 
               {myPlayers.length > 0 && (
                 <>
-                  {sectionTitle(`내 선수 ${myPlayers.length}명`, '⠿ 를 끌거나 길게 눌러 이동 · 탭하면 해제')}
-                  {myPlayers.map((p, i) => renderRow(p, {
-                    rowRef: playerDrag.registerRow(i),
-                    style: playerDrag.rowStyle(i),
-                    hold: playerDrag.holdProps(i, myPlayers.length),
-                    onGuardedClick: playerDrag.suppressClick,
-                    handle: <DragHandle onStart={playerDrag.startDrag(i, myPlayers.length)}
-                                        active={playerDrag.dragging}/>,
-                  }))}
+                  {sectionTitle(`내 선수 ${myPlayers.length}명`, '같은 종목 안에서 이동 · 탭하면 해제')}
+                  {mySports.map(sp => (
+                    <ReorderPlayerGroup
+                      key={sp}
+                      sport={sp}
+                      icon={sportIcon[sp] || ''}
+                      players={myPlayers.filter(p => p.sport === sp)}
+                      onReorder={reorderInSport(sp)}
+                      renderRow={renderRow}
+                    />
+                  ))}
                 </>
               )}
 
