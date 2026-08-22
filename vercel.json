@@ -8,6 +8,10 @@
       "destination": "/api/:path*"
     },
     {
+      "source": "/ota/:path*",
+      "destination": "/ota/:path*"
+    },
+    {
       "source": "/privacy",
       "destination": "/privacy.html"
     },
