@@ -4617,12 +4617,44 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
     return diff < 0 ? `${-diff}일전` : `${diff}일후`;
   };
 
+  // 날짜 스트립 가장자리 페이드 — 잘린 쪽에만 넣는다. 양쪽에 늘 걸어두면
+  // 스크롤이 끝에 닿았는데도 첫/마지막 날짜가 흐려 보여 눌린 것처럼 보인다.
+  const STRIP_FADE = 28;
+  const [stripEdge, setStripEdge] = React.useState({ left: false, right: false });
+  const updateStripEdge = React.useCallback(() => {
+    const el = stripRef.current;
+    if (!el) return;
+    const left = el.scrollLeft > 4;
+    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+    setStripEdge(p => (p.left === left && p.right === right) ? p : { left, right });
+  }, []);
+  React.useEffect(() => {
+    updateStripEdge();
+    window.addEventListener('resize', updateStripEdge);
+    return () => window.removeEventListener('resize', updateStripEdge);
+  }, [updateStripEdge]);
+  const stripMask = `linear-gradient(to right, ${
+    stripEdge.left ? `transparent 0, #000 ${STRIP_FADE}px` : '#000 0'
+  }, ${
+    stripEdge.right ? `#000 calc(100% - ${STRIP_FADE}px), transparent 100%` : '#000 100%'
+  })`;
+
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, height:'100%', background:'var(--bg)', minHeight:0 }}>
       {/* Fixed top nav (title + date strip) */}
       <div style={{ flexShrink:0, background:'var(--bg)' }}>
         <div style={{ padding:'16px 20px 8px', fontSize:22, fontWeight:700, color:'var(--text)', letterSpacing:-0.5 }}>일정</div>
-        <div ref={stripRef} style={{ display:'flex', gap:6, padding:'8px 16px 12px', overflowX:'auto' }} className="scrollbar-hide">
+        <div
+          ref={stripRef}
+          onScroll={updateStripEdge}
+          style={{
+            display:'flex', gap:6, padding:'8px 16px 12px', overflowX:'auto',
+            // 배경색을 덮는 오버레이 대신 마스크로 내용 자체를 흐린다 —
+            // 라이트 모드에서도 배경색 가정 없이 그대로 동작한다.
+            maskImage: stripMask, WebkitMaskImage: stripMask,
+            transition:'mask-image 0.2s ease, -webkit-mask-image 0.2s ease',
+          }}
+          className="scrollbar-hide">
           {datesList.map(date => {
             const dayIdx = date.getDay();
             const dateStr = date.toDateString();
@@ -6450,6 +6482,23 @@ function App() {
           const d = new Date(today); d.setDate(today.getDate() + offset);
           return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
         });
+        // quick 회차는 축구를 어제~내일만 받는다. 이 결과로 목록을 통째로
+        // 갈아치우면 캐시로 그려둔 ±7일 경기가 한순간 사라져, 히어로가
+        // A → B → A 로 튄다(실측: 백승호 → 김혜성 → 백승호).
+        // 이번에 조회하지 않은 날짜의 기존 항목은 남겨 병합한다.
+        const coveredDates = new Set(afDates);
+        const localDateKey = (iso) => {
+          const d = new Date(iso);
+          return isNaN(d) ? '' : `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+        };
+        const mergeUncovered = (prev, next) => {
+          if (!quick || !prev || !prev.length) return next;
+          const nextIds = new Set(next.map(m => m.id));
+          const kept = prev.filter(m =>
+            !nextIds.has(m.id) && !coveredDates.has(localDateKey(m.fullDate)));
+          return kept.length ? [...next, ...kept] : next;
+        };
+
         const todayStr = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
         const ttlForDate = (dateStr) => {
           if (dateStr === todayStr) return 2 * 60 * 1000; // 오늘: 2분
@@ -6660,7 +6709,7 @@ function App() {
           setLiveMatches(prev => {
             if (!prev.length) return [...koreanMatches];
             const prevById = new Map(prev.map(m => [m.id, m]));
-            return koreanMatches.map(m => {
+            const merged = koreanMatches.map(m => {
               const old = prevById.get(m.id);
               const oldEv = old?.koreanPlayer?.event;
               const keepOld = oldEv && oldEv !== '출전 예상';
@@ -6671,6 +6720,7 @@ function App() {
                     events: (old.events && old.events.length) ? old.events : m.events }
                 : m;
             });
+            return mergeUncovered(prev, merged);
           });
           setIsInitialLoad(false);
           lastPublishAtRef.current = Date.now();
@@ -7104,12 +7154,14 @@ function App() {
         // 보강까지 끝난 완성본을 반영한다. 폴백(기본 목록)이 아직 안 나갔으면
         // 취소해서 '떴다가 다시 갱신되는' 두 번 그리기를 피한다.
         clearTimeout(baseFallbackTimer);
-        setLiveMatches([...koreanMatches]);
+        setLiveMatches(prev => mergeUncovered(prev, [...koreanMatches]));
         setIsInitialLoad(false);
         lastPublishAtRef.current = Date.now();
-        // 다음 콜드 스타트에서 즉시 그릴 수 있도록 완성본만 저장한다
-        // (중간 폴백 목록은 저장하지 않는다 — 낡은 반쪽을 물려주지 않기 위해).
-        saveCachedMatches(koreanMatches);
+        // 다음 콜드 스타트에서 즉시 그릴 수 있도록 완성본만 저장한다.
+        // quick 회차(어제~내일)는 저장하지 않는다 — 좁은 목록을 캐시에 넣으면
+        // 다음 부팅이 반쪽짜리 화면으로 시작한다. 전체 범위 회차가 800ms 뒤에
+        // 이어지므로 그때 온전한 목록이 저장된다.
+        if (!quick) saveCachedMatches(koreanMatches);
 
         // Save manual baseline once (first run) so we can rebuild totals each refresh
         // by adding contributions from finished matches in the live cache.
