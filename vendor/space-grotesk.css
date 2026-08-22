@@ -1,0 +1,10 @@
+/* Space Grotesk (가변 폰트, latin 서브셋) — Google Fonts 원본을 로컬 번들로.
+   숫자·영문 표기에만 쓰므로 latin 하나면 충분하고, 가변 폰트라 6.7KB 한 파일이
+   400~700 전 웨이트를 커버한다. 원격 폰트 요청을 없애 콜드 스타트를 줄인다. */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url(fonts/space-grotesk.woff2) format('woff2');
+}

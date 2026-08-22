@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#0b0b0d"/>
 <title>Jumo — 한국 선수 스포츠 앱</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -91,7 +91,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Noto Sans KR', system-ui, sans-serif;
+  font-family: -apple-system, 'Apple SD Gothic Neo', system-ui, sans-serif;
   overflow: hidden;
   transition: background 0.3s;
 }
@@ -1063,7 +1063,7 @@ function PlayerPhoto({ player, style={}, tint='var(--bg)' }) {
             <rect width="240" height="340" fill={`url(#st${player.id})`}/>
             <rect width="240" height="340" fill={`url(#rg${player.id})`}/>
             <text x="120" y="220" textAnchor="middle" fontFamily="'Space Grotesk',monospace" fontWeight="900" fontSize="160" style={{fill:"var(--photo-mark)"}} letterSpacing="-8">{num}</text>
-            <text x="120" y="300" textAnchor="middle" fontFamily="'Noto Sans KR',sans-serif" fontWeight="700" fontSize="22" style={{fill:"var(--text6)"}}>{player.nameEn.toUpperCase()}</text>
+            <text x="120" y="300" textAnchor="middle" fontFamily="-apple-system, 'Apple SD Gothic Neo', system-ui, sans-serif" fontWeight="700" fontSize="22" style={{fill:"var(--text6)"}}>{player.nameEn.toUpperCase()}</text>
             <ellipse cx="120" cy="155" rx="52" ry="62" style={{fill:"var(--photo-mark)"}}/>
             <ellipse cx="120" cy="95" rx="32" ry="34" style={{fill:"var(--photo-mark)"}}/>
             <text x="120" y="338" textAnchor="middle" fontFamily="monospace" fontSize="8" style={{fill:"var(--text6)"}} letterSpacing="1">PLAYER PHOTO</text>
@@ -5549,7 +5549,7 @@ function AddPlayerScreen({ followed, onToggle, onBack }) {
           <div style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', pointerEvents:'none' }}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="var(--text4)" strokeWidth="1.6"/><path d="M10.5 10.5L14 14" stroke="var(--text4)" strokeWidth="1.6" strokeLinecap="round"/></svg>
           </div>
-          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="선수 이름, 팀 검색..." style={{ width:'100%', background:'var(--card)', border:'0.5px solid var(--border)', borderRadius:12, padding:'11px 14px 11px 36px', fontSize:14, color:'var(--text)', outline:'none', boxSizing:'border-box', fontFamily:"'Noto Sans KR', sans-serif" }}/>
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="선수 이름, 팀 검색..." style={{ width:'100%', background:'var(--card)', border:'0.5px solid var(--border)', borderRadius:12, padding:'11px 14px 11px 36px', fontSize:14, color:'var(--text)', outline:'none', boxSizing:'border-box', fontFamily:"-apple-system, 'Apple SD Gothic Neo', system-ui, sans-serif" }}/>
           {query && <button onClick={() => setQuery('')} style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', background:'var(--text6)', border:'none', borderRadius:'50%', width:20, height:20, cursor:'pointer', color:'var(--text-60)', fontSize:11, display:'flex', alignItems:'center', justifyContent:'center', padding:0 }}>✕</button>}
         </div>
         <div style={{ display:'flex', gap:8, overflowX:'auto', paddingBottom:12 }} className="scrollbar-hide">
@@ -5857,7 +5857,7 @@ function ProfileEditScreen({ profile, onSave, onBack }) {
             onChange={e => setNickname(e.target.value)}
             maxLength={20}
             placeholder="닉네임을 입력하세요"
-            style={{ width:'100%', background:'transparent', border:'none', outline:'none', color:'var(--text)', fontSize:15, fontWeight:600, padding:'12px 0', fontFamily:"'Noto Sans KR', sans-serif" }}
+            style={{ width:'100%', background:'transparent', border:'none', outline:'none', color:'var(--text)', fontSize:15, fontWeight:600, padding:'12px 0', fontFamily:"-apple-system, 'Apple SD Gothic Neo', system-ui, sans-serif" }}
           />
         </div>
         <div style={{ fontSize:11, color:'var(--text5)', padding:'8px 4px' }}>{nickname.length}/20</div>
@@ -5903,7 +5903,7 @@ function FeedbackScreen({ onBack }) {
             value={text}
             onChange={e => setText(e.target.value.slice(0, MAX))}
             placeholder="어떤 부분이 좋았거나 불편하셨나요?"
-            style={{ width:'100%', minHeight:200, background:'transparent', border:'none', outline:'none', color:'var(--text)', fontSize:14, lineHeight:1.6, resize:'none', fontFamily:"'Noto Sans KR', sans-serif" }}
+            style={{ width:'100%', minHeight:200, background:'transparent', border:'none', outline:'none', color:'var(--text)', fontSize:14, lineHeight:1.6, resize:'none', fontFamily:"-apple-system, 'Apple SD Gothic Neo', system-ui, sans-serif" }}
           />
         </div>
         <div style={{ fontSize:11, color:'var(--text5)', padding:'8px 4px', textAlign:'right' }}>{text.length}/{MAX}</div>
@@ -8139,7 +8139,7 @@ function App() {
 
   return (
     <ToastCtx.Provider value={showToast}>
-    <div style={{ '--acc': tweaks.accentColor, fontFamily:"'Noto Sans KR', system-ui, sans-serif", WebkitFontSmoothing:'antialiased' }}>
+    <div style={{ '--acc': tweaks.accentColor, fontFamily:"-apple-system, 'Apple SD Gothic Neo', system-ui, sans-serif", WebkitFontSmoothing:'antialiased' }}>
       <IOSDevice dark={true} width={deviceDimensions.width} height={deviceDimensions.height}>
         <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'var(--bg)', paddingBottom: nativeTabBar ? '0px' : (IS_IOS26_PLUS ? 'calc(74px + env(safe-area-inset-bottom))' : '70px'), position:'relative' }}>
           {toast && (
@@ -8223,8 +8223,17 @@ function App() {
   );
 }
 
+// 스플래시는 고정 시간이 아니라 '첫 프레임이 그려진 순간' 내린다.
+// capacitor.config 의 launchShowDuration 은 이제 상한(안전장치)일 뿐이다.
+function hideSplashWhenPainted() {
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    try { window.Capacitor?.Plugins?.SplashScreen?.hide({ fadeOutDuration: 180 }); } catch (e) {}
+  }));
+}
+
 try {
   ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+  hideSplashWhenPainted();
 } catch(e) {
   document.getElementById('root').innerHTML = '<div style="color:red;padding:20px;font-family:monospace;font-size:12px;white-space:pre-wrap">렌더링 에러:\n' + e.message + '\n\n' + e.stack + '</div>';
 }

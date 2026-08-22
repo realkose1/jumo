@@ -66,6 +66,19 @@ html = replaceScriptByUrl(html, 'unpkg.com/react-dom@', '<script src="vendor/rea
 html = replaceScriptByUrl(html, 'unpkg.com/react@', '<script src="vendor/react.production.min.js"></script>');
 html = replaceScriptByUrl(html, '@supabase/supabase-js', '<script src="vendor/supabase.js"></script>');
 
+// ── 4) 원격 웹폰트 제거 ─────────────────────────────────────────
+// Google Fonts 스타일시트는 head 에서 렌더를 막는 원격 요청이다. 로컬 사본으로
+// 바꾸고 preconnect 도 지운다 (앱 번들은 네트워크 없이 떠야 한다).
+{
+  const linkIdx = html.indexOf('fonts.googleapis.com/css2');
+  if (linkIdx === -1) throw new Error('Google Fonts link not found');
+  const start = html.lastIndexOf('<link', linkIdx);
+  const end = html.indexOf('>', linkIdx) + 1;
+  html = html.slice(0, start) + '<link rel="stylesheet" href="vendor/space-grotesk.css"/>' + html.slice(end);
+  const pre = html.indexOf('<link rel="preconnect" href="https://fonts.googleapis.com"');
+  if (pre !== -1) html = html.slice(0, pre) + html.slice(html.indexOf('>', pre) + 1);
+}
+
 // ── write www/ ─────────────────────────────────────────────────
 fs.rmSync(WWW, { recursive: true, force: true });
 fs.mkdirSync(path.join(WWW, 'vendor'), { recursive: true });
@@ -75,9 +88,10 @@ fs.writeFileSync(path.join(WWW, 'app.js'), appJs);
 fs.writeFileSync(path.join(WWW, 'ios-frame.js'), iosFrameOut);
 
 // vendor copies (committed local sources)
-for (const f of ['react.production.min.js', 'react-dom.production.min.js', 'supabase.js']) {
+for (const f of ['react.production.min.js', 'react-dom.production.min.js', 'supabase.js', 'space-grotesk.css']) {
   fs.copyFileSync(path.join(ROOT, 'vendor', f), path.join(WWW, 'vendor', f));
 }
+fs.cpSync(path.join(ROOT, 'vendor', 'fonts'), path.join(WWW, 'vendor', 'fonts'), { recursive: true });
 
 // image/ assets
 fs.cpSync(path.join(ROOT, 'image'), path.join(WWW, 'image'), { recursive: true });
