@@ -2141,7 +2141,9 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
       if (!isFinalStatus(m.status) || !m.koreanPlayer || !m.fullDate) return false;
       if (koreanIsMinorLeaguer(m)) return false;
       const hoursAgo = (now - new Date(m.fullDate)) / 3600000;
-      return hoursAgo > 0 && hoursAgo <= 48 && isPositive(m);
+      // 48시간은 너무 길었다 — 그저께 경기까지 후보로 들어왔다. 30시간이면
+      // '어젯밤~오늘 새벽' 경기는 담고 이틀 전은 걸러진다.
+      return hoursAgo > 0 && hoursAgo <= 30 && isPositive(m);
     });
 
     const eligible = [...todayMatches, ...recentPositiveFinished].filter(heroEligible);
@@ -2153,17 +2155,24 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
     const assists = m => m.koreanPlayer?.matchAssists || 0;
 
     const score = m => {
-      let s = 0;
-      if (isLive(m)) s += 1000;            // live always outranks non-live
-      s += goals(m) * 100;                  // each goal: massive impact
-      s += assists(m) * 50;                 // each assist: big impact
+      const kp = m.koreanPlayer || {};
+      // 활약의 크기. 야구 기록도 함께 센다 — 예전엔 골·도움만 점수였고 야구는
+      // 신선도·승리 가산점뿐이라, 축구 골 한 방이 야구 멀티히트를 항상 눌렀다.
+      let s = goals(m) * 100 + assists(m) * 50
+            + (kp.homeRuns || 0) * 80 + (kp.hits || 0) * 25 + (kp.rbi || 0) * 15;
+
+      if (isLive(m)) return 1000 + s;       // 진행 중이면 무조건 최우선
+
       if (isFinal(m)) {
+        if (koreanWon(m)) s += 20;          // 승리한 경기를 우선
+        s += 10;                            // 종료 경기 기본 관심도
+        // 지난 결과는 시간이 지나면 '통째로' 가치가 준다. 예전엔 신선도 점수만
+        // 최대 30점 깎여서, 어제 새벽의 1골(+100)이 오늘 소식을 계속 이겼다.
         const hoursAgo = (now - new Date(m.fullDate)) / 3600000;
-        s += Math.max(0, 30 - hoursAgo * 0.625); // 신선도: 0h→+30, 48h→0
-        if (koreanWon(m)) s += 20;               // 승리한 경기를 우선
-      } else if (!isLive(m)) {
+        s *= Math.max(0.1, 1 - hoursAgo / 24);   // 0h→1.0, 12h→0.5, 24h+→0.1
+      } else {
         const hoursUntil = (new Date(m.fullDate) - now) / 3600000;
-        s += Math.max(0, 25 - hoursUntil * 2); // imminence boost: 0h→+25, 12.5h→0
+        s += Math.max(0, 25 - hoursUntil * 2);   // 임박할수록 가산: 0h→+25
       }
       return s;
     };
