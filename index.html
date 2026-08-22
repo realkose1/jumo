@@ -319,7 +319,12 @@ function useTouchReorder(onCommit) {
       const d = dragRef.current;
       dragRef.current = null;
       setDrag(null);
-      if (d && d.to !== d.from) { haptic('medium'); commitRef.current(d.from, d.to); }
+      if (d) {
+        // 드래그 직후 따라오는 click 이 '팔로우 해제'로 오작동하지 않게 잠깐 막는다.
+        justDraggedRef.current = true;
+        setTimeout(() => { justDraggedRef.current = false; }, 350);
+        if (d.to !== d.from) { haptic('medium'); commitRef.current(d.from, d.to); }
+      }
     };
     document.addEventListener('touchmove', onMove, { passive: false });
     document.addEventListener('touchend', onEnd);
@@ -330,6 +335,13 @@ function useTouchReorder(onCommit) {
       document.removeEventListener('touchcancel', onEnd);
     };
   }, [active]);
+
+  // 손잡이를 정확히 짚기 어려운 경우를 위해 '길게 누르기'로도 잡을 수 있게 한다.
+  const holdRef = React.useRef(null);
+  const cancelHold = React.useCallback(() => {
+    if (holdRef.current) { clearTimeout(holdRef.current.timer); holdRef.current = null; }
+  }, []);
+  const justDraggedRef = React.useRef(false);
 
   const startDrag = React.useCallback((i, count) => (e) => {
     const t = e.touches ? e.touches[0] : e;
@@ -364,18 +376,79 @@ function useTouchReorder(onCommit) {
     return { transform: `translateY(${shift}px)`, transition:'transform 0.16s ease' };
   }, [drag]);
 
-  return { dragging: active, registerRow, startDrag, rowStyle };
+  // 행 아무 데나 길게 눌러도 잡히게 하는 핸들러 묶음.
+  const holdProps = React.useCallback((i, count) => ({
+    onTouchStart: (e) => {
+      const t = e.touches && e.touches[0];
+      if (!t) return;
+      const y0 = t.clientY, x0 = t.clientX;
+      const timer = setTimeout(() => {
+        holdRef.current = null;
+        startDrag(i, count)({ touches: [{ clientY: y0, clientX: x0 }] });
+      }, 320);
+      holdRef.current = { timer, x0, y0 };
+    },
+    onTouchMove: (e) => {
+      const h = holdRef.current;
+      const t = e.touches && e.touches[0];
+      if (!h || !t) return;
+      // 손가락이 움직였으면 스크롤 의도로 보고 길게 누르기를 취소한다.
+      if (Math.abs(t.clientY - h.y0) > 8 || Math.abs(t.clientX - h.x0) > 8) cancelHold();
+    },
+    onTouchEnd: cancelHold,
+    onTouchCancel: cancelHold,
+  }), [startDrag, cancelHold]);
+
+  const suppressClick = React.useCallback(() => justDraggedRef.current, []);
+
+  return { dragging: active, registerRow, startDrag, rowStyle, holdProps, suppressClick };
+}
+
+// 가로 스크롤 목록의 가장자리 페이드. 잘린 쪽에만 걸어, 스크롤이 끝에 닿으면
+// 그쪽 페이드는 사라진다(첫/마지막 항목이 흐려 보이지 않게).
+// 배경색을 덮는 오버레이 대신 mask 로 내용 자체를 흐린다 — 라이트 모드에서도
+// 배경색을 가정하지 않고 그대로 동작한다.
+function useEdgeFade(ref, fade = 28) {
+  const [edge, setEdge] = React.useState({ left: false, right: false });
+  const update = React.useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    const left = el.scrollLeft > 4;
+    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+    setEdge(p => (p.left === left && p.right === right) ? p : { left, right });
+  }, [ref]);
+  React.useEffect(() => {
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, [update]);
+  const mask = `linear-gradient(to right, ${
+    edge.left ? `transparent 0, #000 ${fade}px` : '#000 0'
+  }, ${
+    edge.right ? `#000 calc(100% - ${fade}px), transparent 100%` : '#000 100%'
+  })`;
+  return {
+    update,
+    onScroll: update,
+    style: { maskImage: mask, WebkitMaskImage: mask,
+             transition: 'mask-image 0.2s ease, -webkit-mask-image 0.2s ease' },
+  };
 }
 
 // 드래그 손잡이. touchAction:'none' 이라 이 영역에서 시작한 제스처는
 // 목록 스크롤로 넘어가지 않는다.
-function DragHandle({ onStart }) {
+function DragHandle({ onStart, active }) {
   return (
     <div onTouchStart={onStart}
-         style={{ padding:'8px 4px 8px 8px', marginRight:-4, cursor:'grab',
-                  touchAction:'none', flexShrink:0, color:'var(--text5)' }}>
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <path d="M2 5h12M2 8h12M2 11h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+         style={{ padding:'12px 8px', margin:'-6px -2px -6px -4px', cursor:'grab',
+                  touchAction:'none', flexShrink:0,
+                  color: active ? 'var(--acc)' : 'var(--text4)',
+                  display:'flex', alignItems:'center' }}>
+      {/* 점 6개 그립 — 가로줄보다 '끌 수 있다'는 신호가 분명하다 */}
+      <svg width="12" height="18" viewBox="0 0 12 18" fill="currentColor" aria-hidden>
+        <circle cx="3.2" cy="4" r="1.5"/><circle cx="8.8" cy="4" r="1.5"/>
+        <circle cx="3.2" cy="9" r="1.5"/><circle cx="8.8" cy="9" r="1.5"/>
+        <circle cx="3.2" cy="14" r="1.5"/><circle cx="8.8" cy="14" r="1.5"/>
       </svg>
     </div>
   );
@@ -2084,6 +2157,12 @@ function HomeV1({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
 // ─── TODAY MATCHES CAROUSEL ──────────────────────────────────
 function TodayMatchesCarousel({ todayMatches, matches, now, onMatch, tweaks }) {
   const scrollRef = React.useRef(null);
+  const fade = useEdgeFade(scrollRef);
+  // 카드 수가 바뀌거나 마운트 직후 자동 스크롤이 끝난 뒤에도 다시 재본다.
+  React.useEffect(() => {
+    const t = setTimeout(fade.update, 250);
+    return () => clearTimeout(t);
+  }, [todayMatches.length, fade.update]);
 
   // Auto-scroll to first future match on mount
   React.useEffect(() => {
@@ -2112,7 +2191,7 @@ function TodayMatchesCarousel({ todayMatches, matches, now, onMatch, tweaks }) {
   }, [todayMatches.length]);
 
   return (
-    <div ref={scrollRef} style={{ display:'flex', gap:12, paddingLeft:16, paddingRight:16, paddingTop:8, paddingBottom:20, overflowX:'auto', scrollSnapType:'x mandatory', scrollPaddingLeft:16 }} className="scrollbar-hide">
+    <div ref={scrollRef} onScroll={fade.onScroll} style={{ display:'flex', gap:12, paddingLeft:16, paddingRight:16, paddingTop:8, paddingBottom:20, overflowX:'auto', scrollSnapType:'x mandatory', scrollPaddingLeft:16, ...fade.style }} className="scrollbar-hide">
       {todayMatches.map(m => (
         <div key={m.id} style={{ scrollSnapAlign:'center', flexShrink:0 }}>
           <TodayMatchCard m={m} onMatch={onMatch} tweaks={tweaks} allMatches={matches}/>
@@ -4759,27 +4838,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
     return diff < 0 ? `${-diff}일전` : `${diff}일후`;
   };
 
-  // 날짜 스트립 가장자리 페이드 — 잘린 쪽에만 넣는다. 양쪽에 늘 걸어두면
-  // 스크롤이 끝에 닿았는데도 첫/마지막 날짜가 흐려 보여 눌린 것처럼 보인다.
-  const STRIP_FADE = 28;
-  const [stripEdge, setStripEdge] = React.useState({ left: false, right: false });
-  const updateStripEdge = React.useCallback(() => {
-    const el = stripRef.current;
-    if (!el) return;
-    const left = el.scrollLeft > 4;
-    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
-    setStripEdge(p => (p.left === left && p.right === right) ? p : { left, right });
-  }, []);
-  React.useEffect(() => {
-    updateStripEdge();
-    window.addEventListener('resize', updateStripEdge);
-    return () => window.removeEventListener('resize', updateStripEdge);
-  }, [updateStripEdge]);
-  const stripMask = `linear-gradient(to right, ${
-    stripEdge.left ? `transparent 0, #000 ${STRIP_FADE}px` : '#000 0'
-  }, ${
-    stripEdge.right ? `#000 calc(100% - ${STRIP_FADE}px), transparent 100%` : '#000 100%'
-  })`;
+  const stripFade = useEdgeFade(stripRef);
 
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, height:'100%', background:'var(--bg)', minHeight:0 }}>
@@ -4788,14 +4847,8 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
         <div style={{ padding:'16px 20px 8px', fontSize:22, fontWeight:700, color:'var(--text)', letterSpacing:-0.5 }}>일정</div>
         <div
           ref={stripRef}
-          onScroll={updateStripEdge}
-          style={{
-            display:'flex', gap:6, padding:'8px 16px 12px', overflowX:'auto',
-            // 배경색을 덮는 오버레이 대신 마스크로 내용 자체를 흐린다 —
-            // 라이트 모드에서도 배경색 가정 없이 그대로 동작한다.
-            maskImage: stripMask, WebkitMaskImage: stripMask,
-            transition:'mask-image 0.2s ease, -webkit-mask-image 0.2s ease',
-          }}
+          onScroll={stripFade.onScroll}
+          style={{ display:'flex', gap:6, padding:'8px 16px 12px', overflowX:'auto', ...stripFade.style }}
           className="scrollbar-hide">
           {datesList.map(date => {
             const dayIdx = date.getDay();
@@ -5880,9 +5933,11 @@ function AddPlayerScreen({ followed, onToggle, onBack, playerOrder = [], setPlay
           // 한 행을 그리는 함수 — 정렬 섹션과 추가 목록이 같은 모양을 쓰도록 공유.
           const renderRow = (p, opts = {}) => {
             const isFollowed = followed.has(p.id);
-            const { handle, rowRef, style } = opts;
+            const { handle, rowRef, style, hold, onGuardedClick } = opts;
             return (
-              <div key={p.id} ref={rowRef} onClick={() => onToggle(p.id)} style={{ display:'flex', alignItems:'center', gap:12, marginBottom:8, background: isFollowed ? 'rgba(245,196,0,0.10)' : 'var(--surface)', borderRadius:16, padding:10, border: isFollowed ? '0.5px solid rgba(245,196,0,0.28)' : '0.5px solid var(--border2)', cursor:'pointer', ...style }}>
+              <div key={p.id} ref={rowRef} {...(hold || {})}
+                   onClick={() => { if (onGuardedClick && onGuardedClick()) return; onToggle(p.id); }}
+                   style={{ display:'flex', alignItems:'center', gap:12, marginBottom:8, background: isFollowed ? 'rgba(245,196,0,0.10)' : 'var(--surface)', borderRadius:16, padding:10, border: isFollowed ? '0.5px solid rgba(245,196,0,0.28)' : '0.5px solid var(--border2)', cursor:'pointer', ...style }}>
                 {handle}
                 <div style={{ width:56, height:68, borderRadius:12, overflow:'hidden', background:'var(--card)', flexShrink:0, position:'relative' }}>
                   <PlayerPhoto player={p} style={{ position:'absolute', inset:0 }} tint="var(--surface)"/>
@@ -5923,13 +5978,13 @@ function AddPlayerScreen({ followed, onToggle, onBack, playerOrder = [], setPlay
               {/* 종목 순서 — 2개 이상일 때만 의미가 있다 */}
               {mySports.length > 1 && (
                 <>
-                  {sectionTitle('종목 순서', '손잡이를 끌어 바꾸세요')}
+                  {sectionTitle('종목 순서', '⠿ 를 끌거나 길게 눌러 이동')}
                   {mySports.map((sp, i) => (
-                    <div key={sp} ref={sportDrag.registerRow(i)}
+                    <div key={sp} ref={sportDrag.registerRow(i)} {...sportDrag.holdProps(i, mySports.length)}
                          style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8,
                                   background:'var(--surface)', borderRadius:14, padding:'10px 12px',
                                   border:'0.5px solid var(--border2)', ...(sportDrag.rowStyle(i) || {}) }}>
-                      <DragHandle onStart={sportDrag.startDrag(i, mySports.length)}/>
+                      <DragHandle onStart={sportDrag.startDrag(i, mySports.length)} active={sportDrag.dragging}/>
                       <span style={{ fontSize:15 }}>{sportIcon[sp] || ''}</span>
                       <span style={{ fontSize:14, fontWeight:700, color:'var(--text)' }}>{sp}</span>
                       <span style={{ fontSize:11, color:'var(--text5)', marginLeft:'auto' }}>
@@ -5942,11 +5997,14 @@ function AddPlayerScreen({ followed, onToggle, onBack, playerOrder = [], setPlay
 
               {myPlayers.length > 0 && (
                 <>
-                  {sectionTitle(`내 선수 ${myPlayers.length}명`, '손잡이를 끌어 순서 변경 · 탭하면 해제')}
+                  {sectionTitle(`내 선수 ${myPlayers.length}명`, '⠿ 를 끌거나 길게 눌러 이동 · 탭하면 해제')}
                   {myPlayers.map((p, i) => renderRow(p, {
                     rowRef: playerDrag.registerRow(i),
                     style: playerDrag.rowStyle(i),
-                    handle: <DragHandle onStart={playerDrag.startDrag(i, myPlayers.length)}/>,
+                    hold: playerDrag.holdProps(i, myPlayers.length),
+                    onGuardedClick: playerDrag.suppressClick,
+                    handle: <DragHandle onStart={playerDrag.startDrag(i, myPlayers.length)}
+                                        active={playerDrag.dragging}/>,
                   }))}
                 </>
               )}
