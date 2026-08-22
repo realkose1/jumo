@@ -2141,9 +2141,11 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
       if (!isFinalStatus(m.status) || !m.koreanPlayer || !m.fullDate) return false;
       if (koreanIsMinorLeaguer(m)) return false;
       const hoursAgo = (now - new Date(m.fullDate)) / 3600000;
-      // 48시간은 너무 길었다 — 그저께 경기까지 후보로 들어왔다. 30시간이면
-      // '어젯밤~오늘 새벽' 경기는 담고 이틀 전은 걸러진다.
-      return hoursAgo > 0 && hoursAgo <= 30 && isPositive(m);
+      // 24시간이 지난 결과는 아예 후보에서 뺀다 — 하루 지난 소식을 히어로로
+      // 계속 물고 있으면 앱이 멈춘 것처럼 보인다. 오늘 경기가 없으면 히어로는
+      // 그냥 접힌다(아래 showHero). '오늘' 경기는 같은 날짜 기준이라 애초에
+      // 24시간을 넘지 않으므로 이 창만 조이면 된다.
+      return hoursAgo > 0 && hoursAgo <= 24 && isPositive(m);
     });
 
     const eligible = [...todayMatches, ...recentPositiveFinished].filter(heroEligible);
