@@ -6116,7 +6116,8 @@ function App() {
       const v = localStorage.getItem('jumo_followed');
       if (v) return new Set(JSON.parse(v));
     } catch {}
-    return new Set([1,2,3,6,7,8,9,17,18,15]);
+    // 신규 설치 기본 팔로우: 손흥민(1)·이강인(2)·김민재(3)·이정후(17).
+    return new Set([1, 2, 3, 17]);
   });
 
   // ── App push notifications (APNs via @capacitor/push-notifications) ──────
