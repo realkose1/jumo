@@ -744,6 +744,11 @@ function koreanIsMinorLeaguer(m) {
 // '미출전'·'확인 불가'는 정보가 없거나 부정적인 상태 — 배지를 덜 강조한다.
 const isMutedEvent = (ev) => ev === '미출전' || ev === '확인 불가';
 
+// 종료 상태 판정. HomeV2 안에만 있어서 LiveDetailScreen 에서 부르면
+// ReferenceError 로 화면이 통째로 죽었다(라인업 탭 검은 화면) → 모듈 스코프로.
+const isFinalStatus = (status) =>
+  ['STATUS_FINAL','STATUS_FULL_TIME','final','STATUS_END_PERIOD','STATUS_FINAL_PEN'].includes(status);
+
 // ── 콜드 스타트 체감 개선 ────────────────────────────────────────
 // 마지막으로 화면에 반영한 경기 목록을 저장해 두고 다음 실행에서 곧바로 그린다.
 // 네트워크가 끝나면 통째로 교체된다(stale-while-revalidate). 그동안 낡은 값을
@@ -2279,7 +2284,6 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
   const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
   const twelveHoursLater = new Date(now.getTime() + 12 * 60 * 60 * 1000);
 
-  const isFinalStatus = (status) => ['STATUS_FINAL','STATUS_FULL_TIME','final','STATUS_END_PERIOD','STATUS_FINAL_PEN'].includes(status);
 
   const upcoming = allMatches
     .filter(m => {
