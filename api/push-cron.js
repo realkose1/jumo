@@ -27,27 +27,27 @@ const crypto = require('crypto');
 // afTeamId / afPlayerId: API-Football team & player ids — fixtures are matched by
 // team id and goals/cards by player id (exact; no fuzzy name matching).
 const PLAYERS = [
-  { id: 1,  name: '손흥민', nameEn: 'Son Heung-min', sport: 'soccer', team: 'LAFC',        afTeamId: 1616, afPlayerId: 186 },
-  { id: 2,  name: '이강인', nameEn: 'Lee Kang-in', sport: 'soccer', team: 'Atletico',    afTeamId: 530,  afPlayerId: 927 },
-  { id: 3,  name: '김민재', nameEn: 'Kim Min-jae', sport: 'soccer', team: 'Bayern',      afTeamId: 157,  afPlayerId: 2897 },
-  { id: 6,  name: '황희찬', nameEn: 'Hwang Hee-chan', sport: 'soccer', team: 'Wolves',      afTeamId: 39,   afPlayerId: 24888 },
-  { id: 7,  name: '황인범', nameEn: 'Hwang In-beom', sport: 'soccer', team: 'Porto',       afTeamId: 212,  afPlayerId: 2901 },
-  { id: 8,  name: '조규성', nameEn: 'Cho Gue-sung', sport: 'soccer', team: 'Midtjylland', afTeamId: 397,  afPlayerId: 34211 },
-  { id: 25, name: '이한범', nameEn: 'Lee Han-Beom', sport: 'soccer', team: 'Club Brugge', afTeamId: 569,  afPlayerId: 237218 },
-  { id: 19, name: '오현규', nameEn: 'Oh Hyeon-gyu', sport: 'soccer', team: 'Besiktas',    afTeamId: 549,  afPlayerId: 34710 },
-  { id: 20, name: '양현준', nameEn: 'Yang Hyun-jun', sport: 'soccer', team: 'Celtic',      afTeamId: 247,  afPlayerId: 304958 },
-  { id: 21, name: '백승호', nameEn: 'Paik Seung-ho', sport: 'soccer', team: 'Birmingham',  afTeamId: 54,   afPlayerId: 2909 },
-  { id: 22, name: '배준호', nameEn: 'Bae Jun-ho', sport: 'soccer', team: 'Stoke',       afTeamId: 75,   afPlayerId: 357286 },
-  { id: 23, name: '엄지성', nameEn: 'Eom Ji-sung', sport: 'soccer', team: 'Swansea',     afTeamId: 76,   afPlayerId: 237050 },
-  { id: 24, name: '설영우', nameEn: 'Seol Young-woo', sport: 'soccer', team: 'Crvena',      afTeamId: 598,  afPlayerId: 197985 },
-  { id: 26, name: '이재성', nameEn: 'Lee Jae-sung', sport: 'soccer', team: 'Mainz',        afTeamId: 164,  afPlayerId: 2906 },
-  { id: 27, name: '홍현석', nameEn: 'Hong Hyun-seok', sport: 'soccer', team: 'Mainz',        afTeamId: 164,  afPlayerId: 26519 },
-  { id: 28, name: '정우영', nameEn: 'Jeong Woo-yeong', sport: 'soccer', team: 'Union Berlin', afTeamId: 182,  afPlayerId: 512 },
-  { id: 29, name: '카스트로프', nameEn: 'Jens Castrop', sport: 'soccer', team: 'Gladbach',   afTeamId: 163,  afPlayerId: 280358 },
-  { id: 30, name: '박승수', nameEn: 'Park Seung-soo', sport: 'soccer', team: 'Newcastle',    afTeamId: 34,   afPlayerId: 423714 },
-  { id: 31, name: '김지수', nameEn: 'Kim Ji-soo', sport: 'soccer', team: 'Brentford',    afTeamId: 55,   afPlayerId: 356237 },
-  { id: 32, name: '양민혁', nameEn: 'Yang Min-hyeok', sport: 'soccer', team: 'Westerlo',     afTeamId: 261,  afPlayerId: 423708 },
-  { id: 33, name: '이태석', nameEn: 'Lee Tae-seok', sport: 'soccer', team: 'Austria Wien', afTeamId: 601,  afPlayerId: 237220 },
+  { id: 1,  name: '손흥민', nameEn: 'Son Heung-min', sport: 'soccer', team: 'LAFC',        afTeamId: 1616, afPlayerId: 186, espnLeague: 'usa.1', espnTeamId: 18966 },
+  { id: 2,  name: '이강인', nameEn: 'Lee Kang-in', sport: 'soccer', team: 'Atletico',    afTeamId: 530,  afPlayerId: 927, espnLeague: 'esp.1', espnTeamId: 1068 },
+  { id: 3,  name: '김민재', nameEn: 'Kim Min-jae', sport: 'soccer', team: 'Bayern',      afTeamId: 157,  afPlayerId: 2897, espnLeague: 'ger.1', espnTeamId: 132 },
+  { id: 6,  name: '황희찬', nameEn: 'Hwang Hee-chan', sport: 'soccer', team: 'Wolves',      afTeamId: 39,   afPlayerId: 24888, espnLeague: 'eng.2', espnTeamId: 380 },
+  { id: 7,  name: '황인범', nameEn: 'Hwang In-beom', sport: 'soccer', team: 'Porto',       afTeamId: 212,  afPlayerId: 2901, espnLeague: 'por.1', espnTeamId: 437 },
+  { id: 8,  name: '조규성', nameEn: 'Cho Gue-sung', sport: 'soccer', team: 'Midtjylland', afTeamId: 397,  afPlayerId: 34211, espnLeague: 'den.1', espnTeamId: 304 },
+  { id: 25, name: '이한범', nameEn: 'Lee Han-Beom', sport: 'soccer', team: 'Club Brugge', afTeamId: 569,  afPlayerId: 237218, espnLeague: 'bel.1', espnTeamId: 570 },
+  { id: 19, name: '오현규', nameEn: 'Oh Hyeon-gyu', sport: 'soccer', team: 'Besiktas',    afTeamId: 549,  afPlayerId: 34710, espnLeague: 'tur.1', espnTeamId: 113 },
+  { id: 20, name: '양현준', nameEn: 'Yang Hyun-jun', sport: 'soccer', team: 'Celtic',      afTeamId: 247,  afPlayerId: 304958, espnLeague: 'sco.1', espnTeamId: 256 },
+  { id: 21, name: '백승호', nameEn: 'Paik Seung-ho', sport: 'soccer', team: 'Birmingham',  afTeamId: 54,   afPlayerId: 2909, espnLeague: 'eng.2', espnTeamId: 392 },
+  { id: 22, name: '배준호', nameEn: 'Bae Jun-ho', sport: 'soccer', team: 'Stoke',       afTeamId: 75,   afPlayerId: 357286, espnLeague: 'eng.2', espnTeamId: 336 },
+  { id: 23, name: '엄지성', nameEn: 'Eom Ji-sung', sport: 'soccer', team: 'Swansea',     afTeamId: 76,   afPlayerId: 237050, espnLeague: 'eng.2', espnTeamId: 318 },
+  { id: 24, name: '설영우', nameEn: 'Seol Young-woo', sport: 'soccer', team: 'Crvena',      afTeamId: 598,  afPlayerId: 197985, espnLeague: 'srb.1', espnTeamId: 2290 },
+  { id: 26, name: '이재성', nameEn: 'Lee Jae-sung', sport: 'soccer', team: 'Mainz',        afTeamId: 164,  afPlayerId: 2906, espnLeague: 'ger.1', espnTeamId: 2950 },
+  { id: 27, name: '홍현석', nameEn: 'Hong Hyun-seok', sport: 'soccer', team: 'Mainz',        afTeamId: 164,  afPlayerId: 26519, espnLeague: 'ger.1', espnTeamId: 2950 },
+  { id: 28, name: '정우영', nameEn: 'Jeong Woo-yeong', sport: 'soccer', team: 'Union Berlin', afTeamId: 182,  afPlayerId: 512, espnLeague: 'ger.1', espnTeamId: 598 },
+  { id: 29, name: '카스트로프', nameEn: 'Jens Castrop', sport: 'soccer', team: 'Gladbach',   afTeamId: 163,  afPlayerId: 280358, espnLeague: 'ger.1', espnTeamId: 268 },
+  { id: 30, name: '박승수', nameEn: 'Park Seung-soo', sport: 'soccer', team: 'Newcastle',    afTeamId: 34,   afPlayerId: 423714, espnLeague: 'eng.1', espnTeamId: 361 },
+  { id: 31, name: '김지수', nameEn: 'Kim Ji-soo', sport: 'soccer', team: 'Brentford',    afTeamId: 55,   afPlayerId: 356237, espnLeague: 'eng.1', espnTeamId: 337 },
+  { id: 32, name: '양민혁', nameEn: 'Yang Min-hyeok', sport: 'soccer', team: 'Westerlo',     afTeamId: 261,  afPlayerId: 423708, espnLeague: 'bel.1', espnTeamId: 606 },
+  { id: 33, name: '이태석', nameEn: 'Lee Tae-seok', sport: 'soccer', team: 'Austria Wien', afTeamId: 601,  afPlayerId: 237220, espnLeague: 'aut.1', espnTeamId: 1382 },
   { id: 9,  name: '김하성', en: 'kim',       sport: 'baseball', team: 'Braves',      mlbTeam: 'Atlanta Braves', mlbId: 673490 },
   { id: 17, name: '이정후', en: 'lee',       sport: 'baseball', team: 'Giants',      mlbTeam: 'San Francisco Giants', mlbId: 808982 },
   { id: 18, name: '김혜성', en: 'kim',       sport: 'baseball', team: 'Dodgers',     mlbTeam: 'Los Angeles Dodgers', mlbId: 808975 },
@@ -149,6 +149,35 @@ async function alreadyLogged(eventKey) {
 
 async function collectSoccer(events) {
   if (!process.env.APIFOOTBALL_KEY) { console.warn('soccer: APIFOOTBALL_KEY missing'); return; }
+  // ── ESPN 라인업 폴백 ────────────────────────────────────────────────
+  // AF 는 라인업을 킥오프 직전(실측 8~22분 전)에야 낸다. ESPN 은 같은 경기를
+  // 30분 전에 냈다. AF 가 아직 안 냈을 때만 ESPN 을 본다.
+  // (서버에서 부르므로 UA 차단 이슈가 없다 — 앱은 프록시 /api/espn 을 쓴다.)
+  const espnEventIds = new Map();   // `${league}:${teamId}:${kickoffMs}` → eventId|null
+  const espnGet = async (path, qs = '') => {
+    try {
+      const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${path}${qs}`);
+      return r.ok ? await r.json() : null;
+    } catch { return null; }
+  };
+  const espnLineup = async (p, kickoffMs) => {
+    if (!p.espnLeague || !p.espnTeamId) return null;
+    const key = `${p.espnLeague}:${p.espnTeamId}:${kickoffMs}`;
+    let evId = espnEventIds.get(key);
+    if (evId === undefined) {
+      const sched = await espnGet(`soccer/${p.espnLeague}/teams/${p.espnTeamId}/schedule`);
+      const ev = (sched?.events || []).find((e) =>
+        Math.abs(new Date(e.date).getTime() - kickoffMs) < 6 * 3600 * 1000);
+      evId = ev?.id || null;
+      espnEventIds.set(key, evId);
+    }
+    if (!evId) return null;
+    const sum = await espnGet(`soccer/${p.espnLeague}/summary`, `?event=${evId}`);
+    const rosters = sum?.rosters || [];
+    if (!rosters.some((t) => (t.roster || []).some((a) => a.starter))) return null;
+    return rosters;
+  };
+
   const soccer = PLAYERS.filter((p) => p.sport === 'soccer');
   const ymd = (off) => new Date(Date.now() + off * 86400000).toISOString().slice(0, 10);
   const seenFixtures = new Set(); // a fixture can appear in both date responses
@@ -177,7 +206,20 @@ async function collectSoccer(events) {
         const inWindow = (st === 'NS' || st === 'TBD') && til > 0 && til <= 80 * 60 * 1000;
         if (inWindow && !(await alreadyLogged(`af-lineup-done-${fid}`))) {
           const lu = await afGet(`/fixtures/lineups?fixture=${fid}`);
-          const teams = lu?.response || [];
+          let teams = lu?.response || [];
+          // AF 가 아직 안 냈으면 ESPN 을 본다. ESPN 응답을 AF 형태로 맞춰
+          // 아래 매칭 코드를 그대로 쓴다(선수 id 는 다르므로 이름으로 붙는다).
+          if (!teams.some((t) => (t.startXI || []).length)) {
+            const rosters = await espnLineup(involved[0], new Date(fx.fixture.date).getTime());
+            if (rosters) {
+              const conv = (a) => ({ player: { id: null, name: a.athlete?.displayName || '' } });
+              teams = rosters.map((t) => ({
+                team: { name: t.team?.displayName || '' },
+                startXI: (t.roster || []).filter((a) => a.starter).map(conv),
+                substitutes: (t.roster || []).filter((a) => !a.starter).map(conv),
+              }));
+            }
+          }
           // API-Football 은 발표 전에도 '팀 껍데기'(startXI 가 빈 배열)를 돌려줄 때가
           // 있다. teams.length 만 보면 그걸 발표로 오인해 전원을 '명단 제외'로 잘못
           // 알리고, af-lineup-done 마커까지 남겨 진짜 발표를 영영 놓친다.
