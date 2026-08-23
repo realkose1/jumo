@@ -32,9 +32,9 @@ const PLAYERS = [
   { id: 3,  name: '김민재', nameEn: 'Kim Min-jae', sport: 'soccer', team: 'Bayern',      afTeamId: 157,  afPlayerId: 2897, espnLeague: 'ger.1', espnTeamId: 132 },
   { id: 6,  name: '황희찬', nameEn: 'Hwang Hee-chan', sport: 'soccer', team: 'Wolves',      afTeamId: 39,   afPlayerId: 24888, espnLeague: 'eng.2', espnTeamId: 380 },
   { id: 7,  name: '황인범', nameEn: 'Hwang In-beom', sport: 'soccer', team: 'Porto',       afTeamId: 212,  afPlayerId: 2901, espnLeague: 'por.1', espnTeamId: 437 },
-  { id: 8,  name: '조규성', nameEn: 'Cho Gue-sung', sport: 'soccer', team: 'Midtjylland', afTeamId: 397,  afPlayerId: 34211, espnLeague: 'den.1', espnTeamId: 304 },
+  { id: 8,  name: '조규성', nameEn: 'Cho Gue-sung', sport: 'soccer', team: 'Midtjylland', afTeamId: 397,  afPlayerId: 34211, espnLeague: 'den.1', espnTeamId: 572 },
   { id: 25, name: '이한범', nameEn: 'Lee Han-Beom', sport: 'soccer', team: 'Club Brugge', afTeamId: 569,  afPlayerId: 237218, espnLeague: 'bel.1', espnTeamId: 570 },
-  { id: 19, name: '오현규', nameEn: 'Oh Hyeon-gyu', sport: 'soccer', team: 'Besiktas',    afTeamId: 549,  afPlayerId: 34710, espnLeague: 'tur.1', espnTeamId: 113 },
+  { id: 19, name: '오현규', nameEn: 'Oh Hyeon-gyu', sport: 'soccer', team: 'Besiktas',    afTeamId: 549,  afPlayerId: 34710, espnLeague: 'tur.1', espnTeamId: 1895 },
   { id: 20, name: '양현준', nameEn: 'Yang Hyun-jun', sport: 'soccer', team: 'Celtic',      afTeamId: 247,  afPlayerId: 304958, espnLeague: 'sco.1', espnTeamId: 256 },
   { id: 21, name: '백승호', nameEn: 'Paik Seung-ho', sport: 'soccer', team: 'Birmingham',  afTeamId: 54,   afPlayerId: 2909, espnLeague: 'eng.2', espnTeamId: 392 },
   { id: 22, name: '배준호', nameEn: 'Bae Jun-ho', sport: 'soccer', team: 'Stoke',       afTeamId: 75,   afPlayerId: 357286, espnLeague: 'eng.2', espnTeamId: 336 },
@@ -165,10 +165,17 @@ async function collectSoccer(events) {
     const key = `${p.espnLeague}:${p.espnTeamId}:${kickoffMs}`;
     let evId = espnEventIds.get(key);
     if (evId === undefined) {
-      const sched = await espnGet(`soccer/${p.espnLeague}/teams/${p.espnTeamId}/schedule`);
-      const ev = (sched?.events || []).find((e) =>
-        Math.abs(new Date(e.date).getTime() - kickoffMs) < 6 * 3600 * 1000);
-      evId = ev?.id || null;
+      // 팀 일정 엔드포인트는 지난 경기만 준다 — 예정 경기는 날짜별 scoreboard.
+      const ymd = (d) => new Date(d).toISOString().slice(0, 10).replace(/-/g, '');
+      evId = null;
+      for (const off of [0, -1, 1]) {
+        const sb = await espnGet(`soccer/${p.espnLeague}/scoreboard`,
+          `?dates=${ymd(kickoffMs + off * 86400000)}`);
+        const hit = (sb?.events || []).find((e) =>
+          Math.abs(new Date(e.date).getTime() - kickoffMs) < 6 * 3600 * 1000 &&
+          (e.competitions?.[0]?.competitors || []).some((c) => String(c.team?.id) === String(p.espnTeamId)));
+        if (hit) { evId = hit.id; break; }
+      }
       espnEventIds.set(key, evId);
     }
     if (!evId) return null;
