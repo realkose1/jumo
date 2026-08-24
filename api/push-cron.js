@@ -147,6 +147,31 @@ async function alreadyLogged(eventKey) {
   return Array.isArray(rows) && rows.length > 0;
 }
 
+// 날짜별 경기 목록: Supabase sf_cache 를 먼저 보고, 낡았을 때만 AF 를 부른다.
+// 크론은 2분마다 도는데 이 목록은 그렇게 자주 바뀌지 않는다.
+async function fixturesForDate(date) {
+  const FRESH_MS = 3 * 60 * 1000;
+  try {
+    const rows = await sbSelect('sf_cache', `date=eq.${date}&select=events,updated_at`);
+    const row = Array.isArray(rows) && rows[0];
+    if (row && Array.isArray(row.events) && row.events.length &&
+        Date.now() - new Date(row.updated_at).getTime() < FRESH_MS) {
+      return { response: row.events };
+    }
+  } catch (e) { /* 캐시 불가 → 그냥 AF 로 */ }
+  const data = await afGet(`/fixtures?date=${date}`);
+  if (Array.isArray(data?.response) && data.response.length) {
+    try {
+      await fetch(`${process.env.SUPABASE_URL}/rest/v1/sf_cache`, {
+        method: 'POST',
+        headers: { ...sbHeaders(), 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
+        body: JSON.stringify({ date, events: data.response, updated_at: new Date().toISOString() }),
+      });
+    } catch (e) { /* 저장 실패는 무시 */ }
+  }
+  return data;
+}
+
 async function collectSoccer(events) {
   if (!process.env.APIFOOTBALL_KEY) { console.warn('soccer: APIFOOTBALL_KEY missing'); return; }
   // ── ESPN 라인업 폴백 ────────────────────────────────────────────────
@@ -189,8 +214,15 @@ async function collectSoccer(events) {
   const ymd = (off) => new Date(Date.now() + off * 86400000).toISOString().slice(0, 10);
   const seenFixtures = new Set(); // a fixture can appear in both date responses
 
-  for (const date of [ymd(-1), ymd(0)]) {
-    const data = await afGet(`/fixtures?date=${date}`);
+  // 어제 날짜는 UTC 오전에만 본다. 늦게 끝난 경기의 결과 알림을 잡기 위한
+  // 것이라 하루 종일 조회할 이유가 없다(2분마다 1콜 = 하루 720콜 낭비).
+  const utcHour = new Date().getUTCHours();
+  const dates = utcHour < 8 ? [ymd(-1), ymd(0)] : [ymd(0)];
+
+  for (const date of dates) {
+    // 날짜별 경기 목록은 앱도 sf_cache 에 채운다 — 같은 캐시를 읽어 중복 조회를
+    // 없앤다. 오늘 목록은 3분이면 충분히 신선하다(상태 변화는 경기별 조회로 본다).
+    const data = await fixturesForDate(date);
     for (const fx of data?.response || []) {
       const fid = fx.fixture?.id;
       if (!fid || seenFixtures.has(fid)) continue;
@@ -260,7 +292,11 @@ async function collectSoccer(events) {
       // 야구와 같은 이유 — 팀 경기라고 다 뛰는 게 아니다. 라인업으로 실제 출전을
       // 확인한 뒤 대상을 좁힌다. 라인업이 아직/끝내 없으면 사실을 단정하지 않고 건너뛴다.
       let starters = null, squad = null;
-      if (isLive || isFinal) {
+      // 라이브 중에는 명단이 바뀌지 않는다(교체는 events 로 들어온다).
+      // 시작 알림을 이미 보낸 경기는 다시 조회하지 않는다 — 경기당 2분마다
+      // 1콜씩 90분이면 45콜이 그냥 나간다.
+      const lineupSettled = isLive && await alreadyLogged(`af-start-${fid}`);
+      if ((isLive || isFinal) && !lineupSettled) {
         const lu = await afGet(`/fixtures/lineups?fixture=${fid}`);
         const teams = lu?.response || [];
         if (teams.length && teams.some((t) => (t.startXI || []).length)) {
