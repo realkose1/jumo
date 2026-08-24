@@ -749,6 +749,52 @@ const isMutedEvent = (ev) => ev === '미출전' || ev === '확인 불가';
 const isFinalStatus = (status) =>
   ['STATUS_FINAL','STATUS_FULL_TIME','final','STATUS_END_PERIOD','STATUS_FINAL_PEN'].includes(status);
 
+// ESPN 라인업 조회 — AF 가 아직 안 냈을 때 쓰는 폴백.
+// 폴링 사이클과 경기 상세가 같은 함수를 쓰게 모듈 스코프에 둔다(구현이 갈라지면
+// 카드에는 '선발 출전'인데 라인업 탭은 비는 식으로 어긋난다 — 실제로 그랬다).
+// ESPN 은 iPhone UA 를 403 으로 막아 /api/espn 프록시를 거친다.
+const ESPN_EVENT_CACHE = {};
+async function espnLineupsForMatch(m) {
+  if (!m || !m.fullDate) return null;
+  const kps = (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean);
+  const prof = kps.map(kp => ALL_PLAYERS.find(p => p.name === kp.name))
+                  .find(p => p && p.espnTeamId && p.espnLeague);
+  if (!prof) return null;
+  const base = `${API_BASE}/api/espn?path=soccer/${prof.espnLeague}`;
+  let evId = ESPN_EVENT_CACHE[m.id];
+  if (evId === undefined) {
+    // 팀 일정(/teams/{id}/schedule)은 '지난 경기'만 준다 — 예정 경기는 날짜별
+    // scoreboard 에서 찾는다. UTC 자정 근처 경기를 놓치지 않게 앞뒤 하루까지.
+    const ko = new Date(m.fullDate);
+    const ymd = (d) => d.toISOString().slice(0, 10).replace(/-/g, '');
+    evId = null;
+    for (const off of [0, -1, 1]) {
+      const day = ymd(new Date(ko.getTime() + off * 86400000));
+      const sb = await fetch(`${base}/scoreboard&dates=${day}`)
+        .then(r => r.ok ? r.json() : null).catch(() => null);
+      const hit = (sb?.events || []).find(e =>
+        Math.abs(new Date(e.date).getTime() - ko.getTime()) < 6 * 3600 * 1000 &&
+        (e.competitions?.[0]?.competitors || []).some(c => String(c.team?.id) === String(prof.espnTeamId)));
+      if (hit) { evId = hit.id; break; }
+    }
+    ESPN_EVENT_CACHE[m.id] = evId;
+  }
+  if (!evId) return null;
+  const sum = await fetch(`${base}/summary&event=${evId}`)
+    .then(r => r.ok ? r.json() : null).catch(() => null);
+  const rosters = sum?.rosters || [];
+  if (!rosters.some(t => (t.roster || []).some(a => a.starter))) return null;
+  // AF 형태로 변환 — 기존 매칭·렌더 코드를 그대로 태운다. ESPN 선수 id 는
+  // AF 와 다르므로 id 는 비우고 이름으로 붙게 한다.
+  const conv = (a) => ({ player: {
+    id: null, name: a.athlete?.displayName || '', number: Number(a.jersey) || null } });
+  return rosters.map(t => ({
+    team: { id: null, name: t.team?.displayName || '' },
+    startXI: (t.roster || []).filter(a => a.starter).map(conv),
+    substitutes: (t.roster || []).filter(a => !a.starter).map(conv),
+  }));
+}
+
 // ── 콜드 스타트 체감 개선 ────────────────────────────────────────
 // 마지막으로 화면에 반영한 경기 목록을 저장해 두고 다음 실행에서 곧바로 그린다.
 // 네트워크가 끝나면 통째로 교체된다(stale-while-revalidate). 그동안 낡은 값을
@@ -2499,7 +2545,13 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
         return { status: when, main: '', sub: '' };
       }
       case 5: // Upcoming
-        const statusText5 = m.lineupConfirmed ? '선발 출전' : '출격 대기';
+        // lineupConfirmed 는 '경기'가 아니라 '선수'에 붙는 값이라 m 에서 읽으면
+        // 늘 undefined 였다 — 라인업이 나와도 히어로는 계속 '출격 대기'.
+        const heroKp = (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean)[0];
+        const ev5 = heroKp?.event;
+        const statusText5 = ev5 === '선발 출전' ? '선발 출전'
+                          : ev5 === '벤치 대기' ? '벤치 대기'
+                          : '출격 대기';
         return {
           status: m.krTime || m.time,
           main: `${heroNames}\n${statusText5}`,
@@ -3382,16 +3434,31 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
   }, [tab, match.id, isFinished, isLive]);
 
   React.useEffect(() => {
-    if (tab !== 'lineups' || lineupsData || !(isFinished || isLive)) return;
-    if (!isSoccerMatch) return;
+    if (tab !== 'lineups' || lineupsData || !isSoccerMatch) return;
+    // 예전엔 (isFinished || isLive) 일 때만 받아서, 라인업이 이미 나온 '시작 전'
+    // 경기는 카드에 '선발 출전'이 떠도 이 탭은 늘 비어 있었다. 킥오프 6시간
+    // 안쪽이면 시작 전에도 받는다(그보다 먼 경기는 어차피 명단이 없다).
+    const started = isFinished || isLive;
+    const til = match.fullDate ? new Date(match.fullDate).getTime() - Date.now() : Infinity;
+    if (!started && !(til < 6 * 3600 * 1000)) return;
     setLineupsLoading(true);
-    Promise.all([
-      fetch(`${API_BASE}/api/apifootball?path=fixtures/lineups&fixture=${match.id}`).then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch(`${API_BASE}/api/apifootball?path=fixtures/players&fixture=${match.id}`).then(r => r.ok ? r.json() : null).catch(() => null),
-    ]).then(([lineupsJson, playersJson]) => {
-      setLineupsData(transformAfLineups(lineupsJson?.response, playersJson?.response));
+    (async () => {
+      const [lineupsJson, playersJson] = await Promise.all([
+        fetch(`${API_BASE}/api/apifootball?path=fixtures/lineups&fixture=${match.id}`).then(r => r.ok ? r.json() : null).catch(() => null),
+        // 평점은 시작한 경기에만 있다 — 시작 전엔 부르지 않는다.
+        started
+          ? fetch(`${API_BASE}/api/apifootball?path=fixtures/players&fixture=${match.id}`).then(r => r.ok ? r.json() : null).catch(() => null)
+          : Promise.resolve(null),
+      ]);
+      let afLineups = lineupsJson?.response;
+      // AF 가 아직 안 냈으면 ESPN 으로 — 카드 상태와 같은 소스를 쓴다.
+      if (!(afLineups || []).some(t => (t.startXI || []).length)) {
+        const espn = await espnLineupsForMatch(match);
+        if (espn) afLineups = espn;
+      }
+      setLineupsData(transformAfLineups(afLineups, playersJson?.response));
       setLineupsLoading(false);
-    }).catch(() => { setLineupsLoading(false); });
+    })().catch(() => setLineupsLoading(false));
   }, [tab, match.id, isFinished, isLive]);
 
   React.useEffect(() => {
@@ -7223,49 +7290,6 @@ function App() {
           // MLS 는 T-22분에도 없음). 같은 MLS 경기를 ESPN 은 T-30분에 냈다.
           // 아직 시작 전이거나 진행 중인데 AF 명단이 비어 있으면 ESPN 으로 채운다.
           // ESPN 은 iPhone UA 를 403 으로 막아 /api/espn 프록시를 거친다.
-          const espnEventCache = espnEventCacheRef.current;
-          const fetchEspnLineups = async (m) => {
-            if (!m || !m.fullDate) return null;
-            const kps = (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean);
-            const prof = kps.map(kp => ALL_PLAYERS.find(p => p.name === kp.name))
-                            .find(p => p && p.espnTeamId && p.espnLeague);
-            if (!prof) return null;
-            const base = `${API_BASE}/api/espn?path=soccer/${prof.espnLeague}`;
-            let evId = espnEventCache[m.id];
-            if (evId === undefined) {
-              // 팀 일정(/teams/{id}/schedule)은 '지난 경기'만 돌려준다 — 예정 경기는
-              // 날짜별 scoreboard 에서 찾아야 한다. UTC 자정 근처 경기를 놓치지
-              // 않도록 킥오프 당일과 앞뒤 하루까지 본다.
-              const ko = new Date(m.fullDate);
-              const ymd = (d) => d.toISOString().slice(0, 10).replace(/-/g, '');
-              evId = null;
-              for (const off of [0, -1, 1]) {
-                const day = ymd(new Date(ko.getTime() + off * 86400000));
-                const sb = await fetch(`${base}/scoreboard&dates=${day}`)
-                  .then(r => r.ok ? r.json() : null).catch(() => null);
-                const hit = (sb?.events || []).find(e =>
-                  Math.abs(new Date(e.date).getTime() - ko.getTime()) < 6 * 3600 * 1000 &&
-                  (e.competitions?.[0]?.competitors || []).some(c => String(c.team?.id) === String(prof.espnTeamId)));
-                if (hit) { evId = hit.id; break; }
-              }
-              espnEventCache[m.id] = evId;
-            }
-            if (!evId) return null;
-            const sum = await fetch(`${base}/summary&event=${evId}`)
-              .then(r => r.ok ? r.json() : null).catch(() => null);
-            const rosters = sum?.rosters || [];
-            if (!rosters.some(t => (t.roster || []).some(a => a.starter))) return null;
-            // AF 형태로 맞춰 준다 — 아래 매칭 코드가 그대로 동작하도록.
-            // ESPN 선수 id 는 AF id 와 다르므로 이름으로 매칭된다(nameMatch).
-            const conv = (a) => ({ player: {
-              id: null, name: a.athlete?.displayName || '', number: Number(a.jersey) || null } });
-            return rosters.map(t => ({
-              team: { id: null, name: t.team?.displayName || '' },
-              startXI: (t.roster || []).filter(a => a.starter).map(conv),
-              substitutes: (t.roster || []).filter(a => !a.starter).map(conv),
-            }));
-          };
-
           const needEspn = afDetails
             .filter(r => r.status === 'fulfilled' && r.value)
             .map(r => r.value)
@@ -7279,7 +7303,7 @@ function App() {
           if (needEspn.length) {
             await Promise.allSettled(needEspn.map(async v => {
               const mm = koreanMatches.find(x => x.id === v.id);
-              const lu = await fetchEspnLineups(mm);
+              const lu = await espnLineupsForMatch(mm);
               if (lu) { v.lineups = lu; v.espnLineup = true; }
             }));
           }
@@ -8823,8 +8847,50 @@ function hideSplashWhenPainted() {
   }));
 }
 
+// 렌더 중 예외가 나면 React 는 트리를 통째로 버린다 — 그러면 웹 영역이 검게
+// 비고 아무 조작도 안 먹는다(실제로 라인업 탭에서 그랬다). 경계를 두어
+// 최소한 '무슨 일이 났고 어떻게 빠져나가는지'는 보이게 한다.
+class ErrorBoundary extends React.Component {
+  constructor(p) { super(p); this.state = { err: null }; }
+  static getDerivedStateFromError(err) { return { err }; }
+  componentDidCatch(err) {
+    // OTA 번들이 깨졌을 가능성 → 부팅 표식을 남겨 다음 실행에서 번들 사본으로
+    // 되돌아가게 한다(로더가 이 값을 보고 캐시를 버린다).
+    try { localStorage.setItem('jumo.ota.boot', '1'); } catch (e) {}
+    try { console.error('JUMO-ERR', err && (err.stack || err.message)); } catch (e) {}
+  }
+  render() {
+    if (!this.state.err) return this.props.children;
+    return (
+      <div style={{ minHeight:'100vh', background:'#0b0b0d', color:'#fff',
+                    display:'flex', flexDirection:'column', alignItems:'center',
+                    justifyContent:'center', gap:14, padding:'40px 24px', textAlign:'center' }}>
+        <div style={{ fontSize:40 }}>😵</div>
+        <div style={{ fontSize:16, fontWeight:800 }}>화면을 그리다 문제가 생겼어요</div>
+        <div style={{ fontSize:13, color:'rgba(255,255,255,0.5)', lineHeight:1.6 }}>
+          앱을 다시 시작하면 대부분 해결됩니다.<br/>계속 반복되면 알려주세요.
+        </div>
+        <button onClick={() => location.reload()}
+          // --acc 는 App 루트 div 에서 주입된다 — 경계는 그 바깥이라 값이 없다.
+          // 여기서만 브랜드 옐로를 직접 쓴다(안 그러면 검은 글씨가 검은 배경에 묻힘).
+          style={{ marginTop:6, height:38, boxSizing:'border-box', padding:'0 20px',
+                   borderRadius:19, border:'none', background:'#f5c400',
+                   color:'#000', fontSize:14, fontWeight:800, cursor:'pointer' }}>
+          다시 시도
+        </button>
+        <div style={{ marginTop:10, fontSize:10, color:'rgba(255,255,255,0.35)', maxWidth:320,
+                      wordBreak:'break-all', opacity:0.8 }}>
+          {String(this.state.err && (this.state.err.message || this.state.err)).slice(0, 200)}
+        </div>
+      </div>
+    );
+  }
+}
+
 try {
-  ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <ErrorBoundary><App/></ErrorBoundary>
+  );
   hideSplashWhenPainted();
 } catch(e) {
   document.getElementById('root').innerHTML = '<div style="color:red;padding:20px;font-family:monospace;font-size:12px;white-space:pre-wrap">렌더링 에러:\n' + e.message + '\n\n' + e.stack + '</div>';
