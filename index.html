@@ -5963,9 +5963,8 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames }) {
 
 // ─── SCREEN: ADD PLAYER ───────────────────────────────────────
 function AddPlayerScreen({ followed, onToggle, onBack, playerOrder = [], setPlayerOrder, sportOrder = ['축구','야구'], setSportOrder }) {
-  const sports = ['전체','⚽ 축구','⚾ 야구'];
-  const sportMap = { '전체': null, '⚽ 축구':'축구', '⚾ 야구':'야구' };
-  const [filter, setFilter] = React.useState('전체');
+  // 상단 종목 필터 칩은 없앴다 — 아래 '내 선수'가 이미 종목별 섹션이라 중복이고,
+  // 필터가 걸리면 정렬 UI 를 숨겨야 해서 오히려 기능을 가렸다.
   const [query, setQuery] = React.useState('');
   // 아래로 스크롤하면 검색창을 접고, 위로 올리면 다시 편다(목록 공간 확보).
   const [searchHidden, setSearchHidden] = React.useState(false);
@@ -5980,10 +5979,8 @@ function AddPlayerScreen({ followed, onToggle, onBack, playerOrder = [], setPlay
   }, []);
 
   const filtered = ALL_PLAYERS.filter(p => {
-    const sportMatch = filter === '전체' ? true : p.sport === sportMap[filter];
     const q = query.trim().toLowerCase();
-    const textMatch = !q || p.name.includes(q) || p.nameEn.toLowerCase().includes(q) || p.team.toLowerCase().includes(q);
-    return sportMatch && textMatch;
+    return !q || p.name.includes(q) || p.nameEn.toLowerCase().includes(q) || p.team.toLowerCase().includes(q);
   });
 
   const sportIcon = { '축구':'⚽', '야구':'⚾', '배드민턴':'🏸' };
@@ -5991,7 +5988,7 @@ function AddPlayerScreen({ followed, onToggle, onBack, playerOrder = [], setPlay
   // ── 내 선수 정렬 ────────────────────────────────────────────
   // 검색·필터 중에는 정렬 UI 를 숨긴다 — 걸러진 목록에서 순서를 바꾸면
   // 화면에 안 보이는 선수와의 상대 순서가 어떻게 되는지 알 수 없다.
-  const showReorder = !query.trim() && filter === '전체';
+  const showReorder = !query.trim();
   const myPlayers = byOrder(ALL_PLAYERS.filter(p => followed.has(p.id)), playerOrder, p => p.id);
   const mySports = [
     ...sportOrder.filter(sp => myPlayers.some(p => p.sport === sp)),
@@ -6026,11 +6023,6 @@ function AddPlayerScreen({ followed, onToggle, onBack, playerOrder = [], setPlay
           </div>
           <input value={query} onChange={e => setQuery(e.target.value)} placeholder="선수 이름, 팀 검색..." style={{ width:'100%', background:'var(--card)', border:'0.5px solid var(--border)', borderRadius:12, padding:'11px 14px 11px 36px', fontSize:14, color:'var(--text)', outline:'none', boxSizing:'border-box', fontFamily:"-apple-system, 'Apple SD Gothic Neo', system-ui, sans-serif" }}/>
           {query && <button onClick={() => setQuery('')} style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', background:'var(--text6)', border:'none', borderRadius:'50%', width:20, height:20, cursor:'pointer', color:'var(--text-60)', fontSize:11, display:'flex', alignItems:'center', justifyContent:'center', padding:0 }}>✕</button>}
-        </div>
-        <div style={{ display:'flex', gap:8, overflowX:'auto', paddingBottom:12 }} className="scrollbar-hide">
-          {sports.map(s => (
-            <button key={s} onClick={() => setFilter(s)} style={{ flexShrink:0, background: filter===s ? 'var(--acc)' : 'var(--border)', border:'none', height:CTRL_H, boxSizing:'border-box', borderRadius:CTRL_H/2, padding:'0 14px', color: filter===s ? '#000' : 'var(--text2)', fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap', transition:'all 0.15s' }}>{s}</button>
-          ))}
         </div>
       </div>
       <div style={{ padding:'0 20px 8px', flexShrink:0 }}>
