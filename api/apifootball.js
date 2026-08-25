@@ -37,6 +37,10 @@ module.exports = async function handler(req, res) {
     'fixtures/headtohead',
     'teams',
     'players',
+    // 이적 직후 선수는 시즌 스탯이 없어 players?team= 에 안 잡힌다 —
+    // 현재 스쿼드/프로필 조회용.
+    'players/squads',
+    'players/profiles',
     'injuries',
     'status',
   ]);
