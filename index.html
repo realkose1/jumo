@@ -759,6 +759,17 @@ const isMutedEvent = (ev) => ev === '미출전' || ev === '확인 불가';
 
 // 종료 상태 판정. HomeV2 안에만 있어서 LiveDetailScreen 에서 부르면
 // ReferenceError 로 화면이 통째로 죽었다(라인업 탭 검은 화면) → 모듈 스코프로.
+// 설정에 보여줄 앱 버전. 네이티브가 주입한 실제 번들 값(window.__jumoAppInfo)을
+// 그대로 쓴다 — 하드코딩하면 릴리스마다 갱신을 잊어 실제와 어긋난다(v1.0.0 으로
+// 몇 달째 박혀 있었다). OTA 로 JS 만 바뀌어도 이 값은 설치된 바이너리 기준이다.
+function appVersionLabel() {
+  const info = (typeof window !== 'undefined' && window.__jumoAppInfo) || null;
+  if (info && info.version) {
+    return `Jumo v${info.version}${info.build ? ` (${info.build})` : ''}`;
+  }
+  return 'Jumo — 웹';   // 브라우저에서 열었을 때
+}
+
 const isFinalStatus = (status) =>
   ['STATUS_FINAL','STATUS_FULL_TIME','final','STATUS_END_PERIOD','STATUS_FINAL_PEN'].includes(status);
 
@@ -6471,7 +6482,7 @@ function MoreScreen({ sportFeeds, onToggleSportFeed, profile, onUpdateProfile, s
     { label:'앱 정보', items:[
       { id:'guide',    icon:'📖', color:'#48484a', title:'사용 설명 보기', sub:'온보딩 가이드 다시 보기', chevron:true, action: onShowGuide },
       { id:'privacy',  icon:'🔒', color:'#48484a', title:'개인정보처리방침', sub:'수집 항목과 이용 안내', chevron:true, action: () => openExternal(`${API_BASE}/privacy`) },
-      { id:'version',  icon:'ℹ️', color:'#48484a', title:'버전 정보',     sub:'Jumo v1.0.0' },
+      { id:'version',  icon:'ℹ️', color:'#48484a', title:'버전 정보',     sub: appVersionLabel() },
       { id:'feedback', icon:'💬', color:'#48484a', title:'피드백 보내기', sub:'개선 사항을 알려주세요', chevron:true },
     ]},
   ];

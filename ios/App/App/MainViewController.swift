@@ -69,6 +69,18 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
         guard !didSetup else { return }
         didSetup = true
         if #available(iOS 26.0, *) {
+            // 실제 앱 버전을 웹에 알려준다 — 설정의 '버전 정보'가 하드코딩돼
+            // 실제와 어긋나 있었다. OTA 로 JS 만 갈아끼워도 이 값은 설치된
+            // 바이너리 기준이라 항상 정확하다.
+            if let ucc = wk?.configuration.userContentController {
+                let info = Bundle.main.infoDictionary
+                let ver = (info?["CFBundleShortVersionString"] as? String) ?? ""
+                let build = (info?["CFBundleVersion"] as? String) ?? ""
+                let js = "window.__jumoAppInfo = { version: '\(ver)', build: '\(build)' };"
+                ucc.addUserScript(WKUserScript(source: js,
+                                               injectionTime: .atDocumentStart,
+                                               forMainFrameOnly: true))
+            }
             wk?.configuration.userContentController.add(self, name: "tabbar")
             wk?.configuration.userContentController.add(self, name: "bell")
             wk?.configuration.userContentController.add(self, name: "detailbar")
