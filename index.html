@@ -634,10 +634,16 @@ const KOREAN_PLAYERS_EXTRA = {
 
 // 팀명으로 그 팀의 한국 선수 전원을 돌려준다(0~N명). team 코드는 카드·스코어 비교에
 // 쓰이므로 함께 붙인다.
-function koreansForTeam(teamName, teamCode) {
+function koreansForTeam(teamName, teamCode, sport) {
   const primary = KOREAN_PLAYERS[teamName];
   const extras = KOREAN_PLAYERS_EXTRA[teamName] || [];
-  return [...(primary ? [primary] : []), ...extras].map(p => ({ ...p, team: teamCode }));
+  const all = [...(primary ? [primary] : []), ...extras];
+  // 팀 이름은 종목을 넘어 겹친다 — 'Rangers' 는 스코틀랜드 축구팀이자 MLB
+  // 텍사스 레인저스다. 종목이 주어지면 그 종목 선수만 남긴다(안 주면 종전대로).
+  const matched = sport
+    ? all.filter(p => ALL_PLAYERS.find(x => x.name === p.name)?.sport === sport)
+    : all;
+  return matched.map(p => ({ ...p, team: teamCode }));
 }
 
 // ─── KOREAN BROADCAST RIGHTS (2025-26 시즌) ──────────────────
@@ -8253,8 +8259,8 @@ function App() {
     const homeCode = homeHasKo ? codeFor(homeTeamName, homeShort) : homeShort;
     const awayCode = awayHasKo ? codeFor(awayTeamName, awayShort) : awayShort;
     // 같은 팀에 한국 선수가 둘 이상일 수 있다(미트윌란: 조규성+이한범).
-    const homeKoreans = koreansForTeam(homeTeamName, homeCode);
-    const awayKoreans = koreansForTeam(awayTeamName, awayCode);
+    const homeKoreans = koreansForTeam(homeTeamName, homeCode, '축구');
+    const awayKoreans = koreansForTeam(awayTeamName, awayCode, '축구');
     const koreanPlayers = [...homeKoreans, ...awayKoreans];
     const koreanPlayer = koreanPlayers[0];
     const isKoreanDerby = homeKoreans.length > 0 && awayKoreans.length > 0;
@@ -8356,12 +8362,12 @@ function App() {
     // 양 팀에 나눠 있다. 홈에서 찾았다고 멈추지 말고 양쪽 다 모은다.
     let espnHomeKoreans = [];
     for (const variation of homeVariations) {
-      const found = koreansForTeam(variation, homeAbbr);
+      const found = koreansForTeam(variation, homeAbbr, sport === 'mlb' ? '야구' : '축구');
       if (found.length) { espnHomeKoreans = found; break; }
     }
     let espnAwayKoreans = [];
     for (const variation of awayVariations) {
-      const found = koreansForTeam(variation, awayAbbr);
+      const found = koreansForTeam(variation, awayAbbr, sport === 'mlb' ? '야구' : '축구');
       if (found.length) { espnAwayKoreans = found; break; }
     }
     const espnKoreans = [...espnHomeKoreans, ...espnAwayKoreans];
