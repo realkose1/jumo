@@ -192,6 +192,54 @@ const SB = supabase.createClient(
 );
 
 const ToastCtx = React.createContext(() => {});
+// '선발 예상 N%' 처럼 계산식이 있는 값은 사용자가 근거를 궁금해한다.
+// 탭하면 어떻게 나온 숫자인지 짧게 설명하는 시트를 띄운다.
+const ExplainCtx = React.createContext(() => {});
+
+// 배지 문구가 '선발 예상 …' 이면 그에 맞는 설명을 돌려준다(아니면 null).
+function explainForEvent(text) {
+  if (!/^선발 예상/.test(text || '')) return null;
+  return {
+    title: '선발 예상은 이렇게 계산해요',
+    lines: [
+      '최근 10경기에서 선발로 나선 비율이에요.',
+      '최근 경기일수록 더 크게 반영합니다 — 직전 서너 경기가 다음 선발을 가장 잘 설명하거든요.',
+      '교체로 들어와 60분 이상 뛴 경기도 선발로 봅니다.',
+      '기록이 아직 적으면 그 선수의 평소 출전 비중과 섞어서 계산해요.',
+      '부상·감독 성향·상대 팀은 반영하지 않으니 참고용으로 봐주세요.',
+    ],
+  };
+}
+
+// 설명 시트 — 아래에서 올라오고, 바깥을 누르면 닫힌다.
+function ExplainSheet({ data, onClose }) {
+  if (!data) return null;
+  return (
+    <div onClick={onClose}
+      style={{ position:'fixed', inset:0, zIndex:400, background:'rgba(0,0,0,0.5)',
+               display:'flex', alignItems:'flex-end', animation:'fadeIn 0.18s ease' }}>
+      <div onClick={e => e.stopPropagation()}
+        style={{ width:'100%', background:'var(--surface)', borderTopLeftRadius:20, borderTopRightRadius:20,
+                 // 네이티브 탭바가 하단에 떠 있어 그만큼 더 띄운다(안 그러면 확인 버튼이 가린다)
+                 padding:'20px 22px calc(104px + env(safe-area-inset-bottom))',
+                 borderTop:'0.5px solid var(--border2)', animation:'slideUp 0.24s ease' }}>
+        <div style={{ width:36, height:4, borderRadius:2, background:'var(--text6)', margin:'0 auto 16px' }}/>
+        <div style={{ fontSize:16, fontWeight:800, color:'var(--text)', marginBottom:12 }}>{data.title}</div>
+        {data.lines.map((l, i) => (
+          <div key={i} style={{ display:'flex', gap:8, marginBottom:8 }}>
+            <span style={{ color:'var(--acc)', fontSize:13, lineHeight:1.6 }}>·</span>
+            <span style={{ fontSize:13, color:'var(--text2)', lineHeight:1.6 }}>{l}</span>
+          </div>
+        ))}
+        <button onClick={onClose}
+          style={{ marginTop:14, width:'100%', height:CTRL_H, boxSizing:'border-box', borderRadius:CTRL_H/2,
+                   border:'none', background:'var(--acc)', color:'#000', fontSize:14, fontWeight:800, cursor:'pointer' }}>
+          확인
+        </button>
+      </div>
+    </div>
+  );
+}
 
 const matchSportKey = (m) => ((m?.sport||'').includes('MLB') || (m?.sport||'').includes('⚾')) ? 'baseball'
   : ((m?.sport||'').includes('배드민턴') || (m?.sport||'').includes('🏸')) ? 'badminton'
@@ -1823,6 +1871,7 @@ function BroadcastBadge({ match }) {
 function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
   // 카드에 실을 선수들 — 팔로우한 선수 전원(코리안 더비·같은 팀 복수). 팔로우 정보가
   // 아직 안 붙은 경로(일정 탭 등)에선 대표 선수 한 명으로 떨어진다.
+  const explain = React.useContext(ExplainCtx);
   const cardKoreans = (m.followedKoreans?.length ? m.followedKoreans : [m.koreanPlayer]).filter(Boolean);
   const multiKorean = cardKoreans.length > 1;
   const isLive = m.live || m.time === 'LIVE';
@@ -1932,16 +1981,29 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
                 </div>
 
                 {/* Event info - TOP RIGHT (마이너는 우측 상단에 표시하지 않고 하단 MLB 라벨로 대체) */}
-                {kp.event && kp.event !== '마이너' && (
-                  <div style={{
+                {kp.event && kp.event !== '마이너' && (() => {
+                  const label = compactBadgeEvent(formatExpectedEvent(kp, allMatches));
+                  const tip = explainForEvent(label);
+                  return (
+                  <div
+                    onClick={tip ? (e) => { e.stopPropagation(); explain(tip); } : undefined}
+                    style={{
                     background: isMutedEvent(kp.event) ? 'transparent' : isLive ? 'rgba(230,48,48,0.1)' : 'var(--btn-bg)',
-                    borderRadius:6, padding:'5px 8px', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center'
+                    borderRadius:6, padding:'5px 8px', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center',
+                    gap:3, cursor: tip ? 'pointer' : undefined
                   }}>
                     <span style={{ fontSize:10, fontWeight: isMutedEvent(kp.event) ? 500 : 600, color: isMutedEvent(kp.event) ? 'var(--text4)' : isLive ? 'var(--acc)' : 'var(--text2)', whiteSpace:'nowrap', lineHeight:1 }}>
-                      {compactBadgeEvent(formatExpectedEvent(kp, allMatches))}
+                      {label}
                     </span>
+                    {tip && (
+                      // 물음표로 '눌러서 설명'을 알린다 — 없으면 탭 가능한지 알 수 없다.
+                      <span style={{ fontSize:9, fontWeight:800, color:'var(--text4)',
+                                     border:'0.5px solid var(--text5)', borderRadius:'50%',
+                                     width:11, height:11, lineHeight:'10px', textAlign:'center' }}>?</span>
+                    )}
                   </div>
-                )}
+                  );
+                })()}
               </div>
             );
           })}
@@ -2568,10 +2630,11 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
           // 더비면 활약이 큰 쪽(골 2점, 도움 1점)이 주인공이다.
           const scorer = heroImpact.k;
           const g = heroImpact.g, a = heroImpact.a;
+          // 축구공 이모지는 바로 위 팀 배지와 겹쳐 보여 뺐다.
           const headline =
-            g > 0 && a > 0 ? `⚽ ${scorer.name} ${g}골 ${a}도움`
-            : g > 1        ? `⚽ ${scorer.name} ${g}골!`
-            : g === 1      ? `⚽ ${scorer.name} 골!`
+            g > 0 && a > 0 ? `${scorer.name} ${g}골 ${a}도움`
+            : g > 1        ? `${scorer.name} ${g}골!`
+            : g === 1      ? `${scorer.name} 골!`
             : a > 1        ? `${scorer.name} ${a}도움`
             :                `${scorer.name} 어시스트!`;
           return {
@@ -6756,6 +6819,7 @@ function App() {
   });
   const [toast, setToast] = React.useState(null);
   const toastTimerRef = React.useRef(null);
+  const [explain, setExplain] = React.useState(null);
   const showToast = React.useCallback((message) => {
     setToast({ id: Date.now() + Math.random(), message });
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -8890,6 +8954,7 @@ function App() {
 
   return (
     <ToastCtx.Provider value={showToast}>
+    <ExplainCtx.Provider value={setExplain}>
     <div style={{ '--acc': tweaks.accentColor, fontFamily:"-apple-system, 'Apple SD Gothic Neo', system-ui, sans-serif", WebkitFontSmoothing:'antialiased' }}>
       {/* 캐시로 낡은 내용을 먼저 보여주는 동안 '갱신 중'임을 분명히 알린다.
           스켈레톤이 떠 있는 진짜 첫 로드에는 띄우지 않는다. */}
@@ -8973,6 +9038,8 @@ function App() {
         </div>
       )}
     </div>
+    <ExplainSheet data={explain} onClose={() => setExplain(null)}/>
+    </ExplainCtx.Provider>
     </ToastCtx.Provider>
   );
 }
