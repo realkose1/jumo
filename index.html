@@ -623,9 +623,9 @@ const KOREAN_PLAYERS = {
 // 한 명만 잡힌다(미트윌란: 조규성 + 이한범). 추가 선수는 여기에 둔다.
 const KOREAN_PLAYERS_EXTRA = {
   // 즈베즈다: 설영우 + 김예건 (2026-08 전북에서 완전이적, 5년 계약, 등번호 19)
-  'Crvena Zvezda':    [{ name: '김예건', nameEn: 'Kim Ye-gun', number: 19, position: '미드필더' }],
-  'FK Crvena Zvezda': [{ name: '김예건', nameEn: 'Kim Ye-gun', number: 19, position: '미드필더' }],
-  'Red Star Belgrade':[{ name: '김예건', nameEn: 'Kim Ye-gun', number: 19, position: '미드필더' }],
+  'Crvena Zvezda':    [{ name: '김예건', nameEn: 'Kim Ye-geon', number: 19, position: '미드필더' }],
+  'FK Crvena Zvezda': [{ name: '김예건', nameEn: 'Kim Ye-geon', number: 19, position: '미드필더' }],
+  'Red Star Belgrade':[{ name: '김예건', nameEn: 'Kim Ye-geon', number: 19, position: '미드필더' }],
   // 마인츠: 이재성 + 홍현석
   'Mainz':           [{ name: '홍현석', nameEn: 'Hong Hyun-seok', number: 13, position: '미드필더' }],
   'FSV Mainz 05':    [{ name: '홍현석', nameEn: 'Hong Hyun-seok', number: 13, position: '미드필더' }],
@@ -1001,7 +1001,7 @@ const ALL_PLAYERS = [
   { id: 34, name: '송성문',  nameEn: 'Sung-Mun Song',  number: 24,  sport: '야구',   team: 'Padres',     league: 'MLB',        position: '내야수',   nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 40, age: 29, birth: '1996.08.29', height: '182cm', mlbId: 823550 },
   { id: 35, name: '김민수',  nameEn: 'Kim Min-su',    number: 10, sport: '축구',   team: 'Rangers',    league: 'SPFL',       position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 60, age: 20, birth: '2006.01.19', height: '177cm', espnLeague: 'sco.1', espnId: 388617, espnTeamId: 257, apiFootballId: 397941 },
   // 김예건 — 제공사(AF·ESPN)에 아직 미등록. 등록되면 apiFootballId/espnId 를 채운다.
-  { id: 36, name: '김예건',  nameEn: 'Kim Ye-gun',    number: 19, sport: '축구',   team: 'Crvena Zvezda', league: 'Serbian SuperLiga', position: '미드필더', nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 40, age: 18, espnLeague: 'srb.1' },
+  { id: 36, name: '김예건',  nameEn: 'Kim Ye-geon',    number: 19, sport: '축구',   team: 'Crvena Zvezda', league: 'Serbian SuperLiga', position: '미드필더', nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 40, age: 18, espnLeague: 'srb.1' },
 ];
 const PLAYERS = ALL_PLAYERS.slice(0, 5);
 
@@ -1425,7 +1425,7 @@ function TeamBadge({ code, size=36, logo }) {
 
 function PlayerPhoto({ player, style={}, tint='var(--bg)', objectPosition='50% 50%' }) {
   const num = player.number;
-  const imageMap = { '손흥민': 'heungmin.png', '이강인': 'kangin.png', '김민재': 'minjae.png', '조규성': 'guesung.png', '황희찬': 'heechan.png', '황인범': 'inbeom.png', '김하성': 'haseong.png', '이정후': 'junghoo.png', '김혜성': 'hyeseong.png', '오현규': 'hyungyu.png', '양현준': 'hyunjun.png', '백승호': 'seungho.png', '배준호': 'junho.png', '엄지성': 'jisung.png', '설영우': 'youngwoo.png', '이한범': 'hanbeom.png', '이재성': 'jaesung.png', '홍현석': 'hyunseok.png', '정우영': 'wooyeong.png', '카스트로프': 'castrop.png', '박승수': 'seungsoo.png', '김지수': 'jisoo.png', '양민혁': 'minhyeok.png', '이태석': 'taeseok.png', '김민수': 'minsu.png', '송성문': 'songsm.png' };
+  const imageMap = { '손흥민': 'heungmin.png', '이강인': 'kangin.png', '김민재': 'minjae.png', '조규성': 'guesung.png', '황희찬': 'heechan.png', '황인범': 'inbeom.png', '김하성': 'haseong.png', '이정후': 'junghoo.png', '김혜성': 'hyeseong.png', '오현규': 'hyungyu.png', '양현준': 'hyunjun.png', '백승호': 'seungho.png', '배준호': 'junho.png', '엄지성': 'jisung.png', '설영우': 'youngwoo.png', '이한범': 'hanbeom.png', '이재성': 'jaesung.png', '홍현석': 'hyunseok.png', '정우영': 'wooyeong.png', '카스트로프': 'castrop.png', '박승수': 'seungsoo.png', '김지수': 'jisoo.png', '양민혁': 'minhyeok.png', '이태석': 'taeseok.png', '김민수': 'minsu.png', '김예건': 'yegeon.png', '송성문': 'songsm.png' };
   // 전원 동일 규격 헤드샷(얼굴+어깨)이라 별도 확대 보정이 필요 없다.
   const zoom = null;
   const imagePath = imageMap[player.name] ? `image/${imageMap[player.name]}` : null;
@@ -2660,7 +2660,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
   const finishedHeadline = isFinishedHighlight ? buildFinishedHeadline(highlightMatch) : null;
 
   // landscape image map: Korean name → filename in image/landscape/
-  const LANDSCAPE_MAP = { '손흥민': 'heungmin.jpg', '이강인': 'kangin.jpg', '김민재': 'minjae.jpg', '황희찬': 'heechan.jpg', '황인범': 'inbeom.jpg', '조규성': 'guesung.jpg', '이한범': 'hanbeom.jpg', '오현규': 'hyungyu.jpg', '양현준': 'hyunjun.jpg', '백승호': 'seungho.jpg', '배준호': 'junho.jpg', '엄지성': 'jisung.jpg', '설영우': 'youngwoo.jpg', '김하성': 'haseong.jpg', '이정후': 'junghoo.jpg', '김혜성': 'hyeseong.jpg', '이재성': 'jaesung.jpg', '홍현석': 'hyunseok.jpg', '정우영': 'wooyeong.jpg', '카스트로프': 'castrop.jpg', '박승수': 'seungsoo.jpg', '김지수': 'jisoo.jpg', '양민혁': 'minhyeok.jpg', '이태석': 'taeseok.jpg', '김민수': 'minsu.jpg', '송성문': 'songsm.jpg' };
+  const LANDSCAPE_MAP = { '손흥민': 'heungmin.jpg', '이강인': 'kangin.jpg', '김민재': 'minjae.jpg', '황희찬': 'heechan.jpg', '황인범': 'inbeom.jpg', '조규성': 'guesung.jpg', '이한범': 'hanbeom.jpg', '오현규': 'hyungyu.jpg', '양현준': 'hyunjun.jpg', '백승호': 'seungho.jpg', '배준호': 'junho.jpg', '엄지성': 'jisung.jpg', '설영우': 'youngwoo.jpg', '김하성': 'haseong.jpg', '이정후': 'junghoo.jpg', '김혜성': 'hyeseong.jpg', '이재성': 'jaesung.jpg', '홍현석': 'hyunseok.jpg', '정우영': 'wooyeong.jpg', '카스트로프': 'castrop.jpg', '박승수': 'seungsoo.jpg', '김지수': 'jisoo.jpg', '양민혁': 'minhyeok.jpg', '이태석': 'taeseok.jpg', '김민수': 'minsu.jpg', '김예건': 'yegeon.jpg', '송성문': 'songsm.jpg' };
   React.useEffect(() => {
     const playerName = highlightMatch?.koreanPlayer?.name;
     const landscapeFile = LANDSCAPE_MAP[playerName];
@@ -4544,7 +4544,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
       {/* Hero */}
       <div style={{ position:'relative', height:320, overflow:'hidden' }}>
         {(() => {
-          const LANDSCAPE = { '손흥민': 'heungmin.jpg', '이강인': 'kangin.jpg', '김민재': 'minjae.jpg', '황희찬': 'heechan.jpg', '황인범': 'inbeom.jpg', '조규성': 'guesung.jpg', '이한범': 'hanbeom.jpg', '오현규': 'hyungyu.jpg', '양현준': 'hyunjun.jpg', '백승호': 'seungho.jpg', '배준호': 'junho.jpg', '엄지성': 'jisung.jpg', '설영우': 'youngwoo.jpg', '김하성': 'haseong.jpg', '이정후': 'junghoo.jpg', '김혜성': 'hyeseong.jpg', '이재성': 'jaesung.jpg', '홍현석': 'hyunseok.jpg', '정우영': 'wooyeong.jpg', '카스트로프': 'castrop.jpg', '박승수': 'seungsoo.jpg', '김지수': 'jisoo.jpg', '양민혁': 'minhyeok.jpg', '이태석': 'taeseok.jpg', '김민수': 'minsu.jpg', '송성문': 'songsm.jpg' };
+          const LANDSCAPE = { '손흥민': 'heungmin.jpg', '이강인': 'kangin.jpg', '김민재': 'minjae.jpg', '황희찬': 'heechan.jpg', '황인범': 'inbeom.jpg', '조규성': 'guesung.jpg', '이한범': 'hanbeom.jpg', '오현규': 'hyungyu.jpg', '양현준': 'hyunjun.jpg', '백승호': 'seungho.jpg', '배준호': 'junho.jpg', '엄지성': 'jisung.jpg', '설영우': 'youngwoo.jpg', '김하성': 'haseong.jpg', '이정후': 'junghoo.jpg', '김혜성': 'hyeseong.jpg', '이재성': 'jaesung.jpg', '홍현석': 'hyunseok.jpg', '정우영': 'wooyeong.jpg', '카스트로프': 'castrop.jpg', '박승수': 'seungsoo.jpg', '김지수': 'jisoo.jpg', '양민혁': 'minhyeok.jpg', '이태석': 'taeseok.jpg', '김민수': 'minsu.jpg', '김예건': 'yegeon.jpg', '송성문': 'songsm.jpg' };
           const file = LANDSCAPE[player.name];
           return file
             ? <img src={`image/landscape/${file}`} alt={player.name} style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'50% 25%' }}/>
@@ -5437,7 +5437,7 @@ const NEWS_PLAYER_IMG = {
   '양현준': 'image/hyunjun.png',
   '이재성': 'image/jaesung.png', '홍현석': 'image/hyunseok.png', '정우영': 'image/wooyeong.png',
   '카스트로프': 'image/castrop.png', '박승수': 'image/seungsoo.png', '김지수': 'image/jisoo.png',
-  '양민혁': 'image/minhyeok.png', '이태석': 'image/taeseok.png', '김민수': 'image/minsu.png', '송성문': 'image/songsm.png',
+  '양민혁': 'image/minhyeok.png', '이태석': 'image/taeseok.png', '김민수': 'image/minsu.png', '김예건': 'image/yegeon.png', '송성문': 'image/songsm.png',
   '백승호': 'image/seungho.png',
   '배준호': 'image/junho.png',
   '엄지성': 'image/jisung.png',
