@@ -18,8 +18,15 @@ final class LiveActivityBridge {
     private var current: Activity<JumoMatchAttributes>?
     private var currentMatchId: String?
     private var tokenTask: Task<Void, Never>?
+    /// 시작이 진행 중일 때 들어온 최신 payload. 로고를 받는 동안 점수가 바뀔 수
+    /// 있으므로, 요청 직전에 가장 최근 값을 쓴다.
+    private var pending: [String: Any]?
 
     /// 웹에서 넘어온 dict 로 액티비티를 시작한다. 이미 같은 경기면 갱신만 한다.
+    ///
+    /// 엠블럼은 위젯이 직접 받을 수 없어서(네트워크·비동기 불가) 여기서 먼저
+    /// 내려받아 App Group 에 캐시한 뒤, 그 파일명을 attributes 에 실어 시작한다.
+    /// attributes 는 시작 후 못 바꾸므로 순서가 바뀌면 로고가 영영 안 붙는다.
     func start(_ d: [String: Any], onToken: @escaping (String, String) -> Void) -> String? {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return "disabled" }
         let matchId = d["matchId"] as? String ?? ""
@@ -27,7 +34,24 @@ final class LiveActivityBridge {
             update(d); return nil
         }
         endCurrent()
+        currentMatchId = matchId   // 시작 중 중복 요청을 막는다
+        pending = d
+        Task { [weak self] in
+            let home = await JumoLogoStore.cache(d["homeLogo"] as? String ?? "")
+            let away = await JumoLogoStore.cache(d["awayLogo"] as? String ?? "")
+            await MainActor.run {
+                guard let self, self.currentMatchId == matchId, self.current == nil else { return }
+                self.request(self.pending ?? d, matchId: matchId,
+                             homeLogoFile: home, awayLogoFile: away, onToken: onToken)
+                self.pending = nil
+            }
+        }
+        return nil
+    }
 
+    private func request(_ d: [String: Any], matchId: String,
+                         homeLogoFile: String, awayLogoFile: String,
+                         onToken: @escaping (String, String) -> Void) {
         let attrs = JumoMatchAttributes(
             homeName: d["homeName"] as? String ?? "",
             awayName: d["awayName"] as? String ?? "",
@@ -35,7 +59,9 @@ final class LiveActivityBridge {
             awayAbbr: d["awayAbbr"] as? String ?? "",
             playerName: d["playerName"] as? String ?? "",
             playerNumber: d["playerNumber"] as? Int ?? 0,
-            competition: d["competition"] as? String ?? ""
+            competition: d["competition"] as? String ?? "",
+            homeLogoFile: homeLogoFile,
+            awayLogoFile: awayLogoFile
         )
         let state = Self.state(from: d)
 
@@ -54,14 +80,18 @@ final class LiveActivityBridge {
                     onToken(matchId, hex)
                 }
             }
-            return nil
         } catch {
-            return "\(error)"
+            // 시작에 실패했으면 자리를 비워둬야 다음 시도가 막히지 않는다.
+            currentMatchId = nil
         }
     }
 
     func update(_ d: [String: Any]) {
-        guard let act = current else { return }
+        guard let act = current else {
+            // 아직 시작 중(로고 내려받는 중)이면 최신 값만 남겨두고 빠진다.
+            if currentMatchId != nil { pending = d }
+            return
+        }
         let state = Self.state(from: d)
         Task { await act.update(ActivityContent(state: state, staleDate: Date().addingTimeInterval(3 * 3600))) }
     }
@@ -70,7 +100,8 @@ final class LiveActivityBridge {
 
     private func endCurrent() {
         tokenTask?.cancel(); tokenTask = nil
-        guard let act = current else { return }
+        pending = nil
+        guard let act = current else { currentMatchId = nil; return }
         current = nil; currentMatchId = nil
         Task { await act.end(nil, dismissalPolicy: .immediate) }
     }

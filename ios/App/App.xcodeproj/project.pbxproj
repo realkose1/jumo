@@ -21,8 +21,10 @@
 		5BB6E65F6ECCB1199852765F /* JumoLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22C675A2504AA95B530006A /* JumoLiveActivity.swift */; };
 		6C8A4DCE35A1CB20BEA93D0F /* JumoAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5372048D629C5036E89577C4 /* JumoAttributes.swift */; };
 		71620C830A475EF7E7D4FF34 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 3C993F93CC3ADF23CD1BC049 /* PrivacyInfo.xcprivacy */; };
+		94FD622AEFDF5F6288211CDB /* JumoLogoStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8485D3446CBA3C6B57F2E51B /* JumoLogoStore.swift */; };
 		A084ECDBA7D38E1E42DFC39D /* Pods_App.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AF277DCFFFF123FFC6DF26C7 /* Pods_App.framework */; };
 		AB10000000000000000000F2 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB10000000000000000000F1 /* MainViewController.swift */; };
+		EB01BA004604B5E228C19A16 /* JumoLogoStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8485D3446CBA3C6B57F2E51B /* JumoLogoStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -63,6 +65,7 @@
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
 		5372048D629C5036E89577C4 /* JumoAttributes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = JumoAttributes.swift; sourceTree = "<group>"; };
 		83588E8192579D8208140532 /* LiveActivityBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LiveActivityBridge.swift; sourceTree = "<group>"; };
+		8485D3446CBA3C6B57F2E51B /* JumoLogoStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = JumoLogoStore.swift; sourceTree = "<group>"; };
 		9C27153FF31BAD064FE9173E /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		A22C675A2504AA95B530006A /* JumoLiveActivity.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = JumoLiveActivity.swift; sourceTree = "<group>"; };
 		AB10000000000000000000F1 /* MainViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
@@ -107,6 +110,7 @@
 				5372048D629C5036E89577C4 /* JumoAttributes.swift */,
 				A22C675A2504AA95B530006A /* JumoLiveActivity.swift */,
 				38239F42489C87D8D3D45CB2 /* Info.plist */,
+				8485D3446CBA3C6B57F2E51B /* JumoLogoStore.swift */,
 			);
 			name = JumoLiveActivity;
 			path = JumoLiveActivity;
@@ -310,6 +314,7 @@
 			files = (
 				0605BFDB00EF14AE863C88FA /* JumoAttributes.swift in Sources */,
 				5BB6E65F6ECCB1199852765F /* JumoLiveActivity.swift in Sources */,
+				EB01BA004604B5E228C19A16 /* JumoLogoStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -321,6 +326,7 @@
 				AB10000000000000000000F2 /* MainViewController.swift in Sources */,
 				6C8A4DCE35A1CB20BEA93D0F /* JumoAttributes.swift in Sources */,
 				18BC3A92561E2344CF9E260E /* LiveActivityBridge.swift in Sources */,
+				94FD622AEFDF5F6288211CDB /* JumoLogoStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -509,6 +515,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = JumoLiveActivity/JumoLiveActivity.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 90;
@@ -531,6 +538,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = JumoLiveActivity/JumoLiveActivity.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 90;

@@ -3030,9 +3030,10 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
         </div>
       )}
 
-      {/* This week's matches list (finished today + upcoming until Sunday) */}
+      {/* 오늘 — 지금 진행 중이거나 앞으로 열릴 경기만 */}
       {(() => {
-        // Show today's matches + upcoming within 12 hours, deduplicated
+        // 끝난 경기는 넣지 않는다. 예전엔 오늘 00시부터 담아서, 이른 새벽에 끝난
+        // 경기가 하루 종일 목록 위쪽을 차지했다. 결과는 일정 탭에서 본다.
         const seenIds = new Set();
         const thisWeekMatches = allMatches
           .filter(m => {
@@ -3043,7 +3044,10 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
             if (koreanIsMinorLeaguer(m)) return false;
             if (seenIds.has(m.id)) return false;
             seenIds.add(m.id);
-            if (m.live || m.time === 'LIVE') return true; // always show live
+            if (m.live || m.time === 'LIVE') return true; // 진행 중이면 무조건
+            if (isFinalStatus(m.status)) return false;    // 끝난 경기는 제외
+            // 남은 건 아직 안 끝난 경기다. 킥오프가 지났는데 라이브 표시가 아직
+            // 안 붙은 경우(데이터 지연)도 여기서 살아남아야 하므로 오늘 0시부터 본다.
             const matchDate = new Date(m.fullDate);
             return matchDate >= startOfToday && matchDate <= twelveHoursLater;
           })
@@ -8949,6 +8953,8 @@ function App() {
       matchId: String(m.id),
       homeName: m.home?.name || '', awayName: m.away?.name || '',
       homeAbbr: m.home?.code || '', awayAbbr: m.away?.code || '',
+      // 엠블럼 URL — 네이티브가 받아서 App Group 에 캐시한다(위젯은 네트워크 불가).
+      homeLogo: m.home?.logo || '', awayLogo: m.away?.logo || '',
       playerName: kp?.name || '', playerNumber: kp?.number || 0,
       competition: (m.competition || m.sport || '').replace(/^[⚽⚾🏀🎾]\s*/, ''),
       homeScore: Number(m.home?.score) || 0, awayScore: Number(m.away?.score) || 0,

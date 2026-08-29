@@ -1,5 +1,6 @@
 import SwiftUI
 import WidgetKit
+import UIKit
 import ActivityKit
 
 // 브랜드 옐로 — 앱의 --acc 와 같은 값.
@@ -37,17 +38,29 @@ private struct PlayerLine: View {
     }
 }
 
-// 팀 배지 — 위젯은 원격 이미지를 못 불러온다(AsyncImage 미지원, 콘텐츠 상태에
-// 이미지도 못 싣는다). 그래서 실제 엠블럼 대신 팀 약칭을 원형 배지로 그린다.
+// 팀 배지 — 앱이 App Group 에 미리 캐시해둔 엠블럼을 디스크에서 읽는다.
+// 위젯은 네트워크를 쓸 수 없으므로(뷰가 동기 렌더) 여기서 받아올 방법은 없다.
+// 아직 캐시가 없거나 다운로드가 실패했으면 팀 약칭 배지로 대체한다.
 private struct TeamBadge: View {
     let abbr: String
+    let logoFile: String
+    var size: CGFloat = 30
+
     var body: some View {
-        Text(abbr.isEmpty ? "?" : String(abbr.prefix(3)).uppercased())
-            .font(.system(size: 11, weight: .heavy, design: .rounded))
-            .foregroundStyle(.white)
-            .frame(width: 30, height: 30)
-            .background(Circle().fill(Color.white.opacity(0.14)))
-            .overlay(Circle().stroke(Color.white.opacity(0.22), lineWidth: 0.5))
+        if let path = JumoLogoStore.localPath(logoFile),
+           let img = UIImage(contentsOfFile: path) {
+            Image(uiImage: img)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: size, height: size)
+        } else {
+            Text(abbr.isEmpty ? "?" : String(abbr.prefix(3)).uppercased())
+                .font(.system(size: size * 0.37, weight: .heavy, design: .rounded))
+                .foregroundStyle(.white)
+                .frame(width: size, height: size)
+                .background(Circle().fill(Color.white.opacity(0.14)))
+                .overlay(Circle().stroke(Color.white.opacity(0.22), lineWidth: 0.5))
+        }
     }
 }
 
@@ -79,7 +92,7 @@ private struct LockScreenView: View {
             HStack(spacing: 10) {
                 HStack(spacing: 8) {
                     Spacer(minLength: 0)
-                    TeamBadge(abbr: ctx.attributes.homeAbbr)
+                    TeamBadge(abbr: ctx.attributes.homeAbbr, logoFile: ctx.attributes.homeLogoFile)
                     Text(ctx.attributes.homeName)
                         .font(.system(size: 14, weight: .semibold))
                         .lineLimit(1).minimumScaleFactor(0.8)
@@ -101,7 +114,7 @@ private struct LockScreenView: View {
                     Text(ctx.attributes.awayName)
                         .font(.system(size: 14, weight: .semibold))
                         .lineLimit(1).minimumScaleFactor(0.8)
-                    TeamBadge(abbr: ctx.attributes.awayAbbr)
+                    TeamBadge(abbr: ctx.attributes.awayAbbr, logoFile: ctx.attributes.awayLogoFile)
                     Spacer(minLength: 0)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -149,16 +162,16 @@ struct JumoMatchActivity: Widget {
                 // 확장 — 길게 눌렀을 때
                 DynamicIslandExpandedRegion(.leading) {
                     VStack(spacing: 2) {
-                        Text(ctx.attributes.homeAbbr)
-                            .font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                        TeamBadge(abbr: ctx.attributes.homeAbbr,
+                                  logoFile: ctx.attributes.homeLogoFile, size: 24)
                         Text("\(ctx.state.homeScore)")
                             .font(.system(size: 24, weight: .heavy, design: .rounded))
                     }
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     VStack(spacing: 2) {
-                        Text(ctx.attributes.awayAbbr)
-                            .font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                        TeamBadge(abbr: ctx.attributes.awayAbbr,
+                                  logoFile: ctx.attributes.awayLogoFile, size: 24)
                         Text("\(ctx.state.awayScore)")
                             .font(.system(size: 24, weight: .heavy, design: .rounded))
                     }

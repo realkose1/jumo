@@ -24,4 +24,7 @@ struct JumoMatchAttributes: ActivityAttributes {
     var playerName: String
     var playerNumber: Int
     var competition: String
+    // App Group 에 캐시된 엠블럼 파일명. 비어 있으면 위젯이 약칭 배지로 대체한다.
+    var homeLogoFile: String = ""
+    var awayLogoFile: String = ""
 }
