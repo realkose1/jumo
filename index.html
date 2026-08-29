@@ -860,6 +860,17 @@ function appVersionLabel() {
 const isFinalStatus = (status) =>
   ['STATUS_FINAL','STATUS_FULL_TIME','final','STATUS_END_PERIOD','STATUS_FINAL_PEN'].includes(status);
 
+// 이 선수가 실제로 그라운드를 밟았는가.
+// 코리안 더비처럼 한 경기에 여러 선수가 걸릴 때, 뛰지 않은 선수까지 '출전 중'으로
+// 묶어 부르는 일을 막는다(마인츠전에서 홍현석이 미출전인데 출전 중으로 나왔다).
+const isPlayingKorean = (kp) => {
+  const ev = (kp?.event || '').trim();
+  if (!ev) return false;
+  if (/미출전|벤치/.test(ev)) return false;          // 벤치 · 벤치 대기 · 미출전
+  if (ev === '출전 예상' || ev === '출전 여부 확인 중') return false;  // 아직 미확정
+  return true;   // 선발 출전 · 출전 중 · 교체 출전 중 · 교체 아웃 · 야구 스탯 라인
+};
+
 // ESPN 라인업 조회 — AF 가 아직 안 냈을 때 쓰는 폴백.
 // 폴링 사이클과 경기 상세가 같은 함수를 쓰게 모듈 스코프에 둔다(구현이 갈라지면
 // 카드에는 '선발 출전'인데 라인업 탭은 비는 식으로 어긋난다 — 실제로 그랬다).
@@ -2668,18 +2679,26 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
             sub: `${m.home.name} vs ${m.away.name} · ${m.competition}`
           };
         } else {
-          // 미참여 상태는 이미 히어로 후보에서 제외됐으므로, 여기선 참여/시작전 라벨만 처리.
-          const ev = m.koreanPlayer.event || '';
+          // 여러 선수가 걸린 경기라도 '출전 중'으로 묶을 수 있는 건 실제로 뛰는
+          // 선수뿐이다. 한 명만 뛰면 그 선수 이름으로, 아무도 안 뛰면 대표 선수의
+          // 상태를 그대로 보여준다.
+          const onPitch = heroKoreans.filter(isPlayingKorean);
+          const solo = onPitch.length === 1 ? onPitch[0]
+                     : onPitch.length === 0 ? (heroKoreans[0] || m.koreanPlayer)
+                     : null;
+          const ev = (solo || m.koreanPlayer)?.event || '';
           const evLabel =
             ev === '교체 출전 중' ? '교체 출전 중' : ev === '교체 아웃' ? '교체 아웃' :
             ev === '선발 출전' ? '선발 출전' :
             ev === '출전 예상' ? '출전 여부 확인 중' :
+            ev === '미출전' ? '미출전' :
+            /벤치/.test(ev) ? '벤치' :
             /\d+타수/.test(ev) ? ev :               // 야구 실시간/최종 스탯 라인(n타수 n안타)은 그대로
             '출전 중';
           return {
             status: matchSportKey(m) === 'baseball' ? `LIVE NOW · ${m.inning || ''}` : `LIVE NOW · ${hlLiveMinute || m.minute || ''}\'`,
-            // 복수 선수(더비 등)는 개별 상태가 다를 수 있어 이름만 나열하고 상태는 생략.
-            main: heroKoreans.length > 1 ? `${heroNames} 출전 중` : `${m.koreanPlayer.name} ${evLabel}`,
+            main: solo ? `${solo.name} ${evLabel}`
+                       : `${onPitch.map(k => k.name).join(' · ')} 출전 중`,
             scoreNode,
             sub: `${m.home.name} vs ${m.away.name} · ${m.competition}`
           };
@@ -2693,9 +2712,13 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
       case 5: // Upcoming
         // lineupConfirmed 는 '경기'가 아니라 '선수'에 붙는 값이라 m 에서 읽으면
         // 늘 undefined 였다 — 라인업이 나와도 히어로는 계속 '출격 대기'.
-        const heroKp = (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean)[0];
-        const ev5 = heroKp?.event;
-        const statusText5 = ev5 === '선발 출전' ? '선발 출전'
+        const heroKps = (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean);
+        const ev5 = heroKps[0]?.event;
+        // 여러 선수가 걸린 경기에서 첫 선수의 상태를 전원 상태처럼 붙이면 안 된다
+        // (한 명은 선발인데 다른 한 명은 벤치인 경우). 상태가 갈리면 중립 라벨로.
+        const sameEv5 = heroKps.every(k => k?.event === ev5);
+        const statusText5 = !sameEv5 ? '출격 대기'
+                          : ev5 === '선발 출전' ? '선발 출전'
                           : ev5 === '벤치 대기' ? '벤치 대기'
                           : '출격 대기';
         return {
@@ -8940,8 +8963,13 @@ function App() {
       return;
     }
 
-    const kp = (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean)
-      .find(k => followedNames.has(k.name)) || m.koreanPlayer;
+    // 더비처럼 팔로우 선수가 둘 이상이면 '기록 있는 선수 → 뛰는 선수 → 첫 선수'
+    // 순으로 고른다. 그냥 첫 선수를 잡으면 벤치에 앉은 선수를 잠금화면에 띄운다.
+    const mineInMatch = (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean)
+      .filter(k => followedNames.has(k.name));
+    const kp = mineInMatch.find(k => (k.matchGoals || 0) > 0 || (k.matchAssists || 0) > 0)
+            || mineInMatch.find(isPlayingKorean)
+            || mineInMatch[0] || m.koreanPlayer;
     const goals = kp?.matchGoals || 0;
     const assists = kp?.matchAssists || 0;
     // 잠금화면은 좁다 — 상태를 한 줄로 압축한다.
