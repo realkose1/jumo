@@ -20,6 +20,7 @@ private struct PlayerLine: View {
             Text(name)
                 .font(.system(size: compact ? 11 : 13, weight: .bold))
                 .foregroundStyle(acc)
+                .lineLimit(1).fixedSize()
             if goals > 0 || assists > 0 {
                 // 기록이 있으면 그게 핵심이다 — 배지로 띄운다.
                 HStack(spacing: 3) {
@@ -36,44 +37,78 @@ private struct PlayerLine: View {
     }
 }
 
+// 팀 배지 — 위젯은 원격 이미지를 못 불러온다(AsyncImage 미지원, 콘텐츠 상태에
+// 이미지도 못 싣는다). 그래서 실제 엠블럼 대신 팀 약칭을 원형 배지로 그린다.
+private struct TeamBadge: View {
+    let abbr: String
+    var body: some View {
+        Text(abbr.isEmpty ? "?" : String(abbr.prefix(3)).uppercased())
+            .font(.system(size: 11, weight: .heavy, design: .rounded))
+            .foregroundStyle(.white)
+            .frame(width: 30, height: 30)
+            .background(Circle().fill(Color.white.opacity(0.14)))
+            .overlay(Circle().stroke(Color.white.opacity(0.22), lineWidth: 0.5))
+    }
+}
+
 // 잠금화면 / 배너
 private struct LockScreenView: View {
     let ctx: ActivityViewContext<JumoMatchAttributes>
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
+        VStack(spacing: 12) {
+            // 윗줄: 대회 · 우리 선수 기록 ······ 진행 시간
+            HStack(spacing: 8) {
                 Text(ctx.attributes.competition)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.secondary)
-                Spacer()
+                    .lineLimit(1).truncationMode(.tail)
+                    .layoutPriority(0)   // 대회명이 길면 이쪽이 먼저 줄어든다
+                PlayerLine(name: ctx.attributes.playerName,
+                           number: ctx.attributes.playerNumber,
+                           line: ctx.state.playerLine,
+                           goals: ctx.state.playerGoals,
+                           assists: ctx.state.playerAssists,
+                           compact: true)
+                    .layoutPriority(2)
+                Spacer(minLength: 4)
                 StatusPill(status: ctx.state.status, minute: ctx.state.minute)
             }
 
-            HStack(alignment: .center, spacing: 12) {
-                Text(ctx.attributes.homeName)
-                    .font(.system(size: 15, weight: .semibold))
-                    .lineLimit(1)
-                Spacer(minLength: 8)
-                Text("\(ctx.state.homeScore)")
-                    .font(.system(size: 26, weight: .heavy, design: .rounded))
-                Text(":").font(.system(size: 20, weight: .medium)).foregroundStyle(.secondary)
-                Text("\(ctx.state.awayScore)")
-                    .font(.system(size: 26, weight: .heavy, design: .rounded))
-                Spacer(minLength: 8)
-                Text(ctx.attributes.awayName)
-                    .font(.system(size: 15, weight: .semibold))
-                    .lineLimit(1)
-                    .multilineTextAlignment(.trailing)
-            }
+            // 가운뎃줄: [배지] 팀명   점수 : 점수   팀명 [배지] — 좌우 대칭으로 가운데 정렬
+            HStack(spacing: 10) {
+                HStack(spacing: 8) {
+                    Spacer(minLength: 0)
+                    TeamBadge(abbr: ctx.attributes.homeAbbr)
+                    Text(ctx.attributes.homeName)
+                        .font(.system(size: 14, weight: .semibold))
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                }
+                .frame(maxWidth: .infinity, alignment: .trailing)
 
-            PlayerLine(name: ctx.attributes.playerName,
-                       number: ctx.attributes.playerNumber,
-                       line: ctx.state.playerLine,
-                       goals: ctx.state.playerGoals,
-                       assists: ctx.state.playerAssists)
+                HStack(spacing: 6) {
+                    Text("\(ctx.state.homeScore)")
+                        .font(.system(size: 28, weight: .heavy, design: .rounded))
+                    Text(":")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    Text("\(ctx.state.awayScore)")
+                        .font(.system(size: 28, weight: .heavy, design: .rounded))
+                }
+                .fixedSize()
+
+                HStack(spacing: 8) {
+                    Text(ctx.attributes.awayName)
+                        .font(.system(size: 14, weight: .semibold))
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                    TeamBadge(abbr: ctx.attributes.awayAbbr)
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
-        .padding(14)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 13)
         .activityBackgroundTint(Color.black.opacity(0.55))
         .activitySystemActionForegroundColor(acc)
     }
@@ -87,7 +122,9 @@ private struct StatusPill: View {
         let live = status == "live"
         return HStack(spacing: 4) {
             if live {
+                // 진행 중이라는 신호 — 점이 깜빡이면 정지된 스코어와 확실히 구분된다.
                 Circle().fill(acc).frame(width: 5, height: 5)
+                    .background(Circle().fill(acc.opacity(0.3)).frame(width: 11, height: 11))
             }
             Text(minute)
                 .font(.system(size: 10, weight: .heavy))

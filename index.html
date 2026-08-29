@@ -5054,6 +5054,25 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
   React.useEffect(() => { if (scrollTopKey > 0) { SCROLL_MEM.schedule = 0; scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } }, [scrollTopKey]);
   useScrollMemory('schedule', scrollRef);
 
+  // 경기가 많은 날엔 지금 진행 중인 경기를 찾으려고 한참 스크롤해야 한다.
+  // 일정 탭에 들어오면 라이브 경기를 화면 중앙으로 보낸다.
+  // 라이브가 없을 때는 건드리지 않는다 — 그때는 이전 스크롤 위치를 기억하는
+  // 기존 동작이 더 자연스럽다.
+  const liveRowRef = React.useRef(null);
+  const centeredRef = React.useRef(false);
+  React.useEffect(() => { if (!isActive) centeredRef.current = false; }, [isActive]);
+  React.useEffect(() => {
+    if (!isActive || centeredRef.current) return;
+    const el = liveRowRef.current;
+    if (!el) return;
+    centeredRef.current = true;
+    // 목록이 그려진 뒤 위치가 잡히도록 한 프레임 미룬다.
+    const t = setTimeout(() => {
+      try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch { el.scrollIntoView(); }
+    }, 120);
+    return () => clearTimeout(t);
+  }, [isActive, liveApiMatches]);
+
   // Keep the selected date centered in the strip when it changes (tap or swipe).
   React.useEffect(() => {
     const strip = stripRef.current, cell = selRef.current;
@@ -5144,7 +5163,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
             <div style={{ fontSize:13 }}>다른 날짜를 선택해보세요</div>
           </div>
         ) : (
-          dayMatches.map(m => {
+          dayMatches.map((m, mi) => {
             const isFinished = m.status === 'STATUS_FINAL' || m.status === 'STATUS_FULL_TIME' || m.status === 'final' || m.status === 'STATUS_END_PERIOD' || m.status === 'STATUS_FINAL_PEN';
             const kp = m.koreanPlayer;
             const rawLeague = (m.competition || m.sport || '').replace(/^[⚽⚾🏀🎾]\s*/,'');
@@ -5194,7 +5213,11 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
             return (
               <React.Fragment key={m.id}>
                 {/* Label above card — 좌: 선수·경기 정보, 우: 리그. ('종료'는 스코어 표시로 충분해 삭제) */}
-                <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:5, paddingLeft:2 }}>
+                <div
+                  // 그날의 첫 라이브 경기에만 표식을 달아 중앙 정렬 대상으로 삼는다.
+                  ref={(m.live || m.time === 'LIVE') && dayMatches.findIndex(x => x.live || x.time === 'LIVE') === mi
+                       ? liveRowRef : undefined}
+                  style={{ display:'flex', alignItems:'center', gap:4, marginBottom:5, paddingLeft:2 }}>
                   {koreans.map(k => {
                     const kpProfile = ALL_PLAYERS.find(p => p.name === k.name);
                     return kpProfile ? (
