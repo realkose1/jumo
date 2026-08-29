@@ -2545,8 +2545,15 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
     switch (highlightData.priority) {
       case 1: // Live match (HIGHEST PRIORITY)
         // Check if there's a goal/assist event
-        const lastEvent = m.events?.[m.events.length - 1];
-        const hasGoalEvent = lastEvent && (lastEvent.type === 'goal' || lastEvent.type === 'assist');
+        // m.events 는 '골 전부 → 도움 전부' 순으로 덧붙인 합성 배열이라 마지막
+        // 원소가 시간순 마지막이 아니다. 1골 1도움이면 늘 도움이 마지막이라
+        // 골이 묻혔다(실측: 엄지성 1골 1도움 → '어시스트!'만 표시).
+        // 이벤트 순서 대신 선수의 집계값으로 문구를 만든다.
+        const heroImpact = (heroKoreans || [])
+          .map(k => ({ k, g: k.matchGoals || 0, a: k.matchAssists || 0 }))
+          .filter(x => x.g > 0 || x.a > 0)
+          .sort((x, y) => (y.g * 2 + y.a) - (x.g * 2 + x.a))[0];
+        const hasGoalEvent = !!heroImpact;
 
         const scoreNode = (
           <div style={{ display:'flex', alignItems:'center', gap:10, margin:'6px 0 2px' }}>
@@ -2558,12 +2565,18 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
           </div>
         );
         if (hasGoalEvent) {
-          // 더비에서 두 번째 선수가 넣은 골을 첫 선수 이름으로 표기하지 않도록,
-          // 이벤트의 실제 주인공을 우리 선수 목록에서 찾는다.
-          const scorer = heroKoreans.find(k => k.name === lastEvent.player) || m.koreanPlayer;
+          // 더비면 활약이 큰 쪽(골 2점, 도움 1점)이 주인공이다.
+          const scorer = heroImpact.k;
+          const g = heroImpact.g, a = heroImpact.a;
+          const headline =
+            g > 0 && a > 0 ? `⚽ ${scorer.name} ${g}골 ${a}도움`
+            : g > 1        ? `⚽ ${scorer.name} ${g}골!`
+            : g === 1      ? `⚽ ${scorer.name} 골!`
+            : a > 1        ? `${scorer.name} ${a}도움`
+            :                `${scorer.name} 어시스트!`;
           return {
             status: matchSportKey(m) === 'baseball' ? `LIVE NOW · ${m.inning || ''}` : `LIVE NOW · ${hlLiveMinute || m.minute || ''}\'`,
-            main: lastEvent.type === 'goal' ? `⚽ ${scorer.name} 골!` : `${scorer.name} 어시스트!`,
+            main: headline,
             scoreNode,
             sub: `${m.home.name} vs ${m.away.name} · ${m.competition}`
           };
