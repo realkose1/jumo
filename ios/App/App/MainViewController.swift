@@ -85,6 +85,7 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
             wk?.configuration.userContentController.add(self, name: "bell")
             wk?.configuration.userContentController.add(self, name: "detailbar")
             wk?.configuration.userContentController.add(self, name: "openurl")
+            wk?.configuration.userContentController.add(self, name: "liveactivity")
             setupTabBar()
             setupNotifBell()
             setupDetailChrome()
@@ -497,9 +498,40 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
                                actionAccent: (action?["accent"] as? Bool) ?? false,
                                muteShow: (d["muteShow"] as? Bool) ?? false,
                                muteOn: (d["muteOn"] as? Bool) ?? false)
+        } else if message.name == "liveactivity", let d = message.body as? [String: Any] {
+            handleLiveActivity(d)
         } else if message.name == "openurl", let urlStr = message.body as? String,
                   let url = URL(string: urlStr), url.scheme?.hasPrefix("http") == true {
             presentInAppBrowser(url)
+        }
+    }
+
+    private static func jsString(_ s: String) -> String {
+        let escaped = s.replacingOccurrences(of: "\\", with: "\\\\")
+                       .replacingOccurrences(of: "'", with: "\\'")
+        return "'\(escaped)'"
+    }
+
+    // 라이브 액티비티 — 웹이 '언제/무엇을' 정하고, 표시는 네이티브가 한다.
+    // action: start | update | end
+    private func handleLiveActivity(_ d: [String: Any]) {
+        guard #available(iOS 16.2, *) else { return }
+        let action = d["action"] as? String ?? "update"
+        switch action {
+        case "start":
+            _ = LiveActivityBridge.shared.start(d) { [weak self] matchId, token in
+                // 푸시 토큰을 웹으로 돌려준다 → 웹이 Supabase 에 저장하고
+                // 크론이 그 토큰으로 점수를 갱신한다.
+                DispatchQueue.main.async {
+                    let js = "window.__jumoLiveToken && window.__jumoLiveToken("
+                        + "\(Self.jsString(matchId)), \(Self.jsString(token)))"
+                    self?.webView?.evaluateJavaScript(js)
+                }
+            }
+        case "end":
+            LiveActivityBridge.shared.end()
+        default:
+            LiveActivityBridge.shared.update(d)
         }
     }
 
