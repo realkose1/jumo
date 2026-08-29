@@ -535,9 +535,9 @@ const KOREAN_PLAYERS = {
   // 이강인 — Atlético Madrid (La Liga) · 2026-07 이적. 등번호 7은 잠정값이며
   // 라인업이 뜨면 실제 번호로 자동 교정된다(아래 AF 상세 처리 참조).
   'Atletico Madrid': { name: '이강인', nameEn: 'Lee Kang-in', number: 7, position: '미드필더' },
-  // 김민수 — Girona (세군다). 2025시즌은 FC 안도라 임대. 레인저스 이적설 있음.
-  'Girona': { name: '김민수', nameEn: 'Kim Min-su', number: 20, position: '공격수' },
-  'Girona FC': { name: '김민수', nameEn: 'Kim Min-su', number: 20, position: '공격수' },
+  // 김민수 — Rangers (2026-08 지로나에서 완전이적, 4년 계약, 등번호 10)
+  'Rangers': { name: '김민수', nameEn: 'Kim Min-su', number: 10, position: '공격수' },
+  'Glasgow Rangers': { name: '김민수', nameEn: 'Kim Min-su', number: 10, position: '공격수' },
   'Atlético Madrid': { name: '이강인', nameEn: 'Lee Kang-in', number: 7, position: '미드필더' },
   'Atletico de Madrid': { name: '이강인', nameEn: 'Lee Kang-in', number: 7, position: '미드필더' },
   'Club Atletico de Madrid': { name: '이강인', nameEn: 'Lee Kang-in', number: 7, position: '미드필더' },
@@ -622,6 +622,10 @@ const KOREAN_PLAYERS = {
 // KOREAN_PLAYERS는 팀명 → 선수 1명 구조라 같은 팀에 한국 선수가 둘 이상이면
 // 한 명만 잡힌다(미트윌란: 조규성 + 이한범). 추가 선수는 여기에 둔다.
 const KOREAN_PLAYERS_EXTRA = {
+  // 즈베즈다: 설영우 + 김예건 (2026-08 전북에서 완전이적, 5년 계약, 등번호 19)
+  'Crvena Zvezda':    [{ name: '김예건', nameEn: 'Kim Ye-gun', number: 19, position: '미드필더' }],
+  'FK Crvena Zvezda': [{ name: '김예건', nameEn: 'Kim Ye-gun', number: 19, position: '미드필더' }],
+  'Red Star Belgrade':[{ name: '김예건', nameEn: 'Kim Ye-gun', number: 19, position: '미드필더' }],
   // 마인츠: 이재성 + 홍현석
   'Mainz':           [{ name: '홍현석', nameEn: 'Hong Hyun-seok', number: 13, position: '미드필더' }],
   'FSV Mainz 05':    [{ name: '홍현석', nameEn: 'Hong Hyun-seok', number: 13, position: '미드필더' }],
@@ -989,7 +993,9 @@ const ALL_PLAYERS = [
   { id: 32, name: '양민혁',  nameEn: 'Yang Min-hyeok', number: 47, sport: '축구',   team: 'Westerlo',   league: 'Pro League', position: '윙어',     nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 60, age: 20, birth: '2006.04.16', height: '172cm', espnLeague: 'bel.1', espnId: 371578, espnTeamId: 606, apiFootballId: 423708 },
   { id: 33, name: '이태석',  nameEn: 'Lee Tae-seok',   number: 17, sport: '축구',   team: 'Austria Wien',league: '오스트리아 BL',position: '풀백',    nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 75, age: 24, birth: '2002.07.28', height: '177cm', espnLeague: 'aut.1', espnId: 297270, espnTeamId: 1382, apiFootballId: 237220 },
   { id: 34, name: '송성문',  nameEn: 'Sung-Mun Song',  number: 24,  sport: '야구',   team: 'Padres',     league: 'MLB',        position: '내야수',   nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 40, age: 29, birth: '1996.08.29', height: '182cm', mlbId: 823550 },
-  { id: 35, name: '김민수',  nameEn: 'Kim Min-su',    number: 20, sport: '축구',   team: 'Girona',     league: 'Segunda',    position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 60, age: 20, birth: '2006.01.19', height: '177cm', espnLeague: 'esp.2', espnId: 388617, espnTeamId: 9812, apiFootballId: 397941 },
+  { id: 35, name: '김민수',  nameEn: 'Kim Min-su',    number: 10, sport: '축구',   team: 'Rangers',    league: 'SPFL',       position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 60, age: 20, birth: '2006.01.19', height: '177cm', espnLeague: 'sco.1', espnId: 388617, espnTeamId: 257, apiFootballId: 397941 },
+  // 김예건 — 제공사(AF·ESPN)에 아직 미등록. 등록되면 apiFootballId/espnId 를 채운다.
+  { id: 36, name: '김예건',  nameEn: 'Kim Ye-gun',    number: 19, sport: '축구',   team: 'Crvena Zvezda', league: 'Serbian SuperLiga', position: '미드필더', nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 40, age: 18, espnLeague: 'srb.1' },
 ];
 const PLAYERS = ALL_PLAYERS.slice(0, 5);
 

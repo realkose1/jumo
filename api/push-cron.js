@@ -52,7 +52,7 @@ const PLAYERS = [
   { id: 17, name: '이정후', en: 'lee',       sport: 'baseball', team: 'Giants',      mlbTeam: 'San Francisco Giants', mlbId: 808982 },
   { id: 18, name: '김혜성', en: 'kim',       sport: 'baseball', team: 'Dodgers',     mlbTeam: 'Los Angeles Dodgers', mlbId: 808975 },
   { id: 34, name: '송성문', en: 'song',      sport: 'baseball', team: 'Padres',      mlbTeam: 'San Diego Padres', mlbId: 823550 },
-  { id: 35, name: '김민수', nameEn: 'Kim Min-su', sport: 'soccer', team: 'Girona', afTeamId: 547, afPlayerId: 397941, espnLeague: 'esp.2', espnTeamId: 9812 },
+  { id: 35, name: '김민수', nameEn: 'Kim Min-su', sport: 'soccer', team: 'Rangers', afTeamId: 257, afPlayerId: 397941, espnLeague: 'sco.1', espnTeamId: 257 },
 ];
 
 const norm = (s) => (s || '').toLowerCase().replace(/[.\s-]/g, '');
