@@ -102,6 +102,38 @@ function sendOne(client, token, payload, jwt) {
   });
 }
 
+// 라이브 액티비티 갱신 전송. 일반 알림과 헤더가 다르다:
+//  - apns-topic 에 '.push-type.liveactivity' 를 붙여야 한다
+//  - apns-push-type 은 'liveactivity'
+// content-state 의 키 이름은 위젯의 ContentState 프로퍼티명과 정확히 같아야
+// 한다(다르면 조용히 무시된다).
+function sendLiveActivity(client, token, jwt, contentState, { end = false } = {}) {
+  const now = Math.floor(Date.now() / 1000);
+  const aps = {
+    timestamp: now,
+    event: end ? 'end' : 'update',
+    'content-state': contentState,
+    'stale-date': now + 3 * 3600,
+  };
+  if (end) aps['dismissal-date'] = now + 60 * 30;   // 종료 후 30분 뒤 사라짐
+  return new Promise((resolve) => {
+    const req = client.request({
+      ':method': 'POST', ':path': `/3/device/${token}`,
+      authorization: `bearer ${jwt}`,
+      'apns-topic': `${process.env.APNS_BUNDLE_ID}.push-type.liveactivity`,
+      'apns-push-type': 'liveactivity',
+      'apns-priority': '10',
+    });
+    let status = 0, data = '';
+    req.setEncoding('utf8');
+    req.on('response', (h) => { status = h[':status']; });
+    req.on('data', (d) => { data += d; });
+    req.on('end', () => resolve({ status, data }));
+    req.on('error', () => resolve({ status: 0, data: 'error' }));
+    req.end(JSON.stringify({ aps }));
+  });
+}
+
 // ── Supabase REST helpers (service role) ────────────────────────────────────
 const sbHeaders = () => ({
   apikey: process.env.SUPABASE_SERVICE_KEY,
@@ -173,7 +205,7 @@ async function fixturesForDate(date) {
   return data;
 }
 
-async function collectSoccer(events) {
+async function collectSoccer(events, liveStates) {
   if (!process.env.APIFOOTBALL_KEY) { console.warn('soccer: APIFOOTBALL_KEY missing'); return; }
   // ── ESPN 라인업 폴백 ────────────────────────────────────────────────
   // AF 는 라인업을 킥오프 직전(실측 8~22분 전)에야 낸다. ESPN 은 같은 경기를
@@ -319,6 +351,34 @@ async function collectSoccer(events) {
 
       // Per-play events — matched by API-Football player id (exact, no name fuzz).
       const evd = await afGet(`/fixtures/events?fixture=${fid}`);
+
+      // ── 라이브 액티비티 상태 (잠금화면·다이나믹 아일랜드) ──────────────
+      // 알림과 달리 중복 제거를 타지 않는다 — 점수·분이 바뀔 때마다 갱신해야
+      // 하므로 매 실행 만들어 두고, 아래에서 토큰이 있는 경기만 실제로 보낸다.
+      if (liveStates && (isLive || isFinal)) {
+        const me = (squad && squad[0]) || involved[0];
+        let g = 0, a = 0;
+        for (const ev of (evd?.response || [])) {
+          if (ev.type !== 'Goal' || ev.detail === 'Missed Penalty') continue;
+          if (ev.player?.id === me?.afPlayerId && ev.detail !== 'Own Goal') g++;
+          if (ev.assist?.id === me?.afPlayerId) a++;
+        }
+        const el = fx.fixture.status?.elapsed;
+        liveStates.push({
+          matchId: String(fid),
+          ended: isFinal,
+          state: {
+            homeScore: fx.goals?.home ?? 0,
+            awayScore: fx.goals?.away ?? 0,
+            minute: isFinal ? '종료' : st === 'HT' ? '하프타임' : (el != null ? `${el}'` : ''),
+            status: isFinal ? 'final' : st === 'HT' ? 'halftime' : 'live',
+            // 골·도움이 있으면 그게 핵심이라 위젯이 배지로 띄운다.
+            playerLine: (g || a) ? '' : (starters && starters.some((p) => p.id === me?.id) ? '선발 출전' : '출전 중'),
+            playerGoals: g,
+            playerAssists: a,
+          },
+        });
+      }
       (evd?.response || []).forEach((ev, i) => {
         const min = ev.time?.elapsed != null ? `${ev.time.elapsed}'` : '';
         involved.forEach((p) => {
@@ -441,13 +501,38 @@ module.exports = async (req, res) => {
   }
 
   const events = [];
-  try { await collectSoccer(events); } catch (e) { console.warn('soccer', e?.message); }
+  const liveStates = [];
+  try { await collectSoccer(events, liveStates); } catch (e) { console.warn('soccer', e?.message); }
   try { await collectBaseball(events); } catch (e) { console.warn('mlb', e?.message); }
+
+  // ── 라이브 액티비티 갱신 ────────────────────────────────────────────────
+  // 알림 중복 제거(fresh)와 무관하게 먼저 처리한다 — 새 '알림'이 없어도
+  // 점수·분은 계속 바뀌므로 잠금화면은 갱신돼야 한다.
+  let liveSent = 0;
+  if (liveStates.length) {
+    try {
+      const ids = liveStates.map((l) => l.matchId);
+      const rows = await sbSelect('live_activity_tokens',
+        `match_id=in.(${ids.map(encodeURIComponent).join(',')})&select=token,match_id`);
+      if (Array.isArray(rows) && rows.length) {
+        const jwtLA = apnsJWT();
+        const cl = http2.connect(`https://${process.env.APNS_HOST || 'api.push.apple.com'}`);
+        try {
+          for (const l of liveStates) {
+            for (const r of rows.filter((x) => String(x.match_id) === l.matchId)) {
+              const res2 = await sendLiveActivity(cl, r.token, jwtLA, l.state, { end: l.ended });
+              if (res2.status === 200) liveSent++;
+            }
+          }
+        } finally { cl.close(); }
+      }
+    } catch (e) { console.warn('liveactivity', e?.message); }
+  }
 
   // De-dup: keep only events not already in push_log.
   const fresh = [];
   for (const ev of events) { if (await sbInsertLog(ev.key)) fresh.push(ev); }
-  if (!fresh.length) return res.status(200).json({ checked: events.length, sent: 0 });
+  if (!fresh.length) return res.status(200).json({ checked: events.length, sent: 0, liveSent });
 
   // Load all device tokens once.
   const tokens = await sbSelect('device_tokens', 'select=token,player_ids');
@@ -468,5 +553,5 @@ module.exports = async (req, res) => {
     }
   } finally { client.close(); }
 
-  return res.status(200).json({ checked: events.length, fresh: fresh.length, sent, failed });
+  return res.status(200).json({ checked: events.length, fresh: fresh.length, sent, failed, liveSent });
 };
