@@ -6723,11 +6723,9 @@ function OnboardingTour({ onDone, onTab, followed, onToggleFollow }) {
   const last = i === n - 1;
   const step = ONBOARDING_STEPS[i];
   // 축구 먼저, 그다음 야구. 종목이 섞여 나오면 고르기 어렵다.
-  const [pickSport, setPickSport] = React.useState('전체');
+  const [pickSport, setPickSport] = React.useState('축구');
   const pickList = React.useMemo(
-    () => [...ALL_PLAYERS]
-      .sort((a, b) => (a.sport === b.sport ? 0 : a.sport === '축구' ? -1 : 1))
-      .filter(p => pickSport === '전체' || p.sport === pickSport),
+    () => ALL_PLAYERS.filter(p => p.sport === pickSport),
     [pickSport]);
   const picked = followed?.size || 0;
   // 한 명도 없으면 앱이 텅 빈 채로 시작한다 — 최소 한 명은 고르게 막는다.
@@ -6755,11 +6753,11 @@ function OnboardingTour({ onDone, onTab, followed, onToggleFollow }) {
         {step.pick && (
           <>
             <div style={{ display:'flex', gap:8, marginBottom:12 }}>
-              {['전체','축구','야구'].map(sp => {
+              {['축구','야구'].map(sp => {
                 const on = pickSport === sp;
                 return (
                   <button key={sp} onClick={() => setPickSport(sp)}
-                          style={{ height:CTRL_H, boxSizing:'border-box', padding:'0 16px', borderRadius:CTRL_H/2,
+                          style={{ flex:1, height:CTRL_H, boxSizing:'border-box', borderRadius:CTRL_H/2,
                                    border:'none', background: on ? 'var(--acc)' : 'var(--border)',
                                    color: on ? '#000' : 'var(--text-60)', fontSize:13, fontWeight:700,
                                    letterSpacing:-0.3, cursor:'pointer' }}>{sp}</button>
