@@ -54,8 +54,9 @@ private struct TeamBadge: View {
                 .aspectRatio(contentMode: .fit)
                 .frame(width: size, height: size)
         } else {
-            Text(abbr.isEmpty ? "?" : String(abbr.prefix(3)).uppercased())
-                .font(.system(size: size * 0.37, weight: .heavy, design: .rounded))
+            // 다이나믹 아일랜드처럼 작을 땐 3글자를 넣으면 읽을 수 없다.
+            Text(abbr.isEmpty ? "?" : String(abbr.prefix(size < 22 ? 2 : 3)).uppercased())
+                .font(.system(size: size * (size < 22 ? 0.5 : 0.37), weight: .heavy, design: .rounded))
                 .foregroundStyle(.white)
                 .frame(width: size, height: size)
                 .background(Circle().fill(Color.white.opacity(0.14)))
@@ -187,21 +188,34 @@ struct JumoMatchActivity: Widget {
                                assists: ctx.state.playerAssists)
                 }
             } compactLeading: {
-                // 컴팩트 — 폭이 매우 좁다. 점수만.
-                Text("\(ctx.state.homeScore):\(ctx.state.awayScore)")
-                    .font(.system(size: 13, weight: .heavy, design: .rounded))
-                    .foregroundStyle(acc)
+                // 점수만 있으면 어느 경기인지 알 수가 없다 — 엠블럼을 양쪽에 붙여
+                // 노치를 사이에 두고 '홈 0 : 0 원정' 으로 읽히게 한다.
+                HStack(spacing: 3) {
+                    TeamBadge(abbr: ctx.attributes.homeAbbr,
+                              logoFile: ctx.attributes.homeLogoFile, size: 17)
+                    Text("\(ctx.state.homeScore)")
+                        .font(.system(size: 14, weight: .heavy, design: .rounded))
+                        .foregroundStyle(acc)
+                }
             } compactTrailing: {
-                // 우리 선수가 득점하면 그것만큼 중요한 정보가 없다.
-                if ctx.state.playerGoals > 0 {
-                    Text("⚽\(ctx.state.playerGoals)").font(.system(size: 12, weight: .heavy))
-                } else {
-                    Text(ctx.state.minute).font(.system(size: 11, weight: .semibold))
+                HStack(spacing: 3) {
+                    Text("\(ctx.state.awayScore)")
+                        .font(.system(size: 14, weight: .heavy, design: .rounded))
+                        .foregroundStyle(acc)
+                    TeamBadge(abbr: ctx.attributes.awayAbbr,
+                              logoFile: ctx.attributes.awayLogoFile, size: 17)
                 }
             } minimal: {
-                Text("\(ctx.state.homeScore):\(ctx.state.awayScore)")
-                    .font(.system(size: 11, weight: .heavy, design: .rounded))
-                    .foregroundStyle(acc)
+                // 최소 표시는 원 하나 크기다. 우리 선수가 득점했으면 그게 최우선,
+                // 아니면 점수를 붙여 쓴다.
+                if ctx.state.playerGoals > 0 {
+                    Text("⚽\(ctx.state.playerGoals)")
+                        .font(.system(size: 11, weight: .heavy))
+                } else {
+                    Text("\(ctx.state.homeScore):\(ctx.state.awayScore)")
+                        .font(.system(size: 11, weight: .heavy, design: .rounded))
+                        .foregroundStyle(acc)
+                }
             }
             .keylineTint(acc)
         }
