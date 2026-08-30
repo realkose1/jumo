@@ -5880,9 +5880,12 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames }) {
 
     const fetchAllPlayerNews = async () => {
       try {
+        // 13개 쿼리를 한꺼번에 쏘면 네이버 검색 API 버스트 제한에 걸려 절반이
+        // 429 로 돌아온다(콘솔 실측) — 200ms 씩 흘려보낸다.
         const responses = await Promise.all(
-          NEWS_PLAYERS.map(player =>
-            fetch(`${API_BASE}/api/naver-news?query=${encodeURIComponent(player.query)}`)
+          NEWS_PLAYERS.map((player, i) =>
+            new Promise(r => setTimeout(r, i * 200))
+              .then(() => fetch(`${API_BASE}/api/naver-news?query=${encodeURIComponent(player.query)}`))
               .then(r => r.json())
               .then(data => (data.items || []).map(item => ({
                 title: stripHtml(item.title),
