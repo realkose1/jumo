@@ -9135,6 +9135,39 @@ function App() {
     return () => { delete window.__jumoLiveToken; };
   }, [deviceId]);
 
+  // ── 키보드가 떠도 상단이 밀리지 않게 ────────────────────────────────
+  // iOS 는 키보드가 올라오면 입력창을 보이게 하려고 웹뷰 스크롤뷰를 통째로
+  // 밀어 올린다. 앱 컨테이너가 position:fixed 라 그것까지 따라 올라가고,
+  // 결과적으로 '보내기'·'저장' 같은 헤더 버튼이 화면 밖으로 사라졌다(제보).
+  // 컨테이너 높이를 visualViewport 에 맞춰 줄이면 iOS 가 밀어 올릴 이유가
+  // 없어진다. (셸(ios-frame)을 고치면 빌드가 필요해 앱 스크립트에서 처리한다.)
+  React.useEffect(() => {
+    const vv = window.visualViewport;
+    const isNative = !!(window.Capacitor?.getPlatform?.() === 'ios');
+    if (!vv || !isNative) return;
+    const el = document.getElementById('root')?.firstElementChild;
+    if (!el) return;
+    const apply = () => {
+      // position:fixed 는 '레이아웃 뷰포트' 기준이라, iOS 가 시각 뷰포트를 밀어
+      // 올리면 그만큼 위로 딸려 올라간다. offsetTop 만큼 도로 내려주고 높이는
+      // 시각 뷰포트에 맞춘다 — 그래야 헤더가 상태바 밑에 그대로 남는다.
+      el.style.bottom = 'auto';                      // inset:0 의 bottom 을 풀어야 height 가 먹는다
+      el.style.top = Math.round(vv.offsetTop) + 'px';
+      el.style.height = Math.round(vv.height) + 'px';
+      // 높이를 줄이고 나면 웹뷰가 스크롤을 유지할 이유가 없다. 0 으로 되돌려
+      // offsetTop 이 0 으로 수렴하게 하면 네이티브 상단 크롬과도 어긋나지 않는다.
+      if (window.scrollY) window.scrollTo(0, 0);
+    };
+    vv.addEventListener('resize', apply);
+    vv.addEventListener('scroll', apply);
+    apply();
+    return () => {
+      vv.removeEventListener('resize', apply);
+      vv.removeEventListener('scroll', apply);
+      el.style.height = ''; el.style.bottom = ''; el.style.top = '';
+    };
+  }, []);
+
   const filteredLiveMatches = React.useMemo(
     () => liveMatches
       .filter(m =>
