@@ -6509,7 +6509,7 @@ function ProfileEditScreen({ profile, onSave, onBack }) {
   };
 
   return (
-    <div style={{ flex:1, overflow:'auto', background:'var(--bg)', position:'relative' }} className="scrollbar-hide screen-slide-in">
+    <div style={{ display:'flex', flexDirection:'column', flex:1, minHeight:0, background:'var(--bg)', position:'relative' }} className="screen-slide-in">
       {cropSrc && (
         <CropScreen
           src={cropSrc}
@@ -6517,7 +6517,8 @@ function ProfileEditScreen({ profile, onSave, onBack }) {
           onConfirm={(cropped) => { setImage(cropped); setCropSrc(null); }}
         />
       )}
-      <div style={{ padding:'12px 20px 8px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+      {/* 헤더는 스크롤 밖에 — 키보드가 뜰 때 '저장'이 딸려 올라가지 않게 */}
+      <div style={{ flexShrink:0, padding:'12px 20px 8px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         {(typeof window !== 'undefined' && window.__nativeChrome)
           ? <div aria-hidden style={{ width:CTRL_H }}/>
           : <button onClick={onBack} style={{ background:'none', border:'none', color:'var(--text2)', fontSize:15, cursor:'pointer', padding:0 }}>취소</button>}
@@ -6525,7 +6526,7 @@ function ProfileEditScreen({ profile, onSave, onBack }) {
         <button onClick={save} style={{ ...LG.base, ...LG.pill, border:'0.5px solid rgba(255,255,255,0.22)', boxSizing:'border-box', justifyContent:'center', color:'var(--acc)', fontSize:14, fontWeight:700 }}>저장</button>
       </div>
 
-      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'28px 20px 20px' }}>
+      <div style={{ flex:1, overflow:'auto', minHeight:0, display:'flex', flexDirection:'column', alignItems:'center', padding:'28px 20px 20px' }} className="scrollbar-hide">
         <div onClick={() => fileRef.current?.click()} style={{ width:104, height:104, borderRadius:'50%', background: image ? 'transparent' : 'linear-gradient(135deg,#e03030,#8b0000)', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden', cursor:'pointer', position:'relative', border:'0.5px solid var(--border)' }}>
           {image
             ? <img src={image} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
@@ -6568,13 +6569,18 @@ function FeedbackScreen({ onBack, deviceId, profile }) {
     if (!body || sending) { if (!body) showToast('내용을 입력해주세요'); return; }
     setSending(true);
     try {
-      const { error } = await SB.from('feedback').insert({
+      // Supabase 응답이 늦어지면 버튼이 '보내는 중'에 갇힌다(제보). 상한을 두고
+      // 넘기면 메일 경로로 넘겨 사용자가 쓴 내용을 잃지 않게 한다.
+      const withTimeout = (pr, ms = 8000) => Promise.race([
+        pr, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms)),
+      ]);
+      const { error } = await withTimeout(SB.from('feedback').insert({
         device_id: deviceId || null,
         nickname: profile?.nickname || null,
         body,
         app_version: appVersionLabel(),
         user_agent: navigator.userAgent,
-      });
+      }));
       if (error) throw error;
       showToast('보내주셔서 고맙습니다');
       setText('');
@@ -6591,8 +6597,10 @@ function FeedbackScreen({ onBack, deviceId, profile }) {
   };
 
   return (
-    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide screen-slide-in">
-      <div style={{ padding:'12px 20px 8px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+    <div style={{ display:'flex', flexDirection:'column', flex:1, minHeight:0, background:'var(--bg)' }} className="screen-slide-in">
+      {/* 헤더는 스크롤 밖에 — 안에 두면 키보드가 뜰 때 iOS 가 입력창을 보이려고
+          컨테이너를 스크롤해서 '보내기'까지 같이 밀려 올라간다(제보). */}
+      <div style={{ flexShrink:0, padding:'12px 20px 8px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         {(typeof window !== 'undefined' && window.__nativeChrome)
           ? <div aria-hidden style={{ width:CTRL_H }}/>
           : <button onClick={onBack} style={{ background:'none', border:'none', color:'var(--text2)', fontSize:15, cursor:'pointer', padding:0 }}>취소</button>}
@@ -6600,7 +6608,7 @@ function FeedbackScreen({ onBack, deviceId, profile }) {
         <button onClick={send} disabled={sending} style={{ ...LG.base, ...LG.pill, border:'0.5px solid rgba(255,255,255,0.22)', boxSizing:'border-box', justifyContent:'center', color: text.trim() && !sending ? 'var(--acc)' : 'var(--text5)', fontSize:14, fontWeight:700, opacity: text.trim() && !sending ? 1 : 0.55 }}>{sending ? '보내는 중' : '보내기'}</button>
       </div>
 
-      <div style={{ padding:'16px' }}>
+      <div style={{ flex:1, overflow:'auto', minHeight:0, padding:'16px' }} className="scrollbar-hide">
         <div style={{ fontSize:12, color:'var(--text4)', lineHeight:1.6, marginBottom:14 }}>
           개선 사항이나 버그를 알려주세요. 보내기를 누르면 앱에서 바로 전달됩니다.
           닉네임과 앱 버전이 함께 전송돼요.
