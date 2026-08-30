@@ -205,6 +205,38 @@ async function fixturesForDate(date) {
   return data;
 }
 
+// 경기별 라인업: 한 번 받아 sf_cache 에 넣고 이후엔 거기서 읽는다.
+// 라이브 액티비티는 '이 선수가 실제로 뛰는가'를 매 실행 알아야 하는데,
+// 예전엔 시작 알림을 이미 보낸 경기의 라인업 조회를 건너뛰어(lineupSettled)
+// squad 를 모른 채 involved[0] 로 폴백했다 — 그래서 명단에 없는 선수가
+// 잠금화면에 '출전 중'으로 떴다(김지수·조규성 제보).
+// 라인업은 경기 중 바뀌지 않으므로(교체는 events 로 들어온다) 캐시해도 안전하다.
+async function lineupSquad(fid) {
+  const key = `af-lineup-${fid}`;
+  try {
+    const rows = await sbSelect('sf_cache', `date=eq.${key}&select=events`);
+    const row = Array.isArray(rows) && rows[0];
+    if (row && row.events && Array.isArray(row.events.startXI)) return row.events;
+  } catch (e) { /* 캐시 불가 → AF 로 */ }
+  const lu = await afGet(`/fixtures/lineups?fixture=${fid}`);
+  const teams = lu?.response || [];
+  // 발표 전에는 '팀 껍데기'(startXI 빈 배열)가 오므로 채워졌을 때만 인정한다.
+  if (!teams.length || !teams.some((t) => (t.startXI || []).length)) return null;
+  const ids = (list) => (list || []).map((e) => e.player?.id).filter((x) => x != null);
+  const out = {
+    startXI: teams.flatMap((t) => ids(t.startXI)),
+    subs: teams.flatMap((t) => ids(t.substitutes)),
+  };
+  try {
+    await fetch(`${process.env.SUPABASE_URL}/rest/v1/sf_cache`, {
+      method: 'POST',
+      headers: { ...sbHeaders(), 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify({ date: key, events: out, updated_at: new Date().toISOString() }),
+    });
+  } catch (e) { /* 저장 실패는 무시 */ }
+  return out;
+}
+
 async function collectSoccer(events, liveStates) {
   if (!process.env.APIFOOTBALL_KEY) { console.warn('soccer: APIFOOTBALL_KEY missing'); return; }
   // ── ESPN 라인업 폴백 ────────────────────────────────────────────────
@@ -324,18 +356,14 @@ async function collectSoccer(events, liveStates) {
 
       // 야구와 같은 이유 — 팀 경기라고 다 뛰는 게 아니다. 라인업으로 실제 출전을
       // 확인한 뒤 대상을 좁힌다. 라인업이 아직/끝내 없으면 사실을 단정하지 않고 건너뛴다.
+      // 라인업은 캐시를 거치므로 매 실행 불러도 AF 호출이 늘지 않는다.
+      // (예전엔 시작 알림 후 조회를 건너뛰어 출전 여부를 알 수 없었다.)
       let starters = null, squad = null;
-      // 라이브 중에는 명단이 바뀌지 않는다(교체는 events 로 들어온다).
-      // 시작 알림을 이미 보낸 경기는 다시 조회하지 않는다 — 경기당 2분마다
-      // 1콜씩 90분이면 45콜이 그냥 나간다.
-      const lineupSettled = isLive && await alreadyLogged(`af-start-${fid}`);
-      if ((isLive || isFinal) && !lineupSettled) {
-        const lu = await afGet(`/fixtures/lineups?fixture=${fid}`);
-        const teams = lu?.response || [];
-        if (teams.length && teams.some((t) => (t.startXI || []).length)) {
-          const inList = (list, p) => (list || []).some((e) => e.player?.id === p.afPlayerId);
-          starters = involved.filter((p) => teams.some((t) => inList(t.startXI, p)));
-          squad = involved.filter((p) => teams.some((t) => inList(t.startXI, p) || inList(t.substitutes, p)));
+      if (isLive || isFinal) {
+        const lu = await lineupSquad(fid);
+        if (lu) {
+          starters = involved.filter((p) => lu.startXI.includes(p.afPlayerId));
+          squad = involved.filter((p) => lu.startXI.includes(p.afPlayerId) || lu.subs.includes(p.afPlayerId));
         }
       }
 
@@ -356,7 +384,10 @@ async function collectSoccer(events, liveStates) {
       // 알림과 달리 중복 제거를 타지 않는다 — 점수·분이 바뀔 때마다 갱신해야
       // 하므로 매 실행 만들어 두고, 아래에서 토큰이 있는 경기만 실제로 보낸다.
       if (liveStates && (isLive || isFinal)) {
-        const me = (squad && squad[0]) || involved[0];
+        // squad 는 선발+벤치다. 라인업을 받아왔는데 그 안에 없으면 이 경기에
+        // 나설 수 없는 선수라 잠금화면에 띄우지 않는다(=me 가 undefined).
+        // squad 가 null 이면 라인업을 아직 모르는 것이라 단정하지 않는다.
+        const me = squad ? squad[0] : involved[0];
         let g = 0, a = 0;
         for (const ev of (evd?.response || [])) {
           if (ev.type !== 'Goal' || ev.detail === 'Missed Penalty') continue;
@@ -364,7 +395,19 @@ async function collectSoccer(events, liveStates) {
           if (ev.assist?.id === me?.afPlayerId) a++;
         }
         const el = fx.fixture.status?.elapsed;
-        liveStates.push({
+        if (squad && !squad.length) {
+          // 라인업이 나왔는데 우리 선수가 없다 = 미출전. 앱이 '출전 예상' 단계에서
+          // 이미 띄웠을 수 있으니 여기서 내려준다.
+          liveStates.push({
+            matchId: String(fid), ended: true,
+            state: {
+              homeScore: fx.goals?.home ?? 0, awayScore: fx.goals?.away ?? 0,
+              minute: isFinal ? '종료' : (el != null ? `${el}'` : ''),
+              status: isFinal ? 'final' : 'live',
+              playerLine: '미출전', playerGoals: 0, playerAssists: 0,
+            },
+          });
+        } else if (me) liveStates.push({
           matchId: String(fid),
           ended: isFinal,
           state: {
@@ -373,7 +416,12 @@ async function collectSoccer(events, liveStates) {
             minute: isFinal ? '종료' : st === 'HT' ? '하프타임' : (el != null ? `${el}'` : ''),
             status: isFinal ? 'final' : st === 'HT' ? 'halftime' : 'live',
             // 골·도움이 있으면 그게 핵심이라 위젯이 배지로 띄운다.
-            playerLine: (g || a) ? '' : (starters && starters.some((p) => p.id === me?.id) ? '선발 출전' : '출전 중'),
+            // 경기가 끝났으면 상태 문구를 비운다 — '종료'인데 '출전 중'이라고
+            // 적혀 나가는 문제가 있었다(제보). 배지는 이미 '종료'를 보여준다.
+            playerLine: (g || a) ? ''
+              : isFinal ? ''
+              : (starters && starters.some((p) => p.id === me.id)) ? '선발 출전'
+              : '출전 중',
             playerGoals: g,
             playerAssists: a,
           },

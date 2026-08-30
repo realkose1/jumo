@@ -1074,7 +1074,7 @@ const MATCHES = [];
 
 const ALL_PLAYERS = [
   // 축구 - 유럽리그 (2025-26 시즌)
-  { id: 1,  name: '손흥민',  nameEn: 'Son Heung-min',   number: 7,  sport: '축구',   team: 'LAFC',       league: 'MLS',        position: '공격수',   nation: '🇰🇷', goals: 2,  assists: 6,  matches: 16, rating: 7.3, startRate: 90, age: 33, birth: '1992.07.08', height: '183cm', espnLeague: 'usa.1',  espnId: 149945, espnTeamId: 18966, apiFootballId: 186 },
+  { id: 1,  name: '손흥민',  nameEn: 'Son Heung-min',   number: 7,  sport: '축구',   team: 'LAFC',       league: 'MLS',        position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0, rating: 0, startRate: 90, age: 33, birth: '1992.07.08', height: '183cm', espnLeague: 'usa.1',  espnId: 149945, espnTeamId: 18966, apiFootballId: 186 },
   { id: 2,  name: '이강인',  nameEn: 'Lee Kang-in',     number: 7,  sport: '축구',   team: 'Atletico',   league: 'La Liga',    position: '미드필더', nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 60, age: 25, birth: '2001.02.19', height: '173cm', espnLeague: 'esp.1',  espnId: 274197, espnTeamId: 1068, apiFootballId: 927 },
   { id: 3,  name: '김민재',  nameEn: 'Kim Min-jae',     number: 3,  sport: '축구',   team: 'Bayern',     league: 'Bundesliga', position: '센터백',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 65, age: 29, birth: '1996.11.15', height: '190cm', espnLeague: 'ger.1',  espnId: 157688, espnTeamId: 132, apiFootballId: 2897 },
   { id: 6,  name: '황희찬',  nameEn: 'Hwang Hee-chan',  number: 11, sport: '축구',   team: 'Wolves',     league: 'EPL',        position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 65, age: 30, birth: '1996.01.26', height: '177cm', espnLeague: 'eng.2',  espnId: 237224, espnTeamId: 380, apiFootballId: 24888 },
@@ -1090,8 +1090,8 @@ const ALL_PLAYERS = [
 
   // 야구 - MLB (2026 시즌)
   { id: 9,  name: '김하성',  nameEn: 'Ha-Seong Kim',    number: 4,  sport: '야구',   team: 'Braves',    league: 'MLB',        position: '유격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 0,  age: 30, birth: '1995.10.17', height: '179cm', mlbId: 673490, injury: { label:'부상자 명단 (IL)', severity:'high' } },
-  { id: 17, name: '이정후',  nameEn: 'Jung Hoo Lee',    number: 51, sport: '야구',   team: 'Giants',     league: 'MLB',        position: '중견수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 15, rating: 0,   startRate: 95, age: 27, birth: '1998.08.20', height: '186cm', mlbId: 808982 },
-  { id: 18, name: '김혜성',  nameEn: 'Hyeseong Kim',    number: 25, sport: '야구',   team: 'Dodgers',    league: 'MLB',        position: '유격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 16, rating: 0,   startRate: 70, age: 27, birth: '1999.01.27', height: '178cm', mlbId: 808975 },
+  { id: 17, name: '이정후',  nameEn: 'Jung Hoo Lee',    number: 51, sport: '야구',   team: 'Giants',     league: 'MLB',        position: '중견수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0, rating: 0,   startRate: 95, age: 27, birth: '1998.08.20', height: '186cm', mlbId: 808982 },
+  { id: 18, name: '김혜성',  nameEn: 'Hyeseong Kim',    number: 25, sport: '야구',   team: 'Dodgers',    league: 'MLB',        position: '유격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0, rating: 0,   startRate: 70, age: 27, birth: '1999.01.27', height: '178cm', mlbId: 808975 },
   // ── 2026-08 확장 로스터 ──
   { id: 26, name: '이재성',  nameEn: 'Lee Jae-sung',   number: 7,  sport: '축구',   team: 'Mainz',      league: '분데스리가',  position: '미드필더', nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 80, age: 34, birth: '1992.08.10', height: '180cm', espnLeague: 'ger.1', espnId: 134103, espnTeamId: 2950, apiFootballId: 2906 },
   { id: 27, name: '홍현석',  nameEn: 'Hong Hyun-seok', number: 13, sport: '축구',   team: 'Mainz',      league: '분데스리가',  position: '미드필더', nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 60, age: 27, birth: '1999.06.16', height: '175cm', espnLeague: 'ger.1', espnId: 271701, espnTeamId: 2950, apiFootballId: 26519 },
@@ -5340,22 +5340,21 @@ function PlayersScreen({ onPlayer, onAdd, onToggleFollow, followed, statsCache =
 
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, height:'100%', background:'var(--bg)', minHeight:0 }}>
-      {/* Scroll area; the top nav sticks and turns to glass only after scrolling */}
-      <div ref={scrollRef} onScroll={e => { const s = e.currentTarget.scrollTop > 4; setScrolled(p => p !== s ? s : p); }} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} style={{ flex:1, overflow:'auto', background:'var(--bg)', minHeight:0 }} className="scrollbar-hide">
-        {/* Sticky top nav — solid black at rest, glass scroll-edge once scrolled */}
-        <div style={{ position:'sticky', top:0, zIndex:20, background: scrolled ? 'rgba(11,11,13,0.55)' : 'var(--bg)', backdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', WebkitBackdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', borderBottom: `0.5px solid ${scrolled ? 'var(--border)' : 'transparent'}`, transition: 'background 0.28s ease, backdrop-filter 0.28s ease, border-color 0.28s ease' }}>
-          <TabHeader title="선수" right={
-            <button onClick={onAdd} style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(255,255,255,0.10)', border:'0.5px solid rgba(255,255,255,0.22)', height:CTRL_H, boxSizing:'border-box', borderRadius:CTRL_H/2, padding:'0 16px', color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', visibility: (typeof window !== 'undefined' && window.__nativeChrome) ? 'hidden' : 'visible' }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="#fff"/></svg>
-              선수 편집
-            </button>
-          }/>
-          <div style={{ display:'flex', gap:8, padding:'0 16px 14px', overflowX:'auto' }} className="scrollbar-hide">
-            {sports.map(s => (
-              <button key={s} onClick={() => setFilter(s)} style={{ flexShrink:0, background: filter===s ? 'var(--acc)' : 'var(--border)', border:'none', height:CTRL_H, boxSizing:'border-box', borderRadius:CTRL_H/2, padding:'0 16px', color: filter===s ? '#000' : 'var(--text2)', fontSize:13, fontWeight:600, cursor:'pointer' }}>{s}</button>
-            ))}
-          </div>
+      {/* 상단 고정 — 스크롤 밖에 둬야 당겨서 새로고침할 때 타이틀이 안 밀린다 */}
+      <div style={{ flexShrink:0, zIndex:20, background: scrolled ? 'rgba(11,11,13,0.55)' : 'var(--bg)', backdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', WebkitBackdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', borderBottom: `0.5px solid ${scrolled ? 'var(--border)' : 'transparent'}`, transition: 'background 0.28s ease, backdrop-filter 0.28s ease, border-color 0.28s ease' }}>
+        <TabHeader title="선수" right={
+          <button onClick={onAdd} style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(255,255,255,0.10)', border:'0.5px solid rgba(255,255,255,0.22)', height:CTRL_H, boxSizing:'border-box', borderRadius:CTRL_H/2, padding:'0 16px', color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', visibility: (typeof window !== 'undefined' && window.__nativeChrome) ? 'hidden' : 'visible' }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="#fff"/></svg>
+            선수 편집
+          </button>
+        }/>
+        <div style={{ display:'flex', gap:8, padding:'0 16px 14px', overflowX:'auto' }} className="scrollbar-hide">
+          {sports.map(s => (
+            <button key={s} onClick={() => setFilter(s)} style={{ flexShrink:0, background: filter===s ? 'var(--acc)' : 'var(--border)', border:'none', height:CTRL_H, boxSizing:'border-box', borderRadius:CTRL_H/2, padding:'0 16px', color: filter===s ? '#000' : 'var(--text2)', fontSize:13, fontWeight:600, cursor:'pointer' }}>{s}</button>
+          ))}
         </div>
+      </div>
+      <div ref={scrollRef} onScroll={e => { const s = e.currentTarget.scrollTop > 4; setScrolled(p => p !== s ? s : p); }} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} style={{ flex:1, overflow:'auto', background:'var(--bg)', minHeight:0 }} className="scrollbar-hide">
       {/* Pull-to-refresh indicator */}
       <div style={{ overflow:'hidden', height: pullY, transition: pullY === 0 ? 'height 0.25s ease' : 'none', display:'flex', alignItems:'center', justifyContent:'center' }}>
         <div style={{ display:'flex', alignItems:'center', gap:8, opacity: Math.min(pullY / PULL_THRESHOLD, 1) }}>
@@ -5988,36 +5987,35 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames }) {
 
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, height:'100%', background:'var(--bg)', minHeight:0 }}>
-      {/* Scroll area; the top nav sticks and turns to glass only after scrolling */}
-      <div ref={scrollRef} onScroll={e => { const s = e.currentTarget.scrollTop > 4; setScrolled(p => p !== s ? s : p); }} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} style={{ flex:1, overflow:'auto', background:'var(--bg)', minHeight:0 }} className="scrollbar-hide">
-        {/* Sticky top nav — solid black at rest, glass scroll-edge once scrolled */}
-        <div style={{ position:'sticky', top:0, zIndex:20, background: scrolled ? 'rgba(11,11,13,0.55)' : 'var(--bg)', backdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', WebkitBackdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', borderBottom: `0.5px solid ${scrolled ? 'var(--border)' : 'transparent'}`, transition: 'background 0.28s ease, backdrop-filter 0.28s ease, border-color 0.28s ease' }}>
-        <TabHeader title="뉴스"/>
-        <div style={{ display:'flex', gap:8, overflowX:'auto', padding:'0 16px 14px' }} className="scrollbar-hide">
-          {NEWS_CATEGORIES.filter(c => enabledCategories.includes(c)).map(c => (
-            <button
-              key={c}
-              onClick={() => setCategory(c)}
-              style={{
-                flexShrink:0,
-                background: category === c ? 'var(--acc)' : 'var(--border)',
-                border:'none',
-                height:CTRL_H,
-                boxSizing:'border-box',
-                borderRadius:CTRL_H/2,
-                padding:'0 16px',
-                fontSize:13,
-                fontWeight:600,
-                color: category === c ? '#000' : 'var(--text2)',
-                cursor:'pointer',
-                whiteSpace:'nowrap',
-              }}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
+      {/* 상단 고정 — 스크롤 밖에 둬야 당겨서 새로고침할 때 타이틀이 안 밀린다 */}
+      <div style={{ flexShrink:0, zIndex:20, background: scrolled ? 'rgba(11,11,13,0.55)' : 'var(--bg)', backdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', WebkitBackdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', borderBottom: `0.5px solid ${scrolled ? 'var(--border)' : 'transparent'}`, transition: 'background 0.28s ease, backdrop-filter 0.28s ease, border-color 0.28s ease' }}>
+      <TabHeader title="뉴스"/>
+      <div style={{ display:'flex', gap:8, overflowX:'auto', padding:'0 16px 14px' }} className="scrollbar-hide">
+        {NEWS_CATEGORIES.filter(c => enabledCategories.includes(c)).map(c => (
+          <button
+            key={c}
+            onClick={() => setCategory(c)}
+            style={{
+              flexShrink:0,
+              background: category === c ? 'var(--acc)' : 'var(--border)',
+              border:'none',
+              height:CTRL_H,
+              boxSizing:'border-box',
+              borderRadius:CTRL_H/2,
+              padding:'0 16px',
+              fontSize:13,
+              fontWeight:600,
+              color: category === c ? '#000' : 'var(--text2)',
+              cursor:'pointer',
+              whiteSpace:'nowrap',
+            }}
+          >
+            {c}
+          </button>
+        ))}
       </div>
+      </div>
+      <div ref={scrollRef} onScroll={e => { const s = e.currentTarget.scrollTop > 4; setScrolled(p => p !== s ? s : p); }} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} style={{ flex:1, overflow:'auto', background:'var(--bg)', minHeight:0 }} className="scrollbar-hide">
       {/* Pull-to-refresh indicator */}
       <div style={{ overflow:'hidden', height: pullY, transition: pullY === 0 ? 'height 0.25s ease' : 'none', display:'flex', alignItems:'center', justifyContent:'center' }}>
         <div style={{ display:'flex', alignItems:'center', gap:8, opacity: Math.min(pullY / PULL_THRESHOLD, 1) }}>
@@ -6284,8 +6282,8 @@ function AddPlayerScreen({ followed, onToggle, onBack, playerOrder = [], setPlay
 // ─── MORE: NOTIFICATION SETTINGS ─────────────────────────────
 function NotifSettingsScreen({ onBack }) {
   const showToast = React.useContext(ToastCtx);
-  const DEFAULTS = { matchStart:true, goal:true, assist:true, result:true, highlight:false, lineup:false, injury:true };
-  const LABELS = { matchStart:'경기 시작 알림', goal:'골 알림', assist:'어시스트 알림', result:'경기 결과', highlight:'하이라이트 영상', lineup:'선발 라인업', injury:'부상/출장 정보' };
+  const DEFAULTS = { matchStart:true, goal:true, assist:true, result:true, highlight:false, lineup:false, injury:true, liveActivity:true };
+  const LABELS = { matchStart:'경기 시작 알림', goal:'골 알림', assist:'어시스트 알림', result:'경기 결과', highlight:'하이라이트 영상', lineup:'선발 라인업', injury:'부상/출장 정보', liveActivity:'라이브 액티비티' };
   const [s, setS] = React.useState(() => {
     try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('jumo_notif_settings') || '{}') }; }
     catch { return DEFAULTS; }
@@ -6293,6 +6291,7 @@ function NotifSettingsScreen({ onBack }) {
   const toggle = k => setS(p => {
     const next = { ...p, [k]: !p[k] };
     try { localStorage.setItem('jumo_notif_settings', JSON.stringify(next)); } catch {}
+    try { window.dispatchEvent(new Event('jumo:notif-settings')); } catch {}
     showToast(`${LABELS[k] || k} ${next[k] ? '켜짐' : '꺼짐'}`);
     return next;
   });
@@ -6309,6 +6308,7 @@ function NotifSettingsScreen({ onBack }) {
     { k:'highlight', label:'하이라이트 영상', sub:'경기 후 주요 장면 영상' },
     { k:'lineup', label:'선발 라인업', sub:'발표되는 대로' },
     { k:'injury', label:'부상/출장 정보', sub:'선수 컨디션 업데이트' },
+    { k:'liveActivity', label:'라이브 액티비티', sub:'잠금화면·다이나믹 아일랜드에 실시간 경기 표시' },
   ];
   return (
     <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide screen-slide-in">
@@ -9009,14 +9009,40 @@ function App() {
   // 아는 여기서 정한다. 팔로우한 선수가 뛰는 라이브 경기 하나만 띄운다
   // (여러 개를 띄우면 잠금화면이 지저분해지고 갱신 예산도 나눠 쓴다).
   const liveActivityRef = React.useRef({ matchId: null, sig: null });
+  // 알림 설정의 '라이브 액티비티' 스위치. 설정 화면이 저장 후 이벤트를 쏘면 따라간다.
+  const [liveActivityOn, setLiveActivityOn] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem('jumo_notif_settings') || '{}').liveActivity !== false; }
+    catch { return true; }
+  });
+  React.useEffect(() => {
+    const sync = () => {
+      try { setLiveActivityOn(JSON.parse(localStorage.getItem('jumo_notif_settings') || '{}').liveActivity !== false); }
+      catch {}
+    };
+    window.addEventListener('jumo:notif-settings', sync);
+    return () => window.removeEventListener('jumo:notif-settings', sync);
+  }, []);
+
   React.useEffect(() => {
     const mh = window.webkit?.messageHandlers?.liveactivity;
     if (!mh) return;   // 웹·구버전에서는 조용히 없음
 
+    if (!liveActivityOn) {
+      // 껐으면 떠 있던 것도 내린다.
+      if (liveActivityRef.current.matchId) {
+        mh.postMessage({ action: 'end' });
+        liveActivityRef.current = { matchId: null, sig: null };
+      }
+      return;
+    }
+
+    // '미출전'·'벤치'로 확인된 선수는 띄우지 않는다. 아직 모르는 상태
+    // (출전 예상)는 띄운다 — 라인업이 늦게 나오는 리그가 있어서다.
+    const notBenched = (kp) => !/미출전|벤치/.test(kp?.event || '');
     const mine = (liveMatches || []).filter(m =>
       (m.live || m.time === 'LIVE') &&
       (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean)
-        .some(kp => followedNames.has(kp.name)));
+        .some(kp => followedNames.has(kp.name) && notBenched(kp)));
     // 여러 경기가 동시에 라이브면 우리 선수가 뛰는 쪽을 먼저, 그다음 킥오프 순.
     mine.sort((a, b) => new Date(a.fullDate || 0) - new Date(b.fullDate || 0));
     const m = mine[0];
@@ -9032,7 +9058,7 @@ function App() {
     // 더비처럼 팔로우 선수가 둘 이상이면 '기록 있는 선수 → 뛰는 선수 → 첫 선수'
     // 순으로 고른다. 그냥 첫 선수를 잡으면 벤치에 앉은 선수를 잠금화면에 띄운다.
     const mineInMatch = (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean)
-      .filter(k => followedNames.has(k.name));
+      .filter(k => followedNames.has(k.name) && notBenched(k));
     const kp = mineInMatch.find(k => (k.matchGoals || 0) > 0 || (k.matchAssists || 0) > 0)
             || mineInMatch.find(isPlayingKorean)
             || mineInMatch[0] || m.koreanPlayer;
@@ -9063,7 +9089,7 @@ function App() {
     if (prev.matchId === payload.matchId && prev.sig === sig) return;
     mh.postMessage({ ...payload, action: prev.matchId === payload.matchId ? 'update' : 'start' });
     liveActivityRef.current = { matchId: payload.matchId, sig };
-  }, [liveMatches, followedNames]);
+  }, [liveMatches, followedNames, liveActivityOn]);
 
   // 네이티브가 액티비티 푸시 토큰을 받으면 여기로 넘겨준다 → 서버에 저장해
   // 앱이 꺼져 있어도 크론이 점수를 갱신할 수 있게 한다.
