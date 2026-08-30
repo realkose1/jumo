@@ -6854,16 +6854,30 @@ function App() {
     });
   }, []);
 
+  const [sportFeeds, setSportFeeds] = React.useState(() => {
+    try {
+      return { soccer:true, baseball:true, ...JSON.parse(localStorage.getItem('jumo_sport_feeds') || '{}') };
+    } catch {
+      return { soccer:true, baseball:true };
+    }
+  });
+
   React.useEffect(() => {
     if (!pushToken) return;
     try {
+      // 종목별 피드에서 끈 종목은 푸시에서도 빼야 한다. 선수 탭은 sportFeeds 로
+      // 거르는데 타겟팅은 안 걸러서, 야구를 끈 사람이 '목록에 없는 이정후'의
+      // 알림을 계속 받았다(테스터 제보). 팔로우 자체는 남겨둔다 — 종목을 다시
+      // 켜면 그대로 돌아온다.
+      const byId = new Map(ALL_PLAYERS.map(p => [p.id, p]));
       SB.from('device_tokens').upsert({
         device_id: deviceId, token: pushToken, platform: 'ios',
-        player_ids: [...followed].filter(id => !mutedPlayers.has(id)),
+        player_ids: [...followed].filter(id =>
+          !mutedPlayers.has(id) && isPlayerAllowed(byId.get(id), sportFeeds)),
         updated_at: new Date().toISOString(),
       }, { onConflict: 'device_id' }).then(() => {}, () => {});
     } catch {}
-  }, [pushToken, followed, deviceId, mutedPlayers]);
+  }, [pushToken, followed, deviceId, mutedPlayers, sportFeeds]);
 
   // Hydrate from Supabase on mount (overrides localStorage if newer)
   React.useEffect(() => {
@@ -6901,13 +6915,6 @@ function App() {
   }, []);
   React.useEffect(() => { toastRef.current = showToast; }, [showToast]);
 
-  const [sportFeeds, setSportFeeds] = React.useState(() => {
-    try {
-      return { soccer:true, baseball:true, ...JSON.parse(localStorage.getItem('jumo_sport_feeds') || '{}') };
-    } catch {
-      return { soccer:true, baseball:true };
-    }
-  });
   const SPORT_LABELS = { soccer:'축구', baseball:'야구', badminton:'배드민턴' };
   const toggleSportFeed = (id) => {
     setSportFeeds(prev => {
