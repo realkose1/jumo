@@ -4427,7 +4427,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
             });
           }
         } else if (player.sport === '축구' && player.espnLeague && player.espnId) {
-          const res = await fetch(`${API_BASE}/api/espn-player-stats?league=${player.espnLeague}&id=${player.espnId}`);
+          const res = await fetch(`${API_BASE}/api/espn-player-stats?league=${player.espnLeague}&id=${player.espnId}&season=${afSeasonFor(player)}`);
           const data = await res.json();
           const cats = data?.splits?.categories || [];
           if (cats.length > 0 && !cancelled) {
@@ -7080,7 +7080,7 @@ function App() {
     Promise.all(ALL_PLAYERS.map(async p => {
       try {
         if (p.sport === '축구' && p.espnLeague && p.espnId) {
-          const res = await fetch(`${API_BASE}/api/espn-player-stats?league=${p.espnLeague}&id=${p.espnId}`);
+          const res = await fetch(`${API_BASE}/api/espn-player-stats?league=${p.espnLeague}&id=${p.espnId}&season=${afSeasonFor(p)}`);
           const data = await res.json();
           const stats = parseESPN(data);
           if (stats) cache[p.id] = stats;
