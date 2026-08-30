@@ -312,6 +312,35 @@ if (typeof document !== 'undefined') {
 }
 const isPlayerAllowed = (p, feeds) => feeds?.[playerSportKey(p)] !== false;
 
+// API-Football 호출 게이트.
+// 한도를 넘으면 HTTP 200 에 errors.rateLimit 을 담아 빈 응답을 준다 — r.ok 가
+// true 라 코드가 정상으로 착각하고 조용히 실패한다(실측: 전 선수 스탯이 통째로
+// 비었다). 시즌 스탯 22건과 부상 22건이 각자 스태거로 흐르다 합산이 초당 5회를
+// 넘긴 게 원인이라, 개별 스태거 대신 모든 호출을 한 줄로 세워 간격을 보장한다.
+const AF_MIN_GAP_MS = 320;                 // ≈3회/초 — 초당 5회 한도 아래
+let afGate = Promise.resolve();
+let afLastAt = 0;
+function afFetch(query, { retries = 1 } = {}) {
+  const slot = afGate.then(async () => {
+    const wait = AF_MIN_GAP_MS - (Date.now() - afLastAt);
+    if (wait > 0) await new Promise(r => setTimeout(r, wait));
+    afLastAt = Date.now();
+  });
+  afGate = slot;
+  return slot.then(async () => {
+    const r = await fetch(`${API_BASE}/api/apifootball?${query}`);
+    if (!r.ok) return null;
+    const j = await r.json().catch(() => null);
+    // 한도 초과는 '실패'로 다루고 한 번 쉬었다 다시 시도한다.
+    if (j?.errors?.rateLimit && retries > 0) {
+      await new Promise(r2 => setTimeout(r2, 2500));
+      return afFetch(query, { retries: retries - 1 });
+    }
+    return j?.errors?.rateLimit ? null : j;
+  });
+}
+
+
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "homeVariant": 1,
   "accentColor": "#f5c400",
@@ -8019,14 +8048,30 @@ function App() {
     };
     const soccerPlayers = ALL_PLAYERS.filter(p => p.sport === '축구' && p.apiFootballId);
     (async () => {
-      await Promise.all(soccerPlayers.map(async (p, i) => {
-        // 22명을 한꺼번에 쏘면 API-Sports 초당 버스트 제한(5/s)에 걸려 429 가
-        // 섞여 돌아온다 — 부상 동기화와 같은 방식으로 250ms 씩 흘려보낸다.
-        if (i) await new Promise(r => setTimeout(r, i * 250));
+      // 마지막으로 성공한 값을 먼저 얹는다. API 가 한 번 실패했다고 화면이
+      // 통째로 '스탯을 불러올 수 없습니다'가 되지 않게 한다(실측: 분당 한도를
+      // 넘기면 전 선수가 그렇게 됐다).
+      const STATS_CACHE_KEY = 'jumo_player_season_stats';
+      let cached = {};
+      try {
+        const raw = JSON.parse(localStorage.getItem(STATS_CACHE_KEY) || '{}');
+        if (raw && raw.season === afSeasonFor({})) cached = raw.byId || {};
+      } catch {}
+      let restored = 0;
+      for (const p of soccerPlayers) {
+        const c = cached[p.id];
+        if (!c) continue;
+        p.goals = c.goals; p.assists = c.assists; p.matches = c.matches;
+        if (c.rating) p.rating = c.rating;
+        p.compStats = c.compStats; p.detailStats = c.detailStats;
+        restored++;
+      }
+      if (restored && !cancelled) setLiveMatches(prev => [...prev]);
+
+      await Promise.all(soccerPlayers.map(async p => {
         try {
-          const r = await fetch(`${API_BASE}/api/apifootball?path=players&id=${p.apiFootballId}&season=${afSeasonFor(p)}`);
-          if (!r.ok) return;
-          const j = await r.json();
+          const j = await afFetch(`path=players&id=${p.apiFootballId}&season=${afSeasonFor(p)}`);
+          if (!j) return;   // 호출 실패·한도 초과 → 기존 값(캐시)을 유지한다
           // Club competitions only. API-Football uses `team.name` = national team
           // (e.g., 'South Korea') for national team appearances and the club name
           // (e.g., 'Paris Saint Germain') for club competitions including UEFA
@@ -8095,6 +8140,16 @@ function App() {
           console.warn(`Season stats fetch failed for ${p.name}:`, e?.message || e);
         }
       }));
+      try {
+        const byId = {};
+        for (const p of soccerPlayers) {
+          if (!p.compStats) continue;   // 이번에도 못 받았으면 이전 캐시를 남겨둔다
+          byId[p.id] = { goals: p.goals, assists: p.assists, matches: p.matches,
+                         rating: p.rating, compStats: p.compStats, detailStats: p.detailStats };
+        }
+        const merged = { ...cached, ...byId };
+        localStorage.setItem(STATS_CACHE_KEY, JSON.stringify({ season: afSeasonFor({}), byId: merged }));
+      } catch {}
       if (!cancelled) setLiveMatches(prev => [...prev]); // trigger re-render
     })();
     return () => { cancelled = true; };
@@ -8205,14 +8260,11 @@ function App() {
       try {
         const soccer = ALL_PLAYERS.filter(p => p.sport === '축구' && p.apiFootballId);
         await Promise.all(soccer.map(async (p, i) => {
-          // 500ms 스태거: 12명 동시 발사가 API-Sports 초당 버스트 제한에 걸리는 것 방지
-          // (상세 fetch 스태거와 동시에 돌아도 합산 초당 ~7콜 이내).
-          if (i) await new Promise(r => setTimeout(r, i * 500));
-          const season = afSeasonFor(p);
+          // 간격은 afFetch 큐가 보장한다(개별 스태거는 합산 시 한도를 넘겼다).
           try {
-            const r = await fetch(`${API_BASE}/api/apifootball?path=injuries&player=${p.apiFootballId}&season=${season}`);
-            if (!r.ok) return; // proxy/key unavailable → keep existing value
-            const rows = (await r.json())?.response || [];
+            const j = await afFetch(`path=injuries&player=${p.apiFootballId}&season=${afSeasonFor(p)}`);
+            if (!j) return; // 호출 실패·한도 초과 → 기존 값 유지
+            const rows = j.response || [];
             if (!rows.length) { map[p.name] = null; return; } // no injuries this season → available
             rows.sort((a, b) => new Date(b.fixture?.date || 0) - new Date(a.fixture?.date || 0));
             const latest = rows[0];
