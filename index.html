@@ -5327,21 +5327,33 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
 // 로스터에 선수가 늘어도 사용자가 알 길이 없었다 — 선수 편집에 들어가 훑어야만
 // 새로 들어온 선수를 발견할 수 있었다. 최근에 추가된 순으로 앞에 놓고 NEW 를 붙인다.
 const NEW_PLAYER_DAYS = 7;
-function SuggestPlayersBanner({ followed, onToggleFollow, onAdd, sportFeeds, filter }) {
+function SuggestPlayersBanner({ followed, onToggleFollow, onAdd, sportFeeds, filter, sportOrder = ['축구','야구'] }) {
   const scrollRef = React.useRef(null);
   const fade = useEdgeFade(scrollRef, 24);
   const now = Date.now();
 
   const candidates = React.useMemo(() => {
     const daysAgo = p => p.addedAt ? (now - new Date(p.addedAt).getTime()) / 86400000 : Infinity;
-    return ALL_PLAYERS
+    const pool = ALL_PLAYERS
       .filter(p => !followed.has(p.id))
       .filter(p => isPlayerAllowed(p, sportFeeds))
       .filter(p => filter === '전체' || p.sport === filter)
       .map(p => ({ p, d: daysAgo(p) }))
-      .sort((a, b) => a.d - b.d)          // 최근 합류 순
-      .slice(0, 12);
-  }, [followed, sportFeeds, filter, now]);
+      .sort((a, b) => a.d - b.d);         // 종목 안에서 최근 합류 순
+
+    // '전체'에서 최근순으로만 자르면 수가 많은 축구가 12칸을 다 차지해
+    // 야구 선수가 한 명도 안 보인다. 종목을 번갈아 뽑아 둘 다 앞쪽에 나오게 한다.
+    const sports = [...sportOrder, ...[...new Set(pool.map(c => c.p.sport))].filter(sp => !sportOrder.includes(sp))];
+    const groups = sports.map(sp => pool.filter(c => c.p.sport === sp)).filter(g => g.length);
+    const out = [];
+    const at = groups.map(() => 0);
+    while (out.length < 12 && groups.some((g, i) => at[i] < g.length)) {
+      for (let i = 0; i < groups.length && out.length < 12; i++) {
+        if (at[i] < groups[i].length) out.push(groups[i][at[i]++]);
+      }
+    }
+    return out;
+  }, [followed, sportFeeds, filter, sportOrder, now]);
 
   React.useEffect(() => { fade.update(); }, [candidates.length]);
   if (!candidates.length) return null;
@@ -5350,7 +5362,7 @@ function SuggestPlayersBanner({ followed, onToggleFollow, onAdd, sportFeeds, fil
     <div style={{ marginTop:18, padding:'14px 0 4px', borderTop:'0.5px solid var(--border)' }}>
       <div style={{ display:'flex', alignItems:'baseline', gap:8, marginBottom:12, paddingLeft:2 }}>
         <span style={{ fontSize:13, fontWeight:800, color:'var(--text)', letterSpacing:-0.3 }}>
-          다른 선수도 팔로우해 보세요
+          다른 한국 선수도 팔로우해 보세요
         </span>
         <button onClick={onAdd} style={{ marginLeft:'auto', background:'none', border:'none', padding:0,
                  fontSize:12, fontWeight:700, color:'var(--acc)', cursor:'pointer' }}>모두 보기</button>
@@ -5581,7 +5593,8 @@ function PlayersScreen({ onPlayer, onAdd, onToggleFollow, followed, statsCache =
         })()}
         {!isLoading && (
           <SuggestPlayersBanner followed={followed} onToggleFollow={onToggleFollow}
-                                onAdd={onAdd} sportFeeds={sportFeeds} filter={filter}/>
+                                onAdd={onAdd} sportFeeds={sportFeeds} filter={filter}
+                                sportOrder={sportOrder}/>
         )}
       </div>
       <div style={{ height:'calc(96px + env(safe-area-inset-bottom))' }}/>
