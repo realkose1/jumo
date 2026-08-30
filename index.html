@@ -5326,7 +5326,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
 // 팔로우하지 않은 선수를 목록 맨 아래에서 제안한다.
 // 로스터에 선수가 늘어도 사용자가 알 길이 없었다 — 선수 편집에 들어가 훑어야만
 // 새로 들어온 선수를 발견할 수 있었다. 최근에 추가된 순으로 앞에 놓고 NEW 를 붙인다.
-const NEW_PLAYER_DAYS = 30;
+const NEW_PLAYER_DAYS = 7;
 function SuggestPlayersBanner({ followed, onToggleFollow, onAdd, sportFeeds, filter }) {
   const scrollRef = React.useRef(null);
   const fade = useEdgeFade(scrollRef, 24);
@@ -5346,15 +5346,12 @@ function SuggestPlayersBanner({ followed, onToggleFollow, onAdd, sportFeeds, fil
   React.useEffect(() => { fade.update(); }, [candidates.length]);
   if (!candidates.length) return null;
 
-  const hasNew = candidates.some(c => c.d <= NEW_PLAYER_DAYS);
-
   return (
     <div style={{ marginTop:18, padding:'14px 0 4px', borderTop:'0.5px solid var(--border)' }}>
       <div style={{ display:'flex', alignItems:'baseline', gap:8, marginBottom:12, paddingLeft:2 }}>
         <span style={{ fontSize:13, fontWeight:800, color:'var(--text)', letterSpacing:-0.3 }}>
-          {hasNew ? '새로 합류한 선수' : '이런 선수는 어때요?'}
+          다른 선수도 팔로우해 보세요
         </span>
-        <span style={{ fontSize:11, color:'var(--text4)' }}>탭하면 팔로우돼요</span>
         <button onClick={onAdd} style={{ marginLeft:'auto', background:'none', border:'none', padding:0,
                  fontSize:12, fontWeight:700, color:'var(--acc)', cursor:'pointer' }}>모두 보기</button>
       </div>
