@@ -332,11 +332,13 @@ function afFetch(query, { retries = 1 } = {}) {
     if (!r.ok) return null;
     const j = await r.json().catch(() => null);
     // 한도 초과는 '실패'로 다루고 한 번 쉬었다 다시 시도한다.
+    // 분당 한도는 잠깐 쉬면 풀리지만, 일일 한도(errors.requests)는 그날 끝이다.
     if (j?.errors?.rateLimit && retries > 0) {
       await new Promise(r2 => setTimeout(r2, 2500));
       return afFetch(query, { retries: retries - 1 });
     }
-    return j?.errors?.rateLimit ? null : j;
+    const failed = j?.errors && (j.errors.rateLimit || j.errors.requests || j.errors.token);
+    return failed ? null : j;
   });
 }
 
@@ -8142,6 +8144,35 @@ function App() {
           console.warn(`Season stats fetch failed for ${p.name}:`, e?.message || e);
         }
       }));
+      // API-Football 이 못 준 선수(할당량 소진·장애)는 ESPN 으로 메운다.
+      // 대회별 내역까지는 못 만들어도, 종합 수치가 있는 게 '스탯을 불러올 수
+      // 없습니다'보다 낫다. ESPN 은 키가 필요 없어 한도에 걸리지 않는다.
+      const stillMissing = soccerPlayers.filter(p => !p.compStats && p.espnLeague && p.espnId);
+      if (stillMissing.length) {
+        await Promise.all(stillMissing.map(async p => {
+          try {
+            const r = await fetch(`${API_BASE}/api/espn-player-stats?league=${p.espnLeague}&id=${p.espnId}&season=${afSeasonFor(p)}`);
+            const cats = (await r.json())?.splits?.categories || [];
+            if (!cats.length) return;
+            const all = cats.flatMap(c => c.stats || []);
+            const g = (...ns) => { for (const n of ns) { const st = all.find(x => x.name === n); if (st) return parseFloat(st.value) || 0; } return 0; };
+            const mt = g('appearances');
+            if (!mt) return;
+            p.goals = g('totalGoals'); p.assists = g('goalAssists'); p.matches = mt;
+            p.compStats = [{ name: p.league || '리그', icon: '⚽', goals: p.goals, assists: p.assists, matches: mt }];
+            p.detailStats = [
+              ['출전 시간',   `${g('minutes')}분`],
+              ['슈팅',       g('totalShots')],
+              ['유효 슈팅',   g('shotsOnTarget')],
+              ['키패스',      g('shotAssists')],
+              ['태클',       g('totalTackles')],
+              ['경고',       g('yellowCards')],
+            ];
+          } catch (e) {}
+        }));
+        if (!cancelled) setLiveMatches(prev => [...prev]);
+      }
+
       try {
         const byId = {};
         for (const p of soccerPlayers) {
