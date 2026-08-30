@@ -30,6 +30,21 @@ final class LiveActivityBridge {
     func start(_ d: [String: Any], onToken: @escaping (String, String) -> Void) -> String? {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return "disabled" }
         let matchId = d["matchId"] as? String ?? ""
+
+        // 앱이 재시작되면 current 참조가 사라진다. 그대로 request 하면 이미 떠 있는
+        // 카드 위에 한 장이 더 얹혀, 잠금화면에 같은 경기가 계속 쌓인다
+        // (실측: 하프타임·54'·59'·61' 네 장). 살아있는 액티비티를 다시 붙잡는다.
+        if current == nil,
+           let alive = Activity<JumoMatchAttributes>.activities.first(where: { $0.attributes.matchId == matchId }) {
+            current = alive
+            currentMatchId = matchId
+            observeToken(alive, matchId: matchId, onToken: onToken)
+        }
+        // 지난 경기의 잔재도 여기서 함께 정리한다 — 화면엔 한 장만 있어야 한다.
+        for stray in Activity<JumoMatchAttributes>.activities where stray.id != current?.id {
+            Task { await stray.end(nil, dismissalPolicy: .immediate) }
+        }
+
         if currentMatchId == matchId, current != nil {
             update(d); return nil
         }
@@ -60,6 +75,7 @@ final class LiveActivityBridge {
             playerName: d["playerName"] as? String ?? "",
             playerNumber: d["playerNumber"] as? Int ?? 0,
             competition: d["competition"] as? String ?? "",
+            matchId: matchId,
             homeLogoFile: homeLogoFile,
             awayLogoFile: awayLogoFile
         )
@@ -72,17 +88,22 @@ final class LiveActivityBridge {
                 pushType: .token)
             current = act
             currentMatchId = matchId
-            // 푸시 토큰은 비동기로 온다 — 받는 즉시 웹에 넘겨 서버에 저장하게 한다.
-            tokenTask?.cancel()
-            tokenTask = Task {
-                for await data in act.pushTokenUpdates {
-                    let hex = data.map { String(format: "%02x", $0) }.joined()
-                    onToken(matchId, hex)
-                }
-            }
+            observeToken(act, matchId: matchId, onToken: onToken)
         } catch {
             // 시작에 실패했으면 자리를 비워둬야 다음 시도가 막히지 않는다.
             currentMatchId = nil
+        }
+    }
+
+    /// 푸시 토큰은 비동기로 온다 — 받는 즉시 웹에 넘겨 서버에 저장하게 한다.
+    private func observeToken(_ act: Activity<JumoMatchAttributes>, matchId: String,
+                              onToken: @escaping (String, String) -> Void) {
+        tokenTask?.cancel()
+        tokenTask = Task {
+            for await data in act.pushTokenUpdates {
+                let hex = data.map { String(format: "%02x", $0) }.joined()
+                onToken(matchId, hex)
+            }
         }
     }
 
@@ -101,9 +122,11 @@ final class LiveActivityBridge {
     private func endCurrent() {
         tokenTask?.cancel(); tokenTask = nil
         pending = nil
-        guard let act = current else { currentMatchId = nil; return }
         current = nil; currentMatchId = nil
-        Task { await act.end(nil, dismissalPolicy: .immediate) }
+        // current 만 끝내면 재시작 전에 띄운 것들이 잠금화면에 남는다.
+        for act in Activity<JumoMatchAttributes>.activities {
+            Task { await act.end(nil, dismissalPolicy: .immediate) }
+        }
     }
 
     private static func state(from d: [String: Any]) -> JumoMatchAttributes.ContentState {

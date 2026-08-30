@@ -7818,12 +7818,22 @@ function App() {
             // 1) 가능한 스탯을 먼저 확보(박스스코어 우선, 없으면 시즌 게임로그).
             //    played = 실제 타석에 섰는지(= 이 경기에 나왔는지) 여부.
             let played = false;
-            if (box && box.found) {
+            // ESPN 박스스코어는 경기 초반에 **시즌 누적**을 그대로 실어 보낸다.
+            // (실측: 1회초 0-0 경기에서 이정후가 '467타수 136안타 9홈런 48타점')
+            // 한 경기 타석은 연장을 감안해도 10을 넘지 않으므로, 그보다 크면
+            // 경기 기록이 아니라 시즌 성적으로 보고 버린다. starter/lineupPosted 는
+            // 라인업 판별에 계속 쓰므로 box 자체는 그대로 둔다.
+            const boxIsThisGame = !!box && box.found &&
+              box.atBats <= 10 && box.hits <= 10 && box.runs <= 10 &&
+              box.rbi <= 10 && box.homeRuns <= 5 && box.baseOnBalls <= 6;
+            if (boxIsThisGame) {
               atBats = box.atBats; hits = box.hits; homeRuns = box.homeRuns;
               rbi = box.rbi; runs = box.runs; baseOnBalls = box.baseOnBalls;
               stolenBases = parseInt(gl?.stolenBases ?? 0) || 0; // SB absent from ESPN batting box
               played = atBats > 0 || baseOnBalls > 0 || runs > 0;
-            } else if (gl) {
+            } else if (gl && !isLive) {
+              // 진행 중인 경기엔 게임로그를 쓰지 않는다 — 1~3일 늦게 채워지므로
+              // TZ 보정으로 '어제 경기' 기록을 오늘 경기에 붙일 수 있다.
               atBats = parseInt(gl.atBats ?? 0) || 0; hits = parseInt(gl.hits ?? 0) || 0;
               homeRuns = parseInt(gl.homeRuns ?? 0) || 0; rbi = parseInt(gl.rbi ?? 0) || 0;
               runs = parseInt(gl.runs ?? 0) || 0; stolenBases = parseInt(gl.stolenBases ?? 0) || 0;

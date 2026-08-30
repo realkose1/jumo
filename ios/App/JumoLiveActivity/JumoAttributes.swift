@@ -24,6 +24,8 @@ struct JumoMatchAttributes: ActivityAttributes {
     var playerName: String
     var playerNumber: Int
     var competition: String
+    // 앱이 재시작돼도 이미 떠 있는 액티비티를 다시 찾아 붙잡기 위한 열쇠.
+    var matchId: String = ""
     // App Group 에 캐시된 엠블럼 파일명. 비어 있으면 위젯이 약칭 배지로 대체한다.
     var homeLogoFile: String = ""
     var awayLogoFile: String = ""
