@@ -857,6 +857,24 @@ function appVersionLabel() {
   return 'Jumo — 웹';   // 브라우저에서 열었을 때
 }
 
+// API-Football 의 "season" 은 시즌 시작 연도다.
+//  - 유럽 리그(8월~5월): 8월부터 새 시즌 → 7월까지는 전년도가 현재 시즌
+//  - MLS 등 한 해 안에 끝나는 리그: 연도가 곧 시즌
+// 예전엔 통계는 2026, 부상은 2025 로 각각 하드코딩돼 있었다 — 시즌이 넘어가면
+// 조용히 지난 시즌 값을 보여주게 되므로 날짜에서 유도한다.
+const CALENDAR_SEASON_LEAGUES = new Set(['MLS', 'K리그1', 'K리그2']);
+const afSeasonFor = (p) => {
+  const now = new Date();
+  const y = now.getFullYear();
+  if (CALENDAR_SEASON_LEAGUES.has(p?.league)) return y;
+  return now.getMonth() >= 7 ? y : y - 1;   // 8월(=7)부터 새 시즌
+};
+// 화면에 쓸 시즌 라벨. MLS 는 '2026', 유럽은 '2026-27'.
+const seasonLabel = (p) => {
+  const y = afSeasonFor(p);
+  return CALENDAR_SEASON_LEAGUES.has(p?.league) ? `${y}` : `${y}-${String(y + 1).slice(2)}`;
+};
+
 const isFinalStatus = (status) =>
   ['STATUS_FINAL','STATUS_FULL_TIME','final','STATUS_END_PERIOD','STATUS_FINAL_PEN'].includes(status);
 
@@ -1091,7 +1109,6 @@ const ALL_PLAYERS = [
 const PLAYERS = ALL_PLAYERS.slice(0, 5);
 
 // ─── PLAYER EXTRA DATA ────────────────────────────────────────
-// Per-competition stats for 2025-26 season
 // ─── TRANSFER SPOTLIGHT (이적 기념 히어로) ─────────────────────
 // 이적 발표일부터 '그 다음 날이 끝날 때까지' 홈 히어로에 발표 이미지를 띄운다.
 // 앞으로 이적이 생기면 아래 배열에 한 줄만 추가하면 된다 —
@@ -1114,129 +1131,40 @@ const activeTransferSpotlight = (nowMs) => TRANSFER_SPOTLIGHTS.find(s => {
   return nowMs >= start && nowMs < start + SPOTLIGHT_DAYS * 86400000;
 }) || null;
 
-const PLAYER_COMP_STATS = {
-  1: [ // 손흥민
-    { name:'MLS 정규리그',     icon:'🇺🇸', goals:0, assists:0, matches:8 },
-    { name:'CONCACAF 챔피언스컵', icon:'🏆', goals:2, assists:0, matches:7 },
-    { name:'2026 MLS 시즌',     icon:'⚽', goals:0, assists:6, matches:9 },
-  ],
-  2: [ // 이강인
-    { name:'리그앙',     icon:'🇫🇷', goals:3, assists:4, matches:25 },
-    { name:'챔피언스리그', icon:'🏆', goals:0, assists:0, matches:10 },
-    { name:'기타 (슈퍼컵·인터컨)', icon:'🏅', goals:1, assists:1, matches:2 },
-  ],
-  3: [ // 김민재
-    { name:'분데스리가',   icon:'🇩🇪', goals:1, assists:1, matches:24 },
-    { name:'DFB-포칼',    icon:'🏆', goals:0, assists:0, matches:3 },
-    { name:'챔피언스리그', icon:'🏆', goals:0, assists:0, matches:7 },
-    { name:'슈퍼컵',       icon:'🏅', goals:0, assists:0, matches:1 },
-  ],
-  6: [ // 황희찬
-    { name:'프리미어리그', icon:'🇬🇧', goals:2, assists:1, matches:23 },
-    { name:'FA컵',        icon:'🏆', goals:1, assists:0, matches:2 },
-    { name:'EFL컵',       icon:'🏆', goals:0, assists:0, matches:2 },
-  ],
-  7: [ // 황인범
-    { name:'에레디비시',   icon:'🇳🇱', goals:1, assists:3, matches:17 },
-    { name:'KNVB 컵',     icon:'🏆', goals:0, assists:0, matches:1 },
-    { name:'유로파리그',   icon:'🏆', goals:0, assists:1, matches:6 },
-  ],
-  8: [ // 조규성
-    { name:'덴마크 수페르리가', icon:'🇩🇰', goals:3, assists:1, matches:23 },
-    { name:'덴마크 컵',         icon:'🏆', goals:2, assists:0, matches:6 },
-    { name:'유로파리그',         icon:'🏆', goals:2, assists:0, matches:9 },
-  ],
-  19: [ // 오현규
-    { name:'쉬페르리그', icon:'🇹🇷', goals:6, assists:1, matches:11 },
-    { name:'터키 컵',     icon:'🏆', goals:2, assists:0, matches:2 },
-  ],
-  20: [ // 양현준
-    { name:'스코티시 프리미어십', icon:'🏴󠁧󠁢󠁳󠁣󠁴󠁿', goals:7, assists:1, matches:27 },
-    { name:'스코티시 컵',         icon:'🏆', goals:0, assists:0, matches:3 },
-    { name:'스코티시 리그컵',      icon:'🏆', goals:1, assists:0, matches:3 },
-    { name:'챔피언스리그',         icon:'🏆', goals:0, assists:0, matches:2 },
-    { name:'유로파리그',           icon:'🏆', goals:1, assists:1, matches:7 },
-  ],
-  21: [ // 백승호
-    { name:'챔피언십', icon:'🏴󠁧󠁢󠁥󠁮󠁧󠁿', goals:4, assists:4, matches:42 },
-  ],
-  22: [ // 배준호
-    { name:'챔피언십', icon:'🏴󠁧󠁢󠁥󠁮󠁧󠁿', goals:2, assists:3, matches:42 },
-    { name:'FA컵',     icon:'🏆', goals:1, assists:0, matches:2 },
-    { name:'EFL컵',    icon:'🏆', goals:0, assists:0, matches:1 },
-  ],
-  23: [ // 엄지성
-    { name:'챔피언십', icon:'🏴󠁧󠁢󠁥󠁮󠁧󠁿', goals:2, assists:4, matches:44 },
-    { name:'FA컵',     icon:'🏆', goals:1, assists:0, matches:1 },
-    { name:'EFL컵',    icon:'🏆', goals:0, assists:0, matches:3 },
-  ],
-};
 
 const PLAYER_EXTRA = {
   1: { // 손흥민
-    form: [7.8, 8.2, 7.5, 8.5, 7.9, 8.1, 7.7],
-    recentMatches: [
-      { opp:'Galaxy',     result:'W', score:'2-1', contrib:'⚽🅰️', date:'4.19' },
-      { opp:'Seattle',    result:'D', score:'1-1', contrib:'-',    date:'4.13' },
-      { opp:'Portland',   result:'W', score:'3-0', contrib:'⚽',   date:'4.6'  },
-      { opp:'Austin',     result:'W', score:'2-1', contrib:'🅰️',  date:'3.30' },
-      { opp:'Houston',    result:'D', score:'2-2', contrib:'⚽',   date:'3.23' },
-    ],
     career: [
       { year:'2025–',    team:'LAFC',            league:'MLS',        flag:'🇺🇸' },
       { year:'2015–24',  team:'Tottenham',       league:'EPL',        flag:'🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
       { year:'2013–15',  team:'Bayer Leverkusen',league:'분데스리가', flag:'🇩🇪' },
       { year:'2010–13',  team:'Hamburg',         league:'분데스리가', flag:'🇩🇪' },
     ],
-    seasonStats: [['슈팅', 28, 120], ['유효슈팅', 14, 60], ['드리블 성공', 18, 80], ['키패스', 22, 100], ['공중볼 승리', 9, 60]],
   },
   2: { // 이강인
-    form: [7.8, 7.2, 8.5, 7.0, 9.1, 6.9, 8.0],
-    recentMatches: [
-      { opp:'Lyon',       result:'W', score:'2-0', contrib:'🅰️🅰️', date:'4.19' },
-      { opp:'Monaco',     result:'D', score:'1-1', contrib:'⚽',    date:'4.13' },
-      { opp:'Marseille',  result:'W', score:'3-1', contrib:'🅰️',  date:'4.6'  },
-      { opp:'Lille',      result:'W', score:'2-0', contrib:'-',    date:'3.30' },
-      { opp:'Nice',       result:'L', score:'0-1', contrib:'-',    date:'3.16' },
-    ],
     career: [
       { year:'2026–',    team:'Atlético Madrid', league:'라리가', flag:'🇪🇸' },
       { year:'2023–26',  team:'PSG',      league:'리그앙', flag:'🇫🇷' },
       { year:'2022–23',  team:'Mallorca', league:'라리가', flag:'🇪🇸' },
       { year:'2019–22',  team:'Valencia', league:'라리가', flag:'🇪🇸' },
     ],
-    seasonStats: [['패스 성공률', 88, 100], ['키패스', 78, 100], ['드리블 성공', 49, 80], ['찬스 창출', 42, 60], ['어시스트', 14, 20]],
   },
   3: { // 김민재
-    form: [7.5, 8.2, 7.0, 7.8, 8.4, 7.1, 7.6],
-    recentMatches: [
-      { opp:'Dortmund',   result:'W', score:'2-0', contrib:'-',  date:'4.20' },
-      { opp:'Leverkusen', result:'D', score:'1-1', contrib:'-',  date:'4.13' },
-      { opp:'Frankfurt',  result:'W', score:'3-1', contrib:'⚽', date:'4.6'  },
-      { opp:'Stuttgart',  result:'W', score:'2-0', contrib:'-',  date:'3.30' },
-      { opp:'Wolfsburg',  result:'W', score:'4-0', contrib:'-',  date:'3.16' },
-    ],
     career: [
       { year:'2023–',    team:'Bayern Munich', league:'분데스리가', flag:'🇩🇪' },
       { year:'2022–23',  team:'Napoli',        league:'세리에A',   flag:'🇮🇹' },
       { year:'2021–22',  team:'Fenerbahçe',    league:'쉬페르리그', flag:'🇹🇷' },
     ],
-    seasonStats: [['공중볼 승리', 74, 100], ['인터셉트', 58, 80], ['클리어런스', 92, 120], ['태클 성공', 45, 60], ['패스 성공률', 91, 100]],
   },
   6: { // 황희찬
-    form: [6.8, 6.5, 7.2, 6.4, 7.0, 6.6, 6.9],
-    recentMatches: [],
     career: [
       { year:'2020–',    team:'Wolverhampton', league:'EPL',          flag:'🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
       { year:'2018–20',  team:'Hamburger SV',  league:'2.분데스리가',  flag:'🇩🇪' },
       { year:'2015–20',  team:'RB Salzburg',   league:'오스트리아 분데스',flag:'🇦🇹' },
       { year:'2014–15',  team:'포항 스틸러스 U18', league:'유스',        flag:'🇰🇷' },
     ],
-    seasonStats: [],
   },
   7: { // 황인범
-    form: [7.0, 7.4, 7.2, 6.8, 7.5, 7.1, 7.3],
-    recentMatches: [],
     career: [
       { year:'2026–',    team:'FC Porto',           league:'프리메이라리가', flag:'🇵🇹' },
       { year:'2024–26',  team:'Feyenoord',          league:'에레디비시',  flag:'🇳🇱' },
@@ -1246,11 +1174,8 @@ const PLAYER_EXTRA = {
       { year:'2019–21',  team:'Vancouver Whitecaps',league:'MLS',        flag:'🇺🇸' },
       { year:'2017–19',  team:'대전 시티즌',         league:'K리그',       flag:'🇰🇷' },
     ],
-    seasonStats: [],
   },
   8: { // 조규성
-    form: [6.7, 7.1, 6.9, 7.3, 6.8, 7.0, 6.6],
-    recentMatches: [],
     career: [
       { year:'2025–',    team:'FC Midtjylland', league:'덴마크 SL',   flag:'🇩🇰' },
       { year:'2024–25',  team:'Mainz 05 (임대)', league:'분데스리가',   flag:'🇩🇪' },
@@ -1258,33 +1183,24 @@ const PLAYER_EXTRA = {
       { year:'2022–23',  team:'전북 현대 모터스', league:'K리그1',      flag:'🇰🇷' },
       { year:'2019–22',  team:'안양 FC',         league:'K리그2',      flag:'🇰🇷' },
     ],
-    seasonStats: [],
   },
   19: { // 오현규
-    form: [7.2, 6.9, 7.4, 7.0, 7.3, 6.8, 7.1],
-    recentMatches: [],
     career: [
       { year:'2024–',    team:'Beşiktaş (임대)',  league:'쉬페르리그',   flag:'🇹🇷' },
       { year:'2024–',    team:'KRC Genk',         league:'벨기에 1부',   flag:'🇧🇪' },
       { year:'2023–24',  team:'Celtic',           league:'SPFL',        flag:'🏴󠁧󠁢󠁳󠁣󠁴󠁿' },
       { year:'2019–22',  team:'수원 삼성 블루윙즈', league:'K리그1',      flag:'🇰🇷' },
     ],
-    seasonStats: [],
   },
   20: { // 양현준
-    form: [6.9, 7.2, 6.7, 7.4, 7.0, 7.1, 6.8],
-    recentMatches: [],
     career: [
       { year:'2025–',    team:'Celtic',         league:'SPFL',         flag:'🏴󠁧󠁢󠁳󠁣󠁴󠁿' },
       { year:'2024–25',  team:'Hellas Verona (임대)', league:'세리에A', flag:'🇮🇹' },
       { year:'2023–',    team:'Celtic',         league:'SPFL',         flag:'🏴󠁧󠁢󠁳󠁣󠁴󠁿' },
       { year:'2021–23',  team:'강원 FC',         league:'K리그1',        flag:'🇰🇷' },
     ],
-    seasonStats: [],
   },
   21: { // 백승호
-    form: [7.1, 7.0, 7.3, 6.8, 7.2, 6.9, 7.0],
-    recentMatches: [],
     career: [
       { year:'2024–',    team:'Birmingham City', league:'EFL Championship', flag:'🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
       { year:'2022–24',  team:'전북 현대 모터스',  league:'K리그1',      flag:'🇰🇷' },
@@ -1293,159 +1209,110 @@ const PLAYER_EXTRA = {
       { year:'2017–18',  team:'Girona',           league:'라리가',      flag:'🇪🇸' },
       { year:'2010–17',  team:'Barcelona 유스',   league:'유스',        flag:'🇪🇸' },
     ],
-    seasonStats: [],
   },
   22: { // 배준호
-    form: [6.6, 7.0, 6.8, 6.9, 7.1, 6.7, 6.8],
-    recentMatches: [],
     career: [
       { year:'2023–',    team:'Stoke City',     league:'EFL Championship', flag:'🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
       { year:'2022–23',  team:'대전 하나시티즌',  league:'K리그1',           flag:'🇰🇷' },
     ],
-    seasonStats: [],
   },
   23: { // 엄지성
-    form: [6.7, 7.0, 6.9, 7.2, 6.8, 6.9, 7.0],
-    recentMatches: [],
     career: [
       { year:'2024–',    team:'Swansea City', league:'EFL Championship', flag:'🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
       { year:'2020–24',  team:'광주 FC',       league:'K리그',             flag:'🇰🇷' },
     ],
-    seasonStats: [],
   },
   24: { // 설영우
-    form: [7.0, 7.2, 6.9, 7.3, 7.1, 7.0, 6.8],
-    recentMatches: [],
     career: [
       { year:'2024–',    team:'Crvena Zvezda', league:'세르비아 SuperLiga', flag:'🇷🇸' },
       { year:'2018–24',  team:'울산 HD',        league:'K리그1',             flag:'🇰🇷' },
     ],
-    seasonStats: [],
   },
   26: { // 이재성
-    form: [7.1, 7.3, 6.9, 7.2, 7.4, 7.0, 7.2],
-    recentMatches: [],
     career: [
       { year:'2021–',    team:'Mainz 05',      league:'분데스리가',  flag:'🇩🇪' },
       { year:'2018–21',  team:'Holstein Kiel', league:'분데스리가 2', flag:'🇩🇪' },
       { year:'2014–18',  team:'전북 현대 모터스', league:'K리그1',     flag:'🇰🇷' },
     ],
-    seasonStats: [],
   },
   27: { // 홍현석
-    form: [6.8, 7.0, 6.7, 7.1, 6.9, 7.2, 6.8],
-    recentMatches: [],
     career: [
       { year:'2024–',    team:'Mainz 05',   league:'분데스리가',  flag:'🇩🇪' },
       { year:'2023–24',  team:'KAA Gent',   league:'벨기에 1부',  flag:'🇧🇪' },
       { year:'2021–23',  team:'LASK',       league:'오스트리아 BL', flag:'🇦🇹' },
     ],
-    seasonStats: [],
   },
   28: { // 정우영
-    form: [6.7, 6.9, 7.1, 6.8, 7.0, 6.9, 7.0],
-    recentMatches: [],
     career: [
       { year:'2024–',    team:'Union Berlin',  league:'분데스리가',  flag:'🇩🇪' },
       { year:'2023–24',  team:'VfB Stuttgart', league:'분데스리가',  flag:'🇩🇪' },
       { year:'2019–23',  team:'SC Freiburg',   league:'분데스리가',  flag:'🇩🇪' },
     ],
-    seasonStats: [],
   },
   29: { // 카스트로프
-    form: [6.8, 7.0, 6.9, 7.1, 6.8, 7.0, 7.1],
-    recentMatches: [],
     career: [
       { year:'2025–',    team:'Borussia Mönchengladbach', league:'분데스리가', flag:'🇩🇪' },
       { year:'2022–25',  team:'1. FC Nürnberg',           league:'분데스리가 2', flag:'🇩🇪' },
     ],
-    seasonStats: [],
   },
   30: { // 박승수
-    form: [6.6, 6.9, 7.2, 6.8, 7.0, 7.3, 7.0],
-    recentMatches: [],
     career: [
       { year:'2025–',    team:'Newcastle United', league:'EPL',    flag:'🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
       { year:'2024–25',  team:'수원 삼성 블루윙즈',  league:'K리그2',  flag:'🇰🇷' },
     ],
-    seasonStats: [],
   },
   31: { // 김지수
-    form: [6.7, 6.9, 6.8, 7.0, 6.9, 7.1, 6.9],
-    recentMatches: [],
     career: [
       { year:'2023–',    team:'Brentford',        league:'EPL',       flag:'🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
       { year:'2025–26',  team:'Kaiserslautern (임대)', league:'분데스리가 2', flag:'🇩🇪' },
       { year:'2021–23',  team:'성남 FC',           league:'K리그',      flag:'🇰🇷' },
     ],
-    seasonStats: [],
   },
   32: { // 양민혁
-    form: [6.9, 7.1, 6.8, 7.2, 7.0, 7.3, 7.1],
-    recentMatches: [],
     career: [
       { year:'2026–',    team:'KVC Westerlo (임대)', league:'벨기에 1부', flag:'🇧🇪' },
       { year:'2025–',    team:'Tottenham Hotspur',  league:'EPL',       flag:'🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
       { year:'2023–24',  team:'강원 FC',            league:'K리그1',     flag:'🇰🇷' },
     ],
-    seasonStats: [],
   },
   33: { // 이태석
-    form: [7.0, 7.2, 6.9, 7.1, 7.3, 7.0, 7.2],
-    recentMatches: [],
     career: [
       { year:'2025–',    team:'Austria Wien', league:'오스트리아 BL', flag:'🇦🇹' },
       { year:'2021–24',  team:'FC 서울',       league:'K리그1',       flag:'🇰🇷' },
     ],
-    seasonStats: [],
   },
   34: { // 송성문
-    form: [],
-    recentMatches: [],
     career: [
       { year:'2026–',    team:'San Diego Padres', league:'MLB',  flag:'🇺🇸' },
       { year:'2015–25',  team:'키움 히어로즈',      league:'KBO',  flag:'🇰🇷' },
     ],
-    seasonStats: [],
   },
   25: { // 이한범
-    form: [6.9, 7.2, 6.8, 7.4, 7.0, 7.3, 7.1],
-    recentMatches: [],
     career: [
       { year:'2026–',    team:'Club Brugge',    league:'벨기에 1부',  flag:'🇧🇪' },
       { year:'2024–26',  team:'FC Midtjylland', league:'덴마크 SL',   flag:'🇩🇰' },
       { year:'2021–24',  team:'FC 서울',         league:'K리그1',      flag:'🇰🇷' },
     ],
-    seasonStats: [],
   },
   9: { // 김하성
-    form: [6.5, 7.2, 7.8, 6.8, 7.5, 8.0, 7.0],
-    recentMatches: [],
     career: [
       { year:'2026–',   team:'Atlanta Braves',     league:'MLB',  flag:'🇺🇸' },
       { year:'2024–25', team:'San Diego Padres',   league:'MLB',  flag:'🇺🇸' },
       { year:'2021–24', team:'San Diego Padres',   league:'MLB',  flag:'🇺🇸' },
       { year:'2014–20', team:'키움 히어로즈',      league:'KBO',  flag:'🇰🇷' },
     ],
-    seasonStats: [],
   },
   17: { // 이정후
-    form: [6.8, 7.5, 8.2, 7.0, 7.8, 8.5, 7.2],
-    recentMatches: [],
     career: [
       { year:'2024–',   team:'San Francisco Giants', league:'MLB', flag:'🇺🇸' },
       { year:'2017–23', team:'키움 히어로즈',         league:'KBO', flag:'🇰🇷' },
     ],
-    seasonStats: [],
   },
   18: { // 김혜성
-    form: [6.5, 7.0, 7.5, 6.8, 7.2, 7.8, 7.0],
-    recentMatches: [],
     career: [
       { year:'2025–',   team:'LA Dodgers',  league:'MLB', flag:'🇺🇸' },
       { year:'2017–24', team:'키움 히어로즈', league:'KBO', flag:'🇰🇷' },
     ],
-    seasonStats: [],
   },
 };
 
@@ -1618,41 +1485,7 @@ function GlassSegmented({ tabs, active, onChange, sticky = false, style }) {
   );
 }
 
-function FormBar({ vals }) {
-  const max = 10;
-  return (
-    <div style={{ display:'flex', alignItems:'flex-end', gap:4, height:48 }}>
-      {vals.map((v, i) => {
-        const isLast = i === vals.length - 1;
-        const pct = v / max;
-        const color = v >= 8 ? 'var(--acc)' : v >= 7 ? 'rgba(255,193,7,0.8)' : 'var(--text6)';
-        return (
-          <div key={i} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
-            <div style={{ fontSize:9, ...NUM, color: isLast ? 'var(--acc)' : 'var(--text5)', fontWeight: isLast ? 700 : 400 }}>{v.toFixed(1)}</div>
-            <div style={{ width:'100%', height:28, borderRadius:4, background:'var(--border)', overflow:'hidden', position:'relative' }}>
-              <div style={{ position:'absolute', bottom:0, left:0, right:0, height:`${pct*100}%`, background: isLast ? 'var(--acc)' : color, borderRadius:4, transition:'height 0.6s ease' }}/>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
-function RadarStat({ label, val, max }) {
-  const pct = Math.min(val/max, 1);
-  return (
-    <div style={{ marginBottom:10 }}>
-      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
-        <span style={{ fontSize:12, color:'var(--text3)' }}>{label}</span>
-        <span style={{ ...NUM, fontSize:12, fontWeight:700, color:'var(--text)' }}>{val}</span>
-      </div>
-      <div style={{ height:5, background:'var(--border)', borderRadius:3, overflow:'hidden' }}>
-        <div style={{ height:'100%', width:`${pct*100}%`, background:'var(--acc)', borderRadius:3, transition:'width 0.8s ease' }}/>
-      </div>
-    </div>
-  );
-}
 
 function CareerTimeline({ extra }) {
   return (
@@ -4743,18 +4576,6 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
         <div style={{ padding:'16px' }}>
           {(player.sport === '축구' || player.sport === '야구' || player.sport === '배드민턴') && (
             <>
-              {(player.sport === '축구' || player.sport === '배드민턴') && (
-                <div style={{ background:'var(--surface)', borderRadius:16, padding:'16px', border:'0.5px solid var(--border)', marginBottom:12 }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
-                    <div>
-                      <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:2 }}>{player.sport === '배드민턴' ? '최근 컨디션' : '최근 7경기 폼'}</div>
-                      <div style={{ fontSize:11, color:'var(--text4)' }}>평균 {(extra.form.reduce((a,b)=>a+b,0)/extra.form.length).toFixed(1)} / 10</div>
-                    </div>
-                    <div style={{ ...NUM, fontSize:26, fontWeight:800, color:'var(--acc)' }}>{extra.form[extra.form.length-1].toFixed(1)}</div>
-                  </div>
-                  <FormBar vals={extra.form}/>
-                </div>
-              )}
               {player.sport === '야구' && recentLiveMatches.length > 0 && (() => {
                 // Baseline games (most recent N), oldest → newest for left→right reading
                 const games = recentLiveMatches.slice(0, 7).slice().reverse();
@@ -4815,7 +4636,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
                   <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>최근 경기 결과</div>
                   {recentLiveMatches.length > 0 && <span style={{ fontSize:10, color:'var(--acc)', fontWeight:700 }}>LIVE</span>}
                 </div>
-                {(recentLiveMatches.length > 0 ? recentLiveMatches : extra.recentMatches).map((m, i, arr) => (
+                {recentLiveMatches.map((m, i, arr) => (
                   <div key={i} style={{ display:'flex', alignItems:'center', gap:10, marginBottom: i < arr.length-1 ? 12 : 0, paddingBottom: i < arr.length-1 ? 12 : 0, borderBottom: i < arr.length-1 ? '0.5px solid var(--border2)' : 'none' }}>
                     <div style={{ width:30, height:30, borderRadius:8, background: m.result==='W'?'rgba(44,201,109,0.12)':m.result==='D'?'rgba(255,193,7,0.12)':'rgba(230,48,48,0.12)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
                       <span style={{ fontSize:12, fontWeight:800, color:resultColor[m.result] }}>{resultLabel[m.result]}</span>
@@ -4887,12 +4708,15 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
             <div style={{ display:'flex', justifyContent:'center', padding:'48px 0' }}>
               <div style={{ width:28, height:28, borderRadius:'50%', border:'3px solid var(--border)', borderTopColor:'var(--acc)', animation:'spin 0.8s linear infinite' }}/>
             </div>
-          ) : player.sport === '축구' && (player.compStats || PLAYER_COMP_STATS[player.id]) ? (() => {
-            const comps = player.compStats || PLAYER_COMP_STATS[player.id];
+          ) : player.sport === '축구' && player.compStats ? (() => {
+            // 예전엔 지난 시즌(25-26) 기록을 하드코딩해 두고 API 실패 시 폴백으로
+            // 썼다 — 그러면 작년 숫자가 '이번 시즌'인 양 떴다. 표째로 걷어냈고,
+            // compStats 가 없으면 '스탯을 불러올 수 없습니다'로 떨어진다.
+            const comps = player.compStats;
             return (
             <>
               <div style={{ background:'var(--surface)', borderRadius:16, padding:'14px 16px', border:'0.5px solid var(--border)', marginBottom:12 }}>
-                <div style={{ fontSize:11, fontWeight:700, color:'var(--text4)', letterSpacing:1, textTransform:'uppercase', marginBottom:10 }}>2025-26 시즌 합계</div>
+                <div style={{ fontSize:11, fontWeight:700, color:'var(--text4)', letterSpacing:1, textTransform:'uppercase', marginBottom:10 }}>{seasonLabel(player)} 시즌 합계</div>
                 <div style={{ display:'flex', justifyContent:'space-around', textAlign:'center' }}>
                   {(() => {
                     const total = comps.reduce((acc,c)=>({goals:acc.goals+c.goals, assists:acc.assists+c.assists, matches:acc.matches+c.matches}),{goals:0,assists:0,matches:0});
@@ -4933,12 +4757,23 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
                   ))}
                 </div>
               )}
+              {!liveStats && player.detailStats && (
+                <div style={{ background:'var(--surface)', borderRadius:16, padding:'14px 16px', border:'0.5px solid var(--border)', marginTop:12 }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:'var(--text4)', letterSpacing:1, textTransform:'uppercase', marginBottom:10 }}>세부 기록</div>
+                  {player.detailStats.map(([label, val]) => (
+                    <div key={label} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingBottom:8, marginBottom:8, borderBottom:'0.5px solid var(--border2)' }}>
+                      <span style={{ fontSize:12, color:'var(--text3)' }}>{label}</span>
+                      <span style={{ ...NUM, fontSize:13, fontWeight:700, color:'var(--text)' }}>{val}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </>
             );
           })() : player.sport === '야구' && liveStats ? (
             <div style={{ background:'var(--surface)', borderRadius:16, padding:'16px', border:'0.5px solid var(--border)' }}>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
-                <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>2025 시즌 스탯</div>
+                <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>{new Date().getFullYear()} 시즌 스탯</div>
                 <span style={{ fontSize:10, color:'var(--acc)', fontWeight:700 }}>LIVE</span>
               </div>
               {[
@@ -4954,13 +4789,6 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
                   <span style={{ fontSize:13, color:'var(--text3)' }}>{label}</span>
                   <span style={{ fontSize:14, fontWeight:700, color:'var(--text)' }}>{val}{unit && <span style={{ fontSize:11, color:'var(--text4)', fontWeight:400 }}> {unit}</span>}</span>
                 </div>
-              ))}
-            </div>
-          ) : player.sport === '축구' && extra.seasonStats ? (
-            <div style={{ background:'var(--surface)', borderRadius:16, padding:'16px', border:'0.5px solid var(--border)' }}>
-              <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:14 }}>2024/25 시즌 스탯</div>
-              {extra.seasonStats.map(([label, val, max]) => (
-                <RadarStat key={label} label={label} val={val} max={max}/>
               ))}
             </div>
           ) : (
@@ -8130,10 +7958,6 @@ function App() {
   // (club competitions only — friendlies/international matches are excluded).
   React.useEffect(() => {
     let cancelled = false;
-    // API-Football "season"은 시작 연도다. 유럽 리그(8월→5월)의 2026-27 시즌은
-    // 2026, MLS(2월→12월)의 2026 시즌도 2026 → 지금은 모두 2026이다.
-    // (2025-26 시즌이 끝나 유럽 선수 기록은 새 시즌 기준으로 초기화된다)
-    const seasonFor = () => 2026;
     // Map league name → display name + icon for the player stats tab.
     const LEAGUE_DISPLAY = {
       'Major League Soccer': { name: 'MLS', icon: '🇺🇸' },
@@ -8182,7 +8006,7 @@ function App() {
     (async () => {
       await Promise.all(soccerPlayers.map(async p => {
         try {
-          const r = await fetch(`${API_BASE}/api/apifootball?path=players&id=${p.apiFootballId}&season=${seasonFor(p)}`);
+          const r = await fetch(`${API_BASE}/api/apifootball?path=players&id=${p.apiFootballId}&season=${afSeasonFor(p)}`);
           if (!r.ok) return;
           const j = await r.json();
           // Club competitions only. API-Football uses `team.name` = national team
@@ -8204,18 +8028,27 @@ function App() {
             // 포함). 예전엔 여기서 그냥 반환해 지난 시즌 숫자가 그대로 남아 있었다
             // → 새 시즌 기준으로 0으로 초기화한다. 평점은 UI가 0일 때 숨긴다.
             p.goals = 0; p.assists = 0; p.matches = 0; p.rating = 0;
-            p.compStats = [];
+            p.compStats = []; p.detailStats = null;
             delete p._baselineSnapshot;
             return;
           }
           let g = 0, a = 0, m = 0;
           const ratings = [];
           const compStats = [];
+          // 슈팅·키패스 등 상세 지표. 예전엔 PLAYER_EXTRA 에 손으로 적어둔 값을
+          // 썼는데 갱신되지 않아 실제와 어긋났다 — 같은 응답에서 합산한다.
+          const det = { shots:0, shotsOn:0, keyPasses:0, dribbles:0, duelsWon:0, minutes:0 };
           for (const s of clubStats) {
             const sg = s.goals?.total || 0;
             const sa = s.goals?.assists || 0;
             const sm = s.games?.appearences || 0;
             g += sg; a += sa; m += sm;
+            det.shots     += s.shots?.total      || 0;
+            det.shotsOn   += s.shots?.on         || 0;
+            det.keyPasses += s.passes?.key       || 0;
+            det.dribbles  += s.dribbles?.success || 0;
+            det.duelsWon  += s.duels?.won        || 0;
+            det.minutes   += s.games?.minutes    || 0;
             const r2 = s.games?.rating, w = sm;
             if (r2 && w > 0) ratings.push([parseFloat(r2), w]);
             // Only include competitions where the player actually played
@@ -8231,6 +8064,14 @@ function App() {
           if (avgR > 0) p.rating = parseFloat(avgR.toFixed(2));
           // Sort: leagues first by matches desc, then cups
           p.compStats = compStats.sort((x, y) => y.matches - x.matches);
+          p.detailStats = m > 0 ? [
+            ['출전 시간',   `${det.minutes}분`],
+            ['슈팅',       det.shots],
+            ['유효 슈팅',   det.shotsOn],
+            ['키패스',      det.keyPasses],
+            ['드리블 성공', det.dribbles],
+            ['경합 승리',   det.duelsWon],
+          ] : null;
           delete p._baselineSnapshot; // force baseline rebuild in next poll
         } catch (e) {
           console.warn(`Season stats fetch failed for ${p.name}:`, e?.message || e);
@@ -8349,7 +8190,7 @@ function App() {
           // 500ms 스태거: 12명 동시 발사가 API-Sports 초당 버스트 제한에 걸리는 것 방지
           // (상세 fetch 스태거와 동시에 돌아도 합산 초당 ~7콜 이내).
           if (i) await new Promise(r => setTimeout(r, i * 500));
-          const season = p.league === 'MLS' ? 2026 : 2025;
+          const season = afSeasonFor(p);
           try {
             const r = await fetch(`${API_BASE}/api/apifootball?path=injuries&player=${p.apiFootballId}&season=${season}`);
             if (!r.ok) return; // proxy/key unavailable → keep existing value
