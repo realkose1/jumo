@@ -5605,6 +5605,16 @@ function PlayersScreen({ onPlayer, onAdd, onToggleFollow, followed, statsCache =
 
 // ─── SCREEN: NOTIFICATIONS ───────────────────────────────────
 const stripLeadEmoji = (t) => String(t || '').replace(/^[^\w가-힣]+/, '').trim();
+// Capacitor(iOS)는 APNs 페이로드 **전체**를 notification.data 에 담는다. 우리가 보낸
+// 커스텀 필드는 그 안에 한 겹 더 들어 있다: { aps: {...}, data: { key, matchId } }.
+// 그동안 notif.data.matchId 를 읽어 항상 undefined 였고, 그래서 알림을 눌러도
+// id 로는 경기를 못 찾고 제목·본문의 팀명 매칭에만 기대고 있었다.
+// (혹시 평평하게 오는 경로가 생겨도 되도록 양쪽을 다 본다.)
+const pushPayload = (notif) => {
+  const d = notif && notif.data;
+  if (!d || typeof d !== 'object') return {};
+  return (d.data && typeof d.data === 'object') ? d.data : d;
+};
 const pushIcon = (key, title) => { const k = String(key || ''); if (/goal/i.test(k)) return '⚽'; if (/start/i.test(k)) return '🏟️'; if (/result|end|final/i.test(k)) return '🏁'; const m = String(title || '').trim().match(/^([^\w\s가-힣])/); return (m && m[1]) || '🔔'; };
 function NotifScreen({ notifications, onMatch }) {
   const notifs = notifications;
@@ -7093,7 +7103,7 @@ function App() {
   const [pushNotifs, setPushNotifs] = React.useState(() => { try { return JSON.parse(localStorage.getItem('jumo_pushNotifs') || '[]'); } catch { return []; } });
   const addPushNotif = React.useCallback((notif) => {
     if (!notif) return;
-    const key = notif.data && notif.data.key;
+    const key = pushPayload(notif).key;
     const rawTitle = notif.title || '알림';
     const item = { id: key || `push-${Date.now()}`, icon: pushIcon(key, rawTitle), title: stripLeadEmoji(rawTitle) || rawTitle, body: notif.body || '', timestamp: Date.now(), pushed: true };
     setPushNotifs(prev => { const merged = [item, ...prev.filter(x => x.id !== item.id)].slice(0, 50); try { localStorage.setItem('jumo_pushNotifs', JSON.stringify(merged)); } catch {} return merged; });
@@ -8962,7 +8972,7 @@ function App() {
   //     경기 id 체계가 다른 경우를 커버
   const resolvePushMatch = React.useCallback((notif) => {
     if (!notif) return null;
-    const mid = notif.data && notif.data.matchId;
+    const mid = pushPayload(notif).matchId;
     if (mid) {
       const hit = liveMatches.find(m => String(m.id) === String(mid));
       if (hit) return hit;
