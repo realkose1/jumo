@@ -144,17 +144,23 @@ async function sbSelect(table, query) {
   const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/${table}?${query}`, { headers: sbHeaders() });
   return r.ok ? r.json() : [];
 }
-async function sbInsertLog(eventKey) {
-  // Returns true if newly inserted (not a duplicate). Relies on a UNIQUE
-  // constraint on event_key + Prefer: resolution=ignore-duplicates.
+// 이벤트 키를 한 번에 넣고, '새로 들어간 것'만 돌려준다(= 아직 안 보낸 알림).
+// event_key UNIQUE + resolution=ignore-duplicates 라 중복은 조용히 무시된다.
+//
+// 예전엔 이벤트마다 POST 를 한 번씩, 그것도 순차로 보냈다. 경기가 많은 날은
+// 수십~수백 왕복이 되고, Supabase 가 느려지면 한 실행이 크론 주기(2분)를 넘겨
+// 다음 실행과 겹쳤다 — 겹칠수록 DB 부하가 늘어 더 느려지는 악순환이었다
+// (실측: 모든 테이블 응답이 6~80초까지 늘어짐).
+async function sbInsertLogBulk(keys) {
+  if (!keys.length) return new Set();
   const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/push_log`, {
     method: 'POST',
     headers: { ...sbHeaders(), Prefer: 'resolution=ignore-duplicates,return=representation' },
-    body: JSON.stringify({ event_key: eventKey }),
+    body: JSON.stringify(keys.map((event_key) => ({ event_key }))),
   });
-  if (!r.ok) return false;
+  if (!r.ok) return new Set();   // 실패하면 이번 실행은 보내지 않는다(중복 발송 방지)
   const rows = await r.json().catch(() => []);
-  return Array.isArray(rows) && rows.length > 0;
+  return new Set(Array.isArray(rows) ? rows.map((x) => x.event_key) : []);
 }
 
 // ── Event collection ────────────────────────────────────────────────────────
@@ -577,9 +583,11 @@ module.exports = async (req, res) => {
     } catch (e) { console.warn('liveactivity', e?.message); }
   }
 
-  // De-dup: keep only events not already in push_log.
-  const fresh = [];
-  for (const ev of events) { if (await sbInsertLog(ev.key)) fresh.push(ev); }
+  // De-dup: keep only events not already in push_log. 한 번의 요청으로 끝낸다.
+  const seenKey = new Set();
+  const uniqueEvents = events.filter((ev) => ev.key && !seenKey.has(ev.key) && seenKey.add(ev.key));
+  const inserted = await sbInsertLogBulk(uniqueEvents.map((ev) => ev.key));
+  const fresh = uniqueEvents.filter((ev) => inserted.has(ev.key));
   if (!fresh.length) return res.status(200).json({ checked: events.length, sent: 0, liveSent });
 
   // Load all device tokens once.
