@@ -6723,20 +6723,40 @@ function ProfileEditScreen({ profile, onSave, onBack }) {
   );
 }
 
-function FeedbackScreen({ onBack }) {
+function FeedbackScreen({ onBack, deviceId, profile }) {
   const showToast = React.useContext(ToastCtx);
   const [text, setText] = React.useState('');
+  const [sending, setSending] = React.useState(false);
   const MAX = 1000;
   const RECIPIENT = 'gsh0729@naver.com';
 
-  const send = () => {
+  // 앱 안에서 바로 보낸다. 예전엔 메일 앱을 열었는데, 앱을 벗어나는 순간
+  // 대부분 그냥 닫아버려서 피드백이 거의 안 왔다.
+  const send = async () => {
     const body = text.trim();
-    if (!body) { showToast('내용을 입력해주세요'); return; }
-    const subject = '[Jumo] 피드백';
-    const meta = `\n\n---\n${navigator.userAgent}`;
-    const url = `mailto:${RECIPIENT}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body + meta)}`;
-    window.location.href = url;
-    showToast('메일 앱으로 이동합니다');
+    if (!body || sending) { if (!body) showToast('내용을 입력해주세요'); return; }
+    setSending(true);
+    try {
+      const { error } = await SB.from('feedback').insert({
+        device_id: deviceId || null,
+        nickname: profile?.nickname || null,
+        body,
+        app_version: appVersionLabel(),
+        user_agent: navigator.userAgent,
+      });
+      if (error) throw error;
+      showToast('보내주셔서 고맙습니다');
+      setText('');
+      onBack && onBack();
+    } catch (e) {
+      // 네트워크가 없거나 서버가 막혔을 때 쓴 내용을 날리지 않도록 메일로 넘긴다.
+      console.warn('feedback insert failed', e);
+      const meta = `\n\n---\n${appVersionLabel()}\n${navigator.userAgent}`;
+      window.location.href = `mailto:${RECIPIENT}?subject=${encodeURIComponent('[Jumo] 피드백')}&body=${encodeURIComponent(body + meta)}`;
+      showToast('바로 보내지 못해 메일 앱으로 넘겨요');
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -6746,14 +6766,13 @@ function FeedbackScreen({ onBack }) {
           ? <div aria-hidden style={{ width:CTRL_H }}/>
           : <button onClick={onBack} style={{ background:'none', border:'none', color:'var(--text2)', fontSize:15, cursor:'pointer', padding:0 }}>취소</button>}
         <div style={{ fontSize:16, fontWeight:700, color:'var(--text)' }}>피드백 보내기</div>
-        <button onClick={send} style={{ ...LG.base, ...LG.pill, border:'0.5px solid rgba(255,255,255,0.22)', boxSizing:'border-box', justifyContent:'center', color: text.trim() ? 'var(--acc)' : 'var(--text5)', fontSize:14, fontWeight:700, opacity: text.trim() ? 1 : 0.55 }}>보내기</button>
+        <button onClick={send} disabled={sending} style={{ ...LG.base, ...LG.pill, border:'0.5px solid rgba(255,255,255,0.22)', boxSizing:'border-box', justifyContent:'center', color: text.trim() && !sending ? 'var(--acc)' : 'var(--text5)', fontSize:14, fontWeight:700, opacity: text.trim() && !sending ? 1 : 0.55 }}>{sending ? '보내는 중' : '보내기'}</button>
       </div>
 
       <div style={{ padding:'16px' }}>
         <div style={{ fontSize:12, color:'var(--text4)', lineHeight:1.6, marginBottom:14 }}>
-          개선 사항이나 버그를 알려주세요. 보내기를 누르면 메일 앱이 열려{' '}
-          <span style={{ color:'var(--text2)', fontWeight:600 }}>{RECIPIENT}</span>{' '}
-          으로 전송할 수 있습니다.
+          개선 사항이나 버그를 알려주세요. 보내기를 누르면 앱에서 바로 전달됩니다.
+          닉네임과 앱 버전이 함께 전송돼요.
         </div>
         <div style={{ background:'var(--surface)', borderRadius:14, border:'0.5px solid var(--border)', padding:'12px 14px' }}>
           <textarea
@@ -6769,11 +6788,11 @@ function FeedbackScreen({ onBack }) {
   );
 }
 
-function MoreScreen({ sportFeeds, onToggleSportFeed, profile, onUpdateProfile, sub, setSub, onShowGuide }) {
+function MoreScreen({ sportFeeds, onToggleSportFeed, profile, onUpdateProfile, sub, setSub, onShowGuide, deviceId }) {
   if (sub === 'notif')      return <NotifSettingsScreen onBack={() => setSub(null)}/>;
   if (sub === 'sports')     return <SportFeedScreen onBack={() => setSub(null)} sportFeeds={sportFeeds} onToggleSportFeed={onToggleSportFeed}/>;
   if (sub === 'profile')    return <ProfileEditScreen profile={profile} onSave={onUpdateProfile} onBack={() => setSub(null)}/>;
-  if (sub === 'feedback')   return <FeedbackScreen onBack={() => setSub(null)}/>;
+  if (sub === 'feedback')   return <FeedbackScreen onBack={() => setSub(null)} deviceId={deviceId} profile={profile}/>;
 
   const groups = [
     { label:'개인화', items:[
@@ -9259,7 +9278,7 @@ function App() {
               <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
               <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} onToggleFollow={toggleFollow} followed={followed} playerOrder={playerOrder} sportOrder={sportOrder} statsCache={playerStatsCache} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} scrollTopKey={tabScrollKeys.players} liveApiMatches={filteredLiveMatches} sportFeeds={sportFeeds}/></div>
               <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news} followedNames={followedNames}/></div>
-              <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed} profile={profile} onUpdateProfile={updateProfile} sub={moreSub} setSub={setMoreSub} onShowGuide={() => setShowOnboarding(true)}/></div>
+              <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed} profile={profile} onUpdateProfile={updateProfile} sub={moreSub} setSub={setMoreSub} onShowGuide={() => setShowOnboarding(true)} deviceId={deviceId}/></div>
             </>
           )}
           {screen !== 'main' && (
