@@ -6739,7 +6739,11 @@ function OnboardingTour({ onDone, onTab, followed, onToggleFollow }) {
                   background:'linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.82) 30%, rgba(0,0,0,0.45) 58%, rgba(0,0,0,0) 82%)',
                   animation:'fadeIn 0.3s ease' }}>
       {/* 하단 설명 카드 */}
-      <div key={i} style={{ position:'relative', margin:'0 14px calc(env(safe-area-inset-bottom) + 86px)', background:'var(--card)', border:'0.5px solid var(--border2)', borderRadius:20, padding:'18px', boxShadow:'0 18px 55px rgba(0,0,0,0.55)', animation: (dir < 0 ? 'obSlideFromRight' : 'obSlideFromLeft') + ' 0.32s ease' }}>
+      <div key={i} style={{ position:'relative', margin:'0 14px calc(env(safe-area-inset-bottom) + 86px)', background:'var(--card)', border:'0.5px solid var(--border2)', borderRadius:20, padding:'18px', boxShadow:'0 18px 55px rgba(0,0,0,0.55)', animation: (dir < 0 ? 'obSlideFromRight' : 'obSlideFromLeft') + ' 0.32s ease',
+        // 선수 그리드는 길다 — 이 단계만 카드를 위로 늘려('선수' 타이틀 바로 밑까지)
+        // 한 번에 더 많은 선수를 보여준다. flex:1 이 남는 세로 공간을 다 먹는다.
+        ...(step.pick ? { flex:'0 1 auto', minHeight:0, display:'flex', flexDirection:'column',
+                          marginTop:'calc(env(safe-area-inset-top) + 4px)' } : {}) }}>
         <div style={{ display:'flex', gap:5, marginBottom:14 }}>
           {ONBOARDING_STEPS.map((_, k) => (
             <div key={k} style={{ height:4, flex:1, borderRadius:2, background: k <= i ? 'var(--acc)' : 'var(--border2)' }}/>
@@ -6765,7 +6769,7 @@ function OnboardingTour({ onDone, onTab, followed, onToggleFollow }) {
               })}
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:10,
-                          maxHeight:196, overflowY:'auto', WebkitOverflowScrolling:'touch',
+                          flex:'1 1 auto', minHeight:0, overflowY:'auto', WebkitOverflowScrolling:'touch', alignContent:'start',
                           padding:'2px 2px 6px', marginBottom:10 }}>
               {pickList.map(p => {
                 const on = followed.has(p.id);
