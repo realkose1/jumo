@@ -459,6 +459,20 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
         }
     }
 
+    // 웹이 스크롤 방향을 알려주면 하단 탭바를 접었다 편다.
+    // 실제로 숨기지(isHidden) 않고 아래로 밀어낸다 — 레이아웃이 다시 잡히면
+    // 웹 콘텐츠까지 출렁이기 때문이다.
+    private var tabBarHidden = false
+    private func setTabBarHidden(_ hide: Bool) {
+        guard let bar = tabBarVC?.tabBar, tabBarHidden != hide else { return }
+        tabBarHidden = hide
+        let dy = bar.bounds.height + view.safeAreaInsets.bottom + 16
+        UIView.animate(withDuration: 0.26, delay: 0, options: [.curveEaseOut]) {
+            bar.transform = hide ? CGAffineTransform(translationX: 0, y: dy) : .identity
+            bar.alpha = hide ? 0 : 1
+        }
+    }
+
     // System tab bar tap → haptic + drive the web app.
     func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
         let i = viewController.tabBarItem.tag
@@ -481,10 +495,14 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
     }
 
     func userContentController(_ uc: WKUserContentController, didReceive message: WKScriptMessage) {
-        if message.name == "tabbar", let id = message.body as? String,
-           let i = tabs.firstIndex(where: { $0.id == id }),
-           let tvc = tabBarVC, i != tvc.selectedIndex {
-            tvc.selectedIndex = i   // web-driven change (e.g. notification tap) → sync system bar
+        if message.name == "tabbar" {
+            if let id = message.body as? String,
+               let i = tabs.firstIndex(where: { $0.id == id }),
+               let tvc = tabBarVC, i != tvc.selectedIndex {
+                tvc.selectedIndex = i   // web-driven change (e.g. notification tap) → sync system bar
+            } else if let d = message.body as? [String: Any], let hide = d["hide"] as? Bool {
+                setTabBarHidden(hide)
+            }
         } else if message.name == "bell", let d = message.body as? [String: Any] {
             updateBell(show: (d["show"] as? Bool) ?? false, unread: (d["unread"] as? Int) ?? 0)
         } else if message.name == "detailbar", let d = message.body as? [String: Any] {

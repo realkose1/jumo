@@ -513,6 +513,23 @@ function useTouchReorder(onCommit) {
 // 그쪽 페이드는 사라진다(첫/마지막 항목이 흐려 보이지 않게).
 // 배경색을 덮는 오버레이 대신 mask 로 내용 자체를 흐린다 — 라이트 모드에서도
 // 배경색을 가정하지 않고 그대로 동작한다.
+// 아래로 내리면 하단 탭바를 접고, 위로 올리면 다시 편다.
+// 최상단 근처에서는 항상 펼친다 — 조금 내렸다 올릴 때 덜컥거리지 않게.
+// 임계값 8px 은 손떨림·관성으로 인한 미세 변동을 무시하기 위한 것.
+function useHideOnScrollDown(onChange) {
+  const lastY = React.useRef(0);
+  const hidden = React.useRef(false);
+  const set = (v) => { if (hidden.current !== v) { hidden.current = v; onChange && onChange(v); } };
+  return React.useCallback((e) => {
+    const y = e.currentTarget.scrollTop;
+    const dy = y - lastY.current;
+    if (Math.abs(dy) < 8) return;
+    lastY.current = y;
+    if (y <= 24) { set(false); return; }
+    set(dy > 0);
+  }, [onChange]);
+}
+
 function useEdgeFade(ref, fade = 28) {
   const [edge, setEdge] = React.useState({ left: false, right: false });
   const update = React.useCallback(() => {
@@ -1570,7 +1587,7 @@ const IS_IOS26_PLUS = (() => {
   } catch { return false; }
 })();
 
-const TabBar = React.memo(function TabBar({ active: propActive, onTab, elevated = false }) {
+const TabBar = React.memo(function TabBar({ active: propActive, onTab, elevated = false, hidden = false }) {
   const [active, setActive] = React.useState(propActive);
   React.useEffect(() => { setActive(propActive); }, [propActive]);
   const handlePress = (id) => {
@@ -1597,7 +1614,9 @@ const TabBar = React.memo(function TabBar({ active: propActive, onTab, elevated 
       left: 0,
       right: 0,
       zIndex: elevated ? 350 : 100,
-      pointerEvents: elevated ? 'none' : undefined,
+      pointerEvents: elevated ? 'none' : (hidden ? 'none' : undefined),
+      transform: hidden ? 'translateY(120%)' : 'none',
+      transition: 'transform 0.26s ease',
       display:'flex',
       borderTop: IS_IOS26_PLUS ? 'none' : '0.5px solid var(--border)',
       background: IS_IOS26_PLUS ? undefined : 'var(--tab-bg)',
@@ -2286,7 +2305,8 @@ function TodayMatchesCarousel({ todayMatches, matches, now, onMatch, tweaks }) {
 }
 
 // ─── SCREEN: HOME V2 — Editorial ─────────────────────────────
-function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoading = false, scrollTopKey = 0, onRefresh, unreadCount = 0, nativeTabBar = false }) {
+function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoading = false, scrollTopKey = 0, onRefresh, unreadCount = 0, nativeTabBar = false, onTabBarHide }) {
+  const onTabScroll = useHideOnScrollDown(onTabBarHide);
   const homeScrollRef = React.useRef(null);
   React.useEffect(() => { if (scrollTopKey > 0) { SCROLL_MEM.home = 0; homeScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } }, [scrollTopKey]);
   useScrollMemory('home', homeScrollRef);
@@ -2740,7 +2760,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
   }
 
   return (
-    <div ref={homeScrollRef} onTouchStart={handleHomeTouchStart} onTouchMove={handleHomeTouchMove} onTouchEnd={handleHomeTouchEnd} style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
+    <div ref={homeScrollRef} onScroll={onTabScroll} onTouchStart={handleHomeTouchStart} onTouchMove={handleHomeTouchMove} onTouchEnd={handleHomeTouchEnd} style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide">
       <div style={{ overflow:'hidden', height: pullY, transition: pullY === 0 ? 'height 0.25s ease' : 'none', display:'flex', alignItems:'center', justifyContent:'center' }}>
         <div style={{ display:'flex', alignItems:'center', gap:8, opacity: Math.min(pullY / PULL_THRESHOLD, 1) }}>
           <div style={{ width:18, height:18, border:'2.5px solid var(--acc)', borderTopColor:'transparent', borderRadius:'50%', animation: refreshing || pullY >= PULL_THRESHOLD ? 'spin 0.7s linear infinite' : 'none', transform: !refreshing && pullY < PULL_THRESHOLD ? `rotate(${pullY * 4}deg)` : undefined }}/>
@@ -4851,7 +4871,8 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
 }
 
 // ─── SCREEN: SCHEDULE ─────────────────────────────────────────
-function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRefresh, isActive = false, scrollTopKey = 0 }) {
+function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRefresh, isActive = false, scrollTopKey = 0, onTabBarHide }) {
+  const onTabScroll = useHideOnScrollDown(onTabBarHide);
   const days = ['일','월','화','수','목','금','토'];
   const now = new Date();
 
@@ -5057,7 +5078,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
         </div>
       </div>
       {/* Scrollable content with pull-to-refresh */}
-      <div ref={scrollRef} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchEnd} style={{ flex:1, overflowX:'hidden', overflowY:'auto', background:'var(--bg)', minHeight:0, touchAction:'pan-y' }} className="scrollbar-hide">
+      <div ref={scrollRef} onScroll={onTabScroll} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchEnd} style={{ flex:1, overflowX:'hidden', overflowY:'auto', background:'var(--bg)', minHeight:0, touchAction:'pan-y' }} className="scrollbar-hide">
       {/* Pull-to-refresh indicator */}
       <div style={{ overflow:'hidden', height: pullY, transition: pullY === 0 ? 'height 0.25s ease' : 'none', display:'flex', alignItems:'center', justifyContent:'center' }}>
         <div style={{ display:'flex', alignItems:'center', gap:8, opacity: Math.min(pullY / PULL_THRESHOLD, 1) }}>
@@ -5292,7 +5313,7 @@ function SuggestPlayersBanner({ followed, onToggleFollow, onAdd, sportFeeds, fil
   );
 }
 
-function PlayersScreen({ onPlayer, onAdd, onToggleFollow, followed, statsCache = {}, isLoading = false, onRefresh, scrollTopKey = 0, liveApiMatches = [], sportFeeds, playerOrder = [], sportOrder = ['축구','야구'] }) {
+function PlayersScreen({ onPlayer, onAdd, onToggleFollow, onTabBarHide, followed, statsCache = {}, isLoading = false, onRefresh, scrollTopKey = 0, liveApiMatches = [], sportFeeds, playerOrder = [], sportOrder = ['축구','야구'] }) {
   // Static fallback team logo URLs by player name (used when no recent match cached)
   const TEAM_LOGO_FALLBACK = {
     '손흥민':'https://a.espncdn.com/i/teamlogos/soccer/500/18966.png',
@@ -5332,6 +5353,7 @@ function PlayersScreen({ onPlayer, onAdd, onToggleFollow, followed, statsCache =
     return map;
   }, [liveApiMatches]);
 
+  const onTabScroll = useHideOnScrollDown(onTabBarHide);
   // 오버레이 헤더의 실제 높이 — 스크롤 영역 상단 여백을 이 값으로 맞춘다.
   const headRef = React.useRef(null);
   const [headH, setHeadH] = React.useState(0);
@@ -5403,7 +5425,7 @@ function PlayersScreen({ onPlayer, onAdd, onToggleFollow, followed, statsCache =
           ))}
         </div>
       </div>
-      <div ref={scrollRef} onScroll={e => { const s = e.currentTarget.scrollTop > 4; setScrolled(p => p !== s ? s : p); }} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} style={{ flex:1, overflow:'auto', background:'var(--bg)', minHeight:0 }} className="scrollbar-hide">
+      <div ref={scrollRef} onScroll={e => { const s = e.currentTarget.scrollTop > 4; setScrolled(p => p !== s ? s : p); onTabScroll(e); }} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} style={{ flex:1, overflow:'auto', background:'var(--bg)', minHeight:0 }} className="scrollbar-hide">
         {/* 오버레이 헤더가 가리는 만큼 비워둔다 — 스크롤하면 내용이 그 아래로 흐른다 */}
         <div style={{ height: headH, flexShrink: 0 }}/>
       {/* Pull-to-refresh indicator */}
@@ -5836,7 +5858,8 @@ function curateNews(pool, seed, limit) {
   return out;
 }
 
-function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames }) {
+function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarHide }) {
+  const onTabScroll = useHideOnScrollDown(onTabBarHide);
   const NEWS_CATEGORIES = ['전체', '해외축구', 'MLB', '기타'];
   // 오버레이 헤더 높이 — 스크롤 영역 상단 여백과 맞춘다.
   const headRef = React.useRef(null);
@@ -6084,7 +6107,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames }) {
         ))}
       </div>
       </div>
-      <div ref={scrollRef} onScroll={e => { const s = e.currentTarget.scrollTop > 4; setScrolled(p => p !== s ? s : p); }} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} style={{ flex:1, overflow:'auto', background:'var(--bg)', minHeight:0 }} className="scrollbar-hide">
+      <div ref={scrollRef} onScroll={e => { const s = e.currentTarget.scrollTop > 4; setScrolled(p => p !== s ? s : p); onTabScroll(e); }} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} style={{ flex:1, overflow:'auto', background:'var(--bg)', minHeight:0 }} className="scrollbar-hide">
         {/* 오버레이 헤더가 가리는 만큼 비워둔다 — 스크롤하면 내용이 그 아래로 흐른다 */}
         <div style={{ height: headH, flexShrink: 0 }}/>
       {/* Pull-to-refresh indicator */}
@@ -9288,6 +9311,17 @@ function App() {
     };
   }, []);
 
+  // ── 하단 탭바 자동 숨김 ────────────────────────────────────────────
+  // 스크롤을 내리면 접고 올리면 편다. 네이티브 탭바(iOS 26)는 UITabBarController
+  // 라 JS 에서 직접 못 건드리므로 tabbar 채널로 상태만 넘긴다.
+  const [tabBarHidden, setTabBarHidden] = React.useState(false);
+  React.useEffect(() => {
+    try { window.webkit?.messageHandlers?.tabbar?.postMessage({ hide: tabBarHidden }); } catch {}
+  }, [tabBarHidden]);
+  // 탭을 옮기거나 상세로 들어가면 항상 펼친 상태로 되돌린다 — 접힌 채 넘어가면
+  // 새 화면에서 탭바가 없는 것처럼 보인다.
+  React.useEffect(() => { setTabBarHidden(false); }, [tab, screen]);
+
   const filteredLiveMatches = React.useMemo(
     () => liveMatches
       .filter(m =>
@@ -9324,10 +9358,10 @@ function App() {
           )}
           {(screen === 'main' || closing) && (
             <>
-              <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} tweaks={tweaks} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} scrollTopKey={tabScrollKeys.home} onRefresh={fetchLiveMatches} unreadCount={unreadCount} nativeTabBar={nativeTabBar}/></div>
-              <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
-              <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} onToggleFollow={toggleFollow} followed={followed} playerOrder={playerOrder} sportOrder={sportOrder} statsCache={playerStatsCache} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} scrollTopKey={tabScrollKeys.players} liveApiMatches={filteredLiveMatches} sportFeeds={sportFeeds}/></div>
-              <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news} followedNames={followedNames}/></div>
+              <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} onTabBarHide={setTabBarHidden} tweaks={tweaks} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} scrollTopKey={tabScrollKeys.home} onRefresh={fetchLiveMatches} unreadCount={unreadCount} nativeTabBar={nativeTabBar}/></div>
+              <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} onTabBarHide={setTabBarHidden} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
+              <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} onToggleFollow={toggleFollow} onTabBarHide={setTabBarHidden} followed={followed} playerOrder={playerOrder} sportOrder={sportOrder} statsCache={playerStatsCache} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} scrollTopKey={tabScrollKeys.players} liveApiMatches={filteredLiveMatches} sportFeeds={sportFeeds}/></div>
+              <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news} followedNames={followedNames} onTabBarHide={setTabBarHidden}/></div>
               <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed} profile={profile} onUpdateProfile={updateProfile} sub={moreSub} setSub={setMoreSub} onShowGuide={() => setShowOnboarding(true)} deviceId={deviceId}/></div>
             </>
           )}
@@ -9355,7 +9389,7 @@ function App() {
           )}
           </div>
           )}
-          {!nativeTabBar && <TabBar active={tab} onTab={handleTab} elevated={showOnboarding}/>}
+          {!nativeTabBar && <TabBar active={tab} onTab={handleTab} elevated={showOnboarding} hidden={tabBarHidden}/>}
           {showOnboarding && <OnboardingTour onDone={finishOnboarding} onTab={setTab} followed={followed} onToggleFollow={toggleFollow}/>}
         </div>
       </IOSDevice>
