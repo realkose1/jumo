@@ -414,8 +414,10 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
             let icon = UIImage(named: "tab-\(t.id)") ?? UIImage(systemName: t.symbol)
             vc.tabBarItem = UITabBarItem(title: t.label, image: icon, tag: i)
             vc.tabBarItem.selectedImage = icon
+
             return vc
         }
+
         tvc.delegate = self
         tvc.tabBar.tintColor = UIColor(red: 0.961, green: 0.769, blue: 0.0, alpha: 1) // #f5c400
         tvc.view.backgroundColor = .clear
@@ -460,16 +462,27 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
     }
 
     // 웹이 스크롤 방향을 알려주면 하단 탭바를 접었다 편다.
-    // 실제로 숨기지(isHidden) 않고 아래로 밀어낸다 — 레이아웃이 다시 잡히면
-    // 웹 콘텐츠까지 출렁이기 때문이다.
+    //
+    // iOS 26 의 '왼쪽으로 접히는' 최소화(tabBarMinimizeBehavior)는 쓸 수 없다 —
+    // 명령형 API 가 없고 UITabBarController 가 선택된 탭의 **스크롤뷰**를 관찰해
+    // 스스로 판단하는데, 우리 콘텐츠는 WKWebView 안의 div 라 UIKit 이 볼 수 없다.
+    // 프록시 스크롤뷰를 만들어 웹 스크롤 위치를 그대로 넣어봤지만(상호작용 on/off
+    // 양쪽) 최소화가 발동하지 않았다 — 실제 사용자 팬 제스처가 있어야 하는 듯하다.
+    // 그래서 iOS 18+ 공식 API 로 통째로 접는다.
     private var tabBarHidden = false
-    private func setTabBarHidden(_ hide: Bool) {
-        guard let bar = tabBarVC?.tabBar, tabBarHidden != hide else { return }
+    private func setTabBarCollapsed(_ hide: Bool) {
+        guard let tvc = tabBarVC, tabBarHidden != hide else { return }
         tabBarHidden = hide
-        let dy = bar.bounds.height + view.safeAreaInsets.bottom + 16
-        UIView.animate(withDuration: 0.26, delay: 0, options: [.curveEaseOut]) {
-            bar.transform = hide ? CGAffineTransform(translationX: 0, y: dy) : .identity
-            bar.alpha = hide ? 0 : 1
+        if #available(iOS 18.0, *) {
+            tvc.setTabBarHidden(hide, animated: true)
+        } else {
+            // iOS 17 이하: 공식 API 가 없어 밀어낸다.
+            let bar = tvc.tabBar
+            let dy = bar.bounds.height + view.safeAreaInsets.bottom + 16
+            UIView.animate(withDuration: 0.26) {
+                bar.transform = hide ? CGAffineTransform(translationX: 0, y: dy) : .identity
+                bar.alpha = hide ? 0 : 1
+            }
         }
     }
 
@@ -501,7 +514,7 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
                let tvc = tabBarVC, i != tvc.selectedIndex {
                 tvc.selectedIndex = i   // web-driven change (e.g. notification tap) → sync system bar
             } else if let d = message.body as? [String: Any], let hide = d["hide"] as? Bool {
-                setTabBarHidden(hide)
+                setTabBarCollapsed(hide)
             }
         } else if message.name == "bell", let d = message.body as? [String: Any] {
             updateBell(show: (d["show"] as? Bool) ?? false, unread: (d["unread"] as? Int) ?? 0)

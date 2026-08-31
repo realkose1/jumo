@@ -513,21 +513,15 @@ function useTouchReorder(onCommit) {
 // 그쪽 페이드는 사라진다(첫/마지막 항목이 흐려 보이지 않게).
 // 배경색을 덮는 오버레이 대신 mask 로 내용 자체를 흐린다 — 라이트 모드에서도
 // 배경색을 가정하지 않고 그대로 동작한다.
-// 아래로 내리면 하단 탭바를 접고, 위로 올리면 다시 편다.
-// 최상단 근처에서는 항상 펼친다 — 조금 내렸다 올릴 때 덜컥거리지 않게.
-// 임계값 8px 은 손떨림·관성으로 인한 미세 변동을 무시하기 위한 것.
-function useHideOnScrollDown(onChange) {
-  const lastY = React.useRef(0);
-  const hidden = React.useRef(false);
-  const set = (v) => { if (hidden.current !== v) { hidden.current = v; onChange && onChange(v); } };
+// 하단 탭바 최소화를 위해 웹의 스크롤 위치를 네이티브로 흘려보낸다.
+// iOS 26 탭바는 명령형 API 가 없고 UITabBarController 가 스크롤뷰를 관찰해
+// 스스로 접고 편다 — 그래서 '접어라'가 아니라 '지금 여기까지 스크롤됐다'를 보낸다.
+// 웹(비네이티브)에서는 onChange 로 방향만 넘겨 CSS 탭바를 접는다.
+function useTabBarScrollSync(onScrollY) {
   return React.useCallback((e) => {
     const y = e.currentTarget.scrollTop;
-    const dy = y - lastY.current;
-    if (Math.abs(dy) < 8) return;
-    lastY.current = y;
-    if (y <= 24) { set(false); return; }
-    set(dy > 0);
-  }, [onChange]);
+    onScrollY && onScrollY(y);
+  }, [onScrollY]);
 }
 
 function useEdgeFade(ref, fade = 28) {
@@ -2305,8 +2299,8 @@ function TodayMatchesCarousel({ todayMatches, matches, now, onMatch, tweaks }) {
 }
 
 // ─── SCREEN: HOME V2 — Editorial ─────────────────────────────
-function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoading = false, scrollTopKey = 0, onRefresh, unreadCount = 0, nativeTabBar = false, onTabBarHide }) {
-  const onTabScroll = useHideOnScrollDown(onTabBarHide);
+function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoading = false, scrollTopKey = 0, onRefresh, unreadCount = 0, nativeTabBar = false, onTabBarScroll }) {
+  const onTabScroll = useTabBarScrollSync(onTabBarScroll);
   const homeScrollRef = React.useRef(null);
   React.useEffect(() => { if (scrollTopKey > 0) { SCROLL_MEM.home = 0; homeScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } }, [scrollTopKey]);
   useScrollMemory('home', homeScrollRef);
@@ -4871,8 +4865,8 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
 }
 
 // ─── SCREEN: SCHEDULE ─────────────────────────────────────────
-function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRefresh, isActive = false, scrollTopKey = 0, onTabBarHide }) {
-  const onTabScroll = useHideOnScrollDown(onTabBarHide);
+function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRefresh, isActive = false, scrollTopKey = 0, onTabBarScroll }) {
+  const onTabScroll = useTabBarScrollSync(onTabBarScroll);
   const days = ['일','월','화','수','목','금','토'];
   const now = new Date();
 
@@ -5313,7 +5307,7 @@ function SuggestPlayersBanner({ followed, onToggleFollow, onAdd, sportFeeds, fil
   );
 }
 
-function PlayersScreen({ onPlayer, onAdd, onToggleFollow, onTabBarHide, followed, statsCache = {}, isLoading = false, onRefresh, scrollTopKey = 0, liveApiMatches = [], sportFeeds, playerOrder = [], sportOrder = ['축구','야구'] }) {
+function PlayersScreen({ onPlayer, onAdd, onToggleFollow, onTabBarScroll, followed, statsCache = {}, isLoading = false, onRefresh, scrollTopKey = 0, liveApiMatches = [], sportFeeds, playerOrder = [], sportOrder = ['축구','야구'] }) {
   // Static fallback team logo URLs by player name (used when no recent match cached)
   const TEAM_LOGO_FALLBACK = {
     '손흥민':'https://a.espncdn.com/i/teamlogos/soccer/500/18966.png',
@@ -5353,7 +5347,7 @@ function PlayersScreen({ onPlayer, onAdd, onToggleFollow, onTabBarHide, followed
     return map;
   }, [liveApiMatches]);
 
-  const onTabScroll = useHideOnScrollDown(onTabBarHide);
+  const onTabScroll = useTabBarScrollSync(onTabBarScroll);
   // 오버레이 헤더의 실제 높이 — 스크롤 영역 상단 여백을 이 값으로 맞춘다.
   const headRef = React.useRef(null);
   const [headH, setHeadH] = React.useState(0);
@@ -5858,8 +5852,8 @@ function curateNews(pool, seed, limit) {
   return out;
 }
 
-function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarHide }) {
-  const onTabScroll = useHideOnScrollDown(onTabBarHide);
+function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScroll }) {
+  const onTabScroll = useTabBarScrollSync(onTabBarScroll);
   const NEWS_CATEGORIES = ['전체', '해외축구', 'MLB', '기타'];
   // 오버레이 헤더 높이 — 스크롤 영역 상단 여백과 맞춘다.
   const headRef = React.useRef(null);
@@ -9314,13 +9308,19 @@ function App() {
   // ── 하단 탭바 자동 숨김 ────────────────────────────────────────────
   // 스크롤을 내리면 접고 올리면 편다. 네이티브 탭바(iOS 26)는 UITabBarController
   // 라 JS 에서 직접 못 건드리므로 tabbar 채널로 상태만 넘긴다.
+  // 스크롤 방향을 보고 하단 탭바를 접었다 편다. 네이티브·웹 양쪽에 같은 판정을 쓴다.
   const [tabBarHidden, setTabBarHidden] = React.useState(false);
-  React.useEffect(() => {
-    try { window.webkit?.messageHandlers?.tabbar?.postMessage({ hide: tabBarHidden }); } catch {}
-  }, [tabBarHidden]);
-  // 탭을 옮기거나 상세로 들어가면 항상 펼친 상태로 되돌린다 — 접힌 채 넘어가면
-  // 새 화면에서 탭바가 없는 것처럼 보인다.
-  React.useEffect(() => { setTabBarHidden(false); }, [tab, screen]);
+  const lastTabScrollY = React.useRef(0);
+  const onTabBarScroll = React.useCallback((y) => {
+    const dy = y - lastTabScrollY.current;
+    if (Math.abs(dy) < 8) return;
+    lastTabScrollY.current = y;
+    const hide = y > 24 && dy > 0;
+    setTabBarHidden(hide);
+    try { window.webkit?.messageHandlers?.tabbar?.postMessage({ hide }); } catch {}
+  }, []);
+  // 탭을 옮기거나 상세로 들어가면 항상 펼친 상태로 되돌린다.
+  React.useEffect(() => { setTabBarHidden(false); lastTabScrollY.current = 0; }, [tab, screen]);
 
   const filteredLiveMatches = React.useMemo(
     () => liveMatches
@@ -9358,10 +9358,10 @@ function App() {
           )}
           {(screen === 'main' || closing) && (
             <>
-              <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} onTabBarHide={setTabBarHidden} tweaks={tweaks} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} scrollTopKey={tabScrollKeys.home} onRefresh={fetchLiveMatches} unreadCount={unreadCount} nativeTabBar={nativeTabBar}/></div>
-              <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} onTabBarHide={setTabBarHidden} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
-              <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} onToggleFollow={toggleFollow} onTabBarHide={setTabBarHidden} followed={followed} playerOrder={playerOrder} sportOrder={sportOrder} statsCache={playerStatsCache} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} scrollTopKey={tabScrollKeys.players} liveApiMatches={filteredLiveMatches} sportFeeds={sportFeeds}/></div>
-              <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news} followedNames={followedNames} onTabBarHide={setTabBarHidden}/></div>
+              <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} onTabBarScroll={onTabBarScroll} tweaks={tweaks} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} scrollTopKey={tabScrollKeys.home} onRefresh={fetchLiveMatches} unreadCount={unreadCount} nativeTabBar={nativeTabBar}/></div>
+              <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} onTabBarScroll={onTabBarScroll} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
+              <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} onToggleFollow={toggleFollow} onTabBarScroll={onTabBarScroll} followed={followed} playerOrder={playerOrder} sportOrder={sportOrder} statsCache={playerStatsCache} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} scrollTopKey={tabScrollKeys.players} liveApiMatches={filteredLiveMatches} sportFeeds={sportFeeds}/></div>
+              <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news} followedNames={followedNames} onTabBarScroll={onTabBarScroll}/></div>
               <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed} profile={profile} onUpdateProfile={updateProfile} sub={moreSub} setSub={setMoreSub} onShowGuide={() => setShowOnboarding(true)} deviceId={deviceId}/></div>
             </>
           )}
