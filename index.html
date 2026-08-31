@@ -5401,12 +5401,18 @@ function PlayersScreen({ onPlayer, onAdd, onToggleFollow, onTabBarScroll, follow
   };
 
   return (
-    <div style={{ position:'relative', display:'flex', flexDirection:'column', flex:1, height:'100%', background:'var(--bg)', minHeight:0 }}>
+    <div style={{ position:'relative', display:'flex', flexDirection:'column', flex:1, background:'var(--bg)', minHeight:0,
+                  // 앱 컨테이너가 상태표시줄만큼 padding-top 을 갖고 있어 콘텐츠가
+                  // 그 아래에서 시작한다 → 상태표시줄 자리는 단색이라 유리 블러가
+                  // 거기서 끊겨 보인다(제보). 이 화면만 위로 끌어올려 콘텐츠가
+                  // 상태표시줄 밑으로도 흐르게 하고, 헤더가 그 영역까지 덮는다.
+                  marginTop: 'calc(-1 * env(safe-area-inset-top))',
+                  height: 'calc(100% + env(safe-area-inset-top))' }}>
       {/* 상단 고정 — 스크롤 '위에' 겹쳐 둔다.
           밖으로 빼면 당겨서 새로고침·키보드에 안 밀리지만, 콘텐츠가 그 아래로
           지나가지 않아 유리 블러가 걸릴 대상이 없어져 답답해진다(제보).
           absolute 로 겹치고 스크롤 영역 맨 위에 같은 높이의 여백을 둔다. */}
-      <div ref={headRef} style={{ position:'absolute', top:0, left:0, right:0, zIndex:20, background: scrolled ? 'rgba(11,11,13,0.55)' : 'var(--bg)', backdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', WebkitBackdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', borderBottom: `0.5px solid ${scrolled ? 'var(--border)' : 'transparent'}`, transition: 'background 0.28s ease, backdrop-filter 0.28s ease, border-color 0.28s ease' }}>
+      <div ref={headRef} style={{ position:'absolute', top:0, left:0, right:0, zIndex:20, paddingTop:'env(safe-area-inset-top)', background: scrolled ? 'rgba(11,11,13,0.55)' : 'var(--bg)', backdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', WebkitBackdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', borderBottom: `0.5px solid ${scrolled ? 'var(--border)' : 'transparent'}`, transition: 'background 0.28s ease, backdrop-filter 0.28s ease, border-color 0.28s ease' }}>
         <TabHeader title="선수" right={
           <button onClick={onAdd} style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(255,255,255,0.10)', border:'0.5px solid rgba(255,255,255,0.22)', height:CTRL_H, boxSizing:'border-box', borderRadius:CTRL_H/2, padding:'0 16px', color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', visibility: (typeof window !== 'undefined' && window.__nativeChrome) ? 'hidden' : 'visible' }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="#fff"/></svg>
@@ -6069,12 +6075,18 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
   }, [enabledCategories, category]);
 
   return (
-    <div style={{ position:'relative', display:'flex', flexDirection:'column', flex:1, height:'100%', background:'var(--bg)', minHeight:0 }}>
+    <div style={{ position:'relative', display:'flex', flexDirection:'column', flex:1, background:'var(--bg)', minHeight:0,
+                  // 앱 컨테이너가 상태표시줄만큼 padding-top 을 갖고 있어 콘텐츠가
+                  // 그 아래에서 시작한다 → 상태표시줄 자리는 단색이라 유리 블러가
+                  // 거기서 끊겨 보인다(제보). 이 화면만 위로 끌어올려 콘텐츠가
+                  // 상태표시줄 밑으로도 흐르게 하고, 헤더가 그 영역까지 덮는다.
+                  marginTop: 'calc(-1 * env(safe-area-inset-top))',
+                  height: 'calc(100% + env(safe-area-inset-top))' }}>
       {/* 상단 고정 — 스크롤 '위에' 겹쳐 둔다.
           밖으로 빼면 당겨서 새로고침·키보드에 안 밀리지만, 콘텐츠가 그 아래로
           지나가지 않아 유리 블러가 걸릴 대상이 없어져 답답해진다(제보).
           absolute 로 겹치고 스크롤 영역 맨 위에 같은 높이의 여백을 둔다. */}
-      <div ref={headRef} style={{ position:'absolute', top:0, left:0, right:0, zIndex:20, background: scrolled ? 'rgba(11,11,13,0.55)' : 'var(--bg)', backdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', WebkitBackdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', borderBottom: `0.5px solid ${scrolled ? 'var(--border)' : 'transparent'}`, transition: 'background 0.28s ease, backdrop-filter 0.28s ease, border-color 0.28s ease' }}>
+      <div ref={headRef} style={{ position:'absolute', top:0, left:0, right:0, zIndex:20, paddingTop:'env(safe-area-inset-top)', background: scrolled ? 'rgba(11,11,13,0.55)' : 'var(--bg)', backdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', WebkitBackdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', borderBottom: `0.5px solid ${scrolled ? 'var(--border)' : 'transparent'}`, transition: 'background 0.28s ease, backdrop-filter 0.28s ease, border-color 0.28s ease' }}>
       <TabHeader title="뉴스"/>
       <div style={{ display:'flex', gap:8, overflowX:'auto', padding:'0 16px 14px' }} className="scrollbar-hide">
         {NEWS_CATEGORIES.filter(c => enabledCategories.includes(c)).map(c => (
