@@ -2965,29 +2965,47 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
 
         // 오늘 남은 경기가 하나도 없으면 이 자리가 통째로 사라진다 — 그럴 땐
         // 결과라도 보여준다(제보: '아무것도 안 보이는 불상사').
-        //  1순위: 오늘 끝난 경기
-        //  2순위: 오늘 경기가 아예 없던 날 → 최근 이틀 안의 마지막 경기일 결과
-        //         (날짜 머리글이 '어제'·'8/30' 으로 붙어 오늘 것과 헷갈리지 않는다)
-        const finished = remaining.length ? [] : (() => {
+        //  1순위: 오늘 끝난 경기 결과
+        //  2순위: 오늘 경기가 아예 없으면 다음 경기일(내일 등) 예정 경기
+        //  3순위: 그것도 없으면 최근 이틀 안의 마지막 경기일 결과
+        // 날짜 머리글이 '내일'·'9/3'·'8/30' 으로 붙어 오늘 것과 헷갈리지 않는다.
+        // 하루치만 남긴다 — 여러 날을 한꺼번에 늘어놓으면 목록이 장황해진다.
+        const oneDay = (list, pickLast) => {
+          if (!list.length) return [];
+          const ref = pickLast ? list[list.length - 1] : list[0];
+          const key = new Date(ref.fullDate).toDateString();
+          return list.filter(m => new Date(m.fullDate).toDateString() === key);
+        };
+
+        const fallback = remaining.length ? [] : (() => {
+          // 1) 오늘 끝난 경기 — 오늘 경기가 있었다면 그 결과를 보여준다.
           const today = pickMatches(m => {
             if (!isFinalStatus(m.status)) return false;
             const d = new Date(m.fullDate);
             return d >= startOfToday && d <= endOfToday;
           });
           if (today.length) return today;
+
+          // 2) 오늘 경기가 아예 없으면 앞을 본다 — 지난 결과보다 다음 경기가 낫다.
+          const weekAhead = new Date(startOfToday.getTime() + 7 * 86400000);
+          const ahead = pickMatches(m => {
+            if (isFinalStatus(m.status)) return false;
+            const d = new Date(m.fullDate);
+            return d > endOfToday && d <= weekAhead;
+          });
+          if (ahead.length) return oneDay(ahead, false);   // 가장 이른 하루치
+
+          // 3) 앞도 비면 최근 이틀 안의 마지막 경기일 결과.
           const twoDaysAgo = new Date(startOfToday.getTime() - 2 * 86400000);
           const recent = pickMatches(m => {
             if (!isFinalStatus(m.status)) return false;
             const d = new Date(m.fullDate);
             return d >= twoDaysAgo && d < startOfToday;
           });
-          if (!recent.length) return [];
-          // 가장 최근 '하루'만 — 이틀치를 한꺼번에 늘어놓으면 목록이 장황해진다.
-          const lastDay = new Date(recent[recent.length - 1].fullDate).toDateString();
-          return recent.filter(m => new Date(m.fullDate).toDateString() === lastDay);
+          return oneDay(recent, true);
         })();
 
-        const thisWeekMatches = remaining.length ? remaining : finished;
+        const thisWeekMatches = remaining.length ? remaining : fallback;
         if (thisWeekMatches.length === 0) return null;
 
         const todayStr = now.toDateString();
