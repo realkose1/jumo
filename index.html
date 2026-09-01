@@ -2933,33 +2933,61 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
         </div>
       )}
 
-      {/* 오늘 — 지금 진행 중이거나 앞으로 열릴 경기만 */}
+      {/* 오늘 — 진행 중·예정 경기. 남은 게 없으면 오늘 끝난 경기 결과로 대체 */}
       {(() => {
-        // 끝난 경기는 넣지 않는다. 예전엔 오늘 00시부터 담아서, 이른 새벽에 끝난
-        // 경기가 하루 종일 목록 위쪽을 차지했다. 결과는 일정 탭에서 본다.
-        const seenIds = new Set();
-        const thisWeekMatches = allMatches
-          .filter(m => {
-            if (!m.koreanPlayer || !m.fullDate) return false;
-            // 마이너 강등 선수의 MLB(부모 구단) 경기는 그의 경기가 아니다.
-            // 위 '오늘의 경기'와 일정 탭엔 이미 적용돼 있는데 이 목록만 빠져 있어,
-            // 같은 화면에서 카드엔 없고 아래 목록엔 뜨는 불일치가 있었다.
-            if (koreanIsMinorLeaguer(m)) return false;
-            if (seenIds.has(m.id)) return false;
-            seenIds.add(m.id);
-            if (m.live || m.time === 'LIVE') return true; // 진행 중이면 무조건
-            if (isFinalStatus(m.status)) return false;    // 끝난 경기는 제외
-            // 남은 건 아직 안 끝난 경기다. 킥오프가 지났는데 라이브 표시가 아직
-            // 안 붙은 경우(데이터 지연)도 여기서 살아남아야 하므로 오늘 0시부터 본다.
-            const matchDate = new Date(m.fullDate);
-            return matchDate >= startOfToday && matchDate <= twelveHoursLater;
-          })
-          .sort((a, b) => {
-            const dateA = new Date(a.fullDate);
-            const dateB = new Date(b.fullDate);
-            return dateA - dateB;
-          });
+        // 끝난 경기는 기본적으로 넣지 않는다. 예전엔 오늘 00시부터 담아서, 이른
+        // 새벽에 끝난 경기가 하루 종일 목록 위쪽을 차지했다.
+        //
+        // 마이너 강등 선수의 MLB(부모 구단) 경기는 그의 경기가 아니다.
+        // 위 '오늘의 경기'와 일정 탭엔 이미 적용돼 있는데 이 목록만 빠져 있어,
+        // 같은 화면에서 카드엔 없고 아래 목록엔 뜨는 불일치가 있었다.
+        const pickMatches = (accept) => {
+          const seen = new Set();
+          return allMatches
+            .filter(m => {
+              if (!m.koreanPlayer || !m.fullDate) return false;
+              if (koreanIsMinorLeaguer(m)) return false;
+              if (seen.has(m.id)) return false;
+              seen.add(m.id);
+              return accept(m);
+            })
+            .sort((a, b) => new Date(a.fullDate) - new Date(b.fullDate));
+        };
 
+        const remaining = pickMatches(m => {
+          if (m.live || m.time === 'LIVE') return true; // 진행 중이면 무조건
+          if (isFinalStatus(m.status)) return false;    // 끝난 경기는 제외
+          // 남은 건 아직 안 끝난 경기다. 킥오프가 지났는데 라이브 표시가 아직
+          // 안 붙은 경우(데이터 지연)도 여기서 살아남아야 하므로 오늘 0시부터 본다.
+          const d = new Date(m.fullDate);
+          return d >= startOfToday && d <= twelveHoursLater;
+        });
+
+        // 오늘 남은 경기가 하나도 없으면 이 자리가 통째로 사라진다 — 그럴 땐
+        // 결과라도 보여준다(제보: '아무것도 안 보이는 불상사').
+        //  1순위: 오늘 끝난 경기
+        //  2순위: 오늘 경기가 아예 없던 날 → 최근 이틀 안의 마지막 경기일 결과
+        //         (날짜 머리글이 '어제'·'8/30' 으로 붙어 오늘 것과 헷갈리지 않는다)
+        const finished = remaining.length ? [] : (() => {
+          const today = pickMatches(m => {
+            if (!isFinalStatus(m.status)) return false;
+            const d = new Date(m.fullDate);
+            return d >= startOfToday && d <= endOfToday;
+          });
+          if (today.length) return today;
+          const twoDaysAgo = new Date(startOfToday.getTime() - 2 * 86400000);
+          const recent = pickMatches(m => {
+            if (!isFinalStatus(m.status)) return false;
+            const d = new Date(m.fullDate);
+            return d >= twoDaysAgo && d < startOfToday;
+          });
+          if (!recent.length) return [];
+          // 가장 최근 '하루'만 — 이틀치를 한꺼번에 늘어놓으면 목록이 장황해진다.
+          const lastDay = new Date(recent[recent.length - 1].fullDate).toDateString();
+          return recent.filter(m => new Date(m.fullDate).toDateString() === lastDay);
+        })();
+
+        const thisWeekMatches = remaining.length ? remaining : finished;
         if (thisWeekMatches.length === 0) return null;
 
         const todayStr = now.toDateString();
