@@ -7571,7 +7571,14 @@ function App() {
         // → 실제 명단 엔트리 수로 판정한다.
         const rosterCount = (lu) => (lu || []).reduce(
           (n, t) => n + ((t.startXI || []).length + (t.substitutes || []).length), 0);
-        const detailIncomplete = (d) => rosterCount(d && d.lineups) === 0;
+        // 종료 경기인데 이벤트가 하나도 없으면(교체·골·카드 전무) 완결로 보지 않는다.
+        // 90분 경기에 이벤트가 0개인 건 사실상 없고, 실제로는 events 콜만 한도에
+        // 걸려 빈 채로 온 경우다 — 그걸 영구 캐시하면 교체 투입 선수가 '미출전'으로
+        // 굳는다(제보: 밤새 결과가 미출전으로 떠 있다가 재시작 후에야 정상).
+        // 이 판정은 공유 캐시(sf_cache) 읽기에도 쓰이므로 이미 오염된 행도 만료된다.
+        const detailIncomplete = (d) =>
+          rosterCount(d && d.lineups) === 0 ||
+          (d && d.status === 'STATUS_FINAL' && (d.events || []).length === 0);
         const kickoffById = {};
         afKorean.forEach(m => { kickoffById[m.id] = m.fullDate ? new Date(m.fullDate).getTime() : null; });
         const detailTtl = (d, id) => {
@@ -7648,20 +7655,30 @@ function App() {
               const haveRoster = (cached?.lineups || []).some(t => (t.startXI || []).length);
               const playersAge = Date.now() - (cached?.playersAt || 0);
               const wantPlayers = needPlayers && (!cached?.players?.length || playersAge > 90000);
+              // API-Football 은 한도를 넘으면 HTTP 200 에 errors 를 담고 response:[] 를
+              // 준다. r.ok 만 보면 정상 빈 데이터와 구분이 안 되고, [] 는 truthy 라
+              // '|| cached' 폴백도 타지 않아 직전의 멀쩡한 값을 빈 배열로 덮어썼다.
+              // → errors 가 있으면 실패(null)로 돌려 직전 값을 지키고 캐시도 하지 않는다.
+              const afJson = (r) => r.ok ? r.json().then(j => {
+                const e = j && j.errors;
+                const bad = e && (Array.isArray(e) ? e.length > 0 : Object.keys(e).length > 0);
+                return bad ? null : j;
+              }) : null;
               const [lineups, events, players] = await Promise.all([
                 haveRoster
-                  ? Promise.resolve(null)
-                  : fetch(`${AF_BASE}?path=fixtures/lineups&fixture=${m.id}`).then(r => r.ok ? r.json() : null).catch(() => null),
-                fetch(`${AF_BASE}?path=fixtures/events&fixture=${m.id}`).then(r => r.ok ? r.json() : null).catch(() => null),
+                  ? Promise.resolve(undefined)   // 요청 안 함(캐시 사용)
+                  : fetch(`${AF_BASE}?path=fixtures/lineups&fixture=${m.id}`).then(afJson).catch(() => null),
+                fetch(`${AF_BASE}?path=fixtures/events&fixture=${m.id}`).then(afJson).catch(() => null),
                 wantPlayers
-                  ? fetch(`${AF_BASE}?path=fixtures/players&fixture=${m.id}`).then(r => r.ok ? r.json() : null).catch(() => null)
-                  : Promise.resolve(null),
+                  ? fetch(`${AF_BASE}?path=fixtures/players&fixture=${m.id}`).then(afJson).catch(() => null)
+                  : Promise.resolve(undefined),
               ]);
+              // null = 요청했는데 실패, undefined = 요청 안 함. 둘 다 직전 값을 이어쓴다.
+              const failed = lineups === null || events === null || players === null;
               const detail = {
-                // 이번에 안 받은 항목은 직전 값을 그대로 이어쓴다.
-                lineups: lineups?.response || cached?.lineups || [],
-                events: events?.response || [],
-                players: players?.response || cached?.players || [],
+                lineups: lineups ? lineups.response : (cached?.lineups || []),
+                events: events ? events.response : (cached?.events || []),
+                players: players ? players.response : (cached?.players || []),
                 playersAt: players ? Date.now() : (cached?.playersAt || 0),
                 fetchedAt: Date.now(),
                 status: m.status,
@@ -7672,10 +7689,12 @@ function App() {
               // 걸려 빈 응답을 받은 경우 다음 폴링에서 재시도해야 결국 채워진다.
               // (진짜 라인업이 없는 하위 친선경기의 반복 재요청은 3분 TTL로 완화.)
               detail.empty = detail.lineups.length === 0 && detail.events.length === 0;
-              if (!detail.empty || isFinalMatch) {
+              // 하나라도 실패한 회차는 캐시하지 않는다 — 다음 폴링에서 다시 받는다.
+              // (직전 값으로 화면은 그리되, 그 반쪽을 '완결'로 굳히지 않기 위해)
+              if (!failed && (!detail.empty || isFinalMatch)) {
                 detailsCache[m.id] = detail;
               }
-              if (!detail.empty) {
+              if (!failed && !detail.empty) {
                 // players 원본은 팀 전체 스탯이라 크다 — 매칭에 쓰는 id·이름·평점만 남긴다.
                 const slimPlayers = (detail.players || []).map(team => ({
                   players: (team.players || []).map(e => ({

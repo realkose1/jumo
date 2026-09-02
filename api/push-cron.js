@@ -460,7 +460,14 @@ async function collectSoccer(events, liveStates) {
       });
 
       // Mark finished fixtures as fully processed AFTER their events were parsed.
-      if (isFinal) events.push({ key: `af-done-${fid}`, players: [], silent: true });
+      // 단, 라인업을 못 받은 회차(한도 초과·AF 지연)에 찍으면 결과 알림이 영영
+      // 나가지 않는다 — 명단을 확인했거나, 종료 후 2시간이 지나 더 기다릴 이유가
+      // 없을 때만 마감한다. (명단 없는 경기는 2시간 동안 2분마다 1콜 = 60콜 상한)
+      const kickoffMs = new Date(fx.fixture?.date || 0).getTime();
+      const longDone = kickoffMs && Date.now() - kickoffMs > (2 * 60 + 120) * 60 * 1000;
+      if (isFinal && (squad !== null || longDone)) {
+        events.push({ key: `af-done-${fid}`, players: [], silent: true });
+      }
     }
   }
 }
