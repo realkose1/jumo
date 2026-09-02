@@ -3543,10 +3543,10 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
     setLineupsLoading(true);
     (async () => {
       const [lineupsJson, playersJson] = await Promise.all([
-        fetch(`${API_BASE}/api/apifootball?path=fixtures/lineups&fixture=${match.id}`).then(r => r.ok ? r.json() : null).catch(() => null),
+        afFetch(`path=fixtures/lineups&fixture=${match.id}`).catch(() => null),
         // 평점은 시작한 경기에만 있다 — 시작 전엔 부르지 않는다.
         started
-          ? fetch(`${API_BASE}/api/apifootball?path=fixtures/players&fixture=${match.id}`).then(r => r.ok ? r.json() : null).catch(() => null)
+          ? afFetch(`path=fixtures/players&fixture=${match.id}`).catch(() => null)
           : Promise.resolve(null),
       ]);
       let afLineups = lineupsJson?.response;
@@ -7269,7 +7269,6 @@ function App() {
         // Range covers the schedule-tab date strip (±7 days). Tiered TTL keeps
         // calls within the Pro 7,500/day budget — today refreshes often,
         // far-future dates rarely change.
-        const AF_BASE = `${API_BASE}/api/apifootball`;
         // -7..+7: 일정 탭 날짜 스트립(±7일)과 동일 범위. 과거를 -2일까지만 가져오면
         // 스트립의 3~7일 전 축구 경기가 늘 비고, 최근 결과(예: 주초 친선전)도 놓친다.
         // 지난 날짜는 30분 TTL + sf_cache 공유 캐시라 실제 API 부하 증가는 미미.
@@ -7324,8 +7323,7 @@ function App() {
           let fixtures = isFresh ? cached.events : null;
 
           if (!fixtures) {
-            const data = await fetch(`${AF_BASE}?path=fixtures&date=${date}`)
-              .then(r => r.ok ? r.json() : null).catch(() => null);
+            const data = await afFetch(`path=fixtures&date=${date}`).catch(() => null);
             const fetched = data?.response;
             if (Array.isArray(fetched) && fetched.length > 0) {
               fixtures = fetched;
@@ -7659,18 +7657,15 @@ function App() {
               // 준다. r.ok 만 보면 정상 빈 데이터와 구분이 안 되고, [] 는 truthy 라
               // '|| cached' 폴백도 타지 않아 직전의 멀쩡한 값을 빈 배열로 덮어썼다.
               // → errors 가 있으면 실패(null)로 돌려 직전 값을 지키고 캐시도 하지 않는다.
-              const afJson = (r) => r.ok ? r.json().then(j => {
-                const e = j && j.errors;
-                const bad = e && (Array.isArray(e) ? e.length > 0 : Object.keys(e).length > 0);
-                return bad ? null : j;
-              }) : null;
+              // afFetch: 전 호출을 한 줄로 세워 초당 버스트를 막고, errors 가 있으면
+              // null(실패)로 돌려준다 → 직전 값을 지키고 캐시하지 않는다.
               const [lineups, events, players] = await Promise.all([
                 haveRoster
                   ? Promise.resolve(undefined)   // 요청 안 함(캐시 사용)
-                  : fetch(`${AF_BASE}?path=fixtures/lineups&fixture=${m.id}`).then(afJson).catch(() => null),
-                fetch(`${AF_BASE}?path=fixtures/events&fixture=${m.id}`).then(afJson).catch(() => null),
+                  : afFetch(`path=fixtures/lineups&fixture=${m.id}`).catch(() => null),
+                afFetch(`path=fixtures/events&fixture=${m.id}`).catch(() => null),
                 wantPlayers
-                  ? fetch(`${AF_BASE}?path=fixtures/players&fixture=${m.id}`).then(afJson).catch(() => null)
+                  ? afFetch(`path=fixtures/players&fixture=${m.id}`).catch(() => null)
                   : Promise.resolve(undefined),
               ]);
               // null = 요청했는데 실패, undefined = 요청 안 함. 둘 다 직전 값을 이어쓴다.
@@ -8469,7 +8464,8 @@ function App() {
         const til = new Date(m.fullDate).getTime() - Date.now();
         return til > -10 * 60 * 1000 && til <= 90 * 60 * 1000;
       });
-      return hasImminent ? 20000 : 60000;
+      // 0~5초 지터: 기기들이 같은 초에 틱을 쏘면 키 전체의 초당 한도(5회)를 넘긴다.
+      return (hasImminent ? 20000 : 60000) + Math.random() * 5000;
     };
     let firstRun = true;
     // 네트워크가 끝내 응답하지 않아도 루프가 멈추지 않도록 상한을 둔다.

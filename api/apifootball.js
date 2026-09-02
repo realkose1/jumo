@@ -60,6 +60,24 @@ module.exports = async function handler(req, res) {
     const r = await fetch(url, { headers: { 'x-apisports-key': key } });
     const data = await r.json();
 
+    // 사용량 집계 — 어느 경로가 하루 한도를 먹는지 알기 위해 한 줄씩 남긴다.
+    // CDN 캐시(s-maxage)에 맞은 요청은 이 함수까지 오지 않으므로, 여기 기록은
+    // '실제로 API-Football 에 나간 호출'과 같다. 실패해도 응답에는 영향 없음.
+    const errs = data && data.errors;
+    const errKeys = Array.isArray(errs) ? errs : Object.keys(errs || {});
+    const ua = String(req.headers['user-agent'] || '');
+    await Promise.race([
+      fetch(`${process.env.SUPABASE_URL}/rest/v1/af_usage`, {
+        method: 'POST',
+        headers: { apikey: process.env.SUPABASE_SERVICE_KEY,
+                   authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
+                   'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify({ path, source: /iPhone|iPad/.test(ua) ? 'ios' : 'web',
+          ok: errKeys.length === 0, rate_limited: errKeys.includes('rateLimit') || errKeys.includes('requests') }),
+      }).catch(() => {}),
+      new Promise((res2) => setTimeout(res2, 800)),
+    ]);
+
     // CDN cache: fixtures lists for a date are fairly stable, lineups/events
     // change closer to / during kickoff. Use modest TTL to keep daily call
     // count low. The client also has its own Supabase cache layer on top.

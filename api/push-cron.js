@@ -178,7 +178,20 @@ const AF_FINAL = new Set(['FT', 'AET', 'PEN']);
 function afGet(path) {
   const key = process.env.APIFOOTBALL_KEY;
   return fetch(`https://v3.football.api-sports.io${path}`, { headers: { 'x-apisports-key': key } })
-    .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    .then((r) => (r.ok ? r.json() : null))
+    .then((j) => {
+      // 사용량 집계(프록시와 같은 테이블). 실패는 무시한다.
+      const errs = j && j.errors;
+      const errKeys = Array.isArray(errs) ? errs : Object.keys(errs || {});
+      fetch(`${process.env.SUPABASE_URL}/rest/v1/af_usage`, {
+        method: 'POST',
+        headers: { ...sbHeaders(), 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify({ path: path.replace(/^\//, '').split('?')[0], source: 'cron',
+          ok: !!j && errKeys.length === 0, rate_limited: errKeys.includes('rateLimit') || errKeys.includes('requests') }),
+      }).catch(() => {});
+      return j;
+    })
+    .catch(() => null);
 }
 
 async function alreadyLogged(eventKey) {
