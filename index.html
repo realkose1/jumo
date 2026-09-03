@@ -662,11 +662,12 @@ const KOREAN_PLAYERS = {
   'Bayern München': { name: '김민재', nameEn: 'Kim Min-jae', number: 3, position: '센터백' },
   'FC Bayern München': { name: '김민재', nameEn: 'Kim Min-jae', number: 3, position: '센터백' },
   'FC Bayern': { name: '김민재', nameEn: 'Kim Min-jae', number: 3, position: '센터백' },
-  // 황희찬 — Wolves (EPL)
-  'Wolves': { name: '황희찬', nameEn: 'Hwang Hee-chan', number: 11, position: '공격수' },
-  'Wolverhampton Wanderers': { name: '황희찬', nameEn: 'Hwang Hee-chan', number: 11, position: '공격수' },
-  'Wolverhampton': { name: '황희찬', nameEn: 'Hwang Hee-chan', number: 11, position: '공격수' },
+  // 황희찬 — Schalke 04 (분데스리가), 2026-09 Wolves 에서 이적
+  'Schalke 04': { name: '황희찬', nameEn: 'Hwang Hee-chan', number: 11, position: '공격수' },
+  'FC Schalke 04': { name: '황희찬', nameEn: 'Hwang Hee-chan', number: 11, position: '공격수' },
+  'Schalke': { name: '황희찬', nameEn: 'Hwang Hee-chan', number: 11, position: '공격수' },
   // 조규성 — FC Midtjylland (Danish Superliga). 등번호 10 (라인업 확인)
+  // 2026-09 홍현석 합류(Mainz 에서 이적) — 같은 팀 두 번째 선수는 KOREAN_PLAYERS_EXTRA 에.
   'Midtjylland': { name: '조규성', nameEn: 'Cho Gue-sung', number: 10, position: '공격수' },
   'FC Midtjylland': { name: '조규성', nameEn: 'Cho Gue-sung', number: 10, position: '공격수' },
   // 황인범 — FC Porto (Primeira Liga), 2026-07 이적
@@ -743,10 +744,9 @@ const KOREAN_PLAYERS = {
 // KOREAN_PLAYERS는 팀명 → 선수 1명 구조라 같은 팀에 한국 선수가 둘 이상이면
 // 한 명만 잡힌다(미트윌란: 조규성 + 이한범). 추가 선수는 여기에 둔다.
 const KOREAN_PLAYERS_EXTRA = {
-  // 마인츠: 이재성 + 홍현석
-  'Mainz':           [{ name: '홍현석', nameEn: 'Hong Hyun-seok', number: 13, position: '미드필더' }],
-  'FSV Mainz 05':    [{ name: '홍현석', nameEn: 'Hong Hyun-seok', number: 13, position: '미드필더' }],
-  '1. FSV Mainz 05': [{ name: '홍현석', nameEn: 'Hong Hyun-seok', number: 13, position: '미드필더' }],
+  // 미트윌란: 조규성 + 홍현석(2026-09 Mainz 에서 이적)
+  'Midtjylland':    [{ name: '홍현석', nameEn: 'Hong Hyun-seok', number: 13, position: '미드필더' }],
+  'FC Midtjylland': [{ name: '홍현석', nameEn: 'Hong Hyun-seok', number: 13, position: '미드필더' }],
 };
 
 // 팀명으로 그 팀의 한국 선수 전원을 돌려준다(0~N명). team 코드는 카드·스코어 비교에
@@ -1120,7 +1120,7 @@ const ALL_PLAYERS = [
   { id: 1,  name: '손흥민',  nameEn: 'Son Heung-min',   number: 7,  sport: '축구',   team: 'LAFC',       league: 'MLS',        position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0, rating: 0, startRate: 90, age: 33, birth: '1992.07.08', height: '183cm', espnLeague: 'usa.1',  espnId: 149945, espnTeamId: 18966, apiFootballId: 186 },
   { id: 2,  name: '이강인',  nameEn: 'Lee Kang-in',     number: 7,  sport: '축구',   team: 'Atletico',   league: 'La Liga',    position: '미드필더', nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 60, age: 25, birth: '2001.02.19', height: '173cm', espnLeague: 'esp.1',  espnId: 274197, espnTeamId: 1068, apiFootballId: 927 },
   { id: 3,  name: '김민재',  nameEn: 'Kim Min-jae',     number: 3,  sport: '축구',   team: 'Bayern',     league: 'Bundesliga', position: '센터백',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 65, age: 29, birth: '1996.11.15', height: '190cm', espnLeague: 'ger.1',  espnId: 157688, espnTeamId: 132, apiFootballId: 2897 },
-  { id: 6,  name: '황희찬',  nameEn: 'Hwang Hee-chan',  number: 11, sport: '축구',   team: 'Wolves',     league: 'EPL',        position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 65, age: 30, birth: '1996.01.26', height: '177cm', espnLeague: 'eng.2',  espnId: 237224, espnTeamId: 380, apiFootballId: 24888 },
+  { id: 6,  name: '황희찬',  nameEn: 'Hwang Hee-chan',  number: 11, sport: '축구',   team: 'Schalke 04', league: 'Bundesliga', position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 65, age: 30, birth: '1996.01.26', height: '177cm', espnLeague: 'ger.1',  espnId: 237224, espnTeamId: 133, apiFootballId: 24888 },
   { id: 7,  name: '황인범',  nameEn: 'Hwang In-beom',   number: 16, sport: '축구',   team: 'Porto',      league: 'Primeira Liga', position: '미드필더', nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 50, age: 29, birth: '1996.09.20', height: '177cm', espnLeague: 'por.1',  espnId: 280061, espnTeamId: 437, apiFootballId: 2901 },
   { id: 8,  name: '조규성',  nameEn: 'Cho Gue-sung',    number: 10,  sport: '축구',   team: 'Midtjylland',league: 'Superliga',  position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 70, age: 28, birth: '1998.01.25', height: '190cm', espnLeague: 'den.1',  espnId: 303464, espnTeamId: 572, apiFootballId: 34211 },
   { id: 25, name: '이한범',  nameEn: 'Lee Han-Beom',   number: 3,  sport: '축구',   team: 'Club Brugge',league: 'Pro League', position: '센터백',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 85, age: 24, birth: '2002.06.17', height: '190cm', espnLeague: 'bel.1',  apiFootballId: 237218, espnId: 297788, espnTeamId: 570, espnTeamId: 570 },
@@ -1137,7 +1137,7 @@ const ALL_PLAYERS = [
   { id: 18, name: '김혜성',  nameEn: 'Hyeseong Kim',    number: 25, sport: '야구',   team: 'Dodgers',    league: 'MLB',        position: '유격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0, rating: 0,   startRate: 70, age: 27, birth: '1999.01.27', height: '178cm', mlbId: 808975 },
   // ── 2026-08 확장 로스터 ──
   { id: 26, name: '이재성',  nameEn: 'Lee Jae-sung',   number: 7,  sport: '축구',   team: 'Mainz',      league: '분데스리가',  position: '미드필더', nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 80, age: 34, birth: '1992.08.10', height: '180cm', espnLeague: 'ger.1', espnId: 134103, espnTeamId: 2950, apiFootballId: 2906 },
-  { id: 27, name: '홍현석',  nameEn: 'Hong Hyun-seok', number: 13, sport: '축구',   team: 'Mainz',      league: '분데스리가',  position: '미드필더', nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 60, age: 27, birth: '1999.06.16', height: '175cm', espnLeague: 'ger.1', espnId: 271701, espnTeamId: 2950, apiFootballId: 26519 },
+  { id: 27, name: '홍현석',  nameEn: 'Hong Hyun-seok', number: 13, sport: '축구',   team: 'Midtjylland', league: 'Superliga', position: '미드필더', nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 60, age: 27, birth: '1999.06.16', height: '175cm', espnLeague: 'den.1', espnId: 271701, espnTeamId: 572, apiFootballId: 26519 },
   { id: 28, name: '정우영',  nameEn: 'Jeong Woo-yeong',number: 11, sport: '축구',   team: 'Union Berlin',league: '분데스리가', position: '미드필더', nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 55, age: 26, birth: '1999.09.20', height: '179cm', espnLeague: 'ger.1', espnId: 276323, espnTeamId: 598, apiFootballId: 512 },
   { id: 29, name: '카스트로프', nameEn: 'Jens Castrop', number: 17, sport: '축구',   team: 'Gladbach',   league: '분데스리가',  position: '미드필더', nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 55, age: 23, birth: '2003.07.29', height: '178cm', espnLeague: 'ger.1', espnId: 304793, espnTeamId: 268, apiFootballId: 280358, addedAt: '2026-08-15' },
   { id: 30, name: '박승수',  nameEn: 'Park Seung-soo', number: 64, sport: '축구',   team: 'Newcastle',  league: 'EPL',        position: '윙어',     nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 25, age: 19, birth: '2007.03.17', height: '183cm', espnLeague: 'eng.1', espnId: 371584, espnTeamId: 361, apiFootballId: 423714, addedAt: '2026-08-15' },
@@ -1201,7 +1201,8 @@ const PLAYER_EXTRA = {
   },
   6: { // 황희찬
     career: [
-      { year:'2020–',    team:'Wolverhampton', league:'EPL',          flag:'🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
+      { year:'2026–',    team:'Schalke 04',    league:'분데스리가',    flag:'🇩🇪' },
+      { year:'2020–26',  team:'Wolverhampton', league:'EPL',          flag:'🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
       { year:'2018–20',  team:'Hamburger SV',  league:'2.분데스리가',  flag:'🇩🇪' },
       { year:'2015–20',  team:'RB Salzburg',   league:'오스트리아 분데스',flag:'🇦🇹' },
       { year:'2014–15',  team:'포항 스틸러스 U18', league:'유스',        flag:'🇰🇷' },
@@ -1281,7 +1282,8 @@ const PLAYER_EXTRA = {
   },
   27: { // 홍현석
     career: [
-      { year:'2024–',    team:'Mainz 05',   league:'분데스리가',  flag:'🇩🇪' },
+      { year:'2026–',    team:'FC Midtjylland', league:'덴마크 SL',  flag:'🇩🇰' },
+      { year:'2024–26',  team:'Mainz 05',       league:'분데스리가',  flag:'🇩🇪' },
       { year:'2023–24',  team:'KAA Gent',   league:'벨기에 1부',  flag:'🇧🇪' },
       { year:'2021–23',  team:'LASK',       league:'오스트리아 BL', flag:'🇦🇹' },
     ],
