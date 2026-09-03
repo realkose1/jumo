@@ -7295,12 +7295,23 @@ function App() {
         };
 
         const todayStr = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
-        const ttlForDate = (dateStr) => {
-          if (dateStr === todayStr) return 2 * 60 * 1000; // 오늘: 2분
+        // 실측(af_usage, 24h): 목록 호출이 하루 1,389회로 전체의 1/4 — 대부분 아무것도
+        // 안 바뀌는 날짜를 30분마다 다시 받은 것이다. 지난 날은 결과가 확정이라 사실상
+        // 불변, 앞날은 킥오프 시각 변경 정도라 몇 시간에 한 번이면 된다. 오늘도
+        // 라이브·임박 경기가 없으면 점수가 바뀔 일이 없다.
+        const LIVE_SHORT = new Set(['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE', 'INT']);
+        const todayIsHot = (rows) => (rows || []).some(f => {
+          const st = f?.fixture?.status?.short;
+          if (LIVE_SHORT.has(st)) return true;
+          const til = new Date(f?.fixture?.date || 0).getTime() - Date.now();
+          return til > -3 * 3600 * 1000 && til < 90 * 60 * 1000;   // 킥오프 전 90분 ~ 후 3시간
+        });
+        const ttlForDate = (dateStr, cachedRows) => {
+          if (dateStr === todayStr) return todayIsHot(cachedRows) ? 2 * 60 * 1000 : 10 * 60 * 1000;
           const dt = new Date(dateStr).getTime();
-          const diff = Math.abs(dt - today.getTime()) / (24 * 3600 * 1000);
-          if (diff <= 1.5) return 10 * 60 * 1000;   // ±1일: 10분
-          return 30 * 60 * 1000;                     // 그 외: 30분
+          const diffDays = (dt - today.getTime()) / (24 * 3600 * 1000);
+          if (Math.abs(diffDays) <= 1.5) return 30 * 60 * 1000;      // ±1일: 30분
+          return diffDays < 0 ? 24 * 3600 * 1000 : 6 * 3600 * 1000; // 지난 날 24시간, 앞날 6시간
         };
 
         // Load cached rows from Supabase (sf_cache table is reused for API-Football fixtures)
@@ -7316,7 +7327,7 @@ function App() {
 
         await Promise.all(afDates.map(async date => {
           const cached = cacheMap[date];
-          const ttlMs = ttlForDate(date);
+          const ttlMs = ttlForDate(date, cached?.events);
           const cachedHasFixtures = Array.isArray(cached?.events) && cached.events.length > 0;
           const isFresh = cachedHasFixtures && (Date.now() - new Date(cached.updated_at).getTime()) < ttlMs;
 
@@ -7580,7 +7591,16 @@ function App() {
         const kickoffById = {};
         afKorean.forEach(m => { kickoffById[m.id] = m.fullDate ? new Date(m.fullDate).getTime() : null; });
         const detailTtl = (d, id) => {
-          if (!d || d.status !== 'STATUS_FINAL') return d && d.live ? 15000 : 60000;
+          if (!d) return 0;
+          if (d.status !== 'STATUS_FINAL') {
+            if (d.live) return 15000;
+            // 실측: 상세 호출(events 2,087·lineups 702/일)의 상당분이 아직 시작도 안 한
+            // 경기를 매분 다시 받은 것이었다. 라인업은 킥오프 한 시간 전쯤 나오고
+            // 그 전엔 아무것도 없으므로, 90분 밖이면 6시간에 한 번이면 충분하다.
+            const ko = kickoffById[id];
+            const til = ko ? ko - Date.now() : 0;
+            return til > 90 * 60 * 1000 ? 6 * 60 * 60 * 1000 : 60000;
+          }
           if (!detailIncomplete(d)) return Infinity;   // 명단이 채워졌으면 더 볼 것 없음
           // 비어 있으면 일시적 누락(레이트리밋으로 lineups 콜만 실패 등)일 수 있다.
           // 갓 끝난 경기는 10분, 그 뒤로는 6시간마다 느리게 재시도한다. 경기 목록
@@ -7652,7 +7672,7 @@ function App() {
               // - events: 골·교체가 실시간이라 그대로 매번 받는다.
               const haveRoster = (cached?.lineups || []).some(t => (t.startXI || []).length);
               const playersAge = Date.now() - (cached?.playersAt || 0);
-              const wantPlayers = needPlayers && (!cached?.players?.length || playersAge > 90000);
+              const wantPlayers = needPlayers && (!cached?.players?.length || playersAge > 180000);
               // API-Football 은 한도를 넘으면 HTTP 200 에 errors 를 담고 response:[] 를
               // 준다. r.ok 만 보면 정상 빈 데이터와 구분이 안 되고, [] 는 truthy 라
               // '|| cached' 폴백도 타지 않아 직전의 멀쩡한 값을 빈 배열로 덮어썼다.
