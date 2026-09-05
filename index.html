@@ -686,9 +686,11 @@ const KOREAN_PLAYERS = {
   // 옌스 카스트로프 — Borussia Mönchengladbach (분데스리가), 한국 국대
   'Borussia Mönchengladbach': { name: '카스트로프', nameEn: 'Jens Castrop', number: 17, position: '미드필더' },
   'Borussia Monchengladbach': { name: '카스트로프', nameEn: 'Jens Castrop', number: 17, position: '미드필더' },
-  // 박승수 — Newcastle United (EPL)
-  'Newcastle': { name: '박승수', nameEn: 'Park Seung-soo', number: 64, position: '윙어' },
-  'Newcastle United': { name: '박승수', nameEn: 'Park Seung-soo', number: 64, position: '윙어' },
+  // 박승수 — Newcastle United U21 (PL2·EFL 트로피). 1군 스쿼드에도 등록돼 있지만
+  // 실제로 뛰는 건 U21 이라, 1군 팀명에 걸어두면 EPL 경기마다 '미출전'만 뜬다.
+  // AF 일일 목록에 U21·유스 리그가 함께 들어오므로 팀명만 바꾸면 그대로 잡힌다.
+  'Newcastle United U21': { name: '박승수', nameEn: 'Park Seung-soo', number: 64, position: '윙어' },
+  'Newcastle U21': { name: '박승수', nameEn: 'Park Seung-soo', number: 64, position: '윙어' },
   // 김지수 — Brentford (EPL), 카이저슬라우테른 임대 복귀
   'Brentford': { name: '김지수', nameEn: 'Kim Ji-soo', number: 36, position: '센터백' },
   // 양민혁 — KVC Westerlo (벨기에, 토트넘에서 임대)
@@ -1140,7 +1142,7 @@ const ALL_PLAYERS = [
   { id: 27, name: '홍현석',  nameEn: 'Hong Hyun-seok', number: 13, sport: '축구',   team: 'Midtjylland', league: 'Superliga', position: '미드필더', nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 60, age: 27, birth: '1999.06.16', height: '175cm', espnLeague: 'den.1', espnId: 271701, espnTeamId: 572, apiFootballId: 26519 },
   { id: 28, name: '정우영',  nameEn: 'Jeong Woo-yeong',number: 11, sport: '축구',   team: 'Union Berlin',league: '분데스리가', position: '미드필더', nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 55, age: 26, birth: '1999.09.20', height: '179cm', espnLeague: 'ger.1', espnId: 276323, espnTeamId: 598, apiFootballId: 512 },
   { id: 29, name: '카스트로프', nameEn: 'Jens Castrop', number: 17, sport: '축구',   team: 'Gladbach',   league: '분데스리가',  position: '미드필더', nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 55, age: 23, birth: '2003.07.29', height: '178cm', espnLeague: 'ger.1', espnId: 304793, espnTeamId: 268, apiFootballId: 280358, addedAt: '2026-08-15' },
-  { id: 30, name: '박승수',  nameEn: 'Park Seung-soo', number: 64, sport: '축구',   team: 'Newcastle',  league: 'EPL',        position: '윙어',     nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 25, age: 19, birth: '2007.03.17', height: '183cm', espnLeague: 'eng.1', espnId: 371584, espnTeamId: 361, apiFootballId: 423714, addedAt: '2026-08-15' },
+  { id: 30, name: '박승수',  nameEn: 'Park Seung-soo', number: 64, sport: '축구',   team: 'Newcastle U21', league: 'PL2',      position: '윙어',     nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 25, age: 19, birth: '2007.03.17', height: '183cm', apiFootballId: 423714, addedAt: '2026-08-15' },
   { id: 31, name: '김지수',  nameEn: 'Kim Ji-soo',     number: 36, sport: '축구',   team: 'Brentford',  league: 'EPL',        position: '센터백',   nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 30, age: 21, birth: '2004.12.24', height: '192cm', espnLeague: 'eng.1', espnId: 362203, espnTeamId: 337, apiFootballId: 356237, addedAt: '2026-08-15' },
   { id: 32, name: '양민혁',  nameEn: 'Yang Min-hyeok', number: 47, sport: '축구',   team: 'Westerlo',   league: 'Pro League', position: '윙어',     nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 60, age: 20, birth: '2006.04.16', height: '172cm', espnLeague: 'bel.1', espnId: 371578, espnTeamId: 606, apiFootballId: 423708, addedAt: '2026-08-15' },
   { id: 33, name: '이태석',  nameEn: 'Lee Tae-seok',   number: 17, sport: '축구',   team: 'Austria Wien',league: '오스트리아 BL',position: '풀백',    nation: '🇰🇷', goals: 0, assists: 0, matches: 0, rating: 0, startRate: 75, age: 24, birth: '2002.07.28', height: '177cm', espnLeague: 'aut.1', espnId: 297270, espnTeamId: 1382, apiFootballId: 237220, addedAt: '2026-08-15' },
@@ -1303,7 +1305,7 @@ const PLAYER_EXTRA = {
   },
   30: { // 박승수
     career: [
-      { year:'2025–',    team:'Newcastle United', league:'EPL',    flag:'🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
+      { year:'2025–',    team:'Newcastle U21',    league:'PL2',    flag:'🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
       { year:'2024–25',  team:'수원 삼성 블루윙즈',  league:'K리그2',  flag:'🇰🇷' },
     ],
   },
