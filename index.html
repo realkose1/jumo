@@ -3485,7 +3485,7 @@ const SQUAD_POS = [
 // ─── SCREEN: TEAM DETAIL ──────────────────────────────────────
 // 경기 상세에서 팀을 누르면 열린다. 팀 id 는 API-Football 경기에만 실려 있어
 // 야구(statsapi)·ESPN 경기에서는 진입 자체가 막혀 있다(의도된 동작).
-function TeamScreen({ team, onBack, onMatch, liveApiMatches = [] }) {
+function TeamScreen({ team, onBack, onMatch, onPlayer, liveApiMatches = [] }) {
   const teamId = team.id;
   // 시즌은 경기가 실어 온 league.season 을 그대로 쓴다. 없으면 날짜에서 유도.
   const season = team.season || afSeasonFor({});
@@ -3661,9 +3661,13 @@ function TeamScreen({ team, onBack, onMatch, liveApiMatches = [] }) {
                   {list.map((p, i) => {
                     // 한국 선수는 브랜드 옐로로 강조한다 — 이 앱의 존재 이유.
                     const kp = KOREAN_BY_NAME_KEY.get(teamNameKey(p.name));
+                    // 매칭된 한국 선수는 그대로 선수 상세로 넘긴다(강조에 쓴 객체를 재사용).
+                    const canOpen = !!(kp && onPlayer);
                     return (
-                      <div key={p.id || i} style={{ display:'flex', alignItems:'center', gap:12, padding:'11px 14px',
+                      <div key={p.id || i} onClick={canOpen ? () => onPlayer(kp) : undefined}
+                        style={{ display:'flex', alignItems:'center', gap:12, padding:'11px 14px',
                         borderBottom: i === list.length - 1 ? 'none' : '0.5px solid var(--border)',
+                        cursor: canOpen ? 'pointer' : undefined,
                         background: kp ? 'rgba(245,196,0,0.08)' : 'transparent' }}>
                         <span style={{ ...NUM, fontSize:12, fontWeight:700, width:24, textAlign:'center', flexShrink:0, color: kp ? 'var(--acc)' : 'var(--text4)' }}>
                           {p.number ?? '-'}
@@ -3675,6 +3679,7 @@ function TeamScreen({ team, onBack, onMatch, liveApiMatches = [] }) {
                           {kp && <div style={{ fontSize:10, color:'var(--text4)', marginTop:1 }}>{p.name}</div>}
                         </div>
                         {p.age != null && <span style={{ ...NUM, fontSize:11, color:'var(--text4)', flexShrink:0 }}>{p.age}세</span>}
+                        {canOpen && <svg width="7" height="12" viewBox="0 0 7 12" fill="none" style={{ flexShrink:0 }}><path d="M1 1l5 5-5 5" stroke="var(--acc)" strokeWidth="1.8" strokeLinecap="round"/></svg>}
                       </div>
                     );
                   })}
@@ -9485,10 +9490,16 @@ function App() {
   // 상세 위에 상세를 하나 더 얹는다(경기 → 팀). 3단 이상은 지금 필요 없어
   // 배열 대신 단일 슬롯으로 둔다 — 스택 자료구조를 만들면 렌더·제스처 양쪽이
   // 복잡해지는데, 실제 동선은 '상세에서 팀 하나 들여다보기'뿐이다.
-  const [overScreen, setOverScreen] = React.useState(null);   // 'team' | null
+  const [overScreen, setOverScreen] = React.useState(null);   // 'team' | 'player' | null
 
   const goMatch = (m) => { setOverScreen(null); setSelectedMatch(m); setScreen('match'); };
-  const goPlayer = (p) => { setOverScreen(null); setSelectedPlayer(p); setScreen('player'); };
+  const goPlayer = (p) => {
+    setSelectedPlayer(p);
+    // 2단(팀 상세)에서 선수를 누르면 2단을 선수로 갈아끼운다 — 그래야 뒤로 갔을 때
+    // 원래 보던 경기 상세로 돌아간다. 2단을 닫고 1단을 교체하면 홈까지 나가버린다.
+    if (overScreen) setOverScreen('player');
+    else setScreen('player');
+  };
   const goTeam = (t) => {
     if (!t || !t.id) return;
     setSelectedTeam(t);
@@ -9804,9 +9815,11 @@ function App() {
       // 이 된다. closing 을 함께 보고 슬라이드 시작과 동시에 크롬을 접어야 상단
       // 버튼이 사라지는 화면과 겹쳐 보이지 않는다.
       const hiding = closing || dragging;
-      // 2단(팀 상세)이 얹혀 있으면 1단 전용 크롬 — 팔로우·알림 벨·우상단 액션은
-      // 접는다. 팀 화면 위에 남아 겹쳐 보이면 안 된다. 뒤로가기만 살려 둔다:
+      // 2단(팀/선수 상세)이 얹혀 있으면 1단 전용 크롬 — 팔로우·알림 벨·우상단 액션은
+      // 접는다. 2단 화면 위에 남아 겹쳐 보이면 안 된다. 뒤로가기만 살려 둔다:
       // 그게 2단을 걷어내는 버튼이다(웹 BackBtn 은 네이티브 크롬에선 숨는다).
+      // 2단이 선수 화면일 때도 네이티브 팔로우·음소거는 켜지 않는다 — 웹 안에 같은
+      // 버튼이 있어 충분하고, 켜려면 네이티브 크롬의 2단 상태 관리까지 손봐야 한다.
       const over = !!overScreen;
       window.webkit?.messageHandlers?.detailbar?.postMessage({
         back: !hiding && (over || ['match', 'player', 'team', 'notif', 'addplayer'].includes(screen)
@@ -10042,7 +10055,14 @@ function App() {
           스켈레톤이 떠 있는 진짜 첫 로드에는 띄우지 않는다. */}
       <RefreshBar show={refreshing && !isInitialLoad && liveMatches.length > 0}/>
       <IOSDevice dark={true} width={deviceDimensions.width} height={deviceDimensions.height}>
-        <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'var(--bg)', paddingBottom: nativeTabBar ? '0px' : (IS_IOS26_PLUS ? 'calc(74px + env(safe-area-inset-bottom))' : '70px'), position:'relative' }}>
+        {/* 네이티브 리퀴드 글래스 탭바는 웹뷰 위에 떠 있는 UIKit 뷰라, 웹은 그 높이를
+            모른다(네이티브가 알려주게 하려면 Swift 변경 = 네이티브 빌드가 필요).
+            그래서 실측값을 하드코딩한다: iPhone 16e(844pt)에서 탭바가 761~822pt 를
+            차지해 바닥에서 49pt(탭바) + 34pt(safe area) = 83pt 를 먹는다. 여기에
+            여유 7pt 를 더해 56px + env(safe-area-inset-bottom) 으로 둔다.
+            이 컨테이너는 position:relative 이고 상세 오버레이는 position:absolute;
+            inset:0 — inset 은 패딩 박스 기준이라 오버레이도 같은 여백을 자동으로 받는다. */}
+        <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'var(--bg)', paddingBottom: nativeTabBar ? 'calc(56px + env(safe-area-inset-bottom))' : (IS_IOS26_PLUS ? 'calc(74px + env(safe-area-inset-bottom))' : '70px'), position:'relative' }}>
           {toast && (
             <div key={toast.id} style={{ position:'fixed', left:'50%', bottom:'calc(78px + env(safe-area-inset-bottom))', transform:'translateX(-50%)', zIndex:200, background:'rgba(0,0,0,0.85)', color:'#fff', padding:'10px 18px', borderRadius:22, fontSize:13, fontWeight:600, letterSpacing:-0.2, whiteSpace:'nowrap', boxShadow:'0 6px 24px rgba(0,0,0,0.35)', backdropFilter:'blur(10px)', WebkitBackdropFilter:'blur(10px)', animation:'toastIn 0.22s ease-out', pointerEvents:'none' }}>
               {toast.message}
@@ -10061,12 +10081,12 @@ function App() {
               {dragging && !dragTop && <div ref={scrimRef} style={{ position:'absolute', inset:0, zIndex:40, pointerEvents:'none', background:`rgba(0,0,0,${0.18 * (1 - dragP)})` }}/>}
           </div>
           {screen !== 'main' && (
-          <div ref={overlayRef} className={(closing && !dragging) ? 'screen-slide-out' : ''} style={{ position:'absolute', inset:0, zIndex:50, background:'var(--bg)', display:'flex', flexDirection:'column', transform: dragging ? (dragTop ? `translateX(${parallaxX}px)` : `translateX(${dragXRef.current}px)`) : undefined, transition:'none', willChange: dragging ? 'transform' : undefined, boxShadow: (dragging && !dragTop) ? '-8px 0 24px rgba(0,0,0,0.45)' : undefined }}>
+          <div ref={overlayRef} className={(closing && !dragging) ? 'screen-slide-out' : ''} style={{ paddingBottom: nativeTabBar ? 'calc(56px + env(safe-area-inset-bottom))' : undefined, position:'absolute', inset:0, zIndex:50, background:'var(--bg)', display:'flex', flexDirection:'column', transform: dragging ? (dragTop ? `translateX(${parallaxX}px)` : `translateX(${dragXRef.current}px)`) : undefined, transition:'none', willChange: dragging ? 'transform' : undefined, boxShadow: (dragging && !dragTop) ? '-8px 0 24px rgba(0,0,0,0.45)' : undefined }}>
           {screen === 'match' && selectedMatch && (
             <LiveDetailScreen match={selectedMatch} onBack={goBack} liveApiMatches={liveMatches} onPlayer={goPlayer} onTeam={goTeam}/>
           )}
           {screen === 'team' && selectedTeam && (
-            <TeamScreen team={selectedTeam} onBack={goBack} onMatch={goMatch} liveApiMatches={liveMatches}/>
+            <TeamScreen team={selectedTeam} onBack={goBack} onMatch={goMatch} onPlayer={goPlayer} liveApiMatches={liveMatches}/>
           )}
           {screen === 'player' && selectedPlayer && (
             <PlayerScreen player={selectedPlayer} onBack={goBack} onMatch={goMatch} liveApiMatches={liveMatches} statsCache={playerStatsCache} followedSet={followed} onToggleFollow={toggleFollow} muted={mutedPlayers.has(selectedPlayer.id)} onToggleMute={() => togglePlayerMute(selectedPlayer.id)}/>
@@ -10087,13 +10107,21 @@ function App() {
           )}
           </div>
           )}
-          {/* 2단 — 상세 위에 얹히는 팀 화면. 1단은 그대로 뒤에 남아 있어서,
-              뒤로 가면 홈이 아니라 경기 상세로 돌아온다. */}
+          {/* 2단 — 상세 위에 얹히는 팀/선수 화면. 1단은 그대로 뒤에 남아 있어서,
+              뒤로 가면 홈이 아니라 경기 상세로 돌아온다. 팀 스쿼드에서 한국 선수를
+              누르면 이 슬롯이 팀에서 선수로 갈아끼워진다(3단을 쌓지 않는다). */}
           {overScreen === 'team' && selectedTeam && (
-          <div ref={overlayTopRef} style={{ position:'absolute', inset:0, zIndex:60, background:'var(--bg)', display:'flex', flexDirection:'column',
+          <div ref={overlayTopRef} style={{ paddingBottom: nativeTabBar ? 'calc(56px + env(safe-area-inset-bottom))' : undefined, position:'absolute', inset:0, zIndex:60, background:'var(--bg)', display:'flex', flexDirection:'column',
                 transform: dragging ? `translateX(${dragXRef.current}px)` : undefined, transition:'none',
                 willChange: dragging ? 'transform' : undefined, boxShadow: dragging ? '-8px 0 24px rgba(0,0,0,0.45)' : undefined }}>
-            <TeamScreen team={selectedTeam} onBack={goBack} onMatch={goMatch} liveApiMatches={liveMatches}/>
+            <TeamScreen team={selectedTeam} onBack={goBack} onMatch={goMatch} onPlayer={goPlayer} liveApiMatches={liveMatches}/>
+          </div>
+          )}
+          {overScreen === 'player' && selectedPlayer && (
+          <div ref={overlayTopRef} style={{ paddingBottom: nativeTabBar ? 'calc(56px + env(safe-area-inset-bottom))' : undefined, position:'absolute', inset:0, zIndex:60, background:'var(--bg)', display:'flex', flexDirection:'column',
+                transform: dragging ? `translateX(${dragXRef.current}px)` : undefined, transition:'none',
+                willChange: dragging ? 'transform' : undefined, boxShadow: dragging ? '-8px 0 24px rgba(0,0,0,0.45)' : undefined }}>
+            <PlayerScreen player={selectedPlayer} onBack={goBack} onMatch={goMatch} liveApiMatches={liveMatches} statsCache={playerStatsCache} followedSet={followed} onToggleFollow={toggleFollow} muted={mutedPlayers.has(selectedPlayer.id)} onToggleMute={() => togglePlayerMute(selectedPlayer.id)}/>
           </div>
           )}
           {!nativeTabBar && <TabBar active={tab} onTab={handleTab} elevated={showOnboarding} hidden={tabBarHidden}/>}
