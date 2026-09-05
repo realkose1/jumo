@@ -3400,13 +3400,345 @@ function TeamCheerMeter({ match, isLive, isFinished }) {
   );
 }
 
+// ─── 팀 상세용 공유 캐시 ───────────────────────────────────────
+// 목적은 하나다: 같은 팀을 여러 사용자가 열어도 API-Football 호출이 한 번만 나가게.
+// 메모리 캐시 → Supabase sf_cache(기기 간 공유) → 네트워크 순으로 내려가고,
+// 캐시가 신선하면 네트워크는 아예 타지 않는다.
+// sf_cache 는 기존 'af-detail-{id}' 관례를 그대로 따른다(date=문자열 키, events=jsonb).
+//   af-team-{teamId}                 30일   국가·창단·홈구장 — 거의 안 바뀜
+//   af-teamfix-{teamId}-{season}     6시간  시즌 일정/결과
+//   af-squad-{teamId}                7일    스쿼드
+//   af-standings-{leagueId}-{season} 1시간  리그 순위
+const TEAM_TTL = {
+  team: 30 * 24 * 3600e3,
+  fixtures: 6 * 3600e3,
+  squad: 7 * 24 * 3600e3,
+  standings: 3600e3,
+};
+const teamCacheMem = {};   // key → { data, at }
+// slim: 네트워크 응답을 화면에 필요한 필드만 남기는 변환(캐시에도 이 형태로 저장).
+async function afCachedResponse(key, ttl, query, slim) {
+  let stale = teamCacheMem[key] || null;
+  if (stale && Date.now() - stale.at < ttl) return stale.data;
+  try {
+    const r = await SB.from('sf_cache').select('date,events,updated_at').eq('date', key).limit(1);
+    const row = (r && r.data || [])[0];
+    if (row && row.events != null) {
+      const at = new Date(row.updated_at).getTime();
+      if (!stale || at > stale.at) { stale = { data: row.events, at }; teamCacheMem[key] = stale; }
+      if (Date.now() - at < ttl) return stale.data;
+    }
+  } catch (e) { /* 공유 캐시를 못 읽으면 네트워크로 간다 */ }
+  const j = await afFetch(query).catch(() => null);
+  const resp = j && Array.isArray(j.response) ? j.response : null;
+  // afFetch 는 한도 초과·오류를 null 로 준다 — 그럴 땐 만료된 캐시라도 보여준다.
+  if (resp == null) return stale ? stale.data : null;
+  const data = slim ? slim(resp) : resp;
+  teamCacheMem[key] = { data, at: Date.now() };
+  SB.from('sf_cache').upsert({ date: key, events: data, updated_at: new Date().toISOString() })
+    .then(() => {}, () => {});
+  return data;
+}
+
+// 탭이 처음 열릴 때 한 번만 부른다. data === null 이면 '불러올 수 없음'.
+function useLazyAf(active, run) {
+  const [st, setSt] = React.useState({ loading: false, data: null, done: false });
+  const started = React.useRef(false);
+  const runRef = React.useRef(run);
+  runRef.current = run;
+  React.useEffect(() => {
+    if (!active || started.current) return;
+    started.current = true;
+    let alive = true;
+    setSt({ loading: true, data: null, done: false });
+    Promise.resolve().then(() => runRef.current())
+      .then(d => { if (alive) setSt({ loading: false, data: d, done: true }); })
+      .catch(() => { if (alive) setSt({ loading: false, data: null, done: true }); });
+    return () => { alive = false; };
+  }, [active]);
+  return st;
+}
+
+function TeamLoading() {
+  return (
+    <div style={{ display:'flex', justifyContent:'center', padding:'48px 0' }}>
+      <div style={{ width:24, height:24, borderRadius:'50%', border:'2.5px solid var(--border)', borderTopColor:'var(--acc)', animation:'spin 0.8s linear infinite' }}/>
+    </div>
+  );
+}
+function TeamEmpty({ text }) {
+  return <div style={{ textAlign:'center', padding:'40px 0', color:'var(--text5)', fontSize:14 }}>{text}</div>;
+}
+
+// 이름 표기가 소스마다 뒤집힌다('Son Heung-min' vs 'Heung-Min Son').
+// 알파벳 토큰을 정렬해 붙인 키로 비교하면 순서·하이픈 차이를 흡수한다.
+const teamNameKey = (s) => (s || '').toLowerCase().replace(/[^a-z]+/g, ' ').trim().split(' ').filter(Boolean).sort().join('');
+const KOREAN_BY_NAME_KEY = new Map(
+  ALL_PLAYERS.filter(p => p.nameEn).map(p => [teamNameKey(p.nameEn), p])
+);
+const AF_FINAL_SHORT = new Set(['FT', 'AET', 'PEN']);
+const SQUAD_POS = [
+  ['Goalkeeper', '골키퍼'], ['Defender', '수비수'],
+  ['Midfielder', '미드필더'], ['Attacker', '공격수'],
+];
+
+// ─── SCREEN: TEAM DETAIL ──────────────────────────────────────
+// 경기 상세에서 팀을 누르면 열린다. 팀 id 는 API-Football 경기에만 실려 있어
+// 야구(statsapi)·ESPN 경기에서는 진입 자체가 막혀 있다(의도된 동작).
+function TeamScreen({ team, onBack, onMatch, liveApiMatches = [] }) {
+  const teamId = team.id;
+  // 시즌은 경기가 실어 온 league.season 을 그대로 쓴다. 없으면 날짜에서 유도.
+  const season = team.season || afSeasonFor({});
+  const hasLeague = !!(team.leagueId && season);
+  const [tab, setTab] = React.useState('overview');
+
+  // 개요는 진입 즉시, 나머지는 탭을 눌러야 부른다.
+  const info = useLazyAf(true, () => afCachedResponse(
+    `af-team-${teamId}`, TEAM_TTL.team, `path=teams&id=${teamId}`));
+
+  const fixtures = useLazyAf(tab === 'fixtures', () => afCachedResponse(
+    `af-teamfix-${teamId}-${season}`, TEAM_TTL.fixtures,
+    `path=fixtures&team=${teamId}&season=${season}`,
+    // 시즌 전체 응답은 꽤 크다 — 화면에 쓰는 필드만 남겨 캐시에 넣는다.
+    (resp) => resp.map(fx => ({
+      id: fx.fixture && fx.fixture.id,
+      date: fx.fixture && fx.fixture.date,
+      short: (fx.fixture && fx.fixture.status && fx.fixture.status.short) || 'NS',
+      league: (fx.league && fx.league.name) || '',
+      home: { id: fx.teams?.home?.id, name: fx.teams?.home?.name || '', logo: fx.teams?.home?.logo || null },
+      away: { id: fx.teams?.away?.id, name: fx.teams?.away?.name || '', logo: fx.teams?.away?.logo || null },
+      goals: { home: fx.goals?.home ?? null, away: fx.goals?.away ?? null },
+    }))));
+
+  const squad = useLazyAf(tab === 'squad', () => afCachedResponse(
+    `af-squad-${teamId}`, TEAM_TTL.squad, `path=players/squads&team=${teamId}`,
+    (resp) => (resp?.[0]?.players || []).map(p => ({
+      id: p.id, name: p.name || '', number: p.number ?? null, position: p.position || '', age: p.age ?? null,
+    }))));
+
+  const standings = useLazyAf(tab === 'standings' && hasLeague, () => afCachedResponse(
+    `af-standings-${team.leagueId}-${season}`, TEAM_TTL.standings,
+    `path=standings&league=${team.leagueId}&season=${season}`,
+    // 컵대회는 조별로 표가 여러 개다 — 이 팀이 속한 조를 고른다.
+    (resp) => {
+      const groups = resp?.[0]?.league?.standings || [];
+      const rows = groups.find(g => (g || []).some(r => r.team?.id === teamId)) || groups[0] || [];
+      return rows.map(r => ({
+        rank: r.rank, id: r.team?.id, name: r.team?.name || '', logo: r.team?.logo || null,
+        played: r.all?.played ?? 0, win: r.all?.win ?? 0, draw: r.all?.draw ?? 0, lose: r.all?.lose ?? 0,
+        gd: r.goalsDiff ?? 0, pts: r.points ?? 0,
+      }));
+    }));
+
+  const tabs = [
+    { id: 'overview', label: '개요' },
+    { id: 'fixtures', label: '경기' },
+    { id: 'squad', label: '스쿼드' },
+    // 순위표가 없는 하위 리그·컵(EFL 트로피, PL2 등)은 리그 id 자체가 없을 수 있다.
+    ...(hasLeague ? [{ id: 'standings', label: '순위' }] : []),
+  ];
+
+  // 우리 앱 경기 목록(한국 선수가 뛰는 경기)에 있는 경기만 상세로 넘길 수 있다.
+  const appMatchFor = (f) => liveApiMatches.find(m => String(m.id) === String(f.id)) || null;
+
+  const card = { background:'var(--surface)', borderRadius:16, border:'0.5px solid var(--border)', overflow:'hidden' };
+
+  const renderFixtureRow = (f, i, last) => {
+    const isHome = f.home.id === teamId;
+    const opp = isHome ? f.away : f.home;
+    const d = f.date ? new Date(f.date) : null;
+    const md = d ? `${d.getMonth() + 1}.${d.getDate()}` : '';
+    const hm = d ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '';
+    const done = AF_FINAL_SHORT.has(f.short);
+    const my = isHome ? f.goals.home : f.goals.away;
+    const their = isHome ? f.goals.away : f.goals.home;
+    const result = my == null || their == null ? '' : my > their ? '승' : my < their ? '패' : '무';
+    const resultColor = result === '승' ? 'var(--acc)' : result === '패' ? 'var(--text4)' : 'var(--text3)';
+    const mm = appMatchFor(f);
+    return (
+      <div key={f.id || i} onClick={mm ? () => onMatch && onMatch(mm) : undefined}
+        style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 14px',
+                 borderBottom: last ? 'none' : '0.5px solid var(--border)',
+                 cursor: mm ? 'pointer' : 'default' }}>
+        <span style={{ ...NUM, fontSize:11, color:'var(--text4)', width:34, flexShrink:0 }}>{md}</span>
+        <TeamBadge code={(opp.name || '').slice(0, 3).toUpperCase()} size={20} logo={opp.logo}/>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontSize:13, fontWeight:600, color:'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+            <span style={{ color:'var(--text4)', fontWeight:500, marginRight:4 }}>{isHome ? '홈' : '원정'}</span>{opp.name}
+          </div>
+          {f.league && <div style={{ fontSize:10, color:'var(--text4)', marginTop:1, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{f.league}</div>}
+        </div>
+        {done ? (
+          <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
+            <span style={{ ...NUM, fontSize:13, fontWeight:700, color:'var(--text)' }}>{my}:{their}</span>
+            {result && <span style={{ fontSize:10, fontWeight:700, color:resultColor }}>{result}</span>}
+          </div>
+        ) : (
+          <span style={{ ...NUM, fontSize:12, color:'var(--text3)', flexShrink:0 }}>{hm}</span>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide screen-slide-in">
+      {/* Header */}
+      <div style={{ background:'var(--bg2)', padding:'12px 20px 20px' }}>
+        <BackBtn onBack={onBack} nativeHandled/>
+        <div style={{ display:'flex', alignItems:'center', gap:14, marginTop:14 }}>
+          <TeamBadge code={team.code || (team.name || '').slice(0, 3).toUpperCase()} size={56} logo={team.logo}/>
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontSize:22, fontWeight:800, color:'var(--text)', letterSpacing:-0.5 }}>{team.name}</div>
+            {team.competition && <div style={{ fontSize:12, color:'var(--text3)', marginTop:3 }}>{team.competition}</div>}
+          </div>
+        </div>
+      </div>
+
+      <GlassSegmented sticky active={tab} onChange={setTab} tabs={tabs}/>
+
+      {/* 개요 */}
+      {tab === 'overview' && (
+        <div style={{ padding:'4px 16px 28px' }}>
+          {info.loading ? <TeamLoading/> : !info.data ? <TeamEmpty text="불러올 수 없어요"/> : (() => {
+            const t = info.data[0]?.team;
+            const v = info.data[0]?.venue;
+            if (!t) return <TeamEmpty text="팀 정보가 없어요"/>;
+            const rows = [
+              ['국가', t.country],
+              ['창단', t.founded ? `${t.founded}년` : ''],
+              ['홈구장', v?.name],
+              ['도시', v?.city],
+              ['수용 인원', v?.capacity ? `${Number(v.capacity).toLocaleString()}명` : ''],
+            ].filter(r => r[1]);
+            if (!rows.length) return <TeamEmpty text="팀 정보가 없어요"/>;
+            return (
+              <div style={card}>
+                {rows.map(([k, val], i) => (
+                  <div key={k} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, padding:'13px 16px', borderBottom: i === rows.length - 1 ? 'none' : '0.5px solid var(--border)' }}>
+                    <span style={{ fontSize:12, color:'var(--text4)', fontWeight:600 }}>{k}</span>
+                    <span style={{ fontSize:13, color:'var(--text)', fontWeight:600, textAlign:'right' }}>{val}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* 경기 */}
+      {tab === 'fixtures' && (
+        <div style={{ padding:'4px 16px 28px' }}>
+          {fixtures.loading ? <TeamLoading/> : !fixtures.data ? <TeamEmpty text="불러올 수 없어요"/> : (() => {
+            const all = fixtures.data;
+            const ts = (f) => (f.date ? new Date(f.date).getTime() : 0);
+            const recent = all.filter(f => AF_FINAL_SHORT.has(f.short)).sort((a, b) => ts(b) - ts(a)).slice(0, 5);
+            const next = all.filter(f => !AF_FINAL_SHORT.has(f.short) && ts(f) >= Date.now() - 3 * 3600e3)
+              .sort((a, b) => ts(a) - ts(b)).slice(0, 5);
+            if (!recent.length && !next.length) return <TeamEmpty text="경기 정보가 없어요"/>;
+            const section = (title, list) => list.length > 0 && (
+              <div style={{ marginBottom:18 }}>
+                <div style={{ fontSize:12, fontWeight:700, color:'var(--text3)', margin:'0 4px 8px' }}>{title}</div>
+                <div style={card}>{list.map((f, i) => renderFixtureRow(f, i, i === list.length - 1))}</div>
+              </div>
+            );
+            return <>{section('최근 경기', recent)}{section('다음 경기', next)}</>;
+          })()}
+        </div>
+      )}
+
+      {/* 스쿼드 */}
+      {tab === 'squad' && (
+        <div style={{ padding:'4px 16px 28px' }}>
+          {squad.loading ? <TeamLoading/> : !squad.data ? <TeamEmpty text="불러올 수 없어요"/> : squad.data.length === 0 ? <TeamEmpty text="스쿼드 정보가 없어요"/> : (() => {
+            const known = new Set(SQUAD_POS.map(p => p[0]));
+            const groups = SQUAD_POS.map(([pos, ko]) => [ko, squad.data.filter(p => p.position === pos)]);
+            const others = squad.data.filter(p => !known.has(p.position));
+            if (others.length) groups.push(['기타', others]);
+            return groups.filter(g => g[1].length).map(([ko, list]) => (
+              <div key={ko} style={{ marginBottom:18 }}>
+                <div style={{ fontSize:12, fontWeight:700, color:'var(--text3)', margin:'0 4px 8px' }}>{ko}</div>
+                <div style={card}>
+                  {list.map((p, i) => {
+                    // 한국 선수는 브랜드 옐로로 강조한다 — 이 앱의 존재 이유.
+                    const kp = KOREAN_BY_NAME_KEY.get(teamNameKey(p.name));
+                    return (
+                      <div key={p.id || i} style={{ display:'flex', alignItems:'center', gap:12, padding:'11px 14px',
+                        borderBottom: i === list.length - 1 ? 'none' : '0.5px solid var(--border)',
+                        background: kp ? 'rgba(245,196,0,0.08)' : 'transparent' }}>
+                        <span style={{ ...NUM, fontSize:12, fontWeight:700, width:24, textAlign:'center', flexShrink:0, color: kp ? 'var(--acc)' : 'var(--text4)' }}>
+                          {p.number ?? '-'}
+                        </span>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:13, fontWeight:600, color: kp ? 'var(--acc)' : 'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                            {kp ? `🇰🇷 ${kp.name}` : p.name}
+                          </div>
+                          {kp && <div style={{ fontSize:10, color:'var(--text4)', marginTop:1 }}>{p.name}</div>}
+                        </div>
+                        {p.age != null && <span style={{ ...NUM, fontSize:11, color:'var(--text4)', flexShrink:0 }}>{p.age}세</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ));
+          })()}
+        </div>
+      )}
+
+      {/* 순위 */}
+      {tab === 'standings' && (
+        <div style={{ padding:'4px 16px 28px' }}>
+          {standings.loading ? <TeamLoading/> : !standings.data ? <TeamEmpty text="불러올 수 없어요"/> : standings.data.length === 0 ? <TeamEmpty text="순위 정보가 없어요"/> : (
+            <div style={card}>
+              <div style={{ display:'flex', alignItems:'center', gap:8, padding:'9px 12px', borderBottom:'0.5px solid var(--border)', fontSize:10, color:'var(--text4)', fontWeight:600 }}>
+                <span style={{ width:18, textAlign:'center', flexShrink:0 }}>#</span>
+                <span style={{ flex:1, minWidth:0 }}>팀</span>
+                <span style={{ width:22, textAlign:'center', flexShrink:0 }}>경기</span>
+                <span style={{ width:48, textAlign:'center', flexShrink:0 }}>승무패</span>
+                <span style={{ width:28, textAlign:'right', flexShrink:0 }}>득실</span>
+                <span style={{ width:26, textAlign:'right', flexShrink:0 }}>승점</span>
+              </div>
+              {standings.data.map((r, i) => {
+                const me = r.id === teamId;
+                return (
+                  <div key={r.id || i} style={{ display:'flex', alignItems:'center', gap:8, padding:'9px 12px',
+                    borderBottom: i === standings.data.length - 1 ? 'none' : '0.5px solid var(--border)',
+                    background: me ? 'rgba(245,196,0,0.10)' : 'transparent' }}>
+                    <span style={{ ...NUM, fontSize:11, fontWeight:700, width:18, textAlign:'center', flexShrink:0, color: me ? 'var(--acc)' : 'var(--text4)' }}>{r.rank}</span>
+                    <div style={{ flex:1, minWidth:0, display:'flex', alignItems:'center', gap:7 }}>
+                      <TeamBadge code={(r.name || '').slice(0, 3).toUpperCase()} size={16} logo={r.logo}/>
+                      <span style={{ fontSize:12, fontWeight: me ? 700 : 600, color: me ? 'var(--acc)' : 'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{r.name}</span>
+                    </div>
+                    <span style={{ ...NUM, fontSize:11, color:'var(--text3)', width:22, textAlign:'center', flexShrink:0 }}>{r.played}</span>
+                    <span style={{ ...NUM, fontSize:11, color:'var(--text3)', width:48, textAlign:'center', flexShrink:0 }}>{r.win}-{r.draw}-{r.lose}</span>
+                    <span style={{ ...NUM, fontSize:11, color:'var(--text3)', width:28, textAlign:'right', flexShrink:0 }}>{r.gd > 0 ? `+${r.gd}` : r.gd}</span>
+                    <span style={{ ...NUM, fontSize:12, fontWeight:700, color: me ? 'var(--acc)' : 'var(--text)', width:26, textAlign:'right', flexShrink:0 }}>{r.pts}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── SCREEN: LIVE MATCH DETAIL ────────────────────────────────
-function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
+function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam }) {
   const goKoreanPlayer = React.useCallback((kp) => {
     if (!onPlayer || !kp) return;
     const full = ALL_PLAYERS.find(p => p.name === kp.name);
     if (full) onPlayer(full);
   }, [onPlayer]);
+  // 팀 상세는 API-Football 경기에만 있는 팀 id 가 필요하다. 야구·ESPN 경기는
+  // id 가 없어 지금처럼 정적으로 남는다.
+  const canTeam = React.useCallback((side) => !!(onTeam && side && side.id), [onTeam]);
+  const goTeam = React.useCallback((side) => {
+    if (!canTeam(side)) return;
+    onTeam({ id: side.id, name: side.name, code: side.code, logo: side.logo,
+             leagueId: match.leagueId, season: match.leagueSeason, competition: match.competition });
+  }, [canTeam, onTeam, match]);
   const [tab, setTab] = React.useState('events');
   const [countdown, setCountdown] = React.useState('');
   // (emoji 응원 리액션 replaced by <TeamCheerMeter/> — see component above)
@@ -3648,7 +3980,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
           </div>
           {/* Score block */}
           <div style={{ display:'flex', alignItems:'center', marginBottom:16 }}>
-            <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
+            <div onClick={() => goTeam(match.home)} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:6, cursor: canTeam(match.home) ? 'pointer' : 'default' }}>
               <TeamBadge code={match.home.code} size={44} logo={match.home.logo}/>
               <span style={{ fontSize:12, fontWeight:600, color:'var(--text-70)', textAlign:'center' }}>{match.home.name}</span>
             </div>
@@ -3678,7 +4010,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer }) {
                 </>
               )}
             </div>
-            <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
+            <div onClick={() => goTeam(match.away)} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:6, cursor: canTeam(match.away) ? 'pointer' : 'default' }}>
               <TeamBadge code={match.away.code} size={44} logo={match.away.logo}/>
               <span style={{ fontSize:12, fontWeight:600, color:'var(--text2)', textAlign:'center' }}>{match.away.name}</span>
             </div>
@@ -7000,6 +7332,7 @@ function App() {
   const [screen, setScreen] = React.useState('main');
   const [selectedMatch, setSelectedMatch] = React.useState(null);
   const [selectedPlayer, setSelectedPlayer] = React.useState(null);
+  const [selectedTeam, setSelectedTeam] = React.useState(null);
   // 온보딩 튜토리얼: 끝까지 본(시작하기) 뒤엔 다시 안 보임. localStorage 'jumo_onboarding_seen'.
   // (테스트로 매 실행 노출하려면 ONBOARDING_ALWAYS_SHOW = true)
   const ONBOARDING_ALWAYS_SHOW = false;
@@ -8853,8 +9186,13 @@ function App() {
       minute,
       sport: `⚽ ${leagueAbbr}`,
       leagueKey: '',
-      home: { name: homeTeamName, code: homeCode, score: (liveAfterTimeout || isFinished || isTimedOut) ? (fx.goals?.home ?? 0) : null, logo: fx.teams.home?.logo || null },
-      away: { name: awayTeamName, code: awayCode, score: (liveAfterTimeout || isFinished || isTimedOut) ? (fx.goals?.away ?? 0) : null, logo: fx.teams.away?.logo || null },
+      // id/leagueId/leagueSeason 은 팀 상세 화면(TeamScreen)이 쓴다. API-Football
+      // 경기에만 있고 야구(statsapi)·ESPN 경기에는 없다 — 없으면 팀 상세로 들어갈 수
+      // 없게 막는 게 의도된 동작이다.
+      home: { name: homeTeamName, code: homeCode, score: (liveAfterTimeout || isFinished || isTimedOut) ? (fx.goals?.home ?? 0) : null, logo: fx.teams.home?.logo || null, id: fx.teams.home?.id || null },
+      away: { name: awayTeamName, code: awayCode, score: (liveAfterTimeout || isFinished || isTimedOut) ? (fx.goals?.away ?? 0) : null, logo: fx.teams.away?.logo || null, id: fx.teams.away?.id || null },
+      leagueId: fx.league?.id || null,
+      leagueSeason: fx.league?.season || null,
       koreanPlayer: { ...koreanPlayer, event: (isFinished || isTimedOut) ? '미출전' : '출전 예상', minutesPlayed: 0, matchGoals: 0, matchAssists: 0 },
       koreanPlayers: koreanPlayers.map(kp => ({ ...kp, event: (isFinished || isTimedOut) ? '미출전' : '출전 예상', minutesPlayed: 0, matchGoals: 0, matchAssists: 0 })),
       isKoreanDerby,
@@ -9144,8 +9482,19 @@ function App() {
     window.__jumoSetTweaks = setShowTweaks;
   }, [setShowTweaks]);
 
-  const goMatch = (m) => { setSelectedMatch(m); setScreen('match'); };
-  const goPlayer = (p) => { setSelectedPlayer(p); setScreen('player'); };
+  // 상세 위에 상세를 하나 더 얹는다(경기 → 팀). 3단 이상은 지금 필요 없어
+  // 배열 대신 단일 슬롯으로 둔다 — 스택 자료구조를 만들면 렌더·제스처 양쪽이
+  // 복잡해지는데, 실제 동선은 '상세에서 팀 하나 들여다보기'뿐이다.
+  const [overScreen, setOverScreen] = React.useState(null);   // 'team' | null
+
+  const goMatch = (m) => { setOverScreen(null); setSelectedMatch(m); setScreen('match'); };
+  const goPlayer = (p) => { setOverScreen(null); setSelectedPlayer(p); setScreen('player'); };
+  const goTeam = (t) => {
+    if (!t || !t.id) return;
+    setSelectedTeam(t);
+    if (screen === 'main') setScreen('team');   // 나중에 다른 곳에서 바로 열 때
+    else setOverScreen('team');                 // 상세 위에 얹는다
+  };
   const goAddPlayer = () => setScreen('addplayer');
   const [lastNotifViewedAt, setLastNotifViewedAt] = React.useState(() => {
     const v = localStorage.getItem('jumo_lastNotifViewedAt');
@@ -9227,6 +9576,10 @@ function App() {
   const [closing, setClosing] = React.useState(false);
   const goBack = () => {
     if (closing) return;
+    // 2단이 얹혀 있으면 그것만 걷어낸다(경기 상세로 복귀). 슬라이드 아웃
+    // 애니메이션은 붙이지 않는다 — 주 동선은 엣지 제스처이고, 버튼 뒤로가기는
+    // 즉시 닫혀도 어색하지 않다.
+    if (overScreen) { setOverScreen(null); return; }
     setClosing(true); // slide the detail out to the right, revealing main behind
     setTimeout(() => { setScreen('main'); setClosing(false); }, 330);
   };
@@ -9238,7 +9591,8 @@ function App() {
   const [dragging, setDragging] = React.useState(false);
   const draggingRef = React.useRef(false);
   const dragXRef = React.useRef(0);
-  const overlayRef = React.useRef(null);   // 밀려나는 상세 화면
+  const overlayRef = React.useRef(null);   // 1단 상세
+  const overlayTopRef = React.useRef(null);// 2단 상세(있으면 이쪽이 맨 위)
   const behindRef = React.useRef(null);    // 패럴랙스로 따라 나오는 뒤 화면
   const scrimRef = React.useRef(null);     // 뒤 화면을 덮는 어두운 막
   const settleRef = React.useRef(null);    // 진행 중인 스프링의 취소 함수
@@ -9254,17 +9608,27 @@ function App() {
     dragXRef.current = x;
     const W = edgeWidth();
     const p = Math.max(0, Math.min(1, x / W));
+    const top = overScreen ? overlayTopRef.current : null;
+    if (top) {
+      // 2단: 미는 건 맨 위(팀), 뒤에서 패럴랙스로 따라 나오는 건 1단 상세다.
+      // 메인(behindRef)·스크림은 이때 건드리지 않는다 — 두 겹 아래라 안 보이고,
+      // 손대면 2단을 닫은 뒤 메인이 -25% 로 밀린 채 남는다.
+      top.style.transform = `translateX(${x}px)`;
+      if (overlayRef.current) overlayRef.current.style.transform = `translateX(${-W * 0.25 * (1 - p)}px)`;
+      return;
+    }
     if (overlayRef.current) overlayRef.current.style.transform = `translateX(${x}px)`;
     if (behindRef.current) behindRef.current.style.transform = `translateX(${-W * 0.25 * (1 - p)}px)`;
     if (scrimRef.current) scrimRef.current.style.background = `rgba(0,0,0,${0.18 * (1 - p)})`;
-  }, [edgeWidth]);
+  }, [edgeWidth, overScreen]);
 
   // 뒤 화면은 드래그가 시작돼야 마운트된다 — 붙자마자 위치를 한 번 맞춘다.
   React.useLayoutEffect(() => { if (dragging) applyDrag(dragXRef.current); }, [dragging, applyDrag]);
 
   React.useEffect(() => {
-    const el = overlayRef.current;
-    if (!el || screen === 'main') return;
+    // 리스너는 언제나 '맨 위' 레이어에 붙는다 — 그게 손가락이 미는 화면이다.
+    const el = overlayTopRef.current || overlayRef.current;
+    if (!el || (screen === 'main' && !overScreen)) return;
     // 모션 최소화: 추적·패럴랙스 없이 기존 동작(손 뗀 뒤 전환)을 그대로 둔다.
     if (typeof window !== 'undefined' && window.matchMedia
         && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -9279,10 +9643,18 @@ function App() {
       if (!settleRef.current) return false;
       settleRef.current(); settleRef.current = null; return true;
     };
-    const endDrag = () => {
+    // 손을 뗀 뒤 정리. 살아남는 레이어의 인라인 transform 을 원위치로 되돌린다.
+    // (2단을 닫으면 1단은 -25% 로 밀린 채 남는다 — 그걸 여기서 푼다.)
+    // removed 로 넘어온 '이번에 걷어낸 레이어'는 건드리지 않는다: 언마운트
+    // 직전에 0 으로 되돌리면 한 프레임 되돌아온 것처럼 깜빡인다.
+    const endDrag = (removed) => {
       settleRef.current = null;
       draggingRef.current = false;
       dragXRef.current = 0;
+      const top = overlayTopRef.current, base = overlayRef.current;
+      if (top && top !== removed) top.style.transform = '';
+      if (base && base !== removed) base.style.transform = '';
+      if (behindRef.current) behindRef.current.style.transform = '';
       setDragging(false);
     };
 
@@ -9346,11 +9718,13 @@ function App() {
       const W = edgeWidth(), x = dragXRef.current;
       const done = (x + project(vx)) > W * 0.5 || vx > 300;
       edgeHandledAtRef.current = Date.now();
+      const pushed = overScreen ? overlayTopRef.current : overlayRef.current;
       settleRef.current = springTo(x, done ? W : 0, vx, applyDrag, () => {
         // goBack() 의 closing 경로는 타지 않는다 — CSS 키프레임이 겹친다.
         // 상세를 걷어내는 것과 뒤 화면 transform 해제를 같은 렌더에 묶는다.
-        if (done) setScreen('main');
-        endDrag();
+        // 2단이 열려 있으면 걷어내는 건 2단뿐이다(1단 = 경기 상세로 복귀).
+        if (done) { if (overScreen) setOverScreen(null); else setScreen('main'); }
+        endDrag(done ? pushed : null);
       });
     };
 
@@ -9364,7 +9738,7 @@ function App() {
       el.removeEventListener('touchend', onEnd);
       el.removeEventListener('touchcancel', onEnd);
     };
-  }, [screen, applyDrag, edgeWidth]);
+  }, [screen, overScreen, applyDrag, edgeWidth]);
 
   const [tabScrollKeys, setTabScrollKeys] = React.useState({ home:0, schedule:0, players:0, news:0, more:0 });
   const handleTab = React.useCallback((t) => {
@@ -9376,6 +9750,7 @@ function App() {
     }
     React.startTransition(() => {
       setTab(t);
+      setOverScreen(null);   // 2단까지 같이 걷어야 메인이 드러난다
       setScreen('main');
     });
   }, [tab, screen]);
@@ -9407,12 +9782,12 @@ function App() {
       // 웹에서 엣지 스와이프를 직접 처리했으면, 뒤따라 오는 네이티브의 .ended
       // 호출은 같은 제스처의 중복이다(옛 네이티브 바이너리 호환용 경로).
       if (Date.now() - edgeHandledAtRef.current < 700) return true;
-      if (screen !== 'main') { goBack(); return true; }
+      if (overScreen || screen !== 'main') { goBack(); return true; }
       if (tab === 'more' && moreSub) { setMoreSub(null); return true; }
       return false;
     };
     return () => { try { delete window.__back; } catch {} };
-  }, [screen, tab, moreSub]);
+  }, [screen, overScreen, tab, moreSub]);
 
   // Native Liquid Glass notification bell (top-right): show only on home/main,
   // mirror the unread count, and expose the tap target.
@@ -9429,21 +9804,26 @@ function App() {
       // 이 된다. closing 을 함께 보고 슬라이드 시작과 동시에 크롬을 접어야 상단
       // 버튼이 사라지는 화면과 겹쳐 보이지 않는다.
       const hiding = closing || dragging;
+      // 2단(팀 상세)이 얹혀 있으면 1단 전용 크롬 — 팔로우·알림 벨·우상단 액션은
+      // 접는다. 팀 화면 위에 남아 겹쳐 보이면 안 된다. 뒤로가기만 살려 둔다:
+      // 그게 2단을 걷어내는 버튼이다(웹 BackBtn 은 네이티브 크롬에선 숨는다).
+      const over = !!overScreen;
       window.webkit?.messageHandlers?.detailbar?.postMessage({
-        back: !hiding && (['match', 'player', 'notif', 'addplayer'].includes(screen)
+        back: !hiding && (over || ['match', 'player', 'team', 'notif', 'addplayer'].includes(screen)
           || (tab === 'more' && screen === 'main' && !!moreSub)),
-        followShow: !hiding && screen === 'player' && !!selectedPlayer,
+        followShow: !hiding && !over && screen === 'player' && !!selectedPlayer,
         followOn: !!(selectedPlayer && followed.has(selectedPlayer.id)),
         // 선수별 알림 벨 — 팔로우 중인 선수 상세에서만
-        muteShow: !hiding && screen === 'player' && !!selectedPlayer && followed.has(selectedPlayer.id),
+        muteShow: !hiding && !over && screen === 'player' && !!selectedPlayer && followed.has(selectedPlayer.id),
         muteOn: !!(selectedPlayer && mutedPlayers.has(selectedPlayer.id)),
         // accent: 저장·확정 성격의 액션만 브랜드 옐로. 나머지 상단 크롬은 흰색.
-        action: (tab === 'players' && screen === 'main') ? { show: true, label: '선수 편집', icon: 'pencil', accent: false }
+        action: over ? { show: false, label: '', icon: '', accent: false }
+              : (tab === 'players' && screen === 'main') ? { show: true, label: '선수 편집', icon: 'pencil', accent: false }
               : (screen === 'addplayer') ? { show: true, label: '완료' + (followed.size > 0 ? ` (${followed.size})` : ''), icon: '', accent: true }
               : { show: false, label: '', icon: '', accent: false },
       });
     } catch {}
-  }, [screen, selectedPlayer, followed, nativeTabBar, tab, moreSub, mutedPlayers, closing, dragging]);
+  }, [screen, overScreen, selectedPlayer, followed, nativeTabBar, tab, moreSub, mutedPlayers, closing, dragging]);
   React.useEffect(() => {
     window.__jumoFollow = () => {
       if (!selectedPlayer) return;
@@ -9650,6 +10030,9 @@ function App() {
   // 시점의 ref 값으로 인라인 스타일을 만든다(프레임 갱신은 applyDrag 가 DOM 에 직접).
   const dragW = dragging ? edgeWidth() : 0;
   const dragP = dragW ? Math.max(0, Math.min(1, dragXRef.current / dragW)) : 0;
+  // 2단이 열려 있으면 미는 건 2단, 패럴랙스를 받는 건 1단이다(메인은 그대로).
+  const dragTop = dragging && !!overScreen;
+  const parallaxX = -dragW * 0.25 * (1 - dragP);
 
   return (
     <ToastCtx.Provider value={showToast}>
@@ -9669,18 +10052,21 @@ function App() {
               비로소 마운트돼서, '오늘의 경기' 캐러셀의 자동 스크롤이 제스처
               도중에 다시 돌아 카드가 옆으로 미끄러졌다(제보). 살려두면 스크롤
               위치도 그대로 보존되고, 제스처 시작 시점의 마운트 부담도 사라진다. */}
-          <div ref={behindRef} style={{ display:'flex', flexDirection:'column', flex:1, minHeight:0, transform: dragging ? `translateX(${-dragW * 0.25 * (1 - dragP)}px)` : undefined, willChange: dragging ? 'transform' : undefined, pointerEvents: screen === 'main' ? undefined : 'none' }}>
+          <div ref={behindRef} style={{ display:'flex', flexDirection:'column', flex:1, minHeight:0, transform: (dragging && !dragTop) ? `translateX(${parallaxX}px)` : undefined, willChange: dragging ? 'transform' : undefined, pointerEvents: screen === 'main' ? undefined : 'none' }}>
               <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} onTabBarScroll={onTabBarScroll} tweaks={tweaks} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} scrollTopKey={tabScrollKeys.home} onRefresh={fetchLiveMatches} unreadCount={unreadCount} nativeTabBar={nativeTabBar}/></div>
               <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} onTabBarScroll={onTabBarScroll} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
               <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} onToggleFollow={toggleFollow} onTabBarScroll={onTabBarScroll} followed={followed} playerOrder={playerOrder} sportOrder={sportOrder} statsCache={playerStatsCache} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} scrollTopKey={tabScrollKeys.players} liveApiMatches={filteredLiveMatches} sportFeeds={sportFeeds}/></div>
               <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news} followedNames={followedNames} onTabBarScroll={onTabBarScroll}/></div>
               <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed} profile={profile} onUpdateProfile={updateProfile} sub={moreSub} setSub={setMoreSub} onShowGuide={() => setShowOnboarding(true)} deviceId={deviceId}/></div>
-              {dragging && <div ref={scrimRef} style={{ position:'absolute', inset:0, zIndex:40, pointerEvents:'none', background:`rgba(0,0,0,${0.18 * (1 - dragP)})` }}/>}
+              {dragging && !dragTop && <div ref={scrimRef} style={{ position:'absolute', inset:0, zIndex:40, pointerEvents:'none', background:`rgba(0,0,0,${0.18 * (1 - dragP)})` }}/>}
           </div>
           {screen !== 'main' && (
-          <div ref={overlayRef} className={(closing && !dragging) ? 'screen-slide-out' : ''} style={{ position:'absolute', inset:0, zIndex:50, background:'var(--bg)', display:'flex', flexDirection:'column', transform: dragging ? `translateX(${dragXRef.current}px)` : undefined, transition:'none', willChange: dragging ? 'transform' : undefined, boxShadow: dragging ? '-8px 0 24px rgba(0,0,0,0.45)' : undefined }}>
+          <div ref={overlayRef} className={(closing && !dragging) ? 'screen-slide-out' : ''} style={{ position:'absolute', inset:0, zIndex:50, background:'var(--bg)', display:'flex', flexDirection:'column', transform: dragging ? (dragTop ? `translateX(${parallaxX}px)` : `translateX(${dragXRef.current}px)`) : undefined, transition:'none', willChange: dragging ? 'transform' : undefined, boxShadow: (dragging && !dragTop) ? '-8px 0 24px rgba(0,0,0,0.45)' : undefined }}>
           {screen === 'match' && selectedMatch && (
-            <LiveDetailScreen match={selectedMatch} onBack={goBack} liveApiMatches={liveMatches} onPlayer={goPlayer}/>
+            <LiveDetailScreen match={selectedMatch} onBack={goBack} liveApiMatches={liveMatches} onPlayer={goPlayer} onTeam={goTeam}/>
+          )}
+          {screen === 'team' && selectedTeam && (
+            <TeamScreen team={selectedTeam} onBack={goBack} onMatch={goMatch} liveApiMatches={liveMatches}/>
           )}
           {screen === 'player' && selectedPlayer && (
             <PlayerScreen player={selectedPlayer} onBack={goBack} onMatch={goMatch} liveApiMatches={liveMatches} statsCache={playerStatsCache} followedSet={followed} onToggleFollow={toggleFollow} muted={mutedPlayers.has(selectedPlayer.id)} onToggleMute={() => togglePlayerMute(selectedPlayer.id)}/>
@@ -9699,6 +10085,15 @@ function App() {
               <NotifScreen notifications={allNotifs} onMatch={goMatch}/>
             </div>
           )}
+          </div>
+          )}
+          {/* 2단 — 상세 위에 얹히는 팀 화면. 1단은 그대로 뒤에 남아 있어서,
+              뒤로 가면 홈이 아니라 경기 상세로 돌아온다. */}
+          {overScreen === 'team' && selectedTeam && (
+          <div ref={overlayTopRef} style={{ position:'absolute', inset:0, zIndex:60, background:'var(--bg)', display:'flex', flexDirection:'column',
+                transform: dragging ? `translateX(${dragXRef.current}px)` : undefined, transition:'none',
+                willChange: dragging ? 'transform' : undefined, boxShadow: dragging ? '-8px 0 24px rgba(0,0,0,0.45)' : undefined }}>
+            <TeamScreen team={selectedTeam} onBack={goBack} onMatch={goMatch} liveApiMatches={liveMatches}/>
           </div>
           )}
           {!nativeTabBar && <TabBar active={tab} onTab={handleTab} elevated={showOnboarding} hidden={tabBarHidden}/>}
