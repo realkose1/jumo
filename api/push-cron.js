@@ -362,7 +362,7 @@ async function collectSoccer(events, liveStates) {
                 : onBench ? `${vs} — ${p.name}${j} 벤치에서 출발합니다.`
                 : `${vs} — ${p.name}${j} 이번 경기 명단에 포함되지 않았습니다.`;
               events.push({ key: `af-lineup-${fid}-${p.id}`, players: [p.id], matchId: String(fid),
-                title: '⚽ 라인업 발표', body });
+                kind: 'lineup', title: '⚽ 라인업 발표', body });
             }
             events.push({ key: `af-lineup-done-${fid}`, players: [] }); // 감시 종료 마커(무발송)
           }
@@ -389,11 +389,11 @@ async function collectSoccer(events, liveStates) {
       if (isLive && starters && starters.length) {
         const sNames = starters.map((p) => p.name);
         events.push({ key: `af-start-${fid}`, players: starters.map((p) => p.id), matchId: String(fid),
-          title: `⚽ ${vs}`, body: `${namesWithJosa(sNames)} 출전하는 경기가 시작됐습니다.` });
+          kind: 'start', title: `⚽ ${vs}`, body: `${namesWithJosa(sNames)} 출전하는 경기가 시작됐습니다.` });
       }
       if (isFinal && squad && squad.length) {
         events.push({ key: `af-result-${fid}`, players: squad.map((p) => p.id), matchId: String(fid),
-          title: '⚽ 경기 종료', body: `${home} ${fx.goals?.home ?? 0} : ${fx.goals?.away ?? 0} ${away}, 경기가 종료됐습니다.` });
+          kind: 'result', title: '⚽ 경기 종료', body: `${home} ${fx.goals?.home ?? 0} : ${fx.goals?.away ?? 0} ${away}, 경기가 종료됐습니다.` });
       }
 
       // Per-play events — matched by API-Football player id (exact, no name fuzz).
@@ -455,18 +455,18 @@ async function collectSoccer(events, liveStates) {
             if (isPlayer && ev.detail !== 'Own Goal') {
               const pen = ev.detail === 'Penalty' ? '페널티킥으로 ' : '';
               events.push({ key: `af-goal-${fid}-${p.id}-${i}`, players: [p.id], matchId: String(fid),
-                title: `⚽ ${p.name} 골!`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} ${pen}골을 터뜨렸습니다!` });
+                kind: 'goal', title: `⚽ ${p.name} 골!`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} ${pen}골을 터뜨렸습니다!` });
             } else if (isAssist) {
               events.push({ key: `af-assist-${fid}-${p.id}-${i}`, players: [p.id], matchId: String(fid),
-                title: `⚽ ${p.name} 도움!`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} 도움을 기록했습니다!` });
+                kind: 'assist', title: `⚽ ${p.name} 도움!`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} 도움을 기록했습니다!` });
             }
           } else if (ev.type === 'Card' && isPlayer) {
             if (ev.detail === 'Red Card') {
               events.push({ key: `af-red-${fid}-${p.id}-${i}`, players: [p.id], matchId: String(fid),
-                title: `⚽ ${p.name} 퇴장`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} 퇴장당했습니다.` });
+                kind: 'card', title: `⚽ ${p.name} 퇴장`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} 퇴장당했습니다.` });
             } else if (ev.detail === 'Yellow Card') {
               events.push({ key: `af-yellow-${fid}-${p.id}-${i}`, players: [p.id], matchId: String(fid),
-                title: `⚽ ${p.name} 경고`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} 경고를 받았습니다.` });
+                kind: 'card', title: `⚽ ${p.name} 경고`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} 경고를 받았습니다.` });
             }
           }
         });
@@ -528,7 +528,7 @@ async function collectBaseball(events) {
         if (starters.length) {
           const names = starters.map((p) => p.name);
           events.push({ key: `mlb-start-${g.gamePk}`, players: starters.map((p) => p.id), matchId: String(g.gamePk),
-            title: `⚾ ${vs}`, body: `${namesWithJosa(names)} 출전하는 경기가 시작됐습니다.` });
+            kind: 'start', title: `⚾ ${vs}`, body: `${namesWithJosa(names)} 출전하는 경기가 시작됐습니다.` });
         }
       }
 
@@ -540,7 +540,7 @@ async function collectBaseball(events) {
           const hr = parseInt(bat?.homeRuns ?? 0) || 0;
           for (let n = 1; n <= hr; n++) {
             events.push({ key: `mlb-hr-${g.gamePk}-${p.id}-${n}`, players: [p.id], matchId: String(g.gamePk),
-              title: `⚾ ${p.name} 홈런!`, body: `${vs} 경기, ${p.name}${josa(p.name, '이', '가')} 홈런을 쳤습니다!` });
+              kind: 'goal', title: `⚾ ${p.name} 홈런!`, body: `${vs} 경기, ${p.name}${josa(p.name, '이', '가')} 홈런을 쳤습니다!` });
           }
         }
         if (st === 'Final') {
@@ -557,7 +557,7 @@ async function collectBaseball(events) {
           }).filter(Boolean);
           const perf = lines.length ? ` · ${lines.join(', ')}` : '';
           events.push({ key: `mlb-result-${g.gamePk}`, players: played.map((p) => p.id), matchId: String(g.gamePk),
-            title: '⚾ 경기 종료', body: `${away} ${as} : ${hs} ${home}, 경기가 종료됐습니다.${perf}` });
+            kind: 'result', title: '⚾ 경기 종료', body: `${away} ${as} : ${hs} ${home}, 경기가 종료됐습니다.${perf}` });
         }
       }
     }
@@ -611,13 +611,28 @@ module.exports = async (req, res) => {
   if (!fresh.length) return res.status(200).json({ checked: events.length, sent: 0, liveSent });
 
   // Load all device tokens once.
-  const tokens = await sbSelect('device_tokens', 'select=token,player_ids');
+  // notif_prefs 컬럼이 아직 없는 환경(마이그레이션 전/롤백)에서도 알림이 끊기지
+  // 않게 한 번 더 시도한다. sbSelect 는 실패를 빈 배열로 돌려주므로, 컬럼이 없으면
+  // 토큰 0개 = 아무에게도 안 보냄이 되어 푸시가 통째로 멈춘다(조용한 장애).
+  // 폴백으로 받아오면 notif_prefs 가 undefined 라 allows() 가 전부 통과시킨다.
+  let tokens = await sbSelect('device_tokens', 'select=token,player_ids,notif_prefs');
+  if (!tokens.length) tokens = await sbSelect('device_tokens', 'select=token,player_ids');
   const jwt = apnsJWT();
   const client = http2.connect(`https://${process.env.APNS_HOST || 'api.push.apple.com'}`);
   let sent = 0, failed = 0;
+  // 알림 종류별 on/off. notif_prefs 가 없거나(구버전 앱) 해당 키가 없으면 보낸다 —
+  // 설정을 모르는 기기의 알림을 조용히 끊는 것보다 낫다. 명시적으로 false 일 때만 막는다.
+  const allows = (t, kind) => {
+    if (!kind) return true;
+    const p = t.notif_prefs;
+    if (!p || typeof p !== 'object') return true;
+    return p[kind] !== false;
+  };
   try {
     for (const ev of fresh) {
-      const targets = tokens.filter((t) => Array.isArray(t.player_ids) && ev.players.some((pid) => t.player_ids.includes(pid)));
+      const targets = tokens.filter((t) => Array.isArray(t.player_ids)
+        && ev.players.some((pid) => t.player_ids.includes(pid))
+        && allows(t, ev.kind));
       // matchId를 함께 보내면 앱이 알림 탭 시 해당 경기 상세로 바로 이동한다.
       // (축구=AF fixture id로 앱 경기 id와 일치. 야구는 gamePk라 앱 id와 달라
       //  앱이 제목·본문의 팀명으로 폴백 매칭한다.)
