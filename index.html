@@ -10017,7 +10017,14 @@ function App() {
     try { window.webkit?.messageHandlers?.tabbar?.postMessage({ hide }); } catch {}
   }, []);
   // 탭을 옮기거나 상세로 들어가면 항상 펼친 상태로 되돌린다.
-  React.useEffect(() => { setTabBarHidden(false); lastTabScrollY.current = 0; }, [tab, screen]);
+  // 네이티브 탭바는 별도 뷰라 상태를 되돌리는 것만으로는 안 펴진다 — 채널로도
+  // 알려야 한다. 이게 빠져 있어서, 스크롤을 내려 탭바가 접힌 채 상세로 들어갔다
+  // 나오면 네이티브 탭바가 접힌 채로 영영 남았다(제보: '탭바가 날아갔어').
+  React.useEffect(() => {
+    setTabBarHidden(false);
+    lastTabScrollY.current = 0;
+    try { window.webkit?.messageHandlers?.tabbar?.postMessage({ hide: false }); } catch {}
+  }, [tab, screen, overScreen]);
 
   const filteredLiveMatches = React.useMemo(
     () => liveMatches
