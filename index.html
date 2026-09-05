@@ -104,6 +104,13 @@ html.light-mode body { background: #e5e5ea; }
 @keyframes slideOutRight { from{transform:translateX(0)} to{transform:translateX(100%)} }
 .screen-slide-out { animation: slideOutRight 0.34s cubic-bezier(0.4, 0, 0.6, 1) forwards; will-change: transform; }
 @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+@keyframes schedCarNext { from{transform:translateX(0)} to{transform:translateX(-50%)} }
+@keyframes schedCarPrev { from{transform:translateX(-50%)} to{transform:translateX(0)} }
+/* `forwards` holds the track at the end frame until setTrans(null) swaps in the
+   single panel — without it the track reverts to translateX(0) for a frame,
+   flashing the previous day (the ghost/afterimage). */
+.sched-car-next { animation: schedCarNext 0.34s cubic-bezier(0.32,0.72,0,1) forwards; }
+.sched-car-prev { animation: schedCarPrev 0.34s cubic-bezier(0.32,0.72,0,1) forwards; }
 @keyframes ripple { 0%{transform:scale(1);opacity:0.6} 100%{transform:scale(2.5);opacity:0} }
 @keyframes spin { to { transform: rotate(360deg); } }
 /* 갱신 중 표시 — 진행률을 알 수 없으므로 좌→우로 훑는 무한 바 */
