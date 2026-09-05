@@ -9626,16 +9626,18 @@ function App() {
               {toast.message}
             </div>
           )}
-          {(screen === 'main' || closing || dragging) && (
-            <div ref={behindRef} style={{ display:'flex', flexDirection:'column', flex:1, minHeight:0, transform: dragging ? `translateX(${-dragW * 0.25 * (1 - dragP)}px)` : undefined, willChange: dragging ? 'transform' : undefined }}>
+          {/* 뒤 화면은 상세를 볼 때도 마운트해 둔다. 예전엔 드래그가 시작될 때
+              비로소 마운트돼서, '오늘의 경기' 캐러셀의 자동 스크롤이 제스처
+              도중에 다시 돌아 카드가 옆으로 미끄러졌다(제보). 살려두면 스크롤
+              위치도 그대로 보존되고, 제스처 시작 시점의 마운트 부담도 사라진다. */}
+          <div ref={behindRef} style={{ display:'flex', flexDirection:'column', flex:1, minHeight:0, transform: dragging ? `translateX(${-dragW * 0.25 * (1 - dragP)}px)` : undefined, willChange: dragging ? 'transform' : undefined, pointerEvents: screen === 'main' ? undefined : 'none' }}>
               <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} onTabBarScroll={onTabBarScroll} tweaks={tweaks} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} scrollTopKey={tabScrollKeys.home} onRefresh={fetchLiveMatches} unreadCount={unreadCount} nativeTabBar={nativeTabBar}/></div>
               <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} onTabBarScroll={onTabBarScroll} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
               <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} onToggleFollow={toggleFollow} onTabBarScroll={onTabBarScroll} followed={followed} playerOrder={playerOrder} sportOrder={sportOrder} statsCache={playerStatsCache} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} scrollTopKey={tabScrollKeys.players} liveApiMatches={filteredLiveMatches} sportFeeds={sportFeeds}/></div>
               <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news} followedNames={followedNames} onTabBarScroll={onTabBarScroll}/></div>
               <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed} profile={profile} onUpdateProfile={updateProfile} sub={moreSub} setSub={setMoreSub} onShowGuide={() => setShowOnboarding(true)} deviceId={deviceId}/></div>
               {dragging && <div ref={scrimRef} style={{ position:'absolute', inset:0, zIndex:40, pointerEvents:'none', background:`rgba(0,0,0,${0.18 * (1 - dragP)})` }}/>}
-            </div>
-          )}
+          </div>
           {screen !== 'main' && (
           <div ref={overlayRef} className={(closing && !dragging) ? 'screen-slide-out' : ''} style={{ position:'absolute', inset:0, zIndex:50, background:'var(--bg)', display:'flex', flexDirection:'column', transform: dragging ? `translateX(${dragXRef.current}px)` : undefined, transition:'none', willChange: dragging ? 'transform' : undefined, boxShadow: dragging ? '-8px 0 24px rgba(0,0,0,0.45)' : undefined }}>
           {screen === 'match' && selectedMatch && (
