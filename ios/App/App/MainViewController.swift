@@ -110,6 +110,11 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
         let edge = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(handleEdgeBack(_:)))
         edge.edges = .left
         edge.delegate = self
+        // 웹 레이어가 손가락을 직접 따라가며 화면을 미는 방식이라, 인식기가 터치를
+        // 삼키면 안 된다(기본값 true 면 웹뷰가 touchcancel 을 받고 추적이 끊긴다).
+        // 인식기는 남겨둔다 — 옛 OTA 번들엔 터치 핸들러가 없어 이 .ended 경로가
+        // 유일한 뒤로가기다.
+        edge.cancelsTouchesInView = false
         view.addGestureRecognizer(edge)
     }
 

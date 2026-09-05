@@ -6947,6 +6947,33 @@ function OnboardingTour({ onDone, onTab, followed, onToggleFollow }) {
   );
 }
 
+// ─── 제스처 물리 (엣지 스와이프 뒤로가기) ─────────────────────
+// 경계를 넘어간 만큼은 저항을 주며 조금만 따라간다 — iOS 러버밴딩.
+const rubberband = (overshoot, dim, c = 0.55) =>
+  (overshoot * dim * c) / (dim + c * Math.abs(overshoot));
+
+// 손을 뗀 뒤 관성으로 더 갈 거리. UIScrollView 의 감속 상수(0.998)를 그대로 쓴다.
+const project = (v) => (v / 1000) * 0.998 / (1 - 0.998);
+
+// 임계 감쇠 스프링 — 오버슈트 없이, 손가락이 떠난 속도를 그대로 이어받는다.
+// (제스처가 끌고 온 모션이라 튕김을 넣지 않는다: 뒤로가기는 '던지는' 동작이
+//  아니라 '밀어내는' 동작이다.)
+// 반환값은 취소 함수 — 정착 도중 다시 붙잡을 수 있어야 한다.
+const springTo = (from, to, v0, onFrame, onDone) => {
+  const stiffness = (2 * Math.PI / 0.35) ** 2;   // response 0.35s
+  const damping = 2 * Math.sqrt(stiffness);      // damping ratio 1.0
+  let x = from, v = v0, last = performance.now(), raf = 0;
+  const step = (now) => {
+    let dt = Math.min((now - last) / 1000, 1 / 30); last = now;
+    const a = -stiffness * (x - to) - damping * v;
+    v += a * dt; x += v * dt;
+    if (Math.abs(x - to) < 0.5 && Math.abs(v) < 20) { onFrame(to); onDone && onDone(); return; }
+    onFrame(x); raf = requestAnimationFrame(step);
+  };
+  raf = requestAnimationFrame(step);
+  return () => cancelAnimationFrame(raf);
+};
+
 function App() {
   const [tweaks, setTweaks] = React.useState(() => {
     try { return { ...TWEAK_DEFAULTS, ...JSON.parse(localStorage.getItem('jumo_tweaks')||'{}') }; }
@@ -9165,6 +9192,141 @@ function App() {
     setTimeout(() => { setScreen('main'); setClosing(false); }, 330);
   };
 
+  // ─── 왼쪽 엣지 스와이프 뒤로가기 — 손가락을 실시간으로 따라간다 ───────
+  // 네이티브 인식기(MainViewController.handleEdgeBack)는 cancelsTouchesInView
+  // = false 라 터치를 삼키지 않는다. 매 프레임 좌표를 브리지로 넘기면 왕복
+  // 때문에 프레임이 튀므로, 추적은 전부 웹에서 하고 transform 만 갱신한다.
+  const [dragging, setDragging] = React.useState(false);
+  const draggingRef = React.useRef(false);
+  const dragXRef = React.useRef(0);
+  const overlayRef = React.useRef(null);   // 밀려나는 상세 화면
+  const behindRef = React.useRef(null);    // 패럴랙스로 따라 나오는 뒤 화면
+  const scrimRef = React.useRef(null);     // 뒤 화면을 덮는 어두운 막
+  const settleRef = React.useRef(null);    // 진행 중인 스프링의 취소 함수
+  const edgeHandledAtRef = React.useRef(0);
+
+  const edgeWidth = React.useCallback(() =>
+    (overlayRef.current && overlayRef.current.offsetWidth)
+    || (typeof window !== 'undefined' && window.innerWidth) || 390, []);
+
+  // 드래그 중에는 setState 를 쓰지 않는다 — 상세 화면 트리가 무거워서 프레임마다
+  // 리렌더하면 손가락을 놓친다. 여기서 DOM 스타일만 직접 갱신한다.
+  const applyDrag = React.useCallback((x) => {
+    dragXRef.current = x;
+    const W = edgeWidth();
+    const p = Math.max(0, Math.min(1, x / W));
+    if (overlayRef.current) overlayRef.current.style.transform = `translateX(${x}px)`;
+    if (behindRef.current) behindRef.current.style.transform = `translateX(${-W * 0.25 * (1 - p)}px)`;
+    if (scrimRef.current) scrimRef.current.style.background = `rgba(0,0,0,${0.18 * (1 - p)})`;
+  }, [edgeWidth]);
+
+  // 뒤 화면은 드래그가 시작돼야 마운트된다 — 붙자마자 위치를 한 번 맞춘다.
+  React.useLayoutEffect(() => { if (dragging) applyDrag(dragXRef.current); }, [dragging, applyDrag]);
+
+  React.useEffect(() => {
+    const el = overlayRef.current;
+    if (!el || screen === 'main') return;
+    // 모션 최소화: 추적·패럴랙스 없이 기존 동작(손 뗀 뒤 전환)을 그대로 둔다.
+    if (typeof window !== 'undefined' && window.matchMedia
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    let g = null;   // 진행 중인 제스처
+    const begin = () => {
+      if (draggingRef.current) return;
+      draggingRef.current = true;
+      setDragging(true);
+    };
+    const stopSettle = () => {
+      if (!settleRef.current) return false;
+      settleRef.current(); settleRef.current = null; return true;
+    };
+    const endDrag = () => {
+      settleRef.current = null;
+      draggingRef.current = false;
+      dragXRef.current = 0;
+      setDragging(false);
+    };
+
+    const onStart = (e) => {
+      if (e.touches.length !== 1) return;
+      const t = e.touches[0];
+      // 정착 애니메이션이 돌고 있으면 취소하고 그 자리에서 이어받는다(중단 가능성).
+      const settling = !!settleRef.current;
+      if (!settling && t.clientX > 24) return;
+      stopSettle();
+      g = { x0: t.clientX, y0: t.clientY,
+            base: settling ? dragXRef.current : 0,
+            locked: settling,           // 정착을 가로챈 경우엔 방향이 이미 정해져 있다
+            hist: [{ x: t.clientX, t: performance.now() }] };
+      if (g.locked) { edgeHandledAtRef.current = Date.now(); begin(); }
+    };
+
+    const onMove = (e) => {
+      if (!g) return;
+      const t = e.touches[0];
+      if (!t) return;
+      const dx = t.clientX - g.x0, dy = t.clientY - g.y0;
+      g.hist.push({ x: t.clientX, t: performance.now() });
+      if (g.hist.length > 5) g.hist.shift();
+      if (!g.locked) {
+        if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { g = null; return; } // 세로 스크롤 양보
+        if (!(Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy))) return;
+        g.locked = true;
+        edgeHandledAtRef.current = Date.now();
+        begin();
+      }
+      e.preventDefault();
+      const W = edgeWidth();
+      let x = g.base + dx;
+      if (x < 0) x = rubberband(x, W, 0.55);   // 왼쪽으로 되밀면 조금만 따라간다
+      else if (x > W) x = W;                   // 이미 화면 밖 — 더 갈 이유가 없다
+      applyDrag(x);
+    };
+
+    const onEnd = (e) => {
+      const s = g; g = null;
+      if (!s || !s.locked) return;
+      // 옛 네이티브 바이너리는 인식기가 터치를 취소한다 → 웹 추적은 없던 일로
+      // 되돌리고, 뒤이어 오는 네이티브 __back() 에 맡긴다(가드도 풀어준다).
+      if (e.type === 'touchcancel') {
+        edgeHandledAtRef.current = 0;
+        settleRef.current = springTo(dragXRef.current, 0, 0, applyDrag, endDrag);
+        return;
+      }
+      const now = performance.now();
+      const hist = s.hist, last = hist[hist.length - 1];
+      let vx = 0;
+      if (now - last.t <= 100) {
+        let first = hist[0];
+        for (let i = hist.length - 1; i >= 0; i--) {
+          if (now - hist[i].t <= 100) first = hist[i]; else break;
+        }
+        const dt = (last.t - first.t) / 1000;
+        if (dt > 0) vx = (last.x - first.x) / dt;
+      }
+      const W = edgeWidth(), x = dragXRef.current;
+      const done = (x + project(vx)) > W * 0.5 || vx > 300;
+      edgeHandledAtRef.current = Date.now();
+      settleRef.current = springTo(x, done ? W : 0, vx, applyDrag, () => {
+        // goBack() 의 closing 경로는 타지 않는다 — CSS 키프레임이 겹친다.
+        // 상세를 걷어내는 것과 뒤 화면 transform 해제를 같은 렌더에 묶는다.
+        if (done) setScreen('main');
+        endDrag();
+      });
+    };
+
+    el.addEventListener('touchstart', onStart, { passive: false });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    el.addEventListener('touchend', onEnd, { passive: false });
+    el.addEventListener('touchcancel', onEnd, { passive: false });
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
+    };
+  }, [screen, applyDrag, edgeWidth]);
+
   const [tabScrollKeys, setTabScrollKeys] = React.useState({ home:0, schedule:0, players:0, news:0, more:0 });
   const handleTab = React.useCallback((t) => {
     // Keep the native glass tab bar's highlight in sync.
@@ -9203,6 +9365,9 @@ function App() {
   // Left-edge swipe (native) → go back when on a detail screen.
   React.useEffect(() => {
     window.__back = () => {
+      // 웹에서 엣지 스와이프를 직접 처리했으면, 뒤따라 오는 네이티브의 .ended
+      // 호출은 같은 제스처의 중복이다(옛 네이티브 바이너리 호환용 경로).
+      if (Date.now() - edgeHandledAtRef.current < 700) return true;
       if (screen !== 'main') { goBack(); return true; }
       if (tab === 'more' && moreSub) { setMoreSub(null); return true; }
       return false;
@@ -9224,7 +9389,7 @@ function App() {
       // 뒤로가기는 화면이 0.34s 동안 슬라이드 아웃되는데, screen 은 그 뒤에야 'main'
       // 이 된다. closing 을 함께 보고 슬라이드 시작과 동시에 크롬을 접어야 상단
       // 버튼이 사라지는 화면과 겹쳐 보이지 않는다.
-      const hiding = closing;
+      const hiding = closing || dragging;
       window.webkit?.messageHandlers?.detailbar?.postMessage({
         back: !hiding && (['match', 'player', 'notif', 'addplayer'].includes(screen)
           || (tab === 'more' && screen === 'main' && !!moreSub)),
@@ -9239,7 +9404,7 @@ function App() {
               : { show: false, label: '', icon: '', accent: false },
       });
     } catch {}
-  }, [screen, selectedPlayer, followed, nativeTabBar, tab, moreSub, mutedPlayers, closing]);
+  }, [screen, selectedPlayer, followed, nativeTabBar, tab, moreSub, mutedPlayers, closing, dragging]);
   React.useEffect(() => {
     window.__jumoFollow = () => {
       if (!selectedPlayer) return;
@@ -9442,6 +9607,11 @@ function App() {
     [liveMatches, sportFeeds, followedNames]
   );
 
+  // 드래그 중 다른 상태 변화로 리렌더가 끼어들어도 위치가 튀지 않도록, 렌더
+  // 시점의 ref 값으로 인라인 스타일을 만든다(프레임 갱신은 applyDrag 가 DOM 에 직접).
+  const dragW = dragging ? edgeWidth() : 0;
+  const dragP = dragW ? Math.max(0, Math.min(1, dragXRef.current / dragW)) : 0;
+
   return (
     <ToastCtx.Provider value={showToast}>
     <ExplainCtx.Provider value={setExplain}>
@@ -9456,17 +9626,18 @@ function App() {
               {toast.message}
             </div>
           )}
-          {(screen === 'main' || closing) && (
-            <>
+          {(screen === 'main' || closing || dragging) && (
+            <div ref={behindRef} style={{ display:'flex', flexDirection:'column', flex:1, minHeight:0, transform: dragging ? `translateX(${-dragW * 0.25 * (1 - dragP)}px)` : undefined, willChange: dragging ? 'transform' : undefined }}>
               <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} onTabBarScroll={onTabBarScroll} tweaks={tweaks} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} scrollTopKey={tabScrollKeys.home} onRefresh={fetchLiveMatches} unreadCount={unreadCount} nativeTabBar={nativeTabBar}/></div>
               <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} onTabBarScroll={onTabBarScroll} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
               <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} onToggleFollow={toggleFollow} onTabBarScroll={onTabBarScroll} followed={followed} playerOrder={playerOrder} sportOrder={sportOrder} statsCache={playerStatsCache} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} scrollTopKey={tabScrollKeys.players} liveApiMatches={filteredLiveMatches} sportFeeds={sportFeeds}/></div>
               <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news} followedNames={followedNames} onTabBarScroll={onTabBarScroll}/></div>
               <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed} profile={profile} onUpdateProfile={updateProfile} sub={moreSub} setSub={setMoreSub} onShowGuide={() => setShowOnboarding(true)} deviceId={deviceId}/></div>
-            </>
+              {dragging && <div ref={scrimRef} style={{ position:'absolute', inset:0, zIndex:40, pointerEvents:'none', background:`rgba(0,0,0,${0.18 * (1 - dragP)})` }}/>}
+            </div>
           )}
           {screen !== 'main' && (
-          <div className={closing ? 'screen-slide-out' : ''} style={{ position:'absolute', inset:0, zIndex:50, background:'var(--bg)', display:'flex', flexDirection:'column' }}>
+          <div ref={overlayRef} className={(closing && !dragging) ? 'screen-slide-out' : ''} style={{ position:'absolute', inset:0, zIndex:50, background:'var(--bg)', display:'flex', flexDirection:'column', transform: dragging ? `translateX(${dragXRef.current}px)` : undefined, transition:'none', willChange: dragging ? 'transform' : undefined, boxShadow: dragging ? '-8px 0 24px rgba(0,0,0,0.45)' : undefined }}>
           {screen === 'match' && selectedMatch && (
             <LiveDetailScreen match={selectedMatch} onBack={goBack} liveApiMatches={liveMatches} onPlayer={goPlayer}/>
           )}
