@@ -30,7 +30,7 @@ const PLAYERS = [
   { id: 1,  name: '손흥민', nameEn: 'Son Heung-min', sport: 'soccer', team: 'LAFC',        afTeamId: 1616, afPlayerId: 186, espnLeague: 'usa.1', espnTeamId: 18966 },
   { id: 2,  name: '이강인', nameEn: 'Lee Kang-in', sport: 'soccer', team: 'Atletico',    afTeamId: 530,  afPlayerId: 927, espnLeague: 'esp.1', espnTeamId: 1068 },
   { id: 3,  name: '김민재', nameEn: 'Kim Min-jae', sport: 'soccer', team: 'Bayern',      afTeamId: 157,  afPlayerId: 2897, espnLeague: 'ger.1', espnTeamId: 132 },
-  { id: 6,  name: '황희찬', nameEn: 'Hwang Hee-chan', sport: 'soccer', team: 'Wolves',      afTeamId: 39,   afPlayerId: 24888, espnLeague: 'eng.2', espnTeamId: 380 },
+  { id: 6,  name: '황희찬', nameEn: 'Hwang Hee-chan', sport: 'soccer', team: 'Schalke',     afTeamId: 174,  afPlayerId: 24888, espnLeague: 'ger.1', espnTeamId: 133 },
   { id: 7,  name: '황인범', nameEn: 'Hwang In-beom', sport: 'soccer', team: 'Porto',       afTeamId: 212,  afPlayerId: 2901, espnLeague: 'por.1', espnTeamId: 437 },
   { id: 8,  name: '조규성', nameEn: 'Cho Gue-sung', sport: 'soccer', team: 'Midtjylland', afTeamId: 397,  afPlayerId: 34211, espnLeague: 'den.1', espnTeamId: 572 },
   { id: 25, name: '이한범', nameEn: 'Lee Han-Beom', sport: 'soccer', team: 'Club Brugge', afTeamId: 569,  afPlayerId: 237218, espnLeague: 'bel.1', espnTeamId: 570 },
@@ -39,12 +39,12 @@ const PLAYERS = [
   { id: 21, name: '백승호', nameEn: 'Paik Seung-ho', sport: 'soccer', team: 'Birmingham',  afTeamId: 54,   afPlayerId: 2909, espnLeague: 'eng.2', espnTeamId: 392 },
   { id: 22, name: '배준호', nameEn: 'Bae Jun-ho', sport: 'soccer', team: 'Stoke',       afTeamId: 75,   afPlayerId: 357286, espnLeague: 'eng.2', espnTeamId: 336 },
   { id: 23, name: '엄지성', nameEn: 'Eom Ji-sung', sport: 'soccer', team: 'Swansea',     afTeamId: 76,   afPlayerId: 237050, espnLeague: 'eng.2', espnTeamId: 318 },
-  { id: 24, name: '설영우', nameEn: 'Seol Young-woo', sport: 'soccer', team: 'Crvena',      afTeamId: 598,  afPlayerId: 197985, espnLeague: 'srb.1', espnTeamId: 2290 },
+  { id: 24, name: '설영우', nameEn: 'Seol Young-woo', sport: 'soccer', team: 'Augsburg',    afTeamId: 170,  afPlayerId: 197985, espnLeague: 'ger.1', espnTeamId: 3841 },
   { id: 26, name: '이재성', nameEn: 'Lee Jae-sung', sport: 'soccer', team: 'Mainz',        afTeamId: 164,  afPlayerId: 2906, espnLeague: 'ger.1', espnTeamId: 2950 },
-  { id: 27, name: '홍현석', nameEn: 'Hong Hyun-seok', sport: 'soccer', team: 'Mainz',        afTeamId: 164,  afPlayerId: 26519, espnLeague: 'ger.1', espnTeamId: 2950 },
+  { id: 27, name: '홍현석', nameEn: 'Hong Hyun-seok', sport: 'soccer', team: 'Midtjylland',  afTeamId: 397,  afPlayerId: 26519, espnLeague: 'den.1', espnTeamId: 572 },
   { id: 28, name: '정우영', nameEn: 'Jeong Woo-yeong', sport: 'soccer', team: 'Union Berlin', afTeamId: 182,  afPlayerId: 512, espnLeague: 'ger.1', espnTeamId: 598 },
   { id: 29, name: '카스트로프', nameEn: 'Jens Castrop', sport: 'soccer', team: 'Gladbach',   afTeamId: 163,  afPlayerId: 280358, espnLeague: 'ger.1', espnTeamId: 268 },
-  { id: 30, name: '박승수', nameEn: 'Park Seung-soo', sport: 'soccer', team: 'Newcastle',    afTeamId: 34,   afPlayerId: 423714, espnLeague: 'eng.1', espnTeamId: 361 },
+  { id: 30, name: '박승수', nameEn: 'Park Seung-soo', sport: 'soccer', team: 'Newcastle U21', afTeamId: 7199, afPlayerId: 423714, espnLeague: null, espnTeamId: null },
   { id: 31, name: '김지수', nameEn: 'Kim Ji-soo', sport: 'soccer', team: 'Brentford',    afTeamId: 55,   afPlayerId: 356237, espnLeague: 'eng.1', espnTeamId: 337 },
   { id: 32, name: '양민혁', nameEn: 'Yang Min-hyeok', sport: 'soccer', team: 'Westerlo',     afTeamId: 261,  afPlayerId: 423708, espnLeague: 'bel.1', espnTeamId: 606 },
   { id: 33, name: '이태석', nameEn: 'Lee Tae-seok', sport: 'soccer', team: 'Austria Wien', afTeamId: 601,  afPlayerId: 237220, espnLeague: 'aut.1', espnTeamId: 1382 },
@@ -348,15 +348,25 @@ async function collectSoccer(events, liveStates) {
           // 알리고, af-lineup-done 마커까지 남겨 진짜 발표를 영영 놓친다.
           // → 실제 선발 명단이 채워졌을 때만 발표로 본다.
           if (teams.some((t) => (t.startXI || []).length)) {
-            const clean = (s) => (s || '').toLowerCase().replace(/[.\-\s]/g, '');
+            // 이름 비교는 어순을 무시한다 — ESPN 은 'Kim Min-Jae'/'Min-jae Kim' 처럼
+            // 소스마다 성·이름 순서가 뒤집힌다. 토큰을 정렬해 키로 만든다.
+            const nameKey = (s) => (s || '').toLowerCase().replace(/[.\-]/g, ' ').split(/\s+/).filter(Boolean).sort().join('');
+            // 벤치 명단이 아직 없는 팀(선발 11명만 나온 상태)에서는 '명단 제외'를 단정하지
+            // 않는다. ESPN 은 선발을 먼저 내고 벤치를 나중에 채우는데, 그 사이에 확인하면
+            // 벤치 선수를 '제외'로 잘못 알리고 af-lineup-done 까지 찍혀 정정 기회가 없다
+            // (제보: 김민재가 명단에 있는데 '포함되지 않았다'고 옴).
+            const benchKnown = (t) => (t.substitutes || []).length > 0;
+            let allDecided = true;
             for (const p of involved) {
-              let inXI = false, onBench = false;
+              let inXI = false, onBench = false, teamBenchKnown = false;
               for (const t of teams) {
                 const hit = (e) => e?.player && (e.player.id === p.afPlayerId ||
-                  (clean(e.player.name).length >= 6 && clean(e.player.name) === clean(p.nameEn || '')));
-                if ((t.startXI || []).some(hit)) inXI = true;
-                else if ((t.substitutes || []).some(hit)) onBench = true;
+                  (nameKey(e.player.name).length >= 6 && nameKey(e.player.name) === nameKey(p.nameEn || '')));
+                if ((t.startXI || []).some(hit)) { inXI = true; }
+                else if ((t.substitutes || []).some(hit)) { onBench = true; }
+                if (benchKnown(t)) teamBenchKnown = true;
               }
+              if (!inXI && !onBench && !teamBenchKnown) { allDecided = false; continue; } // 아직 판정 보류
               const j = josa(p.name, '이', '가');
               const body = inXI ? `${vs} — ${p.name}${j} 선발로 나섭니다.`
                 : onBench ? `${vs} — ${p.name}${j} 벤치에서 출발합니다.`
@@ -364,7 +374,8 @@ async function collectSoccer(events, liveStates) {
               events.push({ key: `af-lineup-${fid}-${p.id}`, players: [p.id], matchId: String(fid),
                 kind: 'lineup', title: '⚽ 라인업 발표', body });
             }
-            events.push({ key: `af-lineup-done-${fid}`, players: [] }); // 감시 종료 마커(무발송)
+            // 전원 판정이 끝났을 때만 감시를 끝낸다. 보류된 선수는 다음 실행에서 다시 본다.
+            if (allDecided) events.push({ key: `af-lineup-done-${fid}`, players: [] }); // 감시 종료 마커(무발송)
           }
         }
         continue;

@@ -1808,11 +1808,15 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
     return String(Math.max(0, minsInPeriod + ((m.sfPeriod || 1) >= 2 ? 45 : 0)));
   };
   const [liveMinute, setLiveMinute] = React.useState(calcMinute);
+  // API-Football 경기는 periodStartTs 가 없어 m.minute(목록 갱신값)를 그대로 쓴다.
+  // 그런데 m.minute 가 의존성에 없어서, 목록이 갱신돼도 인터벌이 옛 클로저의 옛
+  // 분을 계속 넣었다 — 히어로는 68' 인데 카드는 56' 에 굳어 있던 이유.
   React.useEffect(() => {
     if (!isLive) return;
+    setLiveMinute(calcMinute());
     const iv = setInterval(() => setLiveMinute(calcMinute()), 30000);
     return () => clearInterval(iv);
-  }, [isLive, m.periodStartTs, m.sfPeriod]);
+  }, [isLive, m.periodStartTs, m.sfPeriod, m.minute]);
 
   // Countdown calculation
   const [countdown, setCountdown] = React.useState('');
@@ -2112,11 +2116,13 @@ function LiveCarouselCard({ m, onMatch, tweaks }) {
     return String(Math.max(0, mins + ((m.sfPeriod || 1) >= 2 ? 45 : 0)));
   };
   const [liveMin, setLiveMin] = React.useState(calcLiveMin);
+  // TodayMatchCard 와 같은 문제 — m.minute 가 바뀌면 다시 계산해야 굳지 않는다.
   React.useEffect(() => {
     if (!m.live) return;
+    setLiveMin(calcLiveMin());
     const iv = setInterval(() => setLiveMin(calcLiveMin()), 30000);
     return () => clearInterval(iv);
-  }, [m.live, m.periodStartTs, m.sfPeriod]);
+  }, [m.live, m.periodStartTs, m.sfPeriod, m.minute]);
   return (
     <div onClick={() => onMatch(m)} style={{ flexShrink:0, width:300, borderRadius:20, overflow:'hidden', position:'relative', cursor:'pointer', background:'var(--bg2)', border:'0.5px solid rgba(230,48,48,0.2)' }}>
       {tweaks.showPlayerPhoto && player && (
