@@ -195,13 +195,13 @@ struct JumoMatchActivity: Widget {
                               logoFile: ctx.attributes.homeLogoFile, size: 17)
                     Text("\(ctx.state.homeScore)")
                         .font(.system(size: 14, weight: .heavy, design: .rounded))
-                        .foregroundStyle(acc)
+                        .foregroundStyle(.white)
                 }
             } compactTrailing: {
                 HStack(spacing: 3) {
                     Text("\(ctx.state.awayScore)")
                         .font(.system(size: 14, weight: .heavy, design: .rounded))
-                        .foregroundStyle(acc)
+                        .foregroundStyle(.white)
                     TeamBadge(abbr: ctx.attributes.awayAbbr,
                               logoFile: ctx.attributes.awayLogoFile, size: 17)
                 }
@@ -214,7 +214,7 @@ struct JumoMatchActivity: Widget {
                 } else {
                     Text("\(ctx.state.homeScore):\(ctx.state.awayScore)")
                         .font(.system(size: 11, weight: .heavy, design: .rounded))
-                        .foregroundStyle(acc)
+                        .foregroundStyle(.white)
                 }
             }
             .keylineTint(acc)
