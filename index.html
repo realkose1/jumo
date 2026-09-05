@@ -2354,6 +2354,11 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
   const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
   const twelveHoursLater = new Date(now.getTime() + 12 * 60 * 60 * 1000);
+  // 예정 경기를 12시간으로만 자르면, 오전에 켰을 때 그날 밤 경기가 통째로 사라진다
+  // (제보: 오전 9시 — 20:30 경기 하나만 남고 22:30 이후가 전부 빠짐).
+  // 오늘 남은 경기는 시각과 무관하게 전부 보여주고, 저녁이 지나 12시간 창이
+  // 자정을 넘기면 그때부터 다음 날 새벽 경기(유럽 늦은 킥오프)까지 함께 잡는다.
+  const upcomingHorizon = new Date(Math.max(endOfToday.getTime(), twelveHoursLater.getTime()));
 
 
   const upcoming = allMatches
@@ -2404,7 +2409,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
       const matchDate = new Date(m.fullDate);
       const isFinished = isFinalStatus(m.status);
       const isToday = matchDate >= startOfToday && matchDate <= endOfToday;
-      const isUpcoming = matchDate > now && matchDate <= twelveHoursLater;
+      const isUpcoming = matchDate > now && matchDate <= upcomingHorizon;
       return (isFinished && isToday) || isUpcoming;
     })
     .sort((a, b) => new Date(a.fullDate) - new Date(b.fullDate));
@@ -2962,7 +2967,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
           // 남은 건 아직 안 끝난 경기다. 킥오프가 지났는데 라이브 표시가 아직
           // 안 붙은 경우(데이터 지연)도 여기서 살아남아야 하므로 오늘 0시부터 본다.
           const d = new Date(m.fullDate);
-          return d >= startOfToday && d <= twelveHoursLater;
+          return d >= startOfToday && d <= upcomingHorizon;
         });
 
         // 오늘 남은 경기가 하나도 없으면 이 자리가 통째로 사라진다 — 그럴 땐
