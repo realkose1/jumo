@@ -337,10 +337,15 @@ function afFetch(query, { retries = 1 } = {}) {
       await new Promise(r2 => setTimeout(r2, 2500));
       return afFetch(query, { retries: retries - 1 });
     }
+    // 일일 한도 소진은 그날 끝이다 — 시각을 남겨 폴링이 ESPN 폴백으로 갈아타게 한다.
+    if (j?.errors?.requests) window.__afQuotaHitAt = Date.now();
     const failed = j?.errors && (j.errors.rateLimit || j.errors.requests || j.errors.token);
     return failed ? null : j;
   });
 }
+// 최근 30분 안에 한도 소진을 봤으면 참. 30분이 지나면 다시 AF 를 찔러본다
+// (09:00 리셋을 자동으로 알아채기 위해).
+const afQuotaExhausted = () => Date.now() - (window.__afQuotaHitAt || 0) < 30 * 60 * 1000;
 
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
@@ -7934,6 +7939,28 @@ function App() {
           });
         } catch (e) { console.warn('ESPN UEFA fetch failed:', e?.message || e); }
 
+        // ── ESPN 폴백: API-Football 일일 한도가 소진되면 국내 리그도 ESPN 으로 ──
+        // AF 가 막히면 목록이 마지막 값에서 굳어 끝난 경기가 '출전 중'으로 남는다
+        // (제보: 김민수·이강인 경기가 끝났는데 출전 중). ESPN 은 키·한도가 없으므로
+        // 우리 선수 리그의 스코어보드를 받아 상태·점수·분을 덮어쓴다(아래 병합).
+        const espnDomestic = [];
+        if (afQuotaExhausted()) {
+          try {
+            const codes = [...new Set(ALL_PLAYERS.filter(p => p.sport === '축구' && p.espnLeague).map(p => p.espnLeague))];
+            const rs = await Promise.allSettled(codes.map(code =>
+              fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${code}/scoreboard?dates=${espnFmt(from)}-${espnFmt(to)}&limit=200`)
+                .then(r => r.ok ? r.json() : null)));
+            rs.forEach(r => {
+              if (r.status !== 'fulfilled' || !r.value?.events) return;
+              r.value.events.forEach(e => {
+                const leagueName = e.competitions?.[0]?.league?.name || r.value?.leagues?.[0]?.name || 'ESPN';
+                const m = transformESPNEvent(e, 'soccer', leagueName);
+                if (m.koreanPlayer) { m.source = 'espn'; espnDomestic.push(m); allMatches.push(m); }
+              });
+            });
+          } catch (e) { console.warn('ESPN domestic fallback failed:', e?.message || e); }
+        }
+
         // Deduplicate by id (same match can appear across multiple source responses)
         const seenIds = new Set();
         const uniqueMatches = allMatches.filter(m => {
@@ -7949,9 +7976,34 @@ function App() {
             .filter(m => m.source === 'apifootball' && m.koreanPlayer)
             .map(m => `${m.koreanPlayer.name}|${m.fullDate ? new Date(m.fullDate).toDateString() : ''}`)
         );
+        // 한도 소진 중이면 같은 선수·같은 날의 AF 경기에 ESPN 의 상태·점수·분을 덮어쓴다.
+        // AF 객체(id·상세 캐시·응원·알림 매칭)는 그대로 두고 살아있는 값만 갈아끼운다.
+        const keyOf = (m) => `${m.koreanPlayer.name}|${m.fullDate ? new Date(m.fullDate).toDateString() : ''}`;
+        if (afQuotaExhausted() && espnDomestic.length) {
+          const espnByKey = new Map(espnDomestic.map(m => [keyOf(m), m]));
+          uniqueMatches.forEach(m => {
+            if (m.source !== 'apifootball' || !m.koreanPlayer) return;
+            const e = espnByKey.get(keyOf(m));
+            if (!e) return;
+            // 끝난 경기를 '라이브'로 되돌리지는 않는다 — 정보가 더 새로운 쪽만 반영.
+            const wasFinal = isFinalStatus(m.status);
+            m.live = e.live; m.status = e.status; m.time = e.time; m.isTimedOut = e.isTimedOut;
+            if (e.minute) m.minute = e.minute;
+            if (e.home?.score != null) m.home.score = e.home.score;
+            if (e.away?.score != null) m.away.score = e.away.score;
+            if ((!m.events || !m.events.length) && e.events?.length) m.events = e.events;
+            if (wasFinal && e.live) { m.live = false; m.status = 'STATUS_FINAL'; }
+            // 경기가 끝났는데 아직 '출전 중'이면 풀타임으로 마감한다.
+            const done = isFinalStatus(m.status);
+            (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean).forEach(kp => {
+              if (done && /^(선발 출전|출전 중|교체 출전 중)$/.test(kp.event || '')) kp.event = '풀타임';
+            });
+            m.overlaidFromEspn = true;
+          });
+        }
         const dedupedMatches = uniqueMatches.filter(m => {
           if (m.source === 'espn' && m.koreanPlayer) {
-            const k = `${m.koreanPlayer.name}|${m.fullDate ? new Date(m.fullDate).toDateString() : ''}`;
+            const k = keyOf(m);
             if (afKoreanKeys.has(k)) return false; // API-Football already covers it
             return true;
           }
