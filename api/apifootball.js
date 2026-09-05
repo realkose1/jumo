@@ -41,6 +41,8 @@ module.exports = async function handler(req, res) {
     // 현재 스쿼드/프로필 조회용.
     'players/squads',
     'players/profiles',
+    // 팀 상세 화면의 '순위' 탭.
+    'standings',
     'injuries',
     'status',
   ]);
@@ -83,6 +85,10 @@ module.exports = async function handler(req, res) {
     // count low. The client also has its own Supabase cache layer on top.
     // teams (ids never change) and head-to-head history (past results) are very
     // stable → cache hard. live match data is short-lived.
+    // standings 는 하루에 몇 번, 그것도 경기 직후에만 바뀐다. 다만 '방금 끝난
+    // 경기가 반영된 표'를 오래 붙잡고 있으면 티가 나므로 stable(1일)까지는 가지
+    // 않고 기본 60초를 그대로 쓴다 — 클라이언트가 sf_cache 로 1시간 캐시하니
+    // 실제 API 호출량은 이 CDN TTL 이 아니라 그쪽이 결정한다.
     const stable = path === 'teams' || path === 'fixtures/headtohead';
     const isLive = path === 'fixtures/lineups' || path === 'fixtures/events' || path === 'fixtures/statistics';
     const sMaxAge = stable ? 86400 : (isLive ? 20 : 60);
