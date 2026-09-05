@@ -549,21 +549,26 @@ class MainViewController: CAPBridgeViewController, WKScriptMessageHandler, UIGes
     }
 
     // 라이브 액티비티 — 웹이 '언제/무엇을' 정하고, 표시는 네이티브가 한다.
-    // action: start | update | end
+    // action: sync | start | update | end
+    // sync 는 "지금 떠 있어야 할 경기 목록 전체"를 matches 배열로 받아 그대로 맞춘다
+    // (여러 경기 동시 표시). start/update 는 옛 OTA 번들 호환용으로 남겨 둔다.
     private func handleLiveActivity(_ d: [String: Any]) {
         guard #available(iOS 16.2, *) else { return }
+        // 푸시 토큰을 웹으로 돌려준다 → 웹이 Supabase 에 저장하고
+        // 크론이 그 토큰으로 점수를 갱신한다.
+        let onToken: (String, String) -> Void = { [weak self] matchId, token in
+            DispatchQueue.main.async {
+                let js = "window.__jumoLiveToken && window.__jumoLiveToken("
+                    + "\(Self.jsString(matchId)), \(Self.jsString(token)))"
+                self?.webView?.evaluateJavaScript(js)
+            }
+        }
         let action = d["action"] as? String ?? "update"
         switch action {
+        case "sync":
+            LiveActivityBridge.shared.sync(d["matches"] as? [[String: Any]] ?? [], onToken: onToken)
         case "start":
-            _ = LiveActivityBridge.shared.start(d) { [weak self] matchId, token in
-                // 푸시 토큰을 웹으로 돌려준다 → 웹이 Supabase 에 저장하고
-                // 크론이 그 토큰으로 점수를 갱신한다.
-                DispatchQueue.main.async {
-                    let js = "window.__jumoLiveToken && window.__jumoLiveToken("
-                        + "\(Self.jsString(matchId)), \(Self.jsString(token)))"
-                    self?.webView?.evaluateJavaScript(js)
-                }
-            }
+            LiveActivityBridge.shared.start(d, onToken: onToken)
         case "end":
             LiveActivityBridge.shared.end()
         default:

@@ -9912,9 +9912,11 @@ function App() {
 
   // ── 라이브 액티비티 (잠금화면 · 다이나믹 아일랜드) ──────────────────
   // 표시는 네이티브 SwiftUI 가 하고, '어느 경기를 언제 띄울지'는 경기 데이터를
-  // 아는 여기서 정한다. 팔로우한 선수가 뛰는 라이브 경기 하나만 띄운다
-  // (여러 개를 띄우면 잠금화면이 지저분해지고 갱신 예산도 나눠 쓴다).
-  const liveActivityRef = React.useRef({ matchId: null, sig: null });
+  // 아는 여기서 정한다. 팔로우한 선수가 '실제로 뛰고 있는' 라이브 경기를 최대
+  // 3개까지 띄운다(더 늘리면 잠금화면이 지저분해지고 갱신 예산도 나눠 쓴다).
+  // matchId → sig 맵. 하나라도 내용이 바뀌었거나 목록 구성이 달라졌을 때만 보낸다.
+  const liveActivityRef = React.useRef(new Map());
+  const LIVE_ACTIVITY_MAX = 3;
   // 알림 설정의 '라이브 액티비티' 스위치. 설정 화면이 저장 후 이벤트를 쏘면 따라간다.
   const [liveActivityOn, setLiveActivityOn] = React.useState(() => {
     try { return JSON.parse(localStorage.getItem('jumo_notif_settings') || '{}').liveActivity !== false; }
@@ -9938,63 +9940,63 @@ function App() {
       // 앱 재시작 뒤엔 남아 있는 액티비티를 못 내린다 — 무조건 보낸다
       // (네이티브 endCurrent() 는 없으면 no-op).
       mh.postMessage({ action: 'end' });
-      liveActivityRef.current = { matchId: null, sig: null };
+      liveActivityRef.current = new Map();
       return;
     }
 
-    // '미출전'·'벤치'로 확인된 선수는 띄우지 않는다. 아직 모르는 상태
-    // (출전 예상)는 띄운다 — 라인업이 늦게 나오는 리그가 있어서다.
-    const notBenched = (kp) => !/미출전|벤치/.test(kp?.event || '');
+    // 실제로 그라운드를 밟고 있는 선수만 띄운다(사용자 요청: "꼭 출전하고 있을 때").
+    // isPlayingKorean 은 '출전 예상'·'출전 여부 확인 중'까지 걸러낸다 — 라인업이
+    // 늦게 나오는 리그 때문에 예전엔 이것도 띄웠는데, 결국 안 뛰는 경기가 잠금화면에
+    // 남았다. '교체 아웃'은 계속 띄운다 — 이미 뛴 경기라 남은 시간 결과가 궁금하다.
+    const mineOf = (m) => (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean)
+      .filter(kp => followedNames.has(kp.name) && isPlayingKorean(kp));
     const mine = (liveMatches || []).filter(m =>
-      (m.live || m.time === 'LIVE') &&
-      (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean)
-        .some(kp => followedNames.has(kp.name) && notBenched(kp)));
-    // 여러 경기가 동시에 라이브면 우리 선수가 뛰는 쪽을 먼저, 그다음 킥오프 순.
-    mine.sort((a, b) => new Date(a.fullDate || 0) - new Date(b.fullDate || 0));
-    const m = mine[0];
+      (m.live || m.time === 'LIVE') && mineOf(m).length > 0);
+    // 우리 선수가 골·도움을 기록한 경기를 먼저, 그다음 킥오프가 이른 순.
+    const scored = (m) => mineOf(m).some(kp =>
+      (kp.matchGoals || 0) > 0 || (kp.matchAssists || 0) > 0) ? 0 : 1;
+    mine.sort((a, b) => scored(a) - scored(b)
+      || new Date(a.fullDate || 0) - new Date(b.fullDate || 0));
 
-    if (!m) {
-      if (liveActivityRef.current.matchId) {
-        mh.postMessage({ action: 'end' });
-        liveActivityRef.current = { matchId: null, sig: null };
-      }
-      return;
-    }
+    const matches = mine.slice(0, LIVE_ACTIVITY_MAX).map(m => {
+      // 더비처럼 팔로우 선수가 둘 이상이면 '기록 있는 선수 → 첫 선수' 순으로 고른다.
+      const mineInMatch = mineOf(m);
+      const kp = mineInMatch.find(k => (k.matchGoals || 0) > 0 || (k.matchAssists || 0) > 0)
+              || mineInMatch[0] || m.koreanPlayer;
+      const goals = kp?.matchGoals || 0;
+      const assists = kp?.matchAssists || 0;
+      // 잠금화면은 좁다 — 상태를 한 줄로 압축한다.
+      const line = goals || assists ? '' :
+        (kp?.event === '선발 출전' || kp?.event === '출전 중') ? (kp?.minutesPlayed ? `${kp.minutesPlayed}분 출전` : '출전 중')
+        : (kp?.event === '벤치' || kp?.event === '벤치 대기') ? '벤치'
+        : (kp?.event || '');
+      return {
+        matchId: String(m.id),
+        homeName: m.home?.name || '', awayName: m.away?.name || '',
+        homeAbbr: m.home?.code || '', awayAbbr: m.away?.code || '',
+        // 엠블럼 URL — 네이티브가 받아서 App Group 에 캐시한다(위젯은 네트워크 불가).
+        homeLogo: m.home?.logo || '', awayLogo: m.away?.logo || '',
+        playerName: kp?.name || '', playerNumber: kp?.number || 0,
+        competition: (m.competition || m.sport || '').replace(/^[⚽⚾🏀🎾]\s*/, ''),
+        homeScore: Number(m.home?.score) || 0, awayScore: Number(m.away?.score) || 0,
+        minute: m.liveMinute || m.time || '', status: 'live',
+        playerLine: line, playerGoals: goals, playerAssists: assists,
+      };
+    });
 
-    // 더비처럼 팔로우 선수가 둘 이상이면 '기록 있는 선수 → 뛰는 선수 → 첫 선수'
-    // 순으로 고른다. 그냥 첫 선수를 잡으면 벤치에 앉은 선수를 잠금화면에 띄운다.
-    const mineInMatch = (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean)
-      .filter(k => followedNames.has(k.name) && notBenched(k));
-    const kp = mineInMatch.find(k => (k.matchGoals || 0) > 0 || (k.matchAssists || 0) > 0)
-            || mineInMatch.find(isPlayingKorean)
-            || mineInMatch[0] || m.koreanPlayer;
-    const goals = kp?.matchGoals || 0;
-    const assists = kp?.matchAssists || 0;
-    // 잠금화면은 좁다 — 상태를 한 줄로 압축한다.
-    const line = goals || assists ? '' :
-      (kp?.event === '선발 출전' || kp?.event === '출전 중') ? (kp?.minutesPlayed ? `${kp.minutesPlayed}분 출전` : '출전 중')
-      : (kp?.event === '벤치' || kp?.event === '벤치 대기') ? '벤치'
-      : (kp?.event || '');
-    const payload = {
-      matchId: String(m.id),
-      homeName: m.home?.name || '', awayName: m.away?.name || '',
-      homeAbbr: m.home?.code || '', awayAbbr: m.away?.code || '',
-      // 엠블럼 URL — 네이티브가 받아서 App Group 에 캐시한다(위젯은 네트워크 불가).
-      homeLogo: m.home?.logo || '', awayLogo: m.away?.logo || '',
-      playerName: kp?.name || '', playerNumber: kp?.number || 0,
-      competition: (m.competition || m.sport || '').replace(/^[⚽⚾🏀🎾]\s*/, ''),
-      homeScore: Number(m.home?.score) || 0, awayScore: Number(m.away?.score) || 0,
-      minute: m.liveMinute || m.time || '', status: 'live',
-      playerLine: line, playerGoals: goals, playerAssists: assists,
-    };
     // 내용이 그대로면 보내지 않는다 — iOS 는 액티비티 갱신 횟수에 예산이 있어
     // 의미 없는 갱신을 쌓으면 정작 골이 났을 때 반영이 밀린다.
-    const sig = [payload.homeScore, payload.awayScore, payload.minute,
-                 payload.playerLine, goals, assists].join('|');
+    // 하나라도 바뀌었거나 목록 구성이 달라지면 전체를 다시 보낸다(sync 프로토콜).
+    const next = new Map(matches.map(p => [p.matchId, [
+      p.homeScore, p.awayScore, p.minute, p.playerLine, p.playerGoals, p.playerAssists,
+    ].join('|')]));
     const prev = liveActivityRef.current;
-    if (prev.matchId === payload.matchId && prev.sig === sig) return;
-    mh.postMessage({ ...payload, action: prev.matchId === payload.matchId ? 'update' : 'start' });
-    liveActivityRef.current = { matchId: payload.matchId, sig };
+    let same = prev.size === next.size;
+    if (same) next.forEach((sig, id) => { if (prev.get(id) !== sig) same = false; });
+    if (same) return;
+    // 띄울 경기가 없으면 빈 배열 — 네이티브가 남은 카드를 전부 내린다.
+    mh.postMessage({ action: 'sync', matches });
+    liveActivityRef.current = next;
   }, [liveMatches, followedNames, liveActivityOn]);
 
   // 네이티브가 액티비티 푸시 토큰을 받으면 여기로 넘겨준다 → 서버에 저장해
@@ -10002,10 +10004,23 @@ function App() {
   React.useEffect(() => {
     window.__jumoLiveToken = (matchId, token) => {
       try {
-        SB.from('live_activity_tokens').upsert({
+        const row = {
           device_id: deviceId, match_id: String(matchId), token,
           updated_at: new Date().toISOString(),
-        }, { onConflict: 'device_id' }).then(() => {}, () => {});
+        };
+        // 한 기기가 여러 경기를 동시에 띄우므로 (device_id, match_id) 기준으로 넣는다.
+        // 그 유니크 인덱스가 아직 없는 프로젝트에서는 400 이 나므로, 실패하면
+        // 예전처럼 device_id 기준으로 한 번 더 시도한다 — 토큰이 하나만 남아
+        // 액티비티 한 개만 갱신되지만 앱은 정상 동작한다.
+        // (device_tokens.notif_prefs 도 같은 폴백 패턴을 쓴다.)
+        const fallback = () => {
+          try {
+            SB.from('live_activity_tokens').upsert(row, { onConflict: 'device_id' })
+              .then(() => {}, () => {});
+          } catch {}
+        };
+        SB.from('live_activity_tokens').upsert(row, { onConflict: 'device_id,match_id' })
+          .then(r => { if (r && r.error) fallback(); }, fallback);
       } catch {}
     };
     return () => { delete window.__jumoLiveToken; };
