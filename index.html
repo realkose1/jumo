@@ -9004,8 +9004,12 @@ function App() {
         });
 
         // Apply latest rating/avg
+        // 축구 평점(rating)은 덮어쓰지 않는다 — 선수 탭·상세의 '시즌 평점'이 이 값을
+        // 읽는데, 여기서 마지막 경기 평점으로 갈아치우면 손흥민 한 경기 8.9 가
+        // 시즌 평점처럼 보였다(제보). AF 시즌 통계(가중 평균)가 rating 의 주인이고,
+        // 마지막 경기 평점은 별도 필드에만 남긴다. 야구 타율(avg)은 시즌 누적값이라 그대로.
         latestPerPlayer.forEach((info, idx) => {
-          if (info.rating !== undefined) ALL_PLAYERS[idx].rating = info.rating;
+          if (info.rating !== undefined) ALL_PLAYERS[idx].lastMatchRating = info.rating;
           if (info.avg !== undefined) ALL_PLAYERS[idx].avg = info.avg;
         });
 
