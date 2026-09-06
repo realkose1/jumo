@@ -9710,8 +9710,12 @@ function App() {
       away: { name: awayTeamName, code: awayCode, score: (liveAfterTimeout || isFinished || isTimedOut) ? (fx.goals?.away ?? 0) : null, logo: fx.teams.away?.logo || null, id: fx.teams.away?.id || null },
       leagueId: fx.league?.id || null,
       leagueSeason: fx.league?.season || null,
-      koreanPlayer: { ...koreanPlayer, event: (isFinished || isTimedOut) ? '미출전' : '출전 예상', minutesPlayed: 0, matchGoals: 0, matchAssists: 0 },
-      koreanPlayers: koreanPlayers.map(kp => ({ ...kp, event: (isFinished || isTimedOut) ? '미출전' : '출전 예상', minutesPlayed: 0, matchGoals: 0, matchAssists: 0 })),
+      // 종료 경기의 기본값은 '미출전'이 아니라 '확인 불가'다 — 라인업·이벤트를 아직
+      // 안 받은 상태에서 '미출전 · 엔트리 제외 또는 부상'이라고 단정해 보였다(콜드
+      // 스타트 기본 목록이 3초 만에 나가면서 실제로 뛴 선수가 잠깐 미출전으로 떴다).
+      // 상세를 받으면 거기서 선발/교체/미출전을 정확히 판정해 덮어쓴다.
+      koreanPlayer: { ...koreanPlayer, event: (isFinished || isTimedOut) ? '확인 불가' : '출전 예상', minutesPlayed: 0, matchGoals: 0, matchAssists: 0 },
+      koreanPlayers: koreanPlayers.map(kp => ({ ...kp, event: (isFinished || isTimedOut) ? '확인 불가' : '출전 예상', minutesPlayed: 0, matchGoals: 0, matchAssists: 0 })),
       isKoreanDerby,
       competition: tournamentName,
       competitionLogo: fx.league?.logo || null,
