@@ -6682,6 +6682,9 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
     '가수','아이돌','예능','뮤지컬','개그맨','코미디언','방송인',
     '시청률','넷플릭스','앨범','콘서트','팬미팅','캐스팅',
     '예고편','연예','스포일러','제작발표회','시사회','촬영장','출연료','래퍼',
+    // 2026-09-07 제보: "[포토S] 아이딧 김민재, '무대 기대하세요'" (K팝 시상식 포토).
+    // '무대'·'데뷔'는 "빅리그 무대 데뷔"처럼 스포츠에도 흔해 넣지 않는다.
+    'K팝','K-팝','케이팝','어워즈','시상식','컴백','음원','뮤직비디오','팬사인회','레드카펫','포토월',
   ];
   // 스포츠 맥락 — 동명이인 연예 기사를 걸러내려면 '승리'·'출전' 같은 일반 단어
   // 말고, 경기 보도에만 나오는 말이 하나는 있어야 한다.
@@ -6812,7 +6815,9 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
         const filtered = merged.filter(item => {
           if (!isSportsHost(item.source)) return false;
           if (isClickbaitForKorean(item.title)) return false;
-          const haystack = `${item.title} ${item.description}`;
+          // '경기도(京畿道)'의 '경기'가 경기 용어 '경기'에 걸린다 — 고양시 K팝 시상식
+          // 기사가 이걸로 통과했다(제보). 지명은 지운 뒤 대조한다.
+          const haystack = `${item.title} ${item.description}`.replace(/경기도/g, '');
           if (EXCLUDE_KEYWORDS.some(kw => haystack.includes(kw))) return false;
           const named = PLAYER_NAMES.filter(name => haystack.includes(name));
           if (!named.length) return false;
