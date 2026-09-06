@@ -5369,8 +5369,6 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
     strip.scrollLeft = offset;
   }, [isActive]);
 
-  // Scroll to top when tab tapped
-  React.useEffect(() => { if (scrollTopKey > 0) { SCROLL_MEM.schedule = 0; scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } }, [scrollTopKey]);
   useScrollMemory('schedule', scrollRef);
 
   // 목록이 2주치 연속이라 그냥 두면 어디를 보고 있는지 알 수 없다.
@@ -5397,6 +5395,24 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
     }, 120);
     return () => clearTimeout(t);
   }, [isActive, liveApiMatches]);
+
+  // 탭을 다시 누르면 맨 위가 아니라 '진행 중 → 없으면 다음 경기'로 보낸다(제보).
+  // 목록 맨 위는 2주 전 지난 경기라 올려봐야 볼 것이 없다. 강조할 경기가 아예
+  // 없으면(전부 종료) 그때만 맨 위로.
+  // highlightMatch 는 아래에서 선언되지만 effect 본문은 렌더 뒤에 돌아 안전하다
+  // — 의존성 배열에는 넣지 않는다(선언 전 참조가 되어 TDZ 로 터진다).
+  React.useEffect(() => {
+    if (scrollTopKey <= 0) return;
+    SCROLL_MEM.schedule = 0;
+    const cont = scrollRef.current, el = highlightRowRef.current;
+    if (!cont) return;
+    if (!el) { cont.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    const y = cont.scrollTop + el.getBoundingClientRect().top - cont.getBoundingClientRect().top - STICKY_H - 8;
+    progUntilRef.current = Date.now() + 800;
+    cont.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+    if (highlightMatch?.fullDate) setSelDate(new Date(highlightMatch.fullDate).toDateString());
+    setTimeout(() => { const c3 = scrollRef.current; if (c3) onTabBarScroll?.(c3.scrollTop, { reset: true }); }, 850);
+  }, [scrollTopKey]);
 
   // Keep the selected date centered in the strip when it changes (tap or scroll).
   React.useEffect(() => {
