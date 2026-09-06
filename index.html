@@ -6078,6 +6078,7 @@ const NEWS_PLAYERS = [
   { label:'황희찬', query:'황희찬' },
   { label:'김하성', query:'김하성' },
   { label:'이정후', query:'이정후' },
+  { label:'김혜성', query:'김혜성' },
   { label:'조규성', query:'조규성' },
   { label:'양현준', query:'양현준' },
   { label:'오현규', query:'오현규' },
@@ -6455,6 +6456,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
     '황희찬': ['샬케','울버햄튼','울브스','분데스리가'],
     '김하성': ['브레이브스','애틀랜타','샌디에이고','MLB'],
     '이정후': ['자이언츠','샌프란시스코','MLB','키움'],
+    '김혜성': ['다저스','로스앤젤레스','MLB','키움'],
     '조규성': ['미트윌란','덴마크'],
     '양현준': ['셀틱','스코틀랜드'],
     '오현규': ['베식타스','베식타시','헹크','튀르키예'],
@@ -6463,9 +6465,15 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
     '엄지성': ['스완지','챔피언십'],
     '설영우': ['아우크스부르크','아우크스부르그','분데스리가','울산'],
   };
+  // 같은 종목 안의 동명이인 — 연예 필터로는 못 거른다.
+  // 김혜성은 충남아산(K리그2) 축구 선수와 이름이 같아 골·승점 기사가 섞여 들어온다.
+  // 그 선수만 언급되고 본인 소속팀 언급이 없을 때만 배제한다(정상 기사 손실 0건, 실측).
+  const PLAYER_NEGATIVE = {
+    '김혜성': ['충남아산','K리그2','아산 무궁화'],
+  };
   const PLAYER_NAMES = NEWS_PLAYERS.map(p => p.label);
   const SOCCER_PLAYERS = ['손흥민','이강인','김민재','황희찬','황인범','조규성','양현준','오현규','백승호','배준호','엄지성'];
-  const MLB_PLAYERS = ['김하성','이정후','김혜성','류현진'];
+  const MLB_PLAYERS = ['김하성','이정후','김혜성'];
 
   // Click-bait patterns: when title uses our player's name as a comparison/foil
   // for a foreign player who is the actual subject of the article.
@@ -6561,6 +6569,9 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
           const hasTeam = named.some(n => (PLAYER_CONTEXT[n] || []).some(kw => haystack.includes(kw)));
           const hasGeneric = SPORT_CONTEXT.some(kw => haystack.includes(kw));
           if (!hasTeam && !hasGeneric) return false;
+          // 같은 종목 동명이인은 스포츠 맥락 검사를 그대로 통과하므로,
+          // 그쪽 선수의 표지가 보이면 여기서 끊는다.
+          if (!hasTeam && named.some(n => (PLAYER_NEGATIVE[n] || []).some(kw => haystack.includes(kw)))) return false;
           // 약한 연예 신호는 '소속팀·리그가 안 나올 때만' 배제 근거로 쓴다.
           // 이 말들은 스포츠 기사에도 정상적으로 나온다 — MLS 올스타전에 영화배우가
           // 나오거나('손흥민, 2대 팔콘과 축구 대결'), '승리의 주연' 같은 표현으로.
