@@ -2529,6 +2529,8 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
 
   const highlightData = getHighlightMatch();
   const highlightMatch = highlightData?.match;
+  // 카드와 같은 훅을 쓴다 — 두 화면이 다른 분을 보여주지 않게.
+  const hlLiveMinute = useLiveMinute(highlightMatch);
   const highlightPlayer = highlightMatch ? ALL_PLAYERS.find(p => p.name === highlightMatch.koreanPlayer?.name) : null;
   const heroPlayer = highlightPlayer;
   // Generate highlight text based on priority
@@ -2692,8 +2694,6 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
     setHlBgImg(landscapeFile ? `image/landscape/${landscapeFile}` : null);
   }, [highlightMatch?.koreanPlayer?.name]);
 
-  // 카드와 같은 훅을 쓴다 — 두 화면이 다른 분을 보여주지 않게.
-  const hlLiveMinute = useLiveMinute(highlightMatch);
 
   // 오늘 경기가 없을 때 대신 보여줄 다음 경기들(가까운 순 3경기, 예정만).
   const nextMatches = React.useMemo(() => allMatches
@@ -3015,7 +3015,17 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
           return oneDay(recent, true);
         })();
 
-        const thisWeekMatches = remaining.length ? remaining : fallback;
+        // 남은 경기가 있어도 '오늘 이미 끝난 경기'는 결과를 보고 싶다(제보: 새벽
+        // 경기 결과가 홈에 없어서 당황했다). 다만 예전 지적대로 새벽에 끝난 경기가
+        // 목록 위를 차지하면 안 되므로, 남은 경기 아래에 따로 붙인다.
+        // remaining 이 비면 fallback 이 이미 오늘 결과를 본문으로 쓰므로 중복 없음.
+        const finishedToday = remaining.length ? pickMatches(m => {
+          if (!isFinalStatus(m.status)) return false;
+          const d = new Date(m.fullDate);
+          return d >= startOfToday && d <= endOfToday;
+        }) : [];
+        const finishedTodayIds = new Set(finishedToday.map(m => m.id));
+        const thisWeekMatches = (remaining.length ? remaining : fallback).concat(finishedToday);
         if (thisWeekMatches.length === 0) return null;
 
         const todayStr = now.toDateString();
@@ -3035,7 +3045,10 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
             {thisWeekMatches.map(m => {
               const isFinished = m.status === 'STATUS_FINAL' || m.status === 'STATUS_FULL_TIME' || m.status === 'final' || m.status === 'STATUS_END_PERIOD' || m.status === 'STATUS_FINAL_PEN';
               const isLiveMatch = m.live || m.time === 'LIVE';
-              const thisDateLabel = isLiveMatch ? '오늘' : getDateLabel(m.fullDate);
+              // 오늘 끝난 경기 묶음은 '오늘'과 구분되는 제목을 달아 아래에 모은다.
+              const thisDateLabel = isLiveMatch ? '오늘'
+                : finishedTodayIds.has(m.id) ? '오늘 끝난 경기'
+                : getDateLabel(m.fullDate);
               const showHeader = !isLiveMatch && thisDateLabel !== lastDateLabel;
               if (showHeader) lastDateLabel = thisDateLabel;
               const player = ALL_PLAYERS.find(p => p.name === m.koreanPlayer?.name);
