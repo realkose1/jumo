@@ -1799,6 +1799,29 @@ function BroadcastBadge({ match }) {
   );
 }
 
+// 라이브 경기의 '분'. 히어로와 카드가 각자 계산하다 서로 다른 값을 보여주는 일이
+// 두 번 반복돼서(제보: 히어로 68' / 카드 56') 한 곳으로 모은다.
+// periodStartTs 가 있으면(ESPN) 초 단위로 흐르게 계산하고, 없으면(API-Football)
+// 폴링이 준 minute 를 그대로 쓴다. minute 가 의존성에 없으면 인터벌이 옛 클로저의
+// 옛 값을 계속 넣어 굳는다 — 그게 이 버그의 정체였다.
+function useLiveMinute(m) {
+  const live = !!(m && (m.live || m.time === 'LIVE'));
+  const startTs = m?.periodStartTs, period = m?.sfPeriod, raw = m?.minute;
+  const calc = React.useCallback(() => {
+    if (!startTs) return raw || '';
+    const mins = Math.floor((Date.now() / 1000 - startTs) / 60);
+    return String(Math.max(0, mins + ((period || 1) >= 2 ? 45 : 0)));
+  }, [startTs, period, raw]);
+  const [val, setVal] = React.useState(calc);
+  React.useEffect(() => {
+    setVal(calc());
+    if (!live) return;
+    const iv = setInterval(() => setVal(calc()), 30000);
+    return () => clearInterval(iv);
+  }, [live, calc]);
+  return val;
+}
+
 function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
   // 카드에 실을 선수들 — 팔로우한 선수 전원(코리안 더비·같은 팀 복수). 팔로우 정보가
   // 아직 안 붙은 경로(일정 탭 등)에선 대표 선수 한 명으로 떨어진다.
@@ -1812,22 +1835,7 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
                      m.status === 'STATUS_END_PERIOD' ||
                      m.status === 'STATUS_FINAL_PEN';
 
-  // Real-time live minute
-  const calcMinute = () => {
-    if (!m.periodStartTs) return m.minute || '';
-    const minsInPeriod = Math.floor((Date.now()/1000 - m.periodStartTs) / 60);
-    return String(Math.max(0, minsInPeriod + ((m.sfPeriod || 1) >= 2 ? 45 : 0)));
-  };
-  const [liveMinute, setLiveMinute] = React.useState(calcMinute);
-  // API-Football 경기는 periodStartTs 가 없어 m.minute(목록 갱신값)를 그대로 쓴다.
-  // 그런데 m.minute 가 의존성에 없어서, 목록이 갱신돼도 인터벌이 옛 클로저의 옛
-  // 분을 계속 넣었다 — 히어로는 68' 인데 카드는 56' 에 굳어 있던 이유.
-  React.useEffect(() => {
-    if (!isLive) return;
-    setLiveMinute(calcMinute());
-    const iv = setInterval(() => setLiveMinute(calcMinute()), 30000);
-    return () => clearInterval(iv);
-  }, [isLive, m.periodStartTs, m.sfPeriod, m.minute]);
+  const liveMinute = useLiveMinute(m);
 
   // Countdown calculation
   const [countdown, setCountdown] = React.useState('');
@@ -2121,19 +2129,7 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
 function LiveCarouselCard({ m, onMatch, tweaks }) {
   const player = ALL_PLAYERS.find(p => p.name === m.koreanPlayer.name);
   const lastEvent = m.events[m.events.length - 1];
-  const calcLiveMin = () => {
-    if (!m.periodStartTs) return m.minute || '';
-    const mins = Math.floor((Date.now()/1000 - m.periodStartTs) / 60);
-    return String(Math.max(0, mins + ((m.sfPeriod || 1) >= 2 ? 45 : 0)));
-  };
-  const [liveMin, setLiveMin] = React.useState(calcLiveMin);
-  // TodayMatchCard 와 같은 문제 — m.minute 가 바뀌면 다시 계산해야 굳지 않는다.
-  React.useEffect(() => {
-    if (!m.live) return;
-    setLiveMin(calcLiveMin());
-    const iv = setInterval(() => setLiveMin(calcLiveMin()), 30000);
-    return () => clearInterval(iv);
-  }, [m.live, m.periodStartTs, m.sfPeriod, m.minute]);
+  const liveMin = useLiveMinute(m);
   return (
     <div onClick={() => onMatch(m)} style={{ flexShrink:0, width:300, borderRadius:20, overflow:'hidden', position:'relative', cursor:'pointer', background:'var(--bg2)', border:'0.5px solid rgba(230,48,48,0.2)' }}>
       {tweaks.showPlayerPhoto && player && (
@@ -2354,7 +2350,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
   // State for real-time countdown updates
   const [currentTime, setCurrentTime] = React.useState(new Date());
   const [hlBgImg, setHlBgImg] = React.useState(null);
-  const [hlLiveMinute, setHlLiveMinute] = React.useState('');
+
 
   // Update current time every second for countdown
   React.useEffect(() => {
@@ -2696,20 +2692,8 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
     setHlBgImg(landscapeFile ? `image/landscape/${landscapeFile}` : null);
   }, [highlightMatch?.koreanPlayer?.name]);
 
-  // Real-time minute for highlight live match
-  React.useEffect(() => {
-    if (!highlightMatch?.live || !highlightMatch.periodStartTs) {
-      setHlLiveMinute(highlightMatch?.minute || '');
-      return;
-    }
-    const calc = () => {
-      const mins = Math.floor((Date.now()/1000 - highlightMatch.periodStartTs) / 60);
-      setHlLiveMinute(String(Math.max(0, mins + ((highlightMatch.sfPeriod || 1) >= 2 ? 45 : 0))));
-    };
-    calc();
-    const iv = setInterval(calc, 30000);
-    return () => clearInterval(iv);
-  }, [highlightMatch?.id, highlightMatch?.live, highlightMatch?.periodStartTs, highlightMatch?.sfPeriod]);
+  // 카드와 같은 훅을 쓴다 — 두 화면이 다른 분을 보여주지 않게.
+  const hlLiveMinute = useLiveMinute(highlightMatch);
 
   // 오늘 경기가 없을 때 대신 보여줄 다음 경기들(가까운 순 3경기, 예정만).
   const nextMatches = React.useMemo(() => allMatches
