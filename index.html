@@ -3985,6 +3985,20 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
     timeValue = `${String(displayHours).padStart(2, '0')}:${minutes}`;
   }
 
+  // 시작 시각 — 진행 중이면 분만, 끝났으면 '종료'만 나와서 언제 시작한 경기인지
+  // 알 수가 없었다(제보). 라이브·종료 상태에서 점수 아래에 한 줄로 보여준다.
+  // (formatKRTime 은 오늘이 아니면 무조건 '내일'이라 지난 경기에 못 쓴다.)
+  const kickoffText = (() => {
+    if (!match.fullDate) return '';
+    const d = new Date(match.fullDate), n = new Date();
+    const same = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+    const y = new Date(n); y.setDate(n.getDate() - 1);
+    const day = same(d, n) ? '오늘' : same(d, y) ? '어제' : `${d.getMonth() + 1}월 ${d.getDate()}일`;
+    const h = d.getHours(), mm = String(d.getMinutes()).padStart(2, '0');
+    const hh = h > 12 ? h - 12 : (h === 0 ? 12 : h);
+    return `${day} ${h < 12 ? '오전' : '오후'} ${hh}:${mm} 시작`;
+  })();
+
   return (
     <div style={{ flex:1, overflow:'auto', background:'var(--bg)' }} className="scrollbar-hide screen-slide-in jumo-page">
       {/* Hero */}
@@ -4039,6 +4053,11 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
               <span style={{ fontSize:12, fontWeight:600, color:'var(--text2)', textAlign:'center' }}>{match.away.name}</span>
             </div>
           </div>
+          {(isLive || isFinished) && kickoffText && (
+            <div style={{ textAlign:'center', marginTop:-8, marginBottom:14, fontSize:11, color:'var(--text4)', letterSpacing:-0.1 }}>
+              {kickoffText}
+            </div>
+          )}
           {/* Korean player highlight */}
           {(() => {
             const koreans = match.koreanPlayers || [match.koreanPlayer];
