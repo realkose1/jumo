@@ -316,6 +316,16 @@ async function collectSoccer(events, liveStates) {
 
       const st = fx.fixture.status?.short;
       const isLive = AF_LIVE.has(st), isFinal = AF_FINAL.has(st);
+      const kickoffMs = new Date(fx.fixture?.date || 0).getTime();
+      const elapsedNow = fx.fixture.status?.elapsed;
+      // 2026-09-06 09:04 KST: AF 일일 한도가 새벽 1시경 소진돼 8시간 동안 크론이
+      // 아무것도 못 봤고, 09시 리셋 때 한꺼번에 몰아서 4~7시간 전에 끝난 경기의
+      // '경기 종료' 알림 4건이 동시에 나갔다. 장애 후 캐치업이라도 이미 지난
+      // 소식을 새 알림처럼 보내면 안 된다 — 아래 stale 판정이 true 인 이벤트는
+      // silent 로 표시해 push_log 에는 기록하되(재시도·중복 방지) 실제 발송은
+      // 건너뛴다.
+      const staleResult = isFinal && kickoffMs && Date.now() - kickoffMs > 3.5 * 60 * 60 * 1000; // 경기는 보통 2시간, 킥오프 3.5시간 후 종료 알림은 낡은 소식
+      const staleStart = isLive && ((elapsedNow != null && elapsedNow > 30) || (kickoffMs && Date.now() - kickoffMs > 45 * 60 * 1000));
 
       const home = fx.teams.home.name, away = fx.teams.away.name;
       const vs = `${home} vs ${away}`;
@@ -332,12 +342,19 @@ async function collectSoccer(events, liveStates) {
           let teams = lu?.response || [];
           // AF 가 아직 안 냈으면 ESPN 을 본다. ESPN 응답을 AF 형태로 맞춰
           // 아래 매칭 코드를 그대로 쓴다(선수 id 는 다르므로 이름으로 붙는다).
-          if (!teams.some((t) => (t.startXI || []).length)) {
+          // '안 냈다'의 기준은 우리 선수 소속팀이다 — AF 는 한 팀만 먼저 내기도
+          // 하는데(2026-09-06 RSL 만 있고 LAFC 는 빈 채로 옴), 그때 상대팀이
+          // 있다고 ESPN 을 건너뛰면 우리 선수 판정이 다음 실행까지 밀린다.
+          const ownXI = (p) => (teams.find((t) => t.team?.id === p.afTeamId)?.startXI || []).length;
+          if (involved.some((p) => !ownXI(p))) {
             const rosters = await espnLineup(involved[0], new Date(fx.fixture.date).getTime());
             if (rosters) {
               const conv = (a) => ({ player: { id: null, name: a.athlete?.displayName || '' } });
               teams = rosters.map((t) => ({
-                team: { name: t.team?.displayName || '' },
+                team: {
+                  name: t.team?.displayName || '',
+                  id: involved.find((q) => String(q.espnTeamId) === String(t.team?.id))?.afTeamId ?? null,
+                },
                 startXI: (t.roster || []).filter((a) => a.starter).map(conv),
                 substitutes: (t.roster || []).filter((a) => !a.starter).map(conv),
               }));
@@ -355,18 +372,22 @@ async function collectSoccer(events, liveStates) {
             // 않는다. ESPN 은 선발을 먼저 내고 벤치를 나중에 채우는데, 그 사이에 확인하면
             // 벤치 선수를 '제외'로 잘못 알리고 af-lineup-done 까지 찍혀 정정 기회가 없다
             // (제보: 김민재가 명단에 있는데 '포함되지 않았다'고 옴).
-            const benchKnown = (t) => (t.substitutes || []).length > 0;
+            //
+            // 또한 판정은 반드시 '그 선수 자신의 팀'만 봐야 한다. 2026-09-06 Real Salt
+            // Lake vs LAFC 경기에서 AF 가 홈팀(RSL)만 먼저 발표하고 LAFC 항목은 비어
+            // 있었는데, teams 배열에 RSL 이 있다는 이유만으로 '벤치를 안다'고 판단해
+            // LAFC 소속 손흥민을 RSL 명단에서 못 찾고 '명단 제외'로 잘못 알렸다(그리고
+            // af-lineup-done 마커까지 찍혀 정정되지 않았다). → 상대팀 데이터는 아예
+            // 보지 않고, 선수 자신의 팀(own) 항목이 채워졌을 때만 판정한다.
             let allDecided = true;
             for (const p of involved) {
-              let inXI = false, onBench = false, teamBenchKnown = false;
-              for (const t of teams) {
-                const hit = (e) => e?.player && (e.player.id === p.afPlayerId ||
-                  (nameKey(e.player.name).length >= 6 && nameKey(e.player.name) === nameKey(p.nameEn || '')));
-                if ((t.startXI || []).some(hit)) { inXI = true; }
-                else if ((t.substitutes || []).some(hit)) { onBench = true; }
-                if (benchKnown(t)) teamBenchKnown = true;
-              }
-              if (!inXI && !onBench && !teamBenchKnown) { allDecided = false; continue; } // 아직 판정 보류
+              const own = teams.find((t) => t.team?.id === p.afTeamId);
+              if (!own || !(own.startXI || []).length) { allDecided = false; continue; } // 우리 팀 명단 아직 미발표
+              const hit = (e) => e?.player && (e.player.id === p.afPlayerId ||
+                (nameKey(e.player.name).length >= 6 && nameKey(e.player.name) === nameKey(p.nameEn || '')));
+              const inXI = (own.startXI || []).some(hit);
+              const onBench = (own.substitutes || []).some(hit);
+              if (!inXI && !onBench && !(own.substitutes || []).length) { allDecided = false; continue; } // 벤치 명단 아직 미발표
               const j = josa(p.name, '이', '가');
               const body = inXI ? `${vs} — ${p.name}${j} 선발로 나섭니다.`
                 : onBench ? `${vs} — ${p.name}${j} 벤치에서 출발합니다.`
@@ -400,11 +421,11 @@ async function collectSoccer(events, liveStates) {
       if (isLive && starters && starters.length) {
         const sNames = starters.map((p) => p.name);
         events.push({ key: `af-start-${fid}`, players: starters.map((p) => p.id), matchId: String(fid),
-          kind: 'start', title: `⚽ ${vs}`, body: `${namesWithJosa(sNames)} 출전하는 경기가 시작됐습니다.` });
+          kind: 'start', title: `⚽ ${vs}`, body: `${namesWithJosa(sNames)} 출전하는 경기가 시작됐습니다.`, silent: staleStart });
       }
       if (isFinal && squad && squad.length) {
         events.push({ key: `af-result-${fid}`, players: squad.map((p) => p.id), matchId: String(fid),
-          kind: 'result', title: '⚽ 경기 종료', body: `${home} ${fx.goals?.home ?? 0} : ${fx.goals?.away ?? 0} ${away}, 경기가 종료됐습니다.` });
+          kind: 'result', title: '⚽ 경기 종료', body: `${home} ${fx.goals?.home ?? 0} : ${fx.goals?.away ?? 0} ${away}, 경기가 종료됐습니다.`, silent: staleResult });
       }
 
       // Per-play events — matched by API-Football player id (exact, no name fuzz).
@@ -459,6 +480,9 @@ async function collectSoccer(events, liveStates) {
       }
       (evd?.response || []).forEach((ev, i) => {
         const min = ev.time?.elapsed != null ? `${ev.time.elapsed}'` : '';
+        // 종료된 경기가 이미 낡았거나(staleResult), 라이브 중인데 이 이벤트 시점이
+        // 현재 진행 시각보다 30분 넘게 과거면(장애 복구 후 몰아보기) 낡은 이벤트다.
+        const staleEv = staleResult || (isLive && elapsedNow != null && ev.time?.elapsed != null && elapsedNow - ev.time.elapsed > 30);
         involved.forEach((p) => {
           const isPlayer = ev.player?.id === p.afPlayerId;
           const isAssist = ev.assist?.id === p.afPlayerId;
@@ -466,18 +490,18 @@ async function collectSoccer(events, liveStates) {
             if (isPlayer && ev.detail !== 'Own Goal') {
               const pen = ev.detail === 'Penalty' ? '페널티킥으로 ' : '';
               events.push({ key: `af-goal-${fid}-${p.id}-${i}`, players: [p.id], matchId: String(fid),
-                kind: 'goal', title: `⚽ ${p.name} 골!`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} ${pen}골을 터뜨렸습니다!` });
+                kind: 'goal', title: `⚽ ${p.name} 골!`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} ${pen}골을 터뜨렸습니다!`, silent: staleEv });
             } else if (isAssist) {
               events.push({ key: `af-assist-${fid}-${p.id}-${i}`, players: [p.id], matchId: String(fid),
-                kind: 'assist', title: `⚽ ${p.name} 도움!`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} 도움을 기록했습니다!` });
+                kind: 'assist', title: `⚽ ${p.name} 도움!`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} 도움을 기록했습니다!`, silent: staleEv });
             }
           } else if (ev.type === 'Card' && isPlayer) {
             if (ev.detail === 'Red Card') {
               events.push({ key: `af-red-${fid}-${p.id}-${i}`, players: [p.id], matchId: String(fid),
-                kind: 'card', title: `⚽ ${p.name} 퇴장`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} 퇴장당했습니다.` });
+                kind: 'card', title: `⚽ ${p.name} 퇴장`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} 퇴장당했습니다.`, silent: staleEv });
             } else if (ev.detail === 'Yellow Card') {
               events.push({ key: `af-yellow-${fid}-${p.id}-${i}`, players: [p.id], matchId: String(fid),
-                kind: 'card', title: `⚽ ${p.name} 경고`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} 경고를 받았습니다.` });
+                kind: 'card', title: `⚽ ${p.name} 경고`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} 경고를 받았습니다.`, silent: staleEv });
             }
           }
         });
@@ -487,7 +511,6 @@ async function collectSoccer(events, liveStates) {
       // 단, 라인업을 못 받은 회차(한도 초과·AF 지연)에 찍으면 결과 알림이 영영
       // 나가지 않는다 — 명단을 확인했거나, 종료 후 2시간이 지나 더 기다릴 이유가
       // 없을 때만 마감한다. (명단 없는 경기는 2시간 동안 2분마다 1콜 = 60콜 상한)
-      const kickoffMs = new Date(fx.fixture?.date || 0).getTime();
       const longDone = kickoffMs && Date.now() - kickoffMs > (2 * 60 + 120) * 60 * 1000;
       if (isFinal && (squad !== null || longDone)) {
         events.push({ key: `af-done-${fid}`, players: [], silent: true });
@@ -510,6 +533,7 @@ async function collectBaseball(events) {
       if (!involved.length) continue;
       const vs = `${away} vs ${home}`;
       const st = g.status?.abstractGameState; // Preview | Live | Final
+      const gameMs = new Date(g.gameDate || 0).getTime();
       if (st !== 'Live' && st !== 'Final') continue;
 
       // 팀이 경기한다고 선수가 뛰는 건 아니다 — 박스스코어로 실제 출전을 확인한 뒤
@@ -538,20 +562,26 @@ async function collectBaseball(events) {
         const starters = involved.filter(isStarter);
         if (starters.length) {
           const names = starters.map((p) => p.name);
+          // 경기 시작 후 1시간 넘게 지나서야 잡힌 경우('시작됐습니다'가 이제 와서
+          // 나가면 이상하다) — 캐치업 상황이므로 조용히 기록만 하고 발송은 건너뛴다.
+          const silentStart = !!(gameMs && Date.now() - gameMs > 60 * 60 * 1000);
           events.push({ key: `mlb-start-${g.gamePk}`, players: starters.map((p) => p.id), matchId: String(g.gamePk),
-            kind: 'start', title: `⚾ ${vs}`, body: `${namesWithJosa(names)} 출전하는 경기가 시작됐습니다.` });
+            kind: 'start', title: `⚾ ${vs}`, body: `${namesWithJosa(names)} 출전하는 경기가 시작됐습니다.`, silent: silentStart });
         }
       }
 
       // Batting box → home-run moments (live) + a performance line on the result.
       {
+        // 종료 후 5시간이 지난 결과(경기당 최대 3~4시간 소요 감안)는 낡은 소식으로
+        // 본다. Live 중엔 홈런 시점을 타임스탬프로 알 수 없어 그대로 보낸다.
+        const staleFinal = !!(st === 'Final' && gameMs && Date.now() - gameMs > 5 * 60 * 60 * 1000);
         // Home runs: one push per HR, keyed by cumulative count so a 2-HR game fires twice.
         for (const p of involved) {
           const bat = batOf(p);
           const hr = parseInt(bat?.homeRuns ?? 0) || 0;
           for (let n = 1; n <= hr; n++) {
             events.push({ key: `mlb-hr-${g.gamePk}-${p.id}-${n}`, players: [p.id], matchId: String(g.gamePk),
-              kind: 'goal', title: `⚾ ${p.name} 홈런!`, body: `${vs} 경기, ${p.name}${josa(p.name, '이', '가')} 홈런을 쳤습니다!` });
+              kind: 'goal', title: `⚾ ${p.name} 홈런!`, body: `${vs} 경기, ${p.name}${josa(p.name, '이', '가')} 홈런을 쳤습니다!`, silent: staleFinal });
           }
         }
         if (st === 'Final') {
@@ -568,7 +598,7 @@ async function collectBaseball(events) {
           }).filter(Boolean);
           const perf = lines.length ? ` · ${lines.join(', ')}` : '';
           events.push({ key: `mlb-result-${g.gamePk}`, players: played.map((p) => p.id), matchId: String(g.gamePk),
-            kind: 'result', title: '⚾ 경기 종료', body: `${away} ${as} : ${hs} ${home}, 경기가 종료됐습니다.${perf}` });
+            kind: 'result', title: '⚾ 경기 종료', body: `${away} ${as} : ${hs} ${home}, 경기가 종료됐습니다.${perf}`, silent: staleFinal });
         }
       }
     }
@@ -630,7 +660,7 @@ module.exports = async (req, res) => {
   if (!tokens.length) tokens = await sbSelect('device_tokens', 'select=token,player_ids');
   const jwt = apnsJWT();
   const client = http2.connect(`https://${process.env.APNS_HOST || 'api.push.apple.com'}`);
-  let sent = 0, failed = 0;
+  let sent = 0, failed = 0, silenced = 0;
   // 알림 종류별 on/off. notif_prefs 가 없거나(구버전 앱) 해당 키가 없으면 보낸다 —
   // 설정을 모르는 기기의 알림을 조용히 끊는 것보다 낫다. 명시적으로 false 일 때만 막는다.
   const allows = (t, kind) => {
@@ -641,6 +671,11 @@ module.exports = async (req, res) => {
   };
   try {
     for (const ev of fresh) {
+      // silent 이벤트는 push_log 엔 이미 기록됐으니(처리 완료로 간주돼 재시도되지
+      // 않는다) 여기서 실제 발송만 건너뛴다 — 뒤늦은 캐치업으로 낡은 알림이 나가는
+      // 것을 막는다(af-done 처럼 원래 players:[] 라 자동으로 안 나가던 것과 달리,
+      // 이제 진짜 알림에도 stale 판정이 붙으므로 이 체크가 필요하다).
+      if (ev.silent) { silenced++; continue; }
       const targets = tokens.filter((t) => Array.isArray(t.player_ids)
         && ev.players.some((pid) => t.player_ids.includes(pid))
         && allows(t, ev.kind));
@@ -655,5 +690,5 @@ module.exports = async (req, res) => {
     }
   } finally { client.close(); }
 
-  return res.status(200).json({ checked: events.length, fresh: fresh.length, sent, failed, liveSent });
+  return res.status(200).json({ checked: events.length, fresh: fresh.length, sent, failed, silenced, liveSent });
 };
