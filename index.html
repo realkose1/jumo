@@ -1140,7 +1140,7 @@ const ALL_PLAYERS = [
   { id: 19, name: '오현규',  nameEn: 'Oh Hyeon-gyu',    number: 19, sport: '축구',   team: 'Besiktas',   league: 'Süper Lig',  position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 85, age: 25, birth: '2001.04.12', height: '181cm', espnLeague: 'tur.1',  espnId: 302434, espnTeamId: 1895, apiFootballId: 34710 },
   { id: 20, name: '양현준',  nameEn: 'Yang Hyun-jun',   number: 77, sport: '축구',   team: 'Celtic',     league: 'SPFL',       position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 70, age: 23, birth: '2002.06.25', height: '172cm', espnLeague: 'sco.1',  espnId: 350711, espnTeamId: 256, apiFootballId: 304958 },
   { id: 21, name: '백승호',  nameEn: 'Paik Seung-ho',   number: 17, sport: '축구',   team: 'Birmingham', league: 'Championship', position: '미드필더', nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 95, age: 29, birth: '1997.03.17', height: '183cm', espnLeague: 'eng.2', apiFootballId: 2909, espnId: 256598, espnTeamId: 392, espnTeamId: 392 },
-  { id: 22, name: '배준호',  nameEn: 'Bae Jun-ho',      number: 17, sport: '축구',   team: 'Stoke',      league: 'Championship', position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 85, age: 22, birth: '2003.07.21', height: '178cm', espnLeague: 'eng.2', apiFootballId: 357286, espnId: 362208, espnTeamId: 336, espnTeamId: 336 },
+  { id: 22, name: '배준호',  nameEn: 'Bae Jun-ho',      number: 17, sport: '축구',   team: 'Stoke',      league: 'Championship', position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 85, age: 22, birth: '2003.07.21', height: '178cm', espnLeague: 'eng.2', apiFootballId: 357286, espnId: 362208, espnTeamId: 336 },
   { id: 23, name: '엄지성',  nameEn: 'Eom Ji-sung',     number: 7,  sport: '축구',   team: 'Swansea',    league: 'Championship', position: '공격수',   nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 90, age: 23, birth: '2002.05.30', height: '178cm', espnLeague: 'eng.2', apiFootballId: 237050, espnId: 297791, espnTeamId: 318, espnTeamId: 318 },
   { id: 24, name: '설영우',  nameEn: 'Seol Young-woo',  number: 7, sport: '축구',   team: 'Augsburg', league: '분데스리가', position: '풀백', nation: '🇰🇷', goals: 0,  assists: 0,  matches: 0,  rating: 0,   startRate: 90, age: 26, birth: '1998.12.05', height: '180cm', espnLeague: 'ger.1', espnId: 302793, apiFootballId: 197985, espnTeamId: 3841 },
 
@@ -8754,10 +8754,14 @@ function App() {
       }
       if (restored && !cancelled) setLiveMatches(prev => [...prev]);
 
-      await Promise.all(soccerPlayers.map(async p => {
+      // AF 가 이번 실행에서 실제로 채운 선수. ESPN 폴백이 이들을 덮지 않게 한다.
+      // p.compStats 만 보고 판단하면 캐시 복원·재시도 타이밍에 따라 AF 결과가
+      // 평점 없는 ESPN 값으로 덮여버렸다(제보: 배준호·김민재 시즌 평점 안 보임).
+      const afOk = new Set();
+      const fetchOne = async (p) => {
         try {
           const j = await afFetch(`path=players&id=${p.apiFootballId}&season=${afSeasonFor(p)}`);
-          if (!j) return;   // 호출 실패·한도 초과 → 기존 값(캐시)을 유지한다
+          if (!j) return false;   // 호출 실패·한도 초과 → 기존 값(캐시)을 유지한다
           // Club competitions only. API-Football uses `team.name` = national team
           // (e.g., 'South Korea') for national team appearances and the club name
           // (e.g., 'Paris Saint Germain') for club competitions including UEFA
@@ -8765,7 +8769,7 @@ function App() {
           // cups, etc. So a simple team-name check is the most accurate filter.
           // 응답 자체가 비면(네트워크·레이트리밋 실패) 기존 값을 건드리지 않는다.
           // 아래의 '0으로 초기화'는 응답은 왔는데 클럽 기록이 없는 경우에만 해야 한다.
-          if (!j?.response?.[0]) return;
+          if (!j?.response?.[0]) return true;
           const stats = j.response[0].statistics || [];
           const NATIONAL_TEAM_NAMES = new Set(['south korea', 'korea republic', 'korea']);
           const clubStats = stats.filter(s => {
@@ -8779,7 +8783,7 @@ function App() {
             p.goals = 0; p.assists = 0; p.matches = 0; p.rating = 0;
             p.compStats = []; p.detailStats = null;
             delete p._baselineSnapshot;
-            return;
+            return true;
           }
           let g = 0, a = 0, m = 0;
           const ratings = [];
@@ -8808,11 +8812,16 @@ function App() {
           }
           const totalW = ratings.reduce((acc, [, w]) => acc + w, 0);
           const avgR = totalW > 0 ? ratings.reduce((acc, [r2, w]) => acc + r2 * w, 0) / totalW : 0;
-          if (cancelled) return;
+          // 예전엔 여기서 cancelled 면 그대로 반환해 계산 결과를 버렸다. 그런데
+          // 아래 ESPN 폴백은 cancelled 여부를 안 보고 값을 쓴다 — 결과적으로 AF 의
+          // 정확한 값(평점 포함)은 버려지고 평점 없는 ESPN 값만 남았다
+          // (제보: 배준호만 시즌 평점이 안 보임. AF 에는 6.53/7.2 가 정상으로 있었다).
+          // ALL_PLAYERS 에 값을 넣는 건 화면 갱신과 무관하므로 취소돼도 그대로 쓴다.
           p.goals = g; p.assists = a; p.matches = m;
           if (avgR > 0) p.rating = parseFloat(avgR.toFixed(2));
           // Sort: leagues first by matches desc, then cups
           p.compStats = compStats.sort((x, y) => y.matches - x.matches);
+          afOk.add(p.id);
           p.detailStats = m > 0 ? [
             ['출전 시간',   `${det.minutes}분`],
             ['슈팅',       det.shots],
@@ -8822,16 +8831,30 @@ function App() {
             ['경합 승리',   det.duelsWon],
           ] : null;
           delete p._baselineSnapshot; // force baseline rebuild in next poll
+          return true;
         } catch (e) {
           console.warn(`Season stats fetch failed for ${p.name}:`, e?.message || e);
+          return false;
         }
-      }));
+      };
+
+      // 조회가 실패한 선수는 다시 시도한다. 예전엔 한 번 실패하면 그 세션 내내
+      // 골·도움·평점이 0 으로 남았다(제보: 배준호만 평점이 안 나옴 — API 에는
+      // 데이터가 정상이었다). effect 의존성이 [] 라 자동 재실행도 없다.
+      let pending = soccerPlayers;
+      for (let attempt = 0; attempt < 3 && pending.length; attempt++) {
+        if (attempt) await new Promise(r => setTimeout(r, 3000 * attempt));
+        if (cancelled) return;
+        const oks = await Promise.all(pending.map(p => fetchOne(p)));
+        pending = pending.filter((_, i) => !oks[i]);
+      }
       // API-Football 이 못 준 선수(할당량 소진·장애)는 ESPN 으로 메운다.
       // 대회별 내역까지는 못 만들어도, 종합 수치가 있는 게 '스탯을 불러올 수
       // 없습니다'보다 낫다. ESPN 은 키가 필요 없어 한도에 걸리지 않는다.
-      const stillMissing = soccerPlayers.filter(p => !p.compStats && p.espnLeague && p.espnId);
+      const stillMissing = soccerPlayers.filter(p => !afOk.has(p.id) && !p.compStats && p.espnLeague && p.espnId);
       if (stillMissing.length) {
         await Promise.all(stillMissing.map(async p => {
+          if (afOk.has(p.id) || p.compStats) return;   // 그 사이 AF 가 채웠으면 덮지 않는다
           try {
             const r = await fetch(`${API_BASE}/api/espn-player-stats?league=${p.espnLeague}&id=${p.espnId}&season=${afSeasonFor(p)}`);
             const cats = (await r.json())?.splits?.categories || [];
