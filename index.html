@@ -3756,6 +3756,25 @@ function TeamScreen({ team, onBack, onMatch, onPlayer, liveApiMatches = [] }) {
   // 우리 앱 경기 목록(한국 선수가 뛰는 경기)에 있는 경기만 상세로 넘길 수 있다.
   const appMatchFor = (f) => liveApiMatches.find(m => String(m.id) === String(f.id)) || null;
 
+  // 팀 경기 목록은 6시간 캐시라, 진행 중인 경기가 '아직 시작 전'으로 남는다(제보).
+  // 우리 앱 경기 목록은 라이브 중 15초마다 갱신되므로, 같은 경기가 거기 있으면
+  // 상태·스코어·분을 그쪽으로 덮어쓴다. 한국 선수가 없는 경기는 캐시 그대로다.
+  const withLive = (f) => {
+    const mm = appMatchFor(f);
+    if (!mm) return f;
+    const live = !!(mm.live || mm.time === 'LIVE');
+    const fin = isFinalStatus(mm.status);
+    if (!live && !fin) return f;
+    const num = (v) => (v == null || v === '' ? null : Number(v));
+    const hs = num(mm.home?.score), as = num(mm.away?.score);
+    return {
+      ...f,
+      short: fin ? 'FT' : (mm.status === 'STATUS_HALFTIME' ? 'HT' : 'LIVE'),
+      goals: { home: hs != null ? hs : f.goals.home, away: as != null ? as : f.goals.away },
+      liveMinute: live ? (mm.minute || '') : '',
+    };
+  };
+
   const card = { background:'var(--surface)', borderRadius:16, border:'0.5px solid var(--border)', overflow:'hidden' };
 
   const renderFixtureRow = (f, i, last) => {
@@ -3794,7 +3813,7 @@ function TeamScreen({ team, onBack, onMatch, onPlayer, liveApiMatches = [] }) {
           // 진행 중인 경기는 킥오프 시각 대신 실시간 스코어 + 상태(하프타임/진행 중)를 강조색으로.
           <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
             {my != null && their != null && <span style={{ ...NUM, fontSize:13, fontWeight:700, color:'var(--acc)' }}>{my}:{their}</span>}
-            <span style={{ fontSize:10, fontWeight:700, color:'var(--acc)' }}>{f.short === 'HT' ? '하프타임' : '진행 중'}</span>
+            <span style={{ fontSize:10, fontWeight:700, color:'var(--acc)' }}>{f.short === 'HT' ? '하프타임' : f.liveMinute ? `${f.liveMinute}'` : '진행 중'}</span>
           </div>
         ) : void_ ? (
           <span style={{ fontSize:11, fontWeight:600, color:'var(--text4)', flexShrink:0 }}>{f.short}</span>
@@ -3861,7 +3880,7 @@ function TeamScreen({ team, onBack, onMatch, onPlayer, liveApiMatches = [] }) {
           {fixtures.loading ? <TeamLoading/> : !fixtures.data ? <TeamEmpty text="불러올 수 없어요"/> : (() => {
             const all = fixtures.data;
             if (!all.length) return <TeamEmpty text="경기 정보가 없어요"/>;
-            const sorted = all.slice().sort((a, b) => new Date(a.date) - new Date(b.date));
+            const sorted = all.map(withLive).sort((a, b) => new Date(a.date) - new Date(b.date));
             // 강조 경기: 진행 중인 것 중 가장 이른 것 → 없으면, 이미 시작했을 수도
             // 있는 최근(3시간 이내) 미종료 경기부터 아직 시작 안 한 것 중 가장 이른
             // 것. 일정 탭(highlightMatch)과 같은 기준을 그대로 따른다.
