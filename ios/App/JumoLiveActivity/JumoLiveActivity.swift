@@ -100,14 +100,16 @@ private struct LockScreenView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .trailing)
 
+                // 점수가 카드에서 너무 커 보인다는 제보로 80% 로 줄였다(28→22).
+                // 가운데 콜론도 같은 비율로 줄여 균형을 유지한다(18→14).
                 HStack(spacing: 6) {
                     Text("\(ctx.state.homeScore)")
-                        .font(.system(size: 28, weight: .heavy, design: .rounded))
+                        .font(.system(size: 22, weight: .heavy, design: .rounded))
                     Text(":")
-                        .font(.system(size: 18, weight: .medium))
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(.secondary)
                     Text("\(ctx.state.awayScore)")
-                        .font(.system(size: 28, weight: .heavy, design: .rounded))
+                        .font(.system(size: 22, weight: .heavy, design: .rounded))
                 }
                 .fixedSize()
 
@@ -166,7 +168,7 @@ struct JumoMatchActivity: Widget {
                         TeamBadge(abbr: ctx.attributes.homeAbbr,
                                   logoFile: ctx.attributes.homeLogoFile, size: 24)
                         Text("\(ctx.state.homeScore)")
-                            .font(.system(size: 24, weight: .heavy, design: .rounded))
+                            .font(.system(size: 19, weight: .heavy, design: .rounded))
                     }
                 }
                 DynamicIslandExpandedRegion(.trailing) {
@@ -174,7 +176,7 @@ struct JumoMatchActivity: Widget {
                         TeamBadge(abbr: ctx.attributes.awayAbbr,
                                   logoFile: ctx.attributes.awayLogoFile, size: 24)
                         Text("\(ctx.state.awayScore)")
-                            .font(.system(size: 24, weight: .heavy, design: .rounded))
+                            .font(.system(size: 19, weight: .heavy, design: .rounded))
                     }
                 }
                 DynamicIslandExpandedRegion(.center) {
