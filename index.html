@@ -6412,7 +6412,43 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
     // 형식·기타
     '칼럼','사설','오피니언','기고','속보 종합','광고','협찬','분양','부동산','재테크','주식','코인',
     '스타랭킹','순위표','칼럼','명언','어록','인터뷰','은퇴',
+    // 동명이인 연예 기사 (배우 김민재, 코미디언 김민수 등).
+    // 축구·야구 기사에 섞여 나오지 않는 말만 여기 둔다. '드라마'는 뺐다 —
+    // '반전 드라마' 는 축구 기사 상투어라 정상 기사를 잡는다(실측).
+    '가수','아이돌','예능','뮤지컬','개그맨','코미디언','방송인',
+    '시청률','넷플릭스','앨범','콘서트','팬미팅','캐스팅',
+    '예고편','연예','스포일러','제작발표회','시사회','촬영장','출연료','래퍼',
   ];
+  // 스포츠 맥락 — 동명이인 연예 기사를 걸러내려면 '승리'·'출전' 같은 일반 단어
+  // 말고, 경기 보도에만 나오는 말이 하나는 있어야 한다.
+  // 스포츠 기사에도 쓰이는 연예 어휘 — 소속팀 언급이 없을 때만 배제에 쓴다.
+  const SOFT_ENTERTAINMENT = ['배우','영화','주연','조연','소속사','아나운서','유튜버'];
+  const SPORT_CONTEXT = [
+    '축구','야구','리그','경기','감독','구단','소속팀','원정','홈경기','전반','후반',
+    '선발 출전','교체 투입','대표팀','국가대표','월드컵','시즌','라운드','승점','순위',
+    '프리미어리그','분데스리가','라리가','세리에','리그앙','챔피언십','MLS','MLB',
+    'K리그','챔피언스리그','유로파','컨퍼런스리그','에레디비시','쉬페르리그',
+    '이닝','타석','타율','홈런','안타','투수','타자','마운드','불펜',
+    // 실측 보정: '오현규 앞에서 해트트릭' 기사가 위 목록에 하나도 안 걸려
+    // 탈락했다. 해트트릭·득점포·도움·결승골은 경기 보도 전용어라 안전하다.
+    '해트트릭','득점포','결승골','골키퍼','수비수','미드필더','공격수',
+  ];
+  // 선수별 소속팀·리그 별칭. 이름만 같은 기사에서 결정적으로 갈린다.
+  const PLAYER_CONTEXT = {
+    '손흥민': ['LAFC','로스앤젤레스','토트넘','MLS'],
+    '이강인': ['아틀레티코','마드리드','파리','PSG','라리가'],
+    '김민재': ['바이에른','뮌헨','분데스리가','나폴리'],
+    '황희찬': ['샬케','울버햄튼','울브스','분데스리가'],
+    '김하성': ['브레이브스','애틀랜타','샌디에이고','MLB'],
+    '이정후': ['자이언츠','샌프란시스코','MLB','키움'],
+    '조규성': ['미트윌란','덴마크'],
+    '양현준': ['셀틱','스코틀랜드'],
+    '오현규': ['베식타스','베식타시','헹크','튀르키예'],
+    '백승호': ['버밍엄','챔피언십','전북'],
+    '배준호': ['스토크','챔피언십'],
+    '엄지성': ['스완지','챔피언십'],
+    '설영우': ['아우크스부르크','아우크스부르그','분데스리가','울산'],
+  };
   const PLAYER_NAMES = NEWS_PLAYERS.map(p => p.label);
   const SOCCER_PLAYERS = ['손흥민','이강인','김민재','황희찬','황인범','조규성','양현준','오현규','백승호','배준호','엄지성'];
   const MLB_PLAYERS = ['김하성','이정후','김혜성','류현진'];
@@ -6503,8 +6539,20 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
           if (isClickbaitForKorean(item.title)) return false;
           const haystack = `${item.title} ${item.description}`;
           if (EXCLUDE_KEYWORDS.some(kw => haystack.includes(kw))) return false;
-          if (!PLAYER_NAMES.some(name => haystack.includes(name))) return false;
-          return MATCH_KEYWORDS.some(kw => haystack.includes(kw));
+          const named = PLAYER_NAMES.filter(name => haystack.includes(name));
+          if (!named.length) return false;
+          if (!MATCH_KEYWORDS.some(kw => haystack.includes(kw))) return false;
+          // 동명이인 방어: 일반 스포츠 맥락이 있거나, 언급된 선수의 소속팀·리그가
+          // 나와야 한다. 둘 다 없으면 이름만 같은 기사로 본다.
+          const hasTeam = named.some(n => (PLAYER_CONTEXT[n] || []).some(kw => haystack.includes(kw)));
+          const hasGeneric = SPORT_CONTEXT.some(kw => haystack.includes(kw));
+          if (!hasTeam && !hasGeneric) return false;
+          // 약한 연예 신호는 '소속팀·리그가 안 나올 때만' 배제 근거로 쓴다.
+          // 이 말들은 스포츠 기사에도 정상적으로 나온다 — MLS 올스타전에 영화배우가
+          // 나오거나('손흥민, 2대 팔콘과 축구 대결'), '승리의 주연' 같은 표현으로.
+          // 소속팀이 적힌 기사는 동명이인일 리 없으니 그대로 통과시킨다.
+          if (!hasTeam && SOFT_ENTERTAINMENT.some(kw => haystack.includes(kw))) return false;
+          return true;
         });
 
         const unique = Array.from(
