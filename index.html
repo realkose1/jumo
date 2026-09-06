@@ -945,6 +945,14 @@ const isPlayingKorean = (kp) => {
   return true;   // 선발 출전 · 출전 중 · 교체 출전 중 · 교체 아웃 · 야구 스탯 라인
 };
 
+// API-Football 이 일부 선수 이름을 UTF-8 이중 인코딩 상태로 준다('O. HÃ¸jlund').
+// 프록시는 fetch().json() 그대로라 원본 문제다. 'Ã'/'Â' 뒤에 연속 바이트 패턴이
+// 보이면 한 번 되돌린다(Ã=C3 계열뿐 아니라 Å¾=ž 처럼 C4·C5 선행 바이트도). 실패하면 원문 그대로.
+const fixMojibake = (s) => {
+  if (typeof s !== 'string' || !/[\u00C2-\u00DF][\u0080-\u00BF]/.test(s)) return s;
+  try { return decodeURIComponent(escape(s)); } catch (e) { return s; }
+};
+
 // 선발 11명을 피치 라인으로 배치한다. 반환: { lines, label, predicted }
 //  lines: 공격 라인이 먼저, GK 가 마지막 (렌더가 위→아래로 그린다)
 //  label: '4-2-3-1' 같은 문자열. predicted=true 면 포지션에서 추정한 것.
@@ -4086,19 +4094,19 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
         else if (e.detail === 'Penalty') cls = 'penalty';
         else if (e.detail === 'Missed Penalty') cls = 'missedPenalty';
         return { ...base, incidentType: 'goal', incidentClass: cls,
-          player: { name: e.player?.name }, assist1: e.assist?.name ? { name: e.assist.name } : null };
+          player: { name: fixMojibake(e.player?.name) }, assist1: e.assist?.name ? { name: fixMojibake(e.assist.name) } : null };
       }
       if (e.type === 'Card') {
         let cls = 'yellow';
         if (e.detail === 'Red Card') cls = 'red';
         else if (e.detail === 'Second Yellow card') cls = 'yellowRed';
         return { ...base, incidentType: 'card', incidentClass: cls,
-          player: { name: e.player?.name }, reason: e.comments || '' };
+          player: { name: fixMojibake(e.player?.name) }, reason: e.comments || '' };
       }
       if (e.type === 'subst') {
         // API-Football: player = coming OFF (OUT), assist = coming ON (IN)
         return { ...base, incidentType: 'substitution',
-          playerIn: { name: e.assist?.name }, playerOut: { name: e.player?.name } };
+          playerIn: { name: fixMojibake(e.assist?.name) }, playerOut: { name: fixMojibake(e.player?.name) } };
       }
       if (e.type === 'Var') {
         return { ...base, incidentType: 'varDecision', text: e.detail || '' };
@@ -4121,7 +4129,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
     const mapTeam = (afTeam) => {
       if (!afTeam) return null;
       const mapPlayer = (e, sub) => ({
-        player: { name: e.player?.name, jerseyNumber: e.player?.number, id: e.player?.id,
+        player: { name: fixMojibake(e.player?.name), jerseyNumber: e.player?.number, id: e.player?.id,
                   grid: e.player?.grid || null, pos: e.player?.pos || null },
         substitute: sub,
         statistics: ratingMap.has(e.player?.id) ? { rating: ratingMap.get(e.player.id) } : {},
@@ -5018,7 +5026,8 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
             // '선발 명단'으로 정직하게 보인다.
             body = (
               <div style={{ background:'var(--surface)', borderRadius:14, padding:'12px 8px 14px', border:'0.5px solid var(--border)' }}>
-                <div style={{ fontSize:10, fontWeight:700, color:'var(--text4)', letterSpacing:1, marginBottom:10, textAlign:'center' }}>선발 명단</div>
+                {/* 선발이 11명 미만이면 API 가 아직 발표 중인 조각이다 — 그렇게 알린다. */}
+                <div style={{ fontSize:10, fontWeight:700, color:'var(--text4)', letterSpacing:1, marginBottom:10, textAlign:'center' }}>{starters.length < 11 ? '선발 명단 · 발표 중' : '선발 명단'}</div>
                 <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', rowGap:14, columnGap:4, justifyItems:'center' }}>
                   {starters.map((e, i) => node(e, i, true, false))}
                 </div>
@@ -8472,6 +8481,11 @@ function App() {
         // → 실제 명단 엔트리 수로 판정한다.
         const rosterCount = (lu) => (lu || []).reduce(
           (n, t) => n + ((t.startXI || []).length + (t.substitutes || []).length), 0);
+        // '라인업이 나왔다'는 두 팀 모두 선발 11명이 찼을 때다. API-Football 은 발표를
+        // 조각으로 낸다(실측: 킥오프 25분 전 아우크스부르크 선발 7명·벤치 0명). 한 명이라도
+        // 있으면 나온 것으로 치면 그 반쪽이 킥오프까지, 종료 경기면 영구히 굳는다.
+        const rosterComplete = (lu) => (lu || []).length >= 2 &&
+          (lu || []).every(t => (t.startXI || []).length >= 11);
         // 종료 경기인데 이벤트가 하나도 없으면(교체·골·카드 전무) 완결로 보지 않는다.
         // 90분 경기에 이벤트가 0개인 건 사실상 없고, 실제로는 events 콜만 한도에
         // 걸려 빈 채로 온 경우다 — 그걸 영구 캐시하면 교체 투입 선수가 '미출전'으로
@@ -8479,6 +8493,7 @@ function App() {
         // 이 판정은 공유 캐시(sf_cache) 읽기에도 쓰이므로 이미 오염된 행도 만료된다.
         const detailIncomplete = (d) =>
           rosterCount(d && d.lineups) === 0 ||
+          !rosterComplete(d && d.lineups) ||          // 한 팀이라도 선발 11명 미만이면 반쪽
           (d && d.status === 'STATUS_FINAL' && (d.events || []).length === 0);
         const kickoffById = {};
         afKorean.forEach(m => { kickoffById[m.id] = m.fullDate ? new Date(m.fullDate).getTime() : null; });
@@ -8491,7 +8506,12 @@ function App() {
             // 그 전엔 아무것도 없으므로, 90분 밖이면 6시간에 한 번이면 충분하다.
             const ko = kickoffById[id];
             const til = ko ? ko - Date.now() : 0;
-            return til > 90 * 60 * 1000 ? 6 * 60 * 60 * 1000 : 60000;
+            if (til > 90 * 60 * 1000) return 6 * 60 * 60 * 1000;
+            // 임박 창(90분 전~킥오프): 라인업이 이미 채워졌으면 킥오프 전엔 더 바뀔 게
+            // 없다 — 킥오프까지(최소 2분) 기다린다. 아직 비어 있으면 2분마다 다시 본다.
+            // (전엔 60초였고, 게다가 빈 응답을 캐시에 안 넣어 매 폴링(20초)마다
+            //  라인업+이벤트 2콜을 다시 쐈다 — 임박 경기 하나당 분당 6콜.)
+            return rosterComplete(d.lineups) ? Math.max(til, 2 * 60 * 1000) : 2 * 60 * 1000;
           }
           if (!detailIncomplete(d)) return Infinity;   // 명단이 채워졌으면 더 볼 것 없음
           // 비어 있으면 일시적 누락(레이트리밋으로 lineups 콜만 실패 등)일 수 있다.
@@ -8560,7 +8580,9 @@ function App() {
               //   들어온다) → 이미 있으면 재조회하지 않는다.
               // - 평점(players): 분 단위로 바뀌지 않으니 90초로 늦춘다.
               // - events: 골·교체가 실시간이라 그대로 매번 받는다.
-              const haveRoster = (cached?.lineups || []).some(t => (t.startXI || []).length);
+              const haveRoster = rosterComplete(cached?.lineups);
+              // 킥오프 전엔 이벤트(골·교체·카드)가 있을 수 없다 — 라인업만 묻는다.
+              const preKick = !m.live && !isFinalMatch;
               const playersAge = Date.now() - (cached?.playersAt || 0);
               const wantPlayers = needPlayers && (!cached?.players?.length || playersAge > 180000);
               // API-Football 은 한도를 넘으면 HTTP 200 에 errors 를 담고 response:[] 를
@@ -8573,7 +8595,9 @@ function App() {
                 haveRoster
                   ? Promise.resolve(undefined)   // 요청 안 함(캐시 사용)
                   : afFetch(`path=fixtures/lineups&fixture=${m.id}`).catch(() => null),
-                afFetch(`path=fixtures/events&fixture=${m.id}`).catch(() => null),
+                preKick
+                  ? Promise.resolve(undefined)   // 킥오프 전 — 이벤트 없음
+                  : afFetch(`path=fixtures/events&fixture=${m.id}`).catch(() => null),
                 wantPlayers
                   ? afFetch(`path=fixtures/players&fixture=${m.id}`).catch(() => null)
                   : Promise.resolve(undefined),
@@ -8596,10 +8620,15 @@ function App() {
               detail.empty = detail.lineups.length === 0 && detail.events.length === 0;
               // 하나라도 실패한 회차는 캐시하지 않는다 — 다음 폴링에서 다시 받는다.
               // (직전 값으로 화면은 그리되, 그 반쪽을 '완결'로 굳히지 않기 위해)
-              if (!failed && (!detail.empty || isFinalMatch)) {
+              // 성공한 빈 응답(발표 전 라인업)은 캐시한다 — 안 넣으면 TTL 이 적용될
+              // 대상이 없어 매 폴링마다 다시 묻는다. 얼마나 자주 다시 볼지는
+              // detailTtl 이 정한다(종료 경기의 빈 상세는 10분/6시간).
+              if (!failed) {
                 detailsCache[m.id] = detail;
               }
-              if (!failed && !detail.empty) {
+              // 공유 캐시에도 킥오프 전 빈 라인업을 남긴다 — 다른 기기가 같은 경기를
+              // 각자 2분마다 묻지 않게. (종료 경기의 빈 상세는 여전히 공유하지 않는다.)
+              if (!failed && (!detail.empty || preKick)) {
                 // players 원본은 팀 전체 스탯이라 크다 — 매칭에 쓰는 id·이름·평점만 남긴다.
                 const slimPlayers = (detail.players || []).map(team => ({
                   players: (team.players || []).map(e => ({
