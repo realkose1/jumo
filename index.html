@@ -6079,6 +6079,7 @@ const NEWS_PLAYERS = [
   { label:'김하성', query:'김하성' },
   { label:'이정후', query:'이정후' },
   { label:'김혜성', query:'김혜성' },
+  { label:'송성문', query:'송성문' },
   { label:'조규성', query:'조규성' },
   { label:'양현준', query:'양현준' },
   { label:'오현규', query:'오현규' },
@@ -6457,6 +6458,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
     '김하성': ['브레이브스','애틀랜타','샌디에이고','MLB'],
     '이정후': ['자이언츠','샌프란시스코','MLB','키움'],
     '김혜성': ['다저스','로스앤젤레스','MLB','키움'],
+    '송성문': ['파드리스','샌디에이고','MLB','키움'],
     '조규성': ['미트윌란','덴마크'],
     '양현준': ['셀틱','스코틀랜드'],
     '오현규': ['베식타스','베식타시','헹크','튀르키예'],
@@ -6473,7 +6475,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
   };
   const PLAYER_NAMES = NEWS_PLAYERS.map(p => p.label);
   const SOCCER_PLAYERS = ['손흥민','이강인','김민재','황희찬','황인범','조규성','양현준','오현규','백승호','배준호','엄지성'];
-  const MLB_PLAYERS = ['김하성','이정후','김혜성'];
+  const MLB_PLAYERS = ['김하성','이정후','김혜성','송성문'];
 
   // Click-bait patterns: when title uses our player's name as a comparison/foil
   // for a foreign player who is the actual subject of the article.
