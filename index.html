@@ -7959,6 +7959,16 @@ function App() {
   // 마지막으로 경기 목록을 화면에 반영한 시각. 앱 복귀 시 데이터가 얼마나 낡았는지
   // 판단해 스켈레톤을 다시 띄울지 결정한다.
   const lastPublishAtRef = React.useRef(0);
+  // '목록이 화면에 반영됐다'는 신호. 갱신 표시('최신 정보 불러오는 중'·당겨서
+  // 새로고침 스피너)는 이 시점에 내린다 — 경기 상세(라인업·이벤트·평점)까지 다
+  // 받길 기다리면 10초 넘게 바가 남는데, 그동안 화면엔 이미 내용이 다 떠 있다.
+  // 상세는 뒤에서 이어 받아 카드별로 갱신된다.
+  const listReadyRef = React.useRef([]);
+  const waitListReady = () => new Promise(res => { listReadyRef.current.push(res); });
+  const notifyListReady = () => {
+    const rs = listReadyRef.current; listReadyRef.current = [];
+    rs.forEach(r => { try { r(); } catch (e) {} });
+  };
   const [notifications, setNotifications] = React.useState([]);
   // Received push notifications, persisted so their content shows in the in-app
   // notification center (the match-derived `notifications` get overwritten on
@@ -8404,8 +8414,15 @@ function App() {
           });
           setIsInitialLoad(false);
           lastPublishAtRef.current = Date.now();
+          notifyListReady();
         };
-        const baseFallbackTimer = setTimeout(publishBase, 6000);
+        // 이미 그려진 목록이 있으면(재개·새로고침) 기본 목록을 즉시 내보낸다 —
+        // 이전 값과 병합되므로 화면이 튀지 않고, 갱신 표시가 바로 내려간다.
+        // 콜드 스타트(빈 화면)는 '출전 예상' 기본값이 잠깐 보이는 것보다 스켈레톤이
+        // 낫지만, 상세가 늦어도 3초 안에는 무언가 보여준다(전엔 6초).
+        let baseFallbackTimer = null;
+        if ((liveMatchesRef.current || []).length) publishBase();
+        else baseFallbackTimer = setTimeout(publishBase, 3000);
 
         // ── nameMatch helper ───────────────────────────────────────────────
         const nameMatch = (sfName, nameEn) => {
@@ -8521,7 +8538,6 @@ function App() {
 
         if (afTargets.length > 0) {
           const detailsCache = afDetailsCacheRef.current;
-          let afFetchSeq = 0; // network-bound fetches only (cache hits don't wait)
           const afDetails = await Promise.allSettled(
             afTargets.map(async (m) => {
               const needPlayers = m.live || m.status === 'STATUS_FINAL';
@@ -8535,10 +8551,9 @@ function App() {
                   return { id: m.id, lineups: cached.lineups, events: cached.events, players: cached.players, isLive: m.live };
                 }
               }
-              // API-Sports는 순간 동시 버스트에 초당 제한을 건다(실측: 동시 16콜 중 일부
-              // 거부, 150ms 분산 시 전부 통과). 경기당 3콜 묶음을 600ms 간격으로 분산해
-              // 로드 시점 버스트를 없앤다. 캐시 히트는 위에서 이미 반환돼 대기 없음.
-              await new Promise(r => setTimeout(r, (afFetchSeq++) * 600));
+              // (예전엔 여기서 경기마다 600ms 씩 시차를 뒀다 — afFetch 가 모든 호출을
+              //  320ms 간격 한 줄로 세우게 된 뒤로는 중복이라, 경기 8개면 4초를
+              //  그냥 버리는 셈이었다. 버스트 방지는 afFetch 게이트가 맡는다.)
               // 라이브 경기는 15초마다 도는데 세 엔드포인트를 매번 부르면
               // 경기 하나가 시간당 400콜을 먹는다(실측 기준 쿼터 소진의 주범).
               // - 라인업: 한 번 채워지면 경기 중 바뀌지 않는다(교체는 events 로
@@ -8904,10 +8919,11 @@ function App() {
 
         // 보강까지 끝난 완성본을 반영한다. 폴백(기본 목록)이 아직 안 나갔으면
         // 취소해서 '떴다가 다시 갱신되는' 두 번 그리기를 피한다.
-        clearTimeout(baseFallbackTimer);
+        if (baseFallbackTimer) clearTimeout(baseFallbackTimer);
         setLiveMatches(prev => mergeUncovered(prev, [...koreanMatches]));
         setIsInitialLoad(false);
         lastPublishAtRef.current = Date.now();
+        notifyListReady();
         // 다음 콜드 스타트에서 즉시 그릴 수 있도록 완성본만 저장한다.
         // quick 회차(어제~내일)는 저장하지 않는다 — 좁은 목록을 캐시에 넣으면
         // 다음 부팅이 반쪽짜리 화면으로 시작한다. 전체 범위 회차가 800ms 뒤에
@@ -9021,8 +9037,13 @@ function App() {
         setApiLoading(false);
         setIsInitialLoad(false);
         lastPublishAtRef.current = Date.now();   // 복귀 시 낡음 판단 기준
+        notifyListReady();   // 실패로 끝나도 갱신 표시는 내린다
       }
   }, []);
+
+  // 당겨서 새로고침용 — 목록이 반영되는 즉시 스피너를 내린다(상세는 뒤에서 계속).
+  const refreshFromPull = React.useCallback(
+    () => Promise.race([waitListReady(), fetchLiveMatches()]), [fetchLiveMatches]);
 
   // Fetch each Korean soccer player's 2025-26 season totals from API-Football
   // once at app load. Updates ALL_PLAYERS baseline + per-competition breakdown
@@ -9402,7 +9423,7 @@ function App() {
       pollInFlightRef.current = true;
       const announce = announceRef.current;
       announceRef.current = false;
-      if (announce) setRefreshing(true);
+      if (announce) { setRefreshing(true); waitListReady().then(() => setRefreshing(false)); }
       try {
         await withTimeout(fetchLiveMatches(firstRun));   // 첫 실행만 quick(어제~내일)
       } catch (e) {
@@ -10613,9 +10634,9 @@ function App() {
               도중에 다시 돌아 카드가 옆으로 미끄러졌다(제보). 살려두면 스크롤
               위치도 그대로 보존되고, 제스처 시작 시점의 마운트 부담도 사라진다. */}
           <div ref={behindRef} style={{ display:'flex', flexDirection:'column', flex:1, minHeight:0, transform: (dragging && !dragTop) ? `translateX(${parallaxX}px)` : undefined, willChange: dragging ? 'transform' : undefined, pointerEvents: screen === 'main' ? undefined : 'none' }}>
-              <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} onTabBarScroll={onTabBarScroll} tweaks={tweaks} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} scrollTopKey={tabScrollKeys.home} onRefresh={fetchLiveMatches} unreadCount={unreadCount} nativeTabBar={nativeTabBar}/></div>
-              <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} onTabBarScroll={onTabBarScroll} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
-              <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} onToggleFollow={toggleFollow} onTabBarScroll={onTabBarScroll} followed={followed} playerOrder={playerOrder} sportOrder={sportOrder} statsCache={playerStatsCache} isLoading={isInitialLoad && apiLoading} onRefresh={fetchLiveMatches} scrollTopKey={tabScrollKeys.players} liveApiMatches={filteredLiveMatches} sportFeeds={sportFeeds}/></div>
+              <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} onTabBarScroll={onTabBarScroll} tweaks={tweaks} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} scrollTopKey={tabScrollKeys.home} onRefresh={refreshFromPull} unreadCount={unreadCount} nativeTabBar={nativeTabBar}/></div>
+              <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} onTabBarScroll={onTabBarScroll} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} onRefresh={refreshFromPull} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
+              <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} onToggleFollow={toggleFollow} onTabBarScroll={onTabBarScroll} followed={followed} playerOrder={playerOrder} sportOrder={sportOrder} statsCache={playerStatsCache} isLoading={isInitialLoad && apiLoading} onRefresh={refreshFromPull} scrollTopKey={tabScrollKeys.players} liveApiMatches={filteredLiveMatches} sportFeeds={sportFeeds}/></div>
               <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news} followedNames={followedNames} onTabBarScroll={onTabBarScroll}/></div>
               <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed} profile={profile} onUpdateProfile={updateProfile} sub={moreSub} setSub={setMoreSub} onShowGuide={() => setShowOnboarding(true)} deviceId={deviceId}/></div>
               {dragging && !dragTop && <div ref={scrimRef} style={{ position:'absolute', inset:0, zIndex:40, pointerEvents:'none', background:`rgba(0,0,0,${0.18 * (1 - dragP)})` }}/>}
