@@ -320,6 +320,9 @@ const isPlayerAllowed = (p, feeds) => feeds?.[playerSportKey(p)] !== false;
 const AF_MIN_GAP_MS = 320;                 // ≈3회/초 — 초당 5회 한도 아래
 let afGate = Promise.resolve();
 let afLastAt = 0;
+// 최근 30분 안에 한도 소진을 봤으면 참. 30분이 지나면 다시 AF 를 찔러본다
+// (09:00 리셋을 자동으로 알아채기 위해).
+const afQuotaExhausted = () => Date.now() - (window.__afQuotaHitAt || 0) < 30 * 60 * 1000;
 function afFetch(query, { retries = 1 } = {}) {
   const slot = afGate.then(async () => {
     const wait = AF_MIN_GAP_MS - (Date.now() - afLastAt);
@@ -328,6 +331,12 @@ function afFetch(query, { retries = 1 } = {}) {
   });
   afGate = slot;
   return slot.then(async () => {
+    // 일일 한도가 소진된 동안에는 아예 부르지 않는다. 어차피 전부 errors 로
+    // 반려되는데, 그동안 앱은 시간당 1,500회씩 프록시를 두드리고 있었다(실측).
+    // 게다가 한도 소진으로 데이터가 라이브 상태에서 굳으면 앱이 그 경기를 계속
+    // 라이브로 보고 20초 주기로 폴링해 스스로를 더 두드리는 되먹임이 생긴다.
+    // 30분이 지나면 한 번 찔러본다 — 09:00 리셋을 그렇게 알아챈다.
+    if (afQuotaExhausted()) return null;
     const r = await fetch(`${API_BASE}/api/apifootball?${query}`);
     if (!r.ok) return null;
     const j = await r.json().catch(() => null);
@@ -343,9 +352,6 @@ function afFetch(query, { retries = 1 } = {}) {
     return failed ? null : j;
   });
 }
-// 최근 30분 안에 한도 소진을 봤으면 참. 30분이 지나면 다시 AF 를 찔러본다
-// (09:00 리셋을 자동으로 알아채기 위해).
-const afQuotaExhausted = () => Date.now() - (window.__afQuotaHitAt || 0) < 30 * 60 * 1000;
 
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
