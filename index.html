@@ -9199,7 +9199,12 @@ function App() {
             det.duelsWon  += s.duels?.won        || 0;
             det.minutes   += s.games?.minutes    || 0;
             const r2 = s.games?.rating, w = sm;
-            if (r2 && w > 0) ratings.push([parseFloat(r2), w]);
+            // AF 시즌 집계 평점이 가끔 깨진다 — 김민재 분데스리가 1경기 집계가 3.6 인데
+            // 그 경기의 개별 평점은 7.2 였다(2026-09-07 실측, 정확히 절반). 정상 집계는
+            // 출전 경기 개별 평점의 단순 평균임을 확인했다(설영우 8.2·6.9·8.2 → 7.77).
+            // 시즌 평균이 4.0 아래인 건 실제로 나올 수 없는 값이라 그 대회만 평균에서 뺀다
+            // (골·출전·분은 그대로 센다). 이걸 안 빼면 시즌 평점이 5.7 로 나갔다(제보).
+            if (r2 && w > 0 && parseFloat(r2) >= 4.0) ratings.push([parseFloat(r2), w]);
             // Only include competitions where the player actually played
             if (sm > 0 || sg > 0 || sa > 0) {
               const lbl = labelLeague(s.league?.name, s.league?.country);
