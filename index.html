@@ -4492,18 +4492,23 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
     if (predFetchedRef.current === match.id) return;
     predFetchedRef.current = match.id;
 
-    // 한국 선수 소속팀만 예측한다 — 어느 쪽인지 못 가리면 홈팀으로.
-    const allKp = (match.koreanPlayers || [match.koreanPlayer]).filter(Boolean);
-    const isHomeKp = allKp.some(kp => kp.team === match.home?.code);
-    const isAwayKp = allKp.some(kp => kp.team === match.away?.code);
-    const side = (isAwayKp && !isHomeKp) ? match.away : match.home;
-    if (!side?.id) return;
+    // 양 팀 모두 예측한다(제보: 상대팀도 보여야 한다). 팀별로 12시간 공유
+    // 캐시를 타므로 같은 팀이 다시 나오면 호출이 없다. 홈 → 원정 순서는 실제
+    // 라인업 화면과 같게 맞춘다.
+    const sides = [match.home, match.away].filter(t => t && t.id);
+    if (!sides.length) return;
 
     setPredLoading(true);
-    fetchPredictedXI(side.id, match.leagueId)
-      .then(res => setPredXI(res ? { ...res, team: side } : null))
-      .catch(() => setPredXI(null))
-      .finally(() => setPredLoading(false));
+    (async () => {
+      const out = [];
+      for (const side of sides) {
+        try {
+          const res = await fetchPredictedXI(side.id, match.leagueId);
+          if (res) out.push({ ...res, team: side });
+        } catch (e) { /* 한 팀 실패해도 나머지는 보여준다 */ }
+      }
+      setPredXI(out.length ? out : null);
+    })().finally(() => setPredLoading(false));
   }, [tab, isMLBMatch, lineupsLoading, lineupsData, match]);
 
   React.useEffect(() => {
@@ -5380,17 +5385,21 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
                   <div style={{ width:24, height:24, borderRadius:'50%', border:'2.5px solid var(--border)', borderTopColor:'var(--acc)', animation:'spin 0.8s linear infinite' }}/>
                 </div>
               )}
-              {notStarted && !predLoading && predXI && (
+              {notStarted && !predLoading && predXI && predXI.length > 0 && (
                 <div style={{ padding:'0 12px 20px' }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4, paddingLeft:2 }}>
-                    <TeamBadge code={predXI.team.code} size={20} logo={predXI.team.logo}/>
-                    <span style={{ fontSize:13, fontWeight:700, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{predXI.team.name}</span>
-                    <span style={{ ...NUM, fontSize:11, color:'var(--text4)', flexShrink:0 }}>{predXI.formation} 예상</span>
-                  </div>
-                  <div style={{ fontSize:11, color:'var(--text5)', marginBottom:8, paddingLeft:2 }}>최근 5경기 선발 기준 · 실제 라인업과 다를 수 있어요</div>
-                  <div style={{ opacity:0.92, border:'1px dashed rgba(245,196,0,0.35)', borderRadius:16, padding:10 }}>
-                    {renderTeam(predXI.team, predXI, predXI.players, true)}
-                  </div>
+                  <div style={{ fontSize:11, color:'var(--text5)', marginBottom:10, paddingLeft:2 }}>최근 5경기 선발 기준 · 실제 라인업과 다를 수 있어요</div>
+                  {predXI.map((pred, pi) => (
+                    <div key={pred.team.code || pi} style={{ marginBottom: pi === predXI.length - 1 ? 0 : 18 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6, paddingLeft:2 }}>
+                        <TeamBadge code={pred.team.code} size={20} logo={pred.team.logo}/>
+                        <span style={{ fontSize:13, fontWeight:700, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{pred.team.name}</span>
+                        <span style={{ ...NUM, fontSize:11, color:'var(--text4)', flexShrink:0 }}>{pred.formation} 예상</span>
+                      </div>
+                      <div style={{ opacity:0.92, border:'1px dashed rgba(245,196,0,0.35)', borderRadius:16, padding:10 }}>
+                        {renderTeam(pred.team, pred, pred.players, true)}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
