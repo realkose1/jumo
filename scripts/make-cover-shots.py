@@ -224,19 +224,21 @@ def cover_b():
     d.text((x, y), '출전하는 날만, 잠금화면에서 실시간으로', font=f_sub, fill=DIM)
 
     bx = x
-    bx += badge(c, (bx, 1060), '라인업 · 킥오프', f_badge, accent=True) + 16
-    badge(c, (bx, 1060), '골 · 도움 · 종료', f_badge)
+    bx += badge(c, (bx, 800), '라인업 · 킥오프', f_badge, accent=True) + 16
+    badge(c, (bx, 800), '골 · 도움 · 종료', f_badge)
 
-    # 피치 화면이 배경, 그 위로 실제 푸시 문구를 띄운 배너 두 장.
+    # 피치 화면이 배경, 그 위로 실제 푸시 문구를 띄운 배너 세 장(알림이 쌓이는 모습).
+    # 한 선수만 나오지 않게 두 선수를 섞는다.
     ph = phone('2-lineup.png', 800, -7)
-    c.alpha_composite(ph, (W - ph.width + 150, 1500))
+    c.alpha_composite(ph, (W - ph.width + 150, 1700))
 
-    n1 = notif_card(900, '라인업 발표', '겔젠키르헨 FC vs 베를린 SC — 황희찬이 선발로 나섭니다.',
-                    '지금', -4)
-    c.alpha_composite(n1, (20, 1210))
-    n2 = notif_card(900, '황희찬 골!', "겔젠키르헨 FC vs 베를린 SC 경기 67', 황희찬이 골을 터뜨렸습니다!",
-                    '지금', -4)
-    c.alpha_composite(n2, (110, 1495))
+    cards = [
+        ('라인업 발표', 'LA 골든스 vs 솔트레이크 FC — 손흥민이 선발로 나섭니다.', (10, 950)),
+        ('손흥민 골!', "LA 골든스 vs 솔트레이크 FC 경기 23', 손흥민이 골을 터뜨렸습니다!", (80, 1245)),
+        ('황희찬 도움!', "겔젠키르헨 FC vs 베를린 SC 경기 67', 황희찬이 도움을 기록했습니다!", (150, 1540)),
+    ]
+    for title, body, pos in cards:
+        c.alpha_composite(notif_card(900, title, body, '지금', -4), pos)
 
     return c.convert('RGB')
 
