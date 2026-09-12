@@ -26,14 +26,19 @@ F_BOLD = os.path.join(FDIR, 'Pretendard-Bold.otf')
 F_MED = os.path.join(FDIR, 'Pretendard-Medium.otf')
 
 
-def bg():
-    """세로 그라데이션 + 좌상단 옐로 글로우 + 옅은 대각 스트라이프."""
+def bg(width=None):
+    """세로 그라데이션 + 옐로 글로우 + 옅은 대각 스트라이프.
+
+    width 를 주면 그만큼 넓게 그린다 — 커버 두 장을 한 캔버스에 그린 뒤 반으로
+    잘라야 App Store 에서 나란히 봤을 때 배경이 이어진다.
+    """
+    width = width or W
     top, bot = (17, 17, 21), (7, 7, 9)
-    img = Image.new('RGB', (W, H))
+    img = Image.new('RGB', (width, H))
     d = ImageDraw.Draw(img)
     for y in range(H):
         t = y / H
-        d.line([(0, y), (W, y)], fill=tuple(int(top[i] + (bot[i] - top[i]) * t) for i in range(3)))
+        d.line([(0, y), (width, y)], fill=tuple(int(top[i] + (bot[i] - top[i]) * t) for i in range(3)))
 
     # 옐로 글로우 — 작은 캔버스에 그려서 확대(블러보다 싸고 부드럽다)
     gs = 64
@@ -42,14 +47,17 @@ def bg():
     for r in range(gs // 2, 0, -1):
         gd.ellipse([gs / 2 - r, gs / 2 - r, gs / 2 + r, gs / 2 + r],
                    fill=int(70 * (1 - r / (gs / 2)) ** 1.6))
-    g = g.resize((1500, 1500), Image.BICUBIC)
+    big = g.resize((1500, 1500), Image.BICUBIC)
     glow = Image.new('RGB', (1500, 1500), ACCENT)
-    img.paste(glow, (-420, -380), g)
+    img.paste(glow, (-420, -380), big)
+    if width > W:                      # 오른쪽 절반에도 옅은 글로우를 하나 더
+        g2 = g.resize((1700, 1700), Image.BICUBIC).point(lambda v: int(v * 0.62))
+        img.paste(Image.new('RGB', (1700, 1700), ACCENT), (width - 1080, -520), g2)
 
-    # 대각 스트라이프
-    st = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    # 대각 스트라이프 — 이음매에서 끊기지 않게 전체 폭에 한 번에 긋는다
+    st = Image.new('RGBA', (width, H), (0, 0, 0, 0))
     sd = ImageDraw.Draw(st)
-    for x in range(-H, W, 120):
+    for x in range(-H, width, 120):
         sd.line([(x, H), (x + H, 0)], fill=(255, 255, 255, 6), width=34)
     return Image.alpha_composite(img.convert('RGBA'), st).convert('RGB')
 
@@ -174,79 +182,65 @@ def notif_card(width, title, body, when, angle):
     return out
 
 
-def cover_a():
-    c = bg().convert('RGBA')
+def panorama():
+    """커버 두 장을 한 캔버스(2W x H)에 그린다. 이음매를 가로지르는 기기 목업이
+    A 오른쪽에서 B 왼쪽으로 이어져, 나란히 보면 한 장면으로 읽힌다.
+    각 장을 따로 봐도 말이 되게 카피·배지는 각 절반 안에 둔다."""
+    PW = W * 2
+    c = bg(PW).convert('RGBA')
     d = ImageDraw.Draw(c)
 
     f_kick = ImageFont.truetype(F_BOLD, 46)
     f_mid = ImageFont.truetype(F_BOLD, 84)
     f_big = ImageFont.truetype(F_BLACK, 158)
-    f_badge = ImageFont.truetype(F_BOLD, 38)
-
-    x = 92
-    d.rounded_rectangle([x, 196, x + 104, 206], radius=5, fill=ACCENT)
-    tracked(d, (x, 244), 'JUMO · 주모', f_kick, ACCENT, 2)
-
-    y = 336
-    d.text((x, y), '해외에서 뛰는', font=f_mid, fill=DIM)
-    y += 126
-    tracked(d, (x, y), '우리 선수', f_big, WHITE, -6)
-    y += 186
-    tracked(d, (x, y), '전부 여기에', f_big, ACCENT, -6)
-
-    ph = phone('1-home.png', 860, -9)
-    c.alpha_composite(ph, (W - ph.width + 210, 1080))
-
-    bx = x
-    bx += badge(c, (bx, 1044), '축구 · 야구', f_badge, accent=True) + 16
-    badge(c, (bx, 1044), '한국 선수만 모아서', f_badge)
-
-    return c.convert('RGB')
-
-
-def cover_b():
-    c = bg().convert('RGBA')
-    d = ImageDraw.Draw(c)
-
-    f_mid = ImageFont.truetype(F_BOLD, 84)
-    f_big = ImageFont.truetype(F_BLACK, 158)
     f_sub = ImageFont.truetype(F_MED, 44)
     f_badge = ImageFont.truetype(F_BOLD, 38)
 
+    # ── 왼쪽(0a) ──────────────────────────────────────────────
     x = 92
     d.rounded_rectangle([x, 196, x + 104, 206], radius=5, fill=ACCENT)
-
-    y = 254
-    tracked(d, (x, y), '골 넣으면', f_big, WHITE, -6)
-    y += 186
-    tracked(d, (x, y), '바로 알림', f_big, ACCENT, -6)
-    y += 196
-    d.text((x, y), '출전하는 날만, 잠금화면에서 실시간으로', font=f_sub, fill=DIM)
+    tracked(d, (x, 244), 'JUMO · 주모', f_kick, ACCENT, 2)
+    d.text((x, 336), '해외에서 뛰는', font=f_mid, fill=DIM)
+    tracked(d, (x, 462), '우리 선수', f_big, WHITE, -6)
+    tracked(d, (x, 648), '전부 여기에', f_big, ACCENT, -6)
 
     bx = x
-    bx += badge(c, (bx, 800), '라인업 · 킥오프', f_badge, accent=True) + 16
-    badge(c, (bx, 800), '골 · 도움 · 종료', f_badge)
+    bx += badge(c, (bx, 900), '축구 · 야구', f_badge, accent=True) + 16
+    badge(c, (bx, 900), '한국 선수만 모아서', f_badge)
 
-    # 피치 화면이 배경, 그 위로 실제 푸시 문구를 띄운 배너 세 장(알림이 쌓이는 모습).
-    # 한 선수만 나오지 않게 두 선수를 섞는다.
-    ph = phone('2-lineup.png', 800, -7)
-    c.alpha_composite(ph, (W - ph.width + 150, 1700))
+    # ── 오른쪽(0b) ────────────────────────────────────────────
+    rx = W + 92
+    d.rounded_rectangle([rx, 196, rx + 104, 206], radius=5, fill=ACCENT)
+    tracked(d, (rx, 254), '골 넣으면', f_big, WHITE, -6)
+    tracked(d, (rx, 440), '바로 알림', f_big, ACCENT, -6)
+    d.text((rx, 648), '출전하는 날만, 잠금화면에서 실시간으로', font=f_sub, fill=DIM)
 
+    bx = rx
+    bx += badge(c, (bx, 776), '라인업 · 킥오프', f_badge, accent=True) + 16
+    badge(c, (bx, 776), '골 · 도움 · 종료', f_badge)
+
+    # ── 이음매를 가로지르는 기기 ───────────────────────────────
+    ph = phone('1-home.png', 1000, -8)
+    c.alpha_composite(ph, (W - ph.width // 2 - 290, 1120))
+
+    # ── 알림 배너 — 오른쪽 절반 위에 쌓는다(기기 위로 겹친다) ──
     cards = [
-        ('라인업 발표', 'LA 골든스 vs 솔트레이크 FC — 손흥민이 선발로 나섭니다.', (10, 950)),
-        ('손흥민 골!', "LA 골든스 vs 솔트레이크 FC 경기 23', 손흥민이 골을 터뜨렸습니다!", (80, 1245)),
-        ('황희찬 도움!', "겔젠키르헨 FC vs 베를린 SC 경기 67', 황희찬이 도움을 기록했습니다!", (150, 1540)),
+        ('라인업 발표', 'LA 골든스 vs 솔트레이크 FC — 손흥민이 선발로 나섭니다.', (W + 20, 980)),
+        ('손흥민 골!', "LA 골든스 vs 솔트레이크 FC 경기 23', 손흥민이 골을 터뜨렸습니다!", (W + 95, 1275)),
+        ('황희찬 도움!', "겔젠키르헨 FC vs 베를린 SC 경기 67', 황희찬이 도움을 기록했습니다!", (W + 170, 1570)),
     ]
     for title, body, pos in cards:
-        c.alpha_composite(notif_card(900, title, body, '지금', -4), pos)
+        c.alpha_composite(notif_card(860, title, body, '지금', -4), pos)
 
     return c.convert('RGB')
 
 
 def main():
     os.makedirs(OUT, exist_ok=True)
-    for name, fn in (('0a-cover.png', cover_a), ('0b-cover.png', cover_b)):
-        img = fn()
+    pano = panorama()
+    assert pano.size == (W * 2, H), pano.size
+    for i, name in enumerate(('0a-cover.png', '0b-cover.png')):
+        img = pano.crop((W * i, 0, W * (i + 1), H))
         assert img.size == (W, H), img.size
         p = os.path.join(OUT, name)
         img.save(p, 'PNG')
