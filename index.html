@@ -3782,20 +3782,26 @@ function aggregatePredictedXI(records) {
     formation = lineSizes.join('-');
   }
 
-  // 라인마다(수비→공격) 대응하는 밴드를 정하고, 그 밴드에서 최다 선발 선수부터
-  // 채운다. 밴드가 소진되면 밴드 무관하게 남은 최고 순위 선수로 채운다.
+  // 라인마다(수비→공격) 목표 밴드를 정하고 채운다. 단 **공격 라인부터** 채운다 —
+  // 수비→공격 순으로 채우면 2선(3명)이 최전방(1명)보다 먼저 공격수 밴드를 가져가,
+  // 4-2-3-1 에서 주전 스트라이커가 2선으로 밀리고 다른 공격수가 최전방에 선다
+  // (실측: 케인이 2선, 사이비가 최전방). 목표 밴드와의 거리로 고르고, 같으면
+  // 선발 횟수 순.
   const bandForLine = (li, n) => n === 1 ? 3 : Math.max(1, Math.min(5, Math.round(1 + (li * 4) / (n - 1))));
   const remaining = [...rest];
-  const outfield = [];
-  lineSizes.forEach((size, li) => {
-    const band = bandForLine(li, lineSizes.length);
-    for (let k = 0; k < size; k++) {
-      if (remaining.length === 0) break;
-      let pickIdx = remaining.findIndex(p => predXiBandOf(p.pos) === band);
-      if (pickIdx === -1) pickIdx = 0;
-      outfield.push(remaining.splice(pickIdx, 1)[0]);
+  const slots = lineSizes.map((size, li) => ({ li, size, band: bandForLine(li, lineSizes.length), picks: [] }));
+  [...slots].reverse().forEach(slot => {
+    for (let k = 0; k < slot.size; k++) {
+      if (!remaining.length) break;
+      let best = 0, bestDist = Infinity;
+      remaining.forEach((p, i) => {
+        const d = Math.abs((predXiBandOf(p.pos) ?? 3) - slot.band);
+        if (d < bestDist) { bestDist = d; best = i; }   // 동점이면 먼저 나온 쪽 = 선발 많은 쪽
+      });
+      slot.picks.push(remaining.splice(best, 1)[0]);
     }
   });
+  const outfield = slots.flatMap(s => s.picks);
   while (outfield.length < 10 && remaining.length > 0) outfield.push(remaining.shift());
   if (outfield.length < 10) return null;
 
@@ -3817,7 +3823,8 @@ async function fetchPredictedXI(teamId, leagueId) {
   const mem = predXiMem[memKey];
   if (mem && Date.now() - mem.at < PREDXI_TTL) return mem.data;
 
-  const cacheKey = `af-predxi-${teamId}-${leagueId}`;
+  // 키에 버전(v2)을 둔다 — 배치 규칙이 바뀌면 12시간 캐시가 옛 결과를 붙들고 있다.
+  const cacheKey = `af-predxi2-${teamId}-${leagueId}`;
   try {
     const r = await SB.from('sf_cache').select('date,events,updated_at').eq('date', cacheKey).limit(1);
     const row = (r && r.data || [])[0];
