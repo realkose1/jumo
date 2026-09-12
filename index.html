@@ -8654,15 +8654,19 @@ function App() {
           // ── ESPN 라인업 폴백 ──────────────────────────────────────────
           // API-Football 은 라인업을 킥오프 직전에야 낸다(실측: 챔피언십 T-8분,
           // MLS 는 T-22분에도 없음). 같은 MLS 경기를 ESPN 은 T-30분에 냈다.
-          // 아직 시작 전이거나 진행 중인데 AF 명단이 비어 있으면 ESPN 으로 채운다.
+          // 시작 전·진행 중·종료를 가리지 않고 AF 명단이 비어 있으면 ESPN 으로 채운다.
+          // 예전엔 종료 경기를 뺐다("AF 가 결국 채운다") — 그런데 안 채우는 경기가
+          // 있다: 2026-09-11 베식타시-에르주룸(쉬페르리그)은 종료 8시간 뒤에도 AF 에
+          // 라인업·선수 기록이 전혀 없었고, ESPN 엔 오현규 선발이 있었다. 그 결과
+          // 앱은 '확인 불가'로 굳었다(제보). 종료 경기는 10분(하루 뒤 6시간) 간격의
+          // 재시도 때마다 같이 시도하므로 ESPN 호출도 그 빈도를 넘지 않는다.
           // ESPN 은 iPhone UA 를 403 으로 막아 /api/espn 프록시를 거친다.
           const needEspn = afDetails
             .filter(r => r.status === 'fulfilled' && r.value)
             .map(r => r.value)
             .filter(v => {
               const mm = koreanMatches.find(x => x.id === v.id);
-              // 종료 경기는 AF 가 결국 채우므로 굳이 두 소스를 쓰지 않는다.
-              if (!mm || mm.status === 'STATUS_FINAL') return false;
+              if (!mm) return false;
               return !(v.lineups || []).some(t => (t.startXI || []).length);
             })
             .slice(0, 4);   // 경기당 최대 2콜 — 임박 경기만이라 보통 0~2건
