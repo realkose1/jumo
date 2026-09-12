@@ -3692,6 +3692,174 @@ async function afCachedResponse(key, ttl, query, slim) {
   return data;
 }
 
+// ─── 라인업 미발표 경기: 최근 5경기 선발 기반 예상 XI ───────────────
+// 목적: 킥오프가 임박했는데 공식 라인업이 아직 없을 때, 최근 선발 패턴으로
+// XI를 추정해 보여준다(반드시 '예상'으로 표기). 팀당 API 콜 6회(최근 6경기
+// 조회 1회 + 라인업 5회)라 캐시를 반드시 거친다 — 메모리 → Supabase(공유,
+// 12시간) → 네트워크 순. sf_cache 에는 원본 응답이 아니라 계산이 끝난 결과를
+// 저장한다(af-detail-* 관례와 동일하게 date=문자열 키, events=jsonb).
+const PREDXI_TTL = 12 * 3600e3;
+const predXiMem = {};   // `${teamId}-${leagueId}` → { data, at }
+
+// layoutLineup 의 로컬 bandOf 와 같은 분류 기준(0=GK, 1=수비 … 5=공격).
+function predXiBandOf(posRaw) {
+  const p = (posRaw || '').toUpperCase();
+  if (p === 'G' || p === 'GK') return 0;
+  if (p === 'D' || p === 'CD' || p === 'CB' || p === 'SW' || p === 'LB' || p === 'RB' || /^(CD|CB|LB|RB)(-[LR])?$/.test(p)) return 1;
+  if (['LWB', 'RWB', 'DM', 'CDM', 'DM-L', 'DM-R'].includes(p)) return 2;
+  if (['M', 'CM', 'LM', 'RM', 'CM-L', 'CM-R'].includes(p)) return 3;
+  if (['AM', 'CAM', 'AM-L', 'AM-R', 'LW', 'RW'].includes(p)) return 4;
+  if (['F', 'CF', 'ST', 'S', 'LF', 'RF', 'CF-L', 'CF-R'].includes(p)) return 5;
+  return null;
+}
+
+// records: 최신순 배열 [{ startXI:[{player:{id,name,number,pos,grid}}], formation }].
+// renderTeam 이 그대로 소비할 수 있는 { formation, players, sample, predicted } 를 낸다.
+function aggregatePredictedXI(records) {
+  const usable = (records || []).filter(r => Array.isArray(r.startXI) && r.startXI.length >= 11);
+  if (usable.length < 3) return null;
+
+  const playerMap = new Map();
+  const formationCounts = new Map();
+  usable.forEach((rec, idx) => {
+    if (rec.formation) {
+      const cur = formationCounts.get(rec.formation) || { count: 0, lastIdx: idx };
+      cur.count += 1;
+      if (idx < cur.lastIdx) cur.lastIdx = idx;   // idx 가 작을수록 최근 경기
+      formationCounts.set(rec.formation, cur);
+    }
+    rec.startXI.forEach(e => {
+      const p = e.player || {};
+      if (p.id == null) return;
+      let cur = playerMap.get(p.id);
+      if (!cur) { cur = { id: p.id, starts: 0, lastIdx: idx }; playerMap.set(p.id, cur); }
+      cur.starts += 1;
+      if (idx <= cur.lastIdx) {
+        cur.lastIdx = idx;
+        cur.name = fixMojibake(p.name);
+        cur.number = p.number;
+        cur.pos = p.pos;
+      }
+    });
+  });
+
+  const allPlayers = [...playerMap.values()];
+  if (allPlayers.length < 11) return null;
+
+  let formation = null;
+  if (formationCounts.size) {
+    let best = null;
+    for (const [f, v] of formationCounts) {
+      if (!best || v.count > best.count || (v.count === best.count && v.lastIdx < best.lastIdx)) best = { f, ...v };
+    }
+    formation = best.f;
+  }
+
+  const byStartsRecency = (a, b) => (b.starts - a.starts) || (a.lastIdx - b.lastIdx);
+  const gkCandidates = allPlayers.filter(p => predXiBandOf(p.pos) === 0).sort(byStartsRecency);
+  const gk = gkCandidates[0] || [...allPlayers].sort(byStartsRecency)[0];
+  const rest = allPlayers.filter(p => p.id !== gk.id).sort(byStartsRecency);
+
+  let lineSizes = (formation && /^\d+(-\d+)+$/.test(formation)) ? formation.split('-').map(Number) : null;
+  if (lineSizes && lineSizes.reduce((a, b) => a + b, 0) !== 10) lineSizes = null;
+
+  if (!lineSizes) {
+    // 포메이션 근거가 없으면 상위 10명의 포지션 밴드 분포로 직접 라인을 구성한다
+    // (layoutLineup 의 밴드 폴백과 같은 방식: 라인이 4개 넘으면 인접 라인을 합친다).
+    const top10 = rest.slice(0, 10);
+    if (top10.length < 10) return null;
+    let lines = [1, 2, 3, 4, 5].map(bd => top10.filter(p => (predXiBandOf(p.pos) || 3) === bd).length).filter(n => n > 0);
+    while (lines.length > 4) {
+      let bi = 0, bsize = Infinity;
+      for (let i = 0; i < lines.length - 1; i++) {
+        const s = lines[i] + lines[i + 1];
+        if (s < bsize) { bsize = s; bi = i; }
+      }
+      lines.splice(bi, 2, lines[bi] + lines[bi + 1]);
+    }
+    if (lines.reduce((a, b) => a + b, 0) !== 10) return null;
+    lineSizes = lines;
+    formation = lineSizes.join('-');
+  }
+
+  // 라인마다(수비→공격) 대응하는 밴드를 정하고, 그 밴드에서 최다 선발 선수부터
+  // 채운다. 밴드가 소진되면 밴드 무관하게 남은 최고 순위 선수로 채운다.
+  const bandForLine = (li, n) => n === 1 ? 3 : Math.max(1, Math.min(5, Math.round(1 + (li * 4) / (n - 1))));
+  const remaining = [...rest];
+  const outfield = [];
+  lineSizes.forEach((size, li) => {
+    const band = bandForLine(li, lineSizes.length);
+    for (let k = 0; k < size; k++) {
+      if (remaining.length === 0) break;
+      let pickIdx = remaining.findIndex(p => predXiBandOf(p.pos) === band);
+      if (pickIdx === -1) pickIdx = 0;
+      outfield.push(remaining.splice(pickIdx, 1)[0]);
+    }
+  });
+  while (outfield.length < 10 && remaining.length > 0) outfield.push(remaining.shift());
+  if (outfield.length < 10) return null;
+
+  const players = [gk, ...outfield].map(p => ({
+    // grid 는 과거 경기(다른 포메이션)의 좌표라 이번 포메이션과 안 맞을 수 있어
+    // 비운다 — layoutLineup 이 포지션 밴드 기준으로 다시 배치하게 한다.
+    player: { name: p.name, jerseyNumber: p.number, id: p.id, grid: null, pos: p.pos },
+    substitute: false,
+    statistics: {},
+  }));
+
+  return { formation, players, sample: usable.length, predicted: true };
+}
+
+// 팀의 최근 6경기 중 5경기 선발로 예상 XI 를 계산한다(공유 캐시 우선).
+async function fetchPredictedXI(teamId, leagueId) {
+  if (!teamId) return null;
+  const memKey = `${teamId}-${leagueId}`;
+  const mem = predXiMem[memKey];
+  if (mem && Date.now() - mem.at < PREDXI_TTL) return mem.data;
+
+  const cacheKey = `af-predxi-${teamId}-${leagueId}`;
+  try {
+    const r = await SB.from('sf_cache').select('date,events,updated_at').eq('date', cacheKey).limit(1);
+    const row = (r && r.data || [])[0];
+    if (row && row.events != null) {
+      const at = new Date(row.updated_at).getTime();
+      if (Date.now() - at < PREDXI_TTL) {
+        const data = row.events;
+        predXiMem[memKey] = { data, at };
+        return data;
+      }
+    }
+  } catch (e) { /* 공유 캐시를 못 읽으면 네트워크로 간다 */ }
+
+  const fixJson = await afFetch(`path=fixtures&team=${teamId}&last=6`).catch(() => null);
+  const fixtures = Array.isArray(fixJson?.response) ? fixJson.response : [];
+  if (fixtures.length === 0) return null;
+
+  // 컵대회 로테이션이 리그 예측을 흐리지 않도록, 같은 리그 경기가 3개 이상이면
+  // 그것만 쓰고 아니면 그냥 가장 최근 5경기를 쓴다.
+  const sameLeague = fixtures.filter(f => f.league?.id === leagueId);
+  const chosen = (sameLeague.length >= 3 ? sameLeague : fixtures).slice(0, 5);
+
+  const lineupJsons = await Promise.all(
+    chosen.map(fx => fx.fixture?.id
+      ? afFetch(`path=fixtures/lineups&fixture=${fx.fixture.id}`).catch(() => null)
+      : Promise.resolve(null))
+  );
+  const records = lineupJsons.map(lj => {
+    const resp = Array.isArray(lj?.response) ? lj.response : [];
+    const teamEntry = resp.find(t => t.team?.id === teamId);
+    return teamEntry ? { startXI: teamEntry.startXI || [], formation: teamEntry.formation } : { startXI: [] };
+  });
+
+  const result = aggregatePredictedXI(records);
+  if (result) {
+    predXiMem[memKey] = { data: result, at: Date.now() };
+    SB.from('sf_cache').upsert({ date: cacheKey, events: result, updated_at: new Date().toISOString() })
+      .then(() => {}, () => {});
+  }
+  return result;
+}
+
 // 탭이 처음 열릴 때 한 번만 부른다. data === null 이면 '불러올 수 없음'.
 function useLazyAf(active, run) {
   const [st, setSt] = React.useState({ loading: false, data: null, done: false });
@@ -4142,6 +4310,10 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
   const [incidentsLoading, setIncidentsLoading] = React.useState(false);
   const [mlbSummary, setMlbSummary] = React.useState(null);
   const [mlbLoading, setMlbLoading] = React.useState(false);
+  // 라인업 미발표 + 시작 전 경기용 '예상 XI'(최근 5경기 선발 집계).
+  const [predXI, setPredXI] = React.useState(null);
+  const [predLoading, setPredLoading] = React.useState(false);
+  const predFetchedRef = React.useRef(null);   // match.id 당 한 번만 부른다
 
   const isSoccerMatch = !((match.sport||'').includes('MLB') || (match.sport||'').includes('⚾'));
   const isMLBMatch = !isSoccerMatch;
@@ -4288,6 +4460,32 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
       setLineupsLoading(false);
     })().catch(() => setLineupsLoading(false));
   }, [tab, match.id, isFinished, isLive]);
+
+  // 라인업 탭에 실제로 들어와 있고, 라인업이 아직 없고, 경기가 시작 전일 때만
+  // 예상 XI 를 부른다(폴링 중엔 절대 안 부름). match.id 당 한 번만 시도한다.
+  React.useEffect(() => {
+    if (isMLBMatch || tab !== 'lineups' || lineupsLoading) return;
+    const homePlayers = lineupsData?.home?.players || [];
+    const awayPlayers = lineupsData?.away?.players || [];
+    if (homePlayers.length > 0 || awayPlayers.length > 0) return;   // 실제 라인업이 있으면 예측 불필요
+    const notStarted = !match.live && match.time !== 'LIVE' && !isFinalStatus(match.status);
+    if (!notStarted) return;
+    if (predFetchedRef.current === match.id) return;
+    predFetchedRef.current = match.id;
+
+    // 한국 선수 소속팀만 예측한다 — 어느 쪽인지 못 가리면 홈팀으로.
+    const allKp = (match.koreanPlayers || [match.koreanPlayer]).filter(Boolean);
+    const isHomeKp = allKp.some(kp => kp.team === match.home?.code);
+    const isAwayKp = allKp.some(kp => kp.team === match.away?.code);
+    const side = (isAwayKp && !isHomeKp) ? match.away : match.home;
+    if (!side?.id) return;
+
+    setPredLoading(true);
+    fetchPredictedXI(side.id, match.leagueId)
+      .then(res => setPredXI(res ? { ...res, team: side } : null))
+      .catch(() => setPredXI(null))
+      .finally(() => setPredLoading(false));
+  }, [tab, isMLBMatch, lineupsLoading, lineupsData, match]);
 
   React.useEffect(() => {
     if (tab !== 'stats' || statsData || !(isFinished || isLive)) return;
@@ -5023,21 +5221,6 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
         }
         const homePlayers = lineupsData?.home?.players || [];
         const awayPlayers = lineupsData?.away?.players || [];
-        if (homePlayers.length === 0 && awayPlayers.length === 0) {
-          // 시작 전이면 '아직 안 나왔다'와 '끝내 없다'는 전혀 다른 뜻이다.
-          // 그냥 '정보 없음'이라고만 쓰면 앱이 못 가져온 것처럼 읽힌다.
-          const notStarted = !match.live && match.time !== 'LIVE' && !isFinalStatus(match.status);
-          return (
-            <div style={{ textAlign:'center', padding:'40px 20px', color:'var(--text5)', fontSize:14, lineHeight:1.6 }}>
-              {notStarted ? (
-                <>
-                  <div style={{ fontWeight:700, color:'var(--text3)', marginBottom:6 }}>라인업 발표 전</div>
-                  <div style={{ fontSize:12 }}>경기 시작 직전에 공개됩니다.<br/>나오면 알림으로 알려드릴게요.</div>
-                </>
-              ) : '라인업 정보가 없습니다'}
-            </div>
-          );
-        }
         // 코리안 더비 대응: 팀별로 그 팀 소속 한국 선수 전원과 매칭한다.
         const allKp = (match.koreanPlayers || [match.koreanPlayer]).filter(Boolean);
         const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z\s]/g,'').trim();
@@ -5047,7 +5230,9 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
         }) || null;
         const kpsFor = (team) => allKp.filter(kp => kp.team === team.code);
 
-        const renderTeam = (team, teamData, players) => {
+        // pitchOnly: 헤더·SUBS 없이 피치(또는 격자 명단)만 반환한다 — 예상 XI 는
+        // 자체 헤더(팀명 + '예상' 표기 + 캡션)를 바깥에서 그리고 이 피치만 재사용한다.
+        const renderTeam = (team, teamData, players, pitchOnly = false) => {
           const starters = players.filter(p => p.substitute === false);
           const subs = players.filter(p => p.substitute === true);
           const kps = kpsFor(team);
@@ -5119,6 +5304,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
               </div>
             );
           }
+          if (pitchOnly) return body;
           return (
             <div style={{ marginBottom:18 }}>
               <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8, paddingLeft:2 }}>
@@ -5154,6 +5340,44 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
             </div>
           );
         };
+
+        if (homePlayers.length === 0 && awayPlayers.length === 0) {
+          // 시작 전이면 '아직 안 나왔다'와 '끝내 없다'는 전혀 다른 뜻이다.
+          // 그냥 '정보 없음'이라고만 쓰면 앱이 못 가져온 것처럼 읽힌다.
+          const notStarted = !match.live && match.time !== 'LIVE' && !isFinalStatus(match.status);
+          return (
+            <div>
+              <div style={{ textAlign:'center', padding:'40px 20px', color:'var(--text5)', fontSize:14, lineHeight:1.6 }}>
+                {notStarted ? (
+                  <>
+                    <div style={{ fontWeight:700, color:'var(--text3)', marginBottom:6 }}>라인업 발표 전</div>
+                    <div style={{ fontSize:12 }}>경기 시작 직전에 공개됩니다.<br/>나오면 알림으로 알려드릴게요.</div>
+                  </>
+                ) : '라인업 정보가 없습니다'}
+              </div>
+              {/* 최근 5경기 선발 기준 예상 XI — 한국 선수 소속팀만, '예상' 딱지 필수 */}
+              {notStarted && predLoading && (
+                <div style={{ display:'flex', justifyContent:'center', padding:'8px 0 32px' }}>
+                  <div style={{ width:24, height:24, borderRadius:'50%', border:'2.5px solid var(--border)', borderTopColor:'var(--acc)', animation:'spin 0.8s linear infinite' }}/>
+                </div>
+              )}
+              {notStarted && !predLoading && predXI && (
+                <div style={{ padding:'0 12px 20px' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4, paddingLeft:2 }}>
+                    <TeamBadge code={predXI.team.code} size={20} logo={predXI.team.logo}/>
+                    <span style={{ fontSize:13, fontWeight:700, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{predXI.team.name}</span>
+                    <span style={{ ...NUM, fontSize:11, color:'var(--text4)', flexShrink:0 }}>{predXI.formation} 예상</span>
+                  </div>
+                  <div style={{ fontSize:11, color:'var(--text5)', marginBottom:8, paddingLeft:2 }}>최근 5경기 선발 기준 · 실제 라인업과 다를 수 있어요</div>
+                  <div style={{ opacity:0.92, border:'1px dashed rgba(245,196,0,0.35)', borderRadius:16, padding:10 }}>
+                    {renderTeam(predXI.team, predXI, predXI.players, true)}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        }
+
         return (
           <div style={{ padding:'14px 12px' }}>
             {renderTeam(match.home, lineupsData?.home, homePlayers)}
