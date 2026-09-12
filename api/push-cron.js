@@ -230,7 +230,15 @@ async function fixturesForDate(date) {
 // squad 를 모른 채 involved[0] 로 폴백했다 — 그래서 명단에 없는 선수가
 // 잠금화면에 '출전 중'으로 떴다(김지수·조규성 제보).
 // 라인업은 경기 중 바뀌지 않으므로(교체는 events 로 들어온다) 캐시해도 안전하다.
-async function lineupSquad(fid) {
+// 이름 비교 키 — 성·이름 순서가 소스마다 달라('Oh Hyeon-Gyu'/'Hyeon-gyu Oh') 토큰을 정렬한다.
+const nameKeyOf = (s) => (s || '').toLowerCase().replace(/[.\-]/g, ' ').split(/\s+/).filter(Boolean).sort().join('');
+
+// espnFallback: AF 에 명단이 없을 때 ESPN 로스터를 돌려주는 함수(선택).
+// 2026-09-11 베식타시-에르주룸은 종료 뒤에도 AF 에 라인업이 아예 없어서 시작·종료
+// 알림이 하나도 안 나갔다(앱은 ESPN 폴백으로 '풀타임'을 표시). ESPN 로스터엔
+// AF 선수 id 가 없으므로 우리 선수(involved)만 이름으로 붙여 id 목록을 만든다 —
+// 호출부는 startXI/subs 에 우리 선수 id 가 있는지만 본다.
+async function lineupSquad(fid, espnFallback = null, involved = []) {
   const key = `af-lineup-${fid}`;
   try {
     const rows = await sbSelect('sf_cache', `date=eq.${key}&select=events`);
@@ -239,13 +247,34 @@ async function lineupSquad(fid) {
   } catch (e) { /* 캐시 불가 → AF 로 */ }
   const lu = await afGet(`/fixtures/lineups?fixture=${fid}`);
   const teams = lu?.response || [];
+  let out = null;
   // 발표 전에는 '팀 껍데기'(startXI 빈 배열)가 오므로 채워졌을 때만 인정한다.
-  if (!teams.length || !teams.some((t) => (t.startXI || []).length)) return null;
-  const ids = (list) => (list || []).map((e) => e.player?.id).filter((x) => x != null);
-  const out = {
-    startXI: teams.flatMap((t) => ids(t.startXI)),
-    subs: teams.flatMap((t) => ids(t.substitutes)),
-  };
+  if (teams.length && teams.some((t) => (t.startXI || []).length)) {
+    const ids = (list) => (list || []).map((e) => e.player?.id).filter((x) => x != null);
+    out = {
+      startXI: teams.flatMap((t) => ids(t.startXI)),
+      subs: teams.flatMap((t) => ids(t.substitutes)),
+    };
+  } else if (espnFallback && involved.length) {
+    const rosters = await espnFallback().catch(() => null);
+    // 우리 선수 소속팀 로스터가 선발 11명까지 차 있을 때만 믿는다. 한쪽 팀만 온
+    // 상태를 받아들이면 빈 목록이 '명단 제외'로 확정·캐시돼 영영 안 고쳐진다.
+    const ownOk = rosters && involved.some((p) => rosters.some((t) =>
+      String(t.team?.id) === String(p.espnTeamId) && (t.roster || []).filter((a) => a.starter).length >= 11));
+    if (ownOk) {
+      const match = (a) => involved.find((p) => nameKeyOf(p.nameEn).length >= 6 &&
+        nameKeyOf(a.athlete?.displayName) === nameKeyOf(p.nameEn));
+      const startXI = [], subs = [];
+      rosters.forEach((t) => (t.roster || []).forEach((a) => {
+        const p = match(a); if (!p) return;
+        (a.starter ? startXI : subs).push(p.afPlayerId);
+      }));
+      // 우리 선수가 로스터에 한 명도 없으면 '명단에 없음'이 확정된 것이므로 빈 목록을
+      // 그대로 돌려준다(null 과 구분 — null 은 '아직 모름').
+      out = { startXI, subs, source: 'espn' };
+    }
+  }
+  if (!out) return null;
   try {
     await fetch(`${process.env.SUPABASE_URL}/rest/v1/sf_cache`, {
       method: 'POST',
@@ -411,7 +440,7 @@ async function collectSoccer(events, liveStates) {
       // (예전엔 시작 알림 후 조회를 건너뛰어 출전 여부를 알 수 없었다.)
       let starters = null, squad = null;
       if (isLive || isFinal) {
-        const lu = await lineupSquad(fid);
+        const lu = await lineupSquad(fid, () => espnLineup(involved[0], new Date(fx.fixture.date).getTime()), involved);
         if (lu) {
           starters = involved.filter((p) => lu.startXI.includes(p.afPlayerId));
           squad = involved.filter((p) => lu.startXI.includes(p.afPlayerId) || lu.subs.includes(p.afPlayerId));
