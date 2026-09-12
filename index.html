@@ -4038,6 +4038,9 @@ function TeamScreen({ team, onBack, onMatch, onPlayer, liveApiMatches = [] }) {
 
 // ─── SCREEN: LIVE MATCH DETAIL ────────────────────────────────
 function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam }) {
+  // '선발 예상 N%' 배지 설명 시트 — 홈 카드와 같은 컨텍스트를 쓴다(제보: 경기
+  // 상세에서는 눌러도 아무 일이 없었다).
+  const explain = React.useContext(ExplainCtx);
   const goKoreanPlayer = React.useCallback((kp) => {
     if (!onPlayer || !kp) return;
     const full = ALL_PLAYERS.find(p => p.name === kp.name);
@@ -4371,11 +4374,20 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
                           <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>{kp.name} <span style={{ ...NUM, color:'var(--text4)', fontWeight:400 }}>#{kp.number}</span></div>
-                          {kp.event && !isStatLine && (
-                            <div style={{ background: isMutedEvent(kp.event) ? 'transparent' : isLive ? 'rgba(230,48,48,0.1)' : 'var(--btn-bg)', borderRadius:6, padding:'3px 7px', flexShrink:0, display:'inline-flex', alignItems:'center', justifyContent:'center' }}>
+                          {kp.event && !isStatLine && (() => {
+                            const tip = explainForEvent(formattedEvent);
+                            return (
+                            <div
+                              onClick={tip ? (e) => {
+                                // 카드 자체는 선수 상세로 가므로 전파를 막는다.
+                                e.stopPropagation();
+                                explain({ ...tip, rect: e.currentTarget.getBoundingClientRect() });
+                              } : undefined}
+                              style={{ background: isMutedEvent(kp.event) ? 'transparent' : isLive ? 'rgba(230,48,48,0.1)' : 'var(--btn-bg)', borderRadius:6, padding:'3px 7px', flexShrink:0, display:'inline-flex', alignItems:'center', justifyContent:'center', cursor: tip ? 'pointer' : undefined }}>
                               <span style={{ fontSize:10, fontWeight: isMutedEvent(kp.event) ? 500 : 600, color: isMutedEvent(kp.event) ? 'var(--text4)' : isLive ? 'var(--acc)' : 'var(--text2)', whiteSpace:'nowrap', lineHeight:1 }}>{formattedEvent}</span>
                             </div>
-                          )}
+                            );
+                          })()}
                           {injury && (() => { const s = injuryStyle(injury); return (
                             <span style={{ fontSize:10, fontWeight:700, padding:'3px 7px', borderRadius:6, background:s.bg, color:s.fg, border:`0.5px solid ${s.bd}`, whiteSpace:'nowrap', lineHeight:1, flexShrink:0 }}><span style={{ color:s.ic, fontWeight:900, marginRight:4 }}>{s.icon}</span>{injury.label}</span>
                           ); })()}
