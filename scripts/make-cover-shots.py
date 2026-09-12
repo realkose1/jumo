@@ -231,10 +231,10 @@ def cover_b():
     ph = phone('2-lineup.png', 800, -7)
     c.alpha_composite(ph, (W - ph.width + 150, 1500))
 
-    n1 = notif_card(900, '라인업 발표', '겔젠키르헨 FC vs 베를린 SC — 황희준이 선발로 나섭니다.',
+    n1 = notif_card(900, '라인업 발표', '겔젠키르헨 FC vs 베를린 SC — 황희찬이 선발로 나섭니다.',
                     '지금', -4)
     c.alpha_composite(n1, (20, 1210))
-    n2 = notif_card(900, '황희준 골!', "겔젠키르헨 FC vs 베를린 SC 경기 67', 황희준이 골을 터뜨렸습니다!",
+    n2 = notif_card(900, '황희찬 골!', "겔젠키르헨 FC vs 베를린 SC 경기 67', 황희찬이 골을 터뜨렸습니다!",
                     '지금', -4)
     c.alpha_composite(n2, (110, 1495))
 

@@ -225,12 +225,23 @@ ANCHOR_STATE = ("  const [liveMatches, setLiveMatches] = React.useState(() => bo
                 "  }), []);")
 
 
-def apply():
+def apply(real_names=False):
     s = open(SRC).read()
     if 'SHOT_MODE' in s:
         sys.exit('이미 촬영 모드가 적용돼 있습니다. 먼저 revert 하세요.')
     assert s.count(ANCHOR_HELPERS) == 1
-    s = s.replace(ANCHOR_HELPERS, HELPERS.strip() + '\n\n' + ANCHOR_BROADCAST[1], 1)
+    helpers = HELPERS
+    if real_names:
+        # --real-names: 선수 이름만 실명으로 둔다. 구단명·엠블럼·리그·선수 사진은
+        # 그대로 가상 데이터 — 4.1(a) 반려 사유는 구단/리그 표기였고 선수 실명은
+        # 사실 정보라 위험도가 낮다는 판단(사용자 결정, 2026-09-12).
+        helpers = helpers.replace(
+            "const shotPlayerName = (n) => (SHOT_PLAYER[n] || [n])[0];",
+            "const shotPlayerName = (n) => n;   // --real-names")
+        helpers = helpers.replace(
+            "const shotPlayerNameEn = (n, en) => (SHOT_PLAYER[n] || [null, en])[1];",
+            "const shotPlayerNameEn = (n, en) => en;   // --real-names")
+    s = s.replace(ANCHOR_HELPERS, helpers.strip() + '\n\n' + ANCHOR_BROADCAST[1], 1)
     for old, new in (ANCHOR_PLAYERS, ANCHOR_DETAIL_HERO, ANCHOR_HOME_HERO, ANCHOR_CAREER, ANCHOR_CANONICAL, ANCHOR_PHOTO, ANCHOR_STATE):
         assert s.count(old) == 1, f'앵커를 찾지 못했습니다: {old[:40]}'
         s = s.replace(old, new, 1)
@@ -241,7 +252,8 @@ def apply():
     assert s.count(ANCHOR_TEAM_FIX[0]) == 1, '팀 경기 탭 앵커 없음'
     s = s.replace(ANCHOR_TEAM_FIX[0], ANCHOR_TEAM_FIX[1])
     open(SRC, 'w').write(s)
-    print('촬영 모드 적용 — npm run build && npx cap copy ios 후 시뮬레이터에서 캡처하세요.')
+    print('촬영 모드 적용%s — npm run build && npx cap copy ios 후 시뮬레이터에서 캡처하세요.'
+          % (' (선수 실명 유지)' if real_names else ''))
 
 
 def revert():
@@ -252,8 +264,8 @@ def revert():
 if __name__ == '__main__':
     cmd = sys.argv[1] if len(sys.argv) > 1 else ''
     if cmd == 'apply':
-        apply()
+        apply(real_names='--real-names' in sys.argv[2:])
     elif cmd == 'revert':
         revert()
     else:
-        sys.exit('사용법: shotmode.py apply | revert')
+        sys.exit('사용법: shotmode.py apply [--real-names] | revert')
