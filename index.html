@@ -2207,7 +2207,8 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
       timeLabel = `${date.getMonth() + 1}월 ${date.getDate()}일`;
     }
 
-    const displayHours = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
+    // 오늘이면 '오후 7:30' 처럼 12시간제, 내일·날짜 머리글에는 오전/오후가 없으니 24시간제('내일 19:30').
+    const displayHours = isToday ? (hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours)) : hours;
     timeValue = `${String(displayHours).padStart(2, '0')}:${minutes}`;
   }
 
@@ -4678,7 +4679,8 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
       timeLabel = `${date.getMonth() + 1}월 ${date.getDate()}일`;
     }
 
-    const displayHours = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
+    // 오늘이면 '오후 7:30' 처럼 12시간제, 내일·날짜 머리글에는 오전/오후가 없으니 24시간제('내일 19:30').
+    const displayHours = isToday ? (hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours)) : hours;
     timeValue = `${String(displayHours).padStart(2, '0')}:${minutes}`;
   }
 
@@ -6306,7 +6308,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
               if (/Ligue 1/i.test(s)) return '리그앙';
               if (/Major League Soccer|^MLS/i.test(s)) return 'MLS';
               if (/Major League Baseball/i.test(s)) return 'MLB';
-              if (/Asian Games/i.test(s)) return '아시안게임';
+              if (/Asian Games|아시안게임/i.test(s)) return '아시안게임';
               if (s.length > 10) return s.slice(0, 9) + '…';
               return s;
             })();
@@ -10249,7 +10251,8 @@ function App() {
       koreanPlayer: koreanPlayer?.isTeam ? koreanPlayer : { ...koreanPlayer, event: (isFinished || isTimedOut) ? '확인 불가' : '출전 예상', minutesPlayed: 0, matchGoals: 0, matchAssists: 0 },
       koreanPlayers: koreanPlayers.map(kp => kp.isTeam ? kp : ({ ...kp, event: (isFinished || isTimedOut) ? '확인 불가' : '출전 예상', minutesPlayed: 0, matchGoals: 0, matchAssists: 0 })),
       isKoreanDerby,
-      competition: tournamentName,
+      // 카드·일정의 대회 줄에 그대로 찍히므로 아시안게임은 한글로.
+      competition: tournamentName === 'Asian Games' ? '아시안게임' : tournamentName,
       competitionLogo: fx.league?.logo || null,
       venue: fx.fixture.venue?.city || '',
       time: timeDisplay,
