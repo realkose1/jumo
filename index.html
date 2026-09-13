@@ -964,8 +964,19 @@ const stripClubAffix = (s) => s
   .replace(/\s+(FC|SC|CF|SV|AFC|BK|FK|KV|SK)$/i, '')
   .replace(/\s+\d{2,4}$/, '')
   .trim();
+// 정말 긴 이름만 줄인다. 칸을 실제로 깨뜨리는 건 '끊기지 않는 긴 한 단어'
+// ('Mönchengladbach' 15자)와 아주 긴 전체 이름뿐이다. 'FC Augsburg',
+// 'Bayern München', 'Erzurumspor FK' 처럼 두 줄로 얌전히 접히는 이름은
+// 원래대로 둔다 — 짧게 바꾸면 오히려 낯설다(사용자 요청).
+const TEAM_LONG_WORD = 12;   // 한 단어가 이보다 길면 줄 안에서 끊긴다
+const TEAM_LONG_TOTAL = 20;  // 전체가 이보다 길면 두 줄로도 빠듯하다
+const isTeamNameLong = (name) => {
+  const n = String(name || '');
+  if (n.length > TEAM_LONG_TOTAL) return true;
+  return n.split(/\s+/).some(w => w.length >= TEAM_LONG_WORD);
+};
 const shortTeamName = (name) => {
-  if (!name) return name;
+  if (!name || !isTeamNameLong(name)) return name;
   const hit = TEAM_SHORT[name];
   if (hit) return hit;
   const s = stripClubAffix(String(name));
