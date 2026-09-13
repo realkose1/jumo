@@ -27,6 +27,9 @@ module.exports = async (req, res) => {
         'X-Naver-Client-Secret': NAVER_CLIENT_SECRET,
       },
     }, naverRes => {
+      // 청크를 문자열로 이어 붙이면 한글 같은 멀티바이트 문자가 청크 경계에서 깨진다
+      // (실측: 뉴스 요약에 '기���'). setEncoding 의 StringDecoder 가 경계를 이어 준다.
+      naverRes.setEncoding('utf8');
       let body = '';
       naverRes.on('data', c => body += c);
       naverRes.on('end', () => resolve({ status: naverRes.statusCode, body }));
