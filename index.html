@@ -2899,7 +2899,9 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
       const parts = [];
       if (matchGoals > 0) parts.push(`${matchGoals}골`);
       if (matchAssists > 0) parts.push(`${matchAssists}도움`);
-      main = parts.length > 0 ? `${name} ${parts.join(' ')}` : `${name} ${mins >= 90 ? '풀타임 활약' : mins > 0 ? `${mins}분 출전` : '출전'}`;
+      main = parts.length > 0 ? `${name} ${parts.join(' ')}`
+        : `${name} ${mins >= 90 ? '풀타임 활약' : mins > 0 ? `${mins}분 출전`
+          : (kp.event === '미출전' || kp.event === '확인 불가' || kp.event === '벤치') ? kp.event : '출전'}`;
     }
 
     const homeWin = m.home.score > m.away.score;
@@ -3048,7 +3050,8 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
           const ev = kp.event || '';
           const mins = kp.minutesPlayed;
           const minText = (ev === '풀타임' || mins >= 90) ? '풀타임 출전'
-            : ev.includes('분') ? ev : mins > 0 ? `${mins}분 출전` : ev === '출전 완료' ? '출전 완료' : '출전';
+            : ev.includes('분') ? ev : mins > 0 ? `${mins}분 출전` : ev === '출전 완료' ? '출전 완료'
+            : (ev === '미출전' || ev === '확인 불가' || ev === '벤치') ? ev : '출전';
           statParts.push(minText);
         }
         // 코리안 더비·같은 팀 복수 선수: 팔로우한 전원을 '이름 핵심스탯'으로 압축 나열.
@@ -3063,7 +3066,11 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
           if (a > 0) parts.push(`${a}도움`);
           if (parts.length === 0) {
             const mm = k.minutesPlayed;
-            parts.push(mm >= 90 ? '풀타임' : mm > 0 ? `${mm}분` : '출전');
+            // 0분은 '출전'이 아니다 — 미출전·확인 불가·벤치를 그대로 적는다
+            // (실측: 더비에서 명단 제외된 선수가 '양현준 출전'으로 나갔다).
+            const ev0 = k.event || '';
+            parts.push(mm >= 90 ? '풀타임' : mm > 0 ? `${mm}분`
+              : (ev0 === '미출전' || ev0 === '확인 불가' || ev0 === '벤치' || ev0 === '벤치 대기') ? ev0 : '출전');
           }
           return `${k.name} ${parts.join(' ')}`;
         };
