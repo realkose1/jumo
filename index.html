@@ -196,9 +196,35 @@ const ToastCtx = React.createContext(() => {});
 // 탭하면 어떻게 나온 숫자인지 짧게 설명하는 시트를 띄운다.
 const ExplainCtx = React.createContext(() => {});
 
-// 배지 문구가 '선발 예상 …' 이면 그에 맞는 설명을 돌려준다(아니면 null).
+// 배지 문구에 맞는 설명을 돌려준다(없으면 null). '선발 예상 …', '확인 불가',
+// 수동 결장 라벨(대표팀 차출 등)을 다룬다.
 function explainForEvent(text) {
-  if (!/^선발 예상/.test(text || '')) return null;
+  const t = text || '';
+  if (t === '확인 불가') {
+    return {
+      title: '확인 불가는 이런 뜻이에요',
+      lines: [
+        '이 경기의 출전 명단(라인업)을 데이터 제공처에서 아직 받지 못했어요.',
+        '하위 리그·컵·U-21 경기는 명단이 아예 안 오기도 하고, 종료 직후엔 몇 분 늦게 오기도 해요.',
+        '명단이 들어오면 자동으로 바뀝니다. 당겨서 새로고침하면 바로 다시 확인해요.',
+        "실제로 뛰지 않았다는 뜻은 아니에요 — 그 경우엔 '미출전'으로 표시돼요.",
+      ],
+    };
+  }
+  const manual = Object.values(MANUAL_AVAILABILITY).find(m => m.label === t);
+  if (manual) {
+    const period = manual.from && manual.to ? `${manual.from.replace(/-/g, '.')} ~ ${manual.to.replace(/-/g, '.')}` : '';
+    return {
+      title: `${manual.label} — 소속팀 경기에 나올 수 없어요`,
+      lines: [
+        manual.note || '',
+        period ? `기간: ${period}` : '',
+        '이 기간의 소속팀 경기에서는 선발 예상을 계산하지 않아요.',
+        '대표팀 차출은 데이터 제공처가 알려주지 않아 저희가 직접 반영합니다. 틀렸다면 더보기 → 피드백으로 알려주세요.',
+      ].filter(Boolean),
+    };
+  }
+  if (!/^선발 예상/.test(t)) return null;
   return {
     title: '선발 예상은 이렇게 계산해요',
     lines: [
@@ -1297,6 +1323,9 @@ function compactBadgeEvent(ev) {
 function formatExpectedEvent(kp, allMatches) {
   if (!kp) return '';
   if (kp.event === '출전 예상') {
+    // 대표팀 차출 등 수동 결장 중이면 '선발 예상 N%' 는 거짓말이다 — 사유를 적는다.
+    const man = manualAvailabilityFor(kp.name);
+    if (man) return man.label;
     const p = computeStartProbability(kp.name, allMatches);
     // 계산하는 값은 '선발' 확률이다. 벤치에서 늘 출전하는 선수를 '출전 예상 20%'로
     // 적으면 사실과 어긋나므로 라벨을 실제 지표에 맞춘다.
@@ -1316,6 +1345,24 @@ const STATUS_BADGE = {
   minors:    { bg:'rgba(150,160,175,0.16)', fg:'#aeb6c2', bd:'rgba(150,160,175,0.35)', icon:'▼', ic:'#97a1b0' },
 };
 const injuryStyle = (inj) => STATUS_BADGE[inj?.kind] || STATUS_BADGE.injured;
+STATUS_BADGE.national = { bg:'rgba(80,140,255,0.16)', fg:'#8ab4ff', bd:'rgba(80,140,255,0.4)', icon:'⚑', ic:'#6ea0ff' };
+
+// ─── 수동 결장 정보 ────────────────────────────────────────────
+// API 결장 피드는 부상·징계·비활성만 준다(실측: 셀틱 시즌 전체가 Knee Injury·
+// Red Card·Inactive 뿐). 대표팀 차출(아시안게임·A매치 소집)은 어디서도 구조화된
+// 데이터로 오지 않아 여기서 직접 적는다. 기간이 지나면 자동으로 무시되고, 일일
+// 동기화가 덮어쓰지 못하게 apply 뒤에 얹는다.
+const MANUAL_AVAILABILITY = {
+  '양현준': { kind:'national', label:'아시안게임 차출', from:'2026-09-11', to:'2026-10-05',
+              note:'2026 아이치·나고야 아시안게임 U-23 대표팀 소집으로 소속팀 명단에서 빠져 있어요.' },
+};
+const manualAvailabilityFor = (name, now = Date.now()) => {
+  const m = MANUAL_AVAILABILITY[name];
+  if (!m) return null;
+  if (m.from && now < Date.parse(m.from + 'T00:00:00+09:00')) return null;
+  if (m.to && now > Date.parse(m.to + 'T23:59:59+09:00')) return null;
+  return { label: m.label, severity: 'medium', kind: m.kind, note: m.note, manual: true };
+};
 
 // ─── HELPER: Dynamic date generator ──────────────────────────
 function getRelativeDate(hoursFromNow) {
@@ -9669,11 +9716,13 @@ function App() {
     // Apply a name→status map onto ALL_PLAYERS. A present key with null clears any
     // (now stale) injury; an absent key leaves the existing value untouched.
     const apply = (map) => {
-      if (!map) return;
-      ALL_PLAYERS.forEach(p => {
+      if (map) ALL_PLAYERS.forEach(p => {
         if (Object.prototype.hasOwnProperty.call(map, p.name)) p.injury = map[p.name] || null;
       });
+      // 수동 결장(대표팀 차출)은 동기화 결과 위에 얹는다 — 피드에 없어서 null 로 지워진다.
+      ALL_PLAYERS.forEach(p => { const man = manualAvailabilityFor(p.name); if (man) p.injury = man; });
     };
+    apply(null);   // 캐시·네트워크와 무관하게 수동 결장은 즉시 반영
     const REASON_KO = {
       'knee injury':'무릎 부상', 'ankle injury':'발목 부상', 'hamstring':'햄스트링 부상',
       'muscle injury':'근육 부상', 'thigh injury':'허벅지 부상', 'calf injury':'종아리 부상',
