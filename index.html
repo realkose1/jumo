@@ -788,9 +788,30 @@ const KOREAN_PLAYERS_EXTRA = {
   'FC Midtjylland': [{ name: '홍현석', nameEn: 'Hong Hyun-seok', number: 13, position: '미드필더' }],
 };
 
+// 소속팀이 아니라 대표팀으로 뛰는 경기. 아시안게임 축구는 API-Football 리그 803,
+// 팀 10177 'Korea Republic U23'. 이 여섯 명을 선수 개인으로 붙이지 않고(대표팀
+// 경기에선 누가 선발인지 불확실하므로) 팀 단위 카드 하나로만 보여준다.
+const NATIONAL_TEAMS = {
+  'Korea Republic U23': { afTeamId: 10177, code: '대한민국 U-23', display: '대한민국 U-23',
+                          players: ['양현준', '엄지성', '배준호', '김지수', '양민혁', '박승수'] },
+};
+// 대표팀 경기용 합성 '선수' 엔트리 — 실제 선수가 아니라 팀 전체를 가리킨다.
+// state 는 'upcoming'|'live'|'finished'.
+const nationalTeamEntry = (teamName, teamCode, state) => ({
+  name: NATIONAL_TEAMS[teamName]?.display || teamName,
+  nameEn: 'Korea Republic U23',
+  team: teamCode,
+  number: null,
+  position: '',
+  isTeam: true,
+  event: state === 'live' ? '진행 중' : state === 'finished' ? '경기 종료' : '경기 예정',
+  minutesPlayed: 0, matchGoals: 0, matchAssists: 0,
+});
+
 // 팀명으로 그 팀의 한국 선수 전원을 돌려준다(0~N명). team 코드는 카드·스코어 비교에
-// 쓰이므로 함께 붙인다.
-function koreansForTeam(teamName, teamCode, sport) {
+// 쓰이므로 함께 붙인다. 대표팀이면 선수 개개인이 아니라 팀 엔트리 하나만 돌려준다.
+function koreansForTeam(teamName, teamCode, sport, matchState) {
+  if (NATIONAL_TEAMS[teamName]) return [nationalTeamEntry(teamName, teamCode, matchState)];
   const primary = KOREAN_PLAYERS[teamName];
   const extras = KOREAN_PLAYERS_EXTRA[teamName] || [];
   const all = [...(primary ? [primary] : []), ...extras];
@@ -1322,6 +1343,9 @@ function compactBadgeEvent(ev) {
 }
 function formatExpectedEvent(kp, allMatches) {
   if (!kp) return '';
+  // 대표팀 엔트리는 팀 전체를 가리키는 합성 항목이다 — 선발 확률·차출 라벨 같은
+  // 개인 판정을 붙이지 않고 경기 상태 라벨(경기 예정/진행 중/경기 종료)을 그대로 쓴다.
+  if (kp.isTeam) return kp.event || '';
   if (kp.event === '출전 예상') {
     // 대표팀 차출 등 수동 결장 중이면 '선발 예상 N%' 는 거짓말이다 — 사유를 적는다.
     const man = manualAvailabilityFor(kp.name);
@@ -2199,10 +2223,15 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
           {cardKoreans.map((kp, i) => {
             const kpPlayer = ALL_PLAYERS.find(p => p.name === kp.name);
             const photoSize = multiKorean ? 40 : 48;
+            // 대표팀 엔트리는 선수 사진이 없다 — 그 대신 해당 진영(홈/원정) 팀 로고를 보여준다.
+            const kpSide = kp.isTeam ? (kp.team === m.home.code ? m.home : kp.team === m.away.code ? m.away : null) : null;
             return (
               <div key={kp.name || i} style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
                 <div style={{ display:'flex', alignItems:'center', gap:10, flex:1, minWidth:0 }}>
-                  {tweaks.showPlayerPhoto && kpPlayer && (
+                  {tweaks.showPlayerPhoto && kp.isTeam && (
+                    <TeamBadge code={kp.team} size={photoSize} logo={kpSide?.logo}/>
+                  )}
+                  {tweaks.showPlayerPhoto && !kp.isTeam && kpPlayer && (
                     <div style={{
                       width:photoSize, height:photoSize, borderRadius:'50%', overflow:'hidden',
                       background:'#fff', flexShrink:0,
@@ -2218,7 +2247,7 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
                       🇰🇷 {kp.name}
                     </div>
                     <div style={{ fontSize:11, color:'var(--text3)' }}>
-                      {kp.team} #{kp.number}
+                      {kp.isTeam ? '아시안게임' : `${kp.team} #${kp.number}`}
                     </div>
                   </div>
                 </div>
@@ -2289,8 +2318,9 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
               <>
                 {/* Player performance summary */}
                 <div style={{ marginBottom:14 }}>
-                  {multiKorean ? (
-                    // 더비: 알약은 첫 번째 선수 기준이라 누구 기록인지 알 수 없다.
+                  {(multiKorean || kp.isTeam) ? (
+                    // 더비(선수 여러 명): 알약은 첫 번째 선수 기준이라 누구 기록인지 알 수
+                    // 없다. 대표팀 엔트리(kp.isTeam)는 애초에 개인 출전 판정이 없다.
                     // 개인 기록은 위 각 선수 줄의 배지가 이미 보여준다.
                     <span style={{ fontSize:13, color:'var(--text3)', fontWeight:600 }}>
                       {isFinished ? '경기 종료' : (m.live || m.time === 'LIVE') ? '진행 중' : '경기 예정'}
@@ -2458,9 +2488,9 @@ function LiveCarouselCard({ m, onMatch, tweaks }) {
             <span style={{ fontSize:13, fontWeight:600, color:'var(--text2)' }}>{m.away.code}</span>
           </div>
         </div>
-        {/* Korean player */}
+        {/* Korean player (대표팀 엔트리는 등번호 없이 이름만) */}
         <div style={{ background:'rgba(230,48,48,0.13)', borderRadius:8, padding:'7px 10px', display:'flex', flexDirection:'column', gap:2 }}>
-          <span style={{ fontSize:12, fontWeight:700, color:'var(--acc)' }}>🇰🇷 {m.koreanPlayer.name} <span style={{ ...NUM, color:'var(--text4)', fontWeight:400 }}>#{m.koreanPlayer.number}</span></span>
+          <span style={{ fontSize:12, fontWeight:700, color:'var(--acc)' }}>🇰🇷 {m.koreanPlayer.name} {!m.koreanPlayer.isTeam && <span style={{ ...NUM, color:'var(--text4)', fontWeight:400 }}>#{m.koreanPlayer.number}</span>}</span>
           <span style={{ fontSize:11, color:'var(--text2)' }}>{m.koreanPlayer.event}</span>
         </div>
         {/* last event */}
@@ -2946,7 +2976,10 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
     const isMLB = (m.sport||'').includes('MLB') || (m.sport||'').includes('⚾');
 
     let main = name;
-    if (isMLB) {
+    if (kp.isTeam) {
+      // 대표팀 엔트리 — 개인 출전 문구('출전' 등) 대신 경기 상태만 붙인다.
+      main = `${name} ${kp.event || '경기 종료'}`;
+    } else if (isMLB) {
       const parts = [];
       if (kp.hits > 0) parts.push(`${kp.hits}안타`);
       if (kp.homeRuns > 0) parts.push(`${kp.homeRuns}홈런`);
@@ -3093,7 +3126,10 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
         const goals = (kp.matchGoals != null && kp.matchGoals > 0) ? kp.matchGoals : eventsGoals;
         const assists = (kp.matchAssists != null && kp.matchAssists > 0) ? kp.matchAssists : eventsAssists;
         const statParts = [];
-        if (isMLB) {
+        if (kp.isTeam) {
+          // 대표팀 엔트리 — 개인 기록이 없으니 경기 상태 그대로.
+          statParts.push(kp.event || '경기 종료');
+        } else if (isMLB) {
           const h = kp.hits || 0, hr = kp.homeRuns || 0, rbi = kp.rbi || 0, r = kp.runs || 0, sb = kp.stolenBases || 0;
           if (h > 0) statParts.push(`${h}안타`);
           if (hr > 0) statParts.push(`${hr}홈런`);
@@ -4725,6 +4761,8 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
             const renderKoreanCard = (kp, idx) => {
               const playerObj = ALL_PLAYERS.find(p => p.name === kp.name);
               const injury = playerObj?.injury;
+              // 대표팀 엔트리는 선수가 아니라 팀이다 — 사진 대신 해당 진영 로고를 쓴다.
+              const kpSide = kp.isTeam ? (match.home.code === kp.team ? match.home : match.away.code === kp.team ? match.away : null) : null;
               const eventsGoals = (match.events||[]).filter(e=>e.type==='goal'&&e.player===kp.name).length;
               const eventsAssists = (match.events||[]).filter(e=>e.type==='assist'&&e.player===kp.name).length;
               const goals = (kp.matchGoals != null && kp.matchGoals > 0) ? kp.matchGoals : eventsGoals;
@@ -4734,7 +4772,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
               if (assists > 0) pills.push(`🅰️ ${assists}도움`);
               if (kp.sfRating) pills.push(`★ ${kp.sfRating}`);
               return (
-                <div key={idx} onClick={() => goKoreanPlayer(kp)} style={{ background:'rgba(245,196,0,0.08)', borderRadius:10, padding:'10px 14px', border:'0.5px solid rgba(245,196,0,0.3)', display:'flex', alignItems:'center', gap:10, marginTop: idx > 0 ? 8 : 0, cursor: onPlayer ? 'pointer' : 'default' }}>
+                <div key={idx} onClick={() => goKoreanPlayer(kp)} style={{ background:'rgba(245,196,0,0.08)', borderRadius:10, padding:'10px 14px', border:'0.5px solid rgba(245,196,0,0.3)', display:'flex', alignItems:'center', gap:10, marginTop: idx > 0 ? 8 : 0, cursor: (onPlayer && !kp.isTeam) ? 'pointer' : 'default' }}>
                   <span style={{ fontSize:18 }}>🇰🇷</span>
                   {(() => {
                     const formattedEvent = formatExpectedEvent(kp, liveApiMatches);
@@ -4743,7 +4781,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
                     return (
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-                          <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>{kp.name} <span style={{ ...NUM, color:'var(--text4)', fontWeight:400 }}>#{kp.number}</span></div>
+                          <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>{kp.name} {!kp.isTeam && <span style={{ ...NUM, color:'var(--text4)', fontWeight:400 }}>#{kp.number}</span>}</div>
                           {kp.event && !isStatLine && (() => {
                             const tip = explainForEvent(formattedEvent);
                             return (
@@ -4776,7 +4814,11 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
                       </div>
                     );
                   })()}
-                  {playerObj && (
+                  {kp.isTeam ? (
+                    <div style={{ width:44, height:44, borderRadius:'50%', overflow:'hidden', flexShrink:0, border:'2px solid var(--acc)', background:'var(--surface)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                      <TeamBadge code={kp.team} size={36} logo={kpSide?.logo}/>
+                    </div>
+                  ) : playerObj && (
                     <div style={{ width:44, height:44, borderRadius:'50%', overflow:'hidden', flexShrink:0, border:'2px solid var(--acc)', background:'var(--surface)' }}>
                       <PlayerPhoto player={playerObj} style={{ width:'100%', height:'100%' }} tint="var(--surface)"/>
                     </div>
@@ -6264,6 +6306,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
               if (/Ligue 1/i.test(s)) return '리그앙';
               if (/Major League Soccer|^MLS/i.test(s)) return 'MLS';
               if (/Major League Baseball/i.test(s)) return 'MLB';
+              if (/Asian Games/i.test(s)) return '아시안게임';
               if (s.length > 10) return s.slice(0, 9) + '…';
               return s;
             })();
@@ -9129,6 +9172,11 @@ function App() {
             const lineupConfirmed = (lineups || []).some(t => (t.startXI || []).length > 0);
 
             const computeFor = (kp) => {
+              // 대표팀 엔트리는 선수 개인이 아니라 팀이다 — 로스터·골·평점 매칭을
+              // 시도하면 이름이 안 걸려 '미출전/확인 불가'로 잘못 덮인다. 경기 상태만 반영.
+              if (kp.isTeam) {
+                return { ...kp, event: isUpcoming ? '경기 예정' : isLive ? '진행 중' : '경기 종료', lineupConfirmed };
+              }
               const nameEn = kp.nameEn;
               // AF 선수 ID 정확 매칭 — 로마자 표기 변형('Gue-Sung'/'Gue-sung')이나
               // 축약형('J. Castrop')은 이름 매칭이 놓칠 수 있다. ID 일치 우선, 이름 폴백.
@@ -9555,6 +9603,7 @@ function App() {
       'World Cup - Qualification Asia': { name: '월드컵 예선 (아시아)', icon: '🌏' },
       'AFC Asian Cup': { name: 'AFC 아시안컵', icon: '🌏' },
       'Nations League': { name: 'UEFA 네이션스리그', icon: '🌍' },
+      'Asian Games': { name: '아시안게임', icon: '🏅' },
     };
     const labelLeague = (name, country) => {
       if (LEAGUE_DISPLAY[name]) return LEAGUE_DISPLAY[name];
@@ -10107,39 +10156,37 @@ function App() {
     const awayTeamRaw = (fx.teams.away?.name || '').toLowerCase();
     const WOMEN_MARKERS = ['women', ' w ', '(w)', 'frauen', 'féminin', 'femenin', 'dames', 'ladies'];
     if (WOMEN_MARKERS.some(k => tourneyName.includes(k) || homeTeamRaw.includes(k) || awayTeamRaw.includes(k))) return null;
+    const homeTeamName = fx.teams.home?.name || '';
+    const awayTeamName = fx.teams.away?.name || '';
+    // 대표팀(U23)은 유스 필터 예외 — 아시안게임 등은 U23 대표팀이 정식 성인급 대회를
+    // 뛰는 경기라 소속팀 유스팀과 다르다.
+    const isNational = !!(NATIONAL_TEAMS[fx.teams.home?.name] || NATIONAL_TEAMS[fx.teams.away?.name]);
     // Skip youth / reserve / II teams
     const YOUTH_MARKERS = [' u17', ' u18', ' u19', ' u20', ' u21', ' u23', 'youth', 'reserve', ' ii ', ' ii$'];
     const homeAwayCombined = `${homeTeamRaw} ${awayTeamRaw}`;
-    if (YOUTH_MARKERS.some(k => new RegExp(k).test(homeAwayCombined))) return null;
-
-    const homeTeamName = fx.teams.home?.name || '';
-    const awayTeamName = fx.teams.away?.name || '';
+    if (!isNational && YOUTH_MARKERS.some(k => new RegExp(k).test(homeAwayCombined))) return null;
     const homeShort = homeTeamName.replace(/[^A-Za-z0-9]/g,'').slice(0, 3).toUpperCase() || homeTeamName.slice(0,3).toUpperCase();
     const awayShort = awayTeamName.replace(/[^A-Za-z0-9]/g,'').slice(0, 3).toUpperCase() || awayTeamName.slice(0,3).toUpperCase();
 
     // Match against KOREAN_PLAYERS map. Use ONLY the full team name to avoid
     // false positives like Wolfsberg→WOL→황희찬 from the 3-letter slice.
-    const homeHasKo = !!(KOREAN_PLAYERS[homeTeamName] || KOREAN_PLAYERS_EXTRA[homeTeamName]);
-    const awayHasKo = !!(KOREAN_PLAYERS[awayTeamName] || KOREAN_PLAYERS_EXTRA[awayTeamName]);
+    const homeHasKo = !!(KOREAN_PLAYERS[homeTeamName] || KOREAN_PLAYERS_EXTRA[homeTeamName] || NATIONAL_TEAMS[homeTeamName]);
+    const awayHasKo = !!(KOREAN_PLAYERS[awayTeamName] || KOREAN_PLAYERS_EXTRA[awayTeamName] || NATIONAL_TEAMS[awayTeamName]);
     if (!homeHasKo && !awayHasKo) return null;
 
     // Use player's canonical team abbrev from ALL_PLAYERS for both card display
     // and home.code/away.code comparisons (which key off Korean player's team).
     const codeFor = (teamName, fallback) => {
+      if (NATIONAL_TEAMS[teamName]) return NATIONAL_TEAMS[teamName].code;
       const first = KOREAN_PLAYERS[teamName] || (KOREAN_PLAYERS_EXTRA[teamName] || [])[0];
       const info = first && ALL_PLAYERS.find(p => p.name === first.name);
       return info?.team || fallback;
     };
     const homeCode = homeHasKo ? codeFor(homeTeamName, homeShort) : homeShort;
     const awayCode = awayHasKo ? codeFor(awayTeamName, awayShort) : awayShort;
-    // 같은 팀에 한국 선수가 둘 이상일 수 있다(미트윌란: 조규성+이한범).
-    const homeKoreans = koreansForTeam(homeTeamName, homeCode, '축구');
-    const awayKoreans = koreansForTeam(awayTeamName, awayCode, '축구');
-    const koreanPlayers = [...homeKoreans, ...awayKoreans];
-    const koreanPlayer = koreanPlayers[0];
-    const isKoreanDerby = homeKoreans.length > 0 && awayKoreans.length > 0;
 
-    // API-Football status codes
+    // API-Football status codes — computed early so the national-team synthetic
+    // entry (nationalTeamEntry) can carry the right state-based event label.
     const sShort = fx.fixture.status?.short || 'NS';
     const LIVE_CODES = new Set(['1H','HT','2H','ET','BT','P','INT','LIVE']);
     const FINAL_CODES = new Set(['FT','AET','PEN']);
@@ -10150,6 +10197,15 @@ function App() {
     const isTimedOut = isLive && (Date.now() - matchDate.getTime()) > 160 * 60 * 1000;
     const liveAfterTimeout = isLive && !isTimedOut;
     const status = liveAfterTimeout ? 'STATUS_IN_PROGRESS' : (isFinished || isTimedOut) ? 'STATUS_FINAL' : 'notstarted';
+    const matchState = liveAfterTimeout ? 'live' : (isFinished || isTimedOut) ? 'finished' : 'upcoming';
+
+    // 같은 팀에 한국 선수가 둘 이상일 수 있다(미트윌란: 조규성+이한범). 대표팀이면
+    // koreansForTeam 이 팀 엔트리 하나만 돌려준다.
+    const homeKoreans = koreansForTeam(homeTeamName, homeCode, '축구', matchState);
+    const awayKoreans = koreansForTeam(awayTeamName, awayCode, '축구', matchState);
+    const koreanPlayers = [...homeKoreans, ...awayKoreans];
+    const koreanPlayer = koreanPlayers[0];
+    const isKoreanDerby = homeKoreans.length > 0 && awayKoreans.length > 0 && !koreanPlayer?.isTeam;
 
     const elapsed = fx.fixture.status?.elapsed;
     let minute = '';
@@ -10166,7 +10222,7 @@ function App() {
       'Premiership':'SPL','Süper Lig':'TUR','Eredivisie':'NED','Primeira Liga':'POR',
       'Jupiler Pro League':'BEL','Major League Soccer':'MLS','Superliga':'DEN','La Liga':'ESP',
       'Championship':'CHA','Serbian SuperLiga':'SRB','UEFA Champions League':'UCL',
-      'UEFA Europa League':'UEL','UEFA Conference League':'UECL',
+      'UEFA Europa League':'UEL','UEFA Conference League':'UECL','Asian Games':'AG',
     };
     const leagueAbbr = TOURNEY_ABBR[tournamentName] || tournamentName.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,4);
 
@@ -10180,16 +10236,18 @@ function App() {
       // id/leagueId/leagueSeason 은 팀 상세 화면(TeamScreen)이 쓴다. API-Football
       // 경기에만 있고 야구(statsapi)·ESPN 경기에는 없다 — 없으면 팀 상세로 들어갈 수
       // 없게 막는 게 의도된 동작이다.
-      home: { name: homeTeamName, code: homeCode, score: (liveAfterTimeout || isFinished || isTimedOut) ? (fx.goals?.home ?? 0) : null, logo: fx.teams.home?.logo || null, id: fx.teams.home?.id || null },
-      away: { name: awayTeamName, code: awayCode, score: (liveAfterTimeout || isFinished || isTimedOut) ? (fx.goals?.away ?? 0) : null, logo: fx.teams.away?.logo || null, id: fx.teams.away?.id || null },
+      home: { name: NATIONAL_TEAMS[homeTeamName]?.display || homeTeamName, code: homeCode, score: (liveAfterTimeout || isFinished || isTimedOut) ? (fx.goals?.home ?? 0) : null, logo: fx.teams.home?.logo || null, id: fx.teams.home?.id || null },
+      away: { name: NATIONAL_TEAMS[awayTeamName]?.display || awayTeamName, code: awayCode, score: (liveAfterTimeout || isFinished || isTimedOut) ? (fx.goals?.away ?? 0) : null, logo: fx.teams.away?.logo || null, id: fx.teams.away?.id || null },
       leagueId: fx.league?.id || null,
       leagueSeason: fx.league?.season || null,
       // 종료 경기의 기본값은 '미출전'이 아니라 '확인 불가'다 — 라인업·이벤트를 아직
       // 안 받은 상태에서 '미출전 · 엔트리 제외 또는 부상'이라고 단정해 보였다(콜드
       // 스타트 기본 목록이 3초 만에 나가면서 실제로 뛴 선수가 잠깐 미출전으로 떴다).
       // 상세를 받으면 거기서 선발/교체/미출전을 정확히 판정해 덮어쓴다.
-      koreanPlayer: { ...koreanPlayer, event: (isFinished || isTimedOut) ? '확인 불가' : '출전 예상', minutesPlayed: 0, matchGoals: 0, matchAssists: 0 },
-      koreanPlayers: koreanPlayers.map(kp => ({ ...kp, event: (isFinished || isTimedOut) ? '확인 불가' : '출전 예상', minutesPlayed: 0, matchGoals: 0, matchAssists: 0 })),
+      // 대표팀 엔트리(kp.isTeam)는 '출전 예상/확인 불가' 같은 개인 출전 판정이 의미가
+      // 없다 — nationalTeamEntry 가 이미 매긴 상태 기반 라벨(경기 예정/진행 중/경기 종료)을 그대로 둔다.
+      koreanPlayer: koreanPlayer?.isTeam ? koreanPlayer : { ...koreanPlayer, event: (isFinished || isTimedOut) ? '확인 불가' : '출전 예상', minutesPlayed: 0, matchGoals: 0, matchAssists: 0 },
+      koreanPlayers: koreanPlayers.map(kp => kp.isTeam ? kp : ({ ...kp, event: (isFinished || isTimedOut) ? '확인 불가' : '출전 예상', minutesPlayed: 0, matchGoals: 0, matchAssists: 0 })),
       isKoreanDerby,
       competition: tournamentName,
       competitionLogo: fx.league?.logo || null,
@@ -10916,8 +10974,10 @@ function App() {
     // isPlayingKorean 은 '출전 예상'·'출전 여부 확인 중'까지 걸러낸다 — 라인업이
     // 늦게 나오는 리그 때문에 예전엔 이것도 띄웠는데, 결국 안 뛰는 경기가 잠금화면에
     // 남았다. '교체 아웃'은 계속 띄운다 — 이미 뛴 경기라 남은 시간 결과가 궁금하다.
+    // 대표팀 엔트리(kp.isTeam)는 선수가 아니라 팀이다 — 라이브 액티비티는 선수
+    // 개인용이라 명시적으로 제외한다(팔로우 이름 매칭에도 원래 걸리지 않는다).
     const mineOf = (m) => (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean)
-      .filter(kp => followedNames.has(kp.name) && isPlayingKorean(kp));
+      .filter(kp => !kp.isTeam && followedNames.has(kp.name) && isPlayingKorean(kp));
     const mine = (liveMatches || []).filter(m =>
       (m.live || m.time === 'LIVE') && mineOf(m).length > 0);
     // 우리 선수가 골·도움을 기록한 경기를 먼저, 그다음 킥오프가 이른 순.
@@ -11064,7 +11124,11 @@ function App() {
     () => liveMatches
       .filter(m =>
         isMatchAllowed(m, sportFeeds) &&
-        (m.koreanPlayers || [m.koreanPlayer]).some(kp => kp && followedNames.has(kp.name))
+        (
+          // 대표팀 경기는 팔로우와 무관하게 기본 표시(사용자 요청).
+          (m.koreanPlayers || [m.koreanPlayer]).some(kp => kp?.isTeam) ||
+          (m.koreanPlayers || [m.koreanPlayer]).some(kp => kp && followedNames.has(kp.name))
+        )
       )
       // 한 경기에 우리 선수가 둘 이상일 수 있다 — 같은 팀(미트윌란: 조규성+이한범)이거나
       // 코리안 더비(양 팀에 한 명씩). 팔로우한 선수를 앞으로 정렬해 두면 카드 주인공·

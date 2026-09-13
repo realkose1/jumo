@@ -55,6 +55,14 @@ const PLAYERS = [
   { id: 35, name: '김민수', nameEn: 'Kim Min-su', sport: 'soccer', team: 'Rangers', afTeamId: 257, afPlayerId: 397941, espnLeague: 'sco.1', espnTeamId: 257 },
 ];
 
+// 아시안게임 U23 대표팀(리그 803, 팀 10177 'Korea Republic U23'). 이 경기는 개인
+// 라인업이 아니라 대표팀 소집 자체다 — playerIds 는 실제 출전 판정에 쓰지 않고,
+// 오직 푸시 대상(이 여섯 명 중 한 명이라도 팔로우하는 기기)을 고르는 데만 쓴다.
+// 차출 명단(index.html MANUAL_AVAILABILITY)과 항상 같아야 한다.
+const NATIONAL_TEAMS = { 10177: { name: '대한민국 U-23', playerIds: [20, 23, 22, 31, 32, 30] } };
+// 대표팀 경기의 vs 문구는 소속팀명이 아니라 대표팀명을 쓴다(예: 'Qatar U23 vs 대한민국 U-23').
+const teamLabel = (team) => NATIONAL_TEAMS[team?.id]?.name || team?.name || '';
+
 const norm = (s) => (s || '').toLowerCase().replace(/[.\s-]/g, '');
 const teamMatches = (compName, playerTeam) => {
   const a = norm(compName), b = norm(playerTeam);
@@ -339,7 +347,17 @@ async function collectSoccer(events, liveStates) {
     for (const fx of data?.response || []) {
       const fid = fx.fixture?.id;
       if (!fid || seenFixtures.has(fid)) continue;
-      const involved = soccer.filter((p) => fx.teams?.home?.id === p.afTeamId || fx.teams?.away?.id === p.afTeamId);
+      let involved = soccer.filter((p) => fx.teams?.home?.id === p.afTeamId || fx.teams?.away?.id === p.afTeamId);
+      // 대표팀(아시안게임) 경기 — 소속팀 id 로는 안 잡히니 NATIONAL_TEAMS 로 따로 확인하고,
+      // 차출된 여섯 명을 involved 에 얹는다(이미 있으면 중복 추가하지 않는다).
+      const homeNational = NATIONAL_TEAMS[fx.teams?.home?.id];
+      const awayNational = NATIONAL_TEAMS[fx.teams?.away?.id];
+      const isNationalMatch = !!(homeNational || awayNational);
+      const nationalPlayerIds = [...new Set([...(homeNational?.playerIds || []), ...(awayNational?.playerIds || [])])];
+      if (isNationalMatch) {
+        const extra = PLAYERS.filter((p) => nationalPlayerIds.includes(p.id) && !involved.some((q) => q.id === p.id));
+        involved = [...involved, ...extra];
+      }
       if (!involved.length) continue;
       seenFixtures.add(fid);
 
@@ -356,7 +374,7 @@ async function collectSoccer(events, liveStates) {
       const staleResult = isFinal && kickoffMs && Date.now() - kickoffMs > 3.5 * 60 * 60 * 1000; // 경기는 보통 2시간, 킥오프 3.5시간 후 종료 알림은 낡은 소식
       const staleStart = isLive && ((elapsedNow != null && elapsedNow > 30) || (kickoffMs && Date.now() - kickoffMs > 45 * 60 * 1000));
 
-      const home = fx.teams.home.name, away = fx.teams.away.name;
+      const home = teamLabel(fx.teams.home), away = teamLabel(fx.teams.away);
       const vs = `${home} vs ${away}`;
       const names = involved.map((p) => p.name);
 
@@ -364,6 +382,10 @@ async function collectSoccer(events, liveStates) {
       // (리그마다 60~75분 전 발표. 발표 전엔 빈 응답 → 다음 실행에서 재시도,
       //  처리 완료되면 af-lineup-done 마커로 이후 lineups 호출 자체를 중단.)
       if (!isLive && !isFinal) {
+        // 대표팀(아시안게임) 경기는 라인업 발표 감시를 하지 않는다 — 이 블록의 ESPN
+        // 폴백은 소속팀 espnTeamId 로 조회하는데, 대표팀 경기에는 맞지 않는다.
+        // (경기 시작 전이므로 어차피 알림은 없다 — 아래 continue 는 그대로 탄다.)
+        if (isNationalMatch) continue;
         const til = new Date(fx.fixture.date).getTime() - Date.now();
         const inWindow = (st === 'NS' || st === 'TBD') && til > 0 && til <= 80 * 60 * 1000;
         if (inWindow && !(await alreadyLogged(`af-lineup-done-${fid}`))) {
@@ -439,22 +461,40 @@ async function collectSoccer(events, liveStates) {
       // 라인업은 캐시를 거치므로 매 실행 불러도 AF 호출이 늘지 않는다.
       // (예전엔 시작 알림 후 조회를 건너뛰어 출전 여부를 알 수 없었다.)
       let starters = null, squad = null;
-      if (isLive || isFinal) {
-        const lu = await lineupSquad(fid, () => espnLineup(involved[0], new Date(fx.fixture.date).getTime()), involved);
-        if (lu) {
-          starters = involved.filter((p) => lu.startXI.includes(p.afPlayerId));
-          squad = involved.filter((p) => lu.startXI.includes(p.afPlayerId) || lu.subs.includes(p.afPlayerId));
+      if (isNationalMatch) {
+        // 대표팀 경기는 개인 라인업을 알 방법이 없다(lineupSquad 의 ESPN 폴백은
+        // 소속팀 기준이라 못 쓴다) — squad 확정 없이 팀 단위로 시작/종료만 알린다.
+        // 골·도움·카드는 아래 per-play 루프가 afPlayerId 로 그대로 잡아준다.
+        if (isLive) {
+          events.push({ key: `af-start-${fid}`, players: nationalPlayerIds, matchId: String(fid),
+            kind: 'start', title: `⚽ ${vs}`, body: `${vs} 경기가 시작됐습니다.`, silent: staleStart });
         }
-      }
+        if (isFinal) {
+          events.push({ key: `af-result-${fid}`, players: nationalPlayerIds, matchId: String(fid),
+            kind: 'result', title: '⚽ 경기 종료', body: `${home} ${fx.goals?.home ?? 0} : ${fx.goals?.away ?? 0} ${away}, 경기가 종료됐습니다.`, silent: staleResult });
+        }
+      } else {
+        // 야구와 같은 이유 — 팀 경기라고 다 뛰는 게 아니다. 라인업으로 실제 출전을
+        // 확인한 뒤 대상을 좁힌다. 라인업이 아직/끝내 없으면 사실을 단정하지 않고 건너뛴다.
+        // 라인업은 캐시를 거치므로 매 실행 불러도 AF 호출이 늘지 않는다.
+        // (예전엔 시작 알림 후 조회를 건너뛰어 출전 여부를 알 수 없었다.)
+        if (isLive || isFinal) {
+          const lu = await lineupSquad(fid, () => espnLineup(involved[0], new Date(fx.fixture.date).getTime()), involved);
+          if (lu) {
+            starters = involved.filter((p) => lu.startXI.includes(p.afPlayerId));
+            squad = involved.filter((p) => lu.startXI.includes(p.afPlayerId) || lu.subs.includes(p.afPlayerId));
+          }
+        }
 
-      if (isLive && starters && starters.length) {
-        const sNames = starters.map((p) => p.name);
-        events.push({ key: `af-start-${fid}`, players: starters.map((p) => p.id), matchId: String(fid),
-          kind: 'start', title: `⚽ ${vs}`, body: `${namesWithJosa(sNames)} 출전하는 경기가 시작됐습니다.`, silent: staleStart });
-      }
-      if (isFinal && squad && squad.length) {
-        events.push({ key: `af-result-${fid}`, players: squad.map((p) => p.id), matchId: String(fid),
-          kind: 'result', title: '⚽ 경기 종료', body: `${home} ${fx.goals?.home ?? 0} : ${fx.goals?.away ?? 0} ${away}, 경기가 종료됐습니다.`, silent: staleResult });
+        if (isLive && starters && starters.length) {
+          const sNames = starters.map((p) => p.name);
+          events.push({ key: `af-start-${fid}`, players: starters.map((p) => p.id), matchId: String(fid),
+            kind: 'start', title: `⚽ ${vs}`, body: `${namesWithJosa(sNames)} 출전하는 경기가 시작됐습니다.`, silent: staleStart });
+        }
+        if (isFinal && squad && squad.length) {
+          events.push({ key: `af-result-${fid}`, players: squad.map((p) => p.id), matchId: String(fid),
+            kind: 'result', title: '⚽ 경기 종료', body: `${home} ${fx.goals?.home ?? 0} : ${fx.goals?.away ?? 0} ${away}, 경기가 종료됐습니다.`, silent: staleResult });
+        }
       }
 
       // Per-play events — matched by API-Football player id (exact, no name fuzz).
@@ -463,7 +503,8 @@ async function collectSoccer(events, liveStates) {
       // ── 라이브 액티비티 상태 (잠금화면·다이나믹 아일랜드) ──────────────
       // 알림과 달리 중복 제거를 타지 않는다 — 점수·분이 바뀔 때마다 갱신해야
       // 하므로 매 실행 만들어 두고, 아래에서 토큰이 있는 경기만 실제로 보낸다.
-      if (liveStates && (isLive || isFinal)) {
+      // 대표팀 경기는 개인 출전을 모르니(squad 없음) 라이브 액티비티 자체를 건너뛴다.
+      if (liveStates && (isLive || isFinal) && !isNationalMatch) {
         // squad 는 선발+벤치다. 라인업을 받아왔는데 그 안에 없으면 이 경기에
         // 나설 수 없는 선수라 잠금화면에 띄우지 않는다(=me 가 undefined).
         // squad 가 null 이면 라인업을 아직 모르는 것이라 단정하지 않는다.
