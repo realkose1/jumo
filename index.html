@@ -2333,7 +2333,7 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
                   </div>
                   <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                     <TeamBadge code={m.away.code} size={20} logo={m.away.logo}/>
-                    <span style={{ fontSize:14, fontWeight:600, color:'var(--text-70)' }}>{shortTeamName(m.away.name)}</span>
+                    <span style={{ fontSize:14, fontWeight:600, color:'var(--text)' }}>{shortTeamName(m.away.name)}</span>
                     <span style={{ ...NUM, fontSize:22, fontWeight:800, color:'var(--text-70)', marginLeft:'auto' }}>{m.away.score}</span>
                   </div>
                 </div>
@@ -2403,7 +2403,7 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
 
               <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                 <TeamBadge code={m.away.code} size={20} logo={m.away.logo}/>
-                <span style={{ fontSize:15, fontWeight:600, color:'var(--text-70)' }}>{shortTeamName(m.away.name)}</span>
+                <span style={{ fontSize:15, fontWeight:600, color:'var(--text)' }}>{shortTeamName(m.away.name)}</span>
                 {isLive && m.away.score !== null && m.away.score !== undefined && (
                   <span style={{ ...NUM, fontSize:22, fontWeight:800, color:'var(--text-70)', marginLeft:'auto' }}>
                     {m.away.score}
@@ -2563,7 +2563,7 @@ function HomeV1({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
           </div>
         </div>
       ))}
-      <div style={{ height:'calc(96px + env(safe-area-inset-bottom))' }}/>
+      <div className="jumo-tail" style={{ height:'calc(96px + env(safe-area-inset-bottom))' }}/>
     </div>
   );
 }
@@ -3470,7 +3470,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
       {/* 2026 World Cup — South Korea national-team fixtures, shown as a separate
           block at the very bottom of the home screen (team matches only). */}
 
-      <div style={{ height:'calc(96px + env(safe-area-inset-bottom))' }}/>
+      <div className="jumo-tail" style={{ height:'calc(96px + env(safe-area-inset-bottom))' }}/>
     </div>
   );
 }
@@ -3526,7 +3526,7 @@ function HomeV3({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [] }) {
         </div>
       ))}
 
-      <div style={{ height:'calc(96px + env(safe-area-inset-bottom))' }}/>
+      <div className="jumo-tail" style={{ height:'calc(96px + env(safe-area-inset-bottom))' }}/>
     </div>
   );
 }
@@ -5499,7 +5499,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
         );
       })()}
 
-      <div style={{ height:'calc(96px + env(safe-area-inset-bottom))' }}/>
+      <div className="jumo-tail" style={{ height:'calc(96px + env(safe-area-inset-bottom))' }}/>
     </div>
   );
 }
@@ -5962,7 +5962,7 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
         </div>
       )}
 
-      <div style={{ height:'calc(96px + env(safe-area-inset-bottom))' }}/>
+      <div className="jumo-tail" style={{ height:'calc(96px + env(safe-area-inset-bottom))' }}/>
     </div>
   );
 }
@@ -6390,7 +6390,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
         </div>
       )}
       </div>
-      <div style={{ height:'calc(96px + env(safe-area-inset-bottom))' }}/>
+      <div className="jumo-tail" style={{ height:'calc(96px + env(safe-area-inset-bottom))' }}/>
       </div>
     </div>
   );
@@ -6695,7 +6695,7 @@ function PlayersScreen({ onPlayer, onAdd, onToggleFollow, onTabBarScroll, follow
                                 sportOrder={sportOrder}/>
         )}
       </div>
-      <div style={{ height:'calc(96px + env(safe-area-inset-bottom))' }}/>
+      <div className="jumo-tail" style={{ height:'calc(96px + env(safe-area-inset-bottom))' }}/>
       </div>
     </div>
   );
@@ -6745,7 +6745,7 @@ function NotifScreen({ notifications, onMatch }) {
           })}
         </div>
       )}
-      <div style={{ height:'calc(96px + env(safe-area-inset-bottom))' }}/>
+      <div className="jumo-tail" style={{ height:'calc(96px + env(safe-area-inset-bottom))' }}/>
     </div>
   );
 }
@@ -7625,7 +7625,7 @@ function AddPlayerScreen({ followed, onToggle, onBack, playerOrder = [], setPlay
             </>
           );
         })()}
-        <div style={{ height:'calc(96px + env(safe-area-inset-bottom))' }}/>
+        <div className="jumo-tail" style={{ height:'calc(96px + env(safe-area-inset-bottom))' }}/>
       </div>
     </div>
   );
@@ -7709,7 +7709,7 @@ function SportFeedScreen({ onBack, sportFeeds, onToggleSportFeed }) {
             </div>
           ))}
         </div>
-        <div style={{ height:'calc(96px + env(safe-area-inset-bottom))' }}/>
+        <div className="jumo-tail" style={{ height:'calc(96px + env(safe-area-inset-bottom))' }}/>
       </div>
     </div>
   );
@@ -8027,7 +8027,7 @@ function MoreScreen({ sportFeeds, onToggleSportFeed, profile, onUpdateProfile, s
           </div>
         </div>
       ))}
-      <div style={{ height:'calc(96px + env(safe-area-inset-bottom))' }}/>
+      <div className="jumo-tail" style={{ height:'calc(96px + env(safe-area-inset-bottom))' }}/>
     </div>
   );
 }
@@ -10808,7 +10808,11 @@ function App() {
   React.useEffect(() => {
     if (!nativeTabBar) return;
     const el = document.createElement('style');
-    el.textContent = '.jumo-page{padding-bottom:calc(56px + env(safe-area-inset-bottom)) !important}';
+    // 화면 끝의 여백 스페이서(.jumo-tail, 96px + 안전영역)는 웹 탭바용이다. 네이티브에선
+    // 위 padding-bottom 이 이미 탭바를 비켜 주므로 둘이 겹치면 빈 공간이 200px 넘게
+    // 남았다(제보: 홈 하단 여백). 네이티브에서는 스페이서를 숨 쉴 정도만 남긴다.
+    el.textContent = '.jumo-page{padding-bottom:calc(56px + env(safe-area-inset-bottom)) !important}'
+      + '.jumo-tail{height:16px !important}';
     document.head.appendChild(el);
     return () => { try { el.remove(); } catch {} };
   }, [nativeTabBar]);
