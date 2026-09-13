@@ -6245,6 +6245,10 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
             const isNewDate = rowDate !== lastDate;
             if (isNewDate) lastDate = rowDate;
             const isHi = highlightId != null && m.id === highlightId;
+            // 라이브는 강조 경기 하나만이 아니라 전부 노란 테두리로(사용자 요청). 자동
+            // 스크롤 기준(highlightRowRef)과 '다음 경기' 배지는 여전히 강조 경기 하나뿐.
+            const isLiveRow = !!(m.live || m.time === 'LIVE');
+            const framed = isHi || isLiveRow;
             const isFinished = m.status === 'STATUS_FINAL' || m.status === 'STATUS_FULL_TIME' || m.status === 'final' || m.status === 'STATUS_END_PERIOD' || m.status === 'STATUS_FINAL_PEN';
             const kp = m.koreanPlayer;
             const rawLeague = (m.competition || m.sport || '').replace(/^[⚽⚾🏀🎾]\s*/,'');
@@ -6302,14 +6306,14 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
                   </div>
                 )}
                 <div ref={isHi ? highlightRowRef : undefined}
-                     style={isHi ? { border:'1px solid var(--acc)', background:'rgba(245,196,0,0.06)',
+                     style={framed ? { border:'1px solid var(--acc)', background:'rgba(245,196,0,0.06)',
                                      borderRadius:16, padding:'10px 10px 0', marginBottom:20 } : undefined}>
-                {isHi && (
+                {framed && (
                   <div style={{ display:'flex', alignItems:'center', marginBottom:7, paddingLeft:2 }}>
                     <span style={{ fontSize:10, fontWeight:800, letterSpacing:0.3, lineHeight:1.5, borderRadius:5, padding:'2px 6px',
-                                   color: highlightIsLive ? '#000' : 'var(--text3)',
-                                   background: highlightIsLive ? 'var(--acc)' : 'var(--border2)' }}>
-                      {highlightIsLive ? '진행 중' : '다음 경기'}
+                                   color: isLiveRow ? '#000' : 'var(--text3)',
+                                   background: isLiveRow ? 'var(--acc)' : 'var(--border2)' }}>
+                      {isLiveRow ? '진행 중' : '다음 경기'}
                     </span>
                   </div>
                 )}
@@ -6338,7 +6342,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
                     <span style={{ fontSize:11, color:'var(--text4)' }}>{leagueName}</span>
                   </span>
                 </div>
-                <div onClick={() => onMatch(m)} style={{ marginBottom: isHi ? 10 : 20, background:'var(--surface)', borderRadius:14, padding:'12px 16px', cursor:'pointer', border: m.live ? '0.5px solid rgba(230,48,48,0.25)' : '0.5px solid var(--border2)' }}>
+                <div onClick={() => onMatch(m)} style={{ marginBottom: framed ? 10 : 20, background:'var(--surface)', borderRadius:14, padding:'12px 16px', cursor:'pointer', border: '0.5px solid var(--border2)' }}>
                   <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
                     {/* Home */}
                     {/* minWidth:0 이 없으면 'Mönchengladbach' 처럼 안 끊기는 긴 한 단어가
