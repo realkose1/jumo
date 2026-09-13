@@ -2319,7 +2319,7 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
                   ) : (
                     <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                       <span style={{ fontSize:13, fontWeight:700, color:'var(--text4)' }}>미출전</span>
-                      <span style={{ fontSize:11, color:'var(--text5)' }}>· 엔트리 제외 또는 부상</span>
+                      <span style={{ fontSize:11, color:'var(--text5)' }}>· {manualAvailabilityFor(kp.name)?.label || '엔트리 제외 또는 부상'}</span>
                     </div>
                   )}
                 </div>
