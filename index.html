@@ -5313,10 +5313,20 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
         // 코리안 더비 대응: 팀별로 그 팀 소속 한국 선수 전원과 매칭한다.
         const allKp = (match.koreanPlayers || [match.koreanPlayer]).filter(Boolean);
         const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z\s]/g,'').trim();
-        const findKp = (name, kps) => kps.find(kp => {
-          const a = norm(name), b = norm(kp.nameEn || '');
-          return !!(a && b && (a === b || a.includes(b) || b.includes(a) || a.split(/\s+/).some(t => b.split(/\s+/).includes(t) && t.length >= 3)));
-        }) || null;
+        // 선수 객체({id, name})를 받는다. AF 선수 id 가 있으면 그것만 믿고, 없을 때
+        // (ESPN 폴백)만 이름으로 — 그것도 토큰을 정렬한 전체 이름이 같아야 한다.
+        // 예전엔 'lee' 처럼 3글자 조각 하나만 같아도 붙였는데, 같은 팀에 한국 선수가
+        // 둘이면(오스트리아 빈: 이태석·이강희) 둘 다 한 명으로 붙어 이름이 두 번 나왔다.
+        const findKp = (player, kps) => {
+          const name = player?.name, id = player?.id;
+          const key = s => norm(s).split(/\s+/).filter(Boolean).sort().join(' ');
+          return kps.find(kp => {
+            const afId = ALL_PLAYERS.find(p => p.name === kp.name)?.apiFootballId;
+            if (id != null && afId) return id === afId;
+            const a = key(name), b = key(kp.nameEn || '');
+            return !!(a && b && a === b);
+          }) || null;
+        };
         const kpsFor = (team) => allKp.filter(kp => kp.team === team.code);
 
         // pitchOnly: 헤더·SUBS 없이 피치(또는 격자 명단)만 반환한다 — 예상 XI 는
@@ -5333,7 +5343,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
 
           const node = (entry, i, small, onPitch = true) => {
             const p = entry.player || {};
-            const kp = findKp(p.name, kps);
+            const kp = findKp(p, kps);
             const rating = entry.statistics?.rating;
             const D = small ? 30 : 40;
             return (
@@ -5411,7 +5421,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
                   <div style={{ display:'flex', flexWrap:'wrap', gap:4 }}>
                     {subs.map((e, i) => {
                       const p = e.player || {};
-                      const kp = findKp(p.name, kps);
+                      const kp = findKp(p, kps);
                       return (
                         <span key={i} onClick={kp ? () => goKoreanPlayer(kp) : undefined}
                           style={{ fontSize:11, fontWeight: kp ? 800 : 500, color: kp ? 'var(--acc)' : 'var(--text2)',
