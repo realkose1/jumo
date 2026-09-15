@@ -2769,6 +2769,10 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
     const heroEligible = (m) => {
       const ev = m.koreanPlayer?.event || '';
       if (HERO_EXCLUDE.has(ev)) return false;
+      // 대표팀 차출(아시안게임 등)로 소속팀 명단에서 빠진 선수의 소속팀 경기는
+      // 그의 경기가 아니다 — '출격 대기' 히어로로 올리지 않는다(오늘의 경기
+      // 목록에는 차출 라벨과 함께 그대로 남긴다).
+      if (!m.koreanPlayer?.isTeam && manualAvailabilityFor(m.koreanPlayer?.name)) return false;
       // 이미 시작된(라이브·종료) 경기인데 아직 '출전 예상'이면 출전 여부를 모르는
       // 상태다. 히어로가 '출전 여부 확인 중'이라고 단정하지 않도록 후보에서 뺀다.
       // (같은 경기 카드는 자기 상태를 그대로 보여주면 되고, 히어로만 침묵한다.)
