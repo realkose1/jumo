@@ -5100,8 +5100,10 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
                 if (inc.player?.name) involvedNames.push(inc.player.name);
               } else if (inc.incidentType === 'substitution') {
                 icon = '🔄';
-                title = inc.playerIn?.name || '';
-                detail = `↑ IN  /  ${inc.playerOut?.name || ''} ↓ OUT`;
+                // 한 줄에 '들어온 선수 ↑ IN', 다음 줄에 '나간 선수 ↓ OUT' — 이름 뒤에
+                // 화살표·IN/OUT 이 붙어야 누가 들어오고 나갔는지 바로 읽힌다.
+                title = `${inc.playerIn?.name || ''} ↑ IN`;
+                detail = `${inc.playerOut?.name || ''} ↓ OUT`;
                 if (inc.playerIn?.name) involvedNames.push(inc.playerIn.name);
                 if (inc.playerOut?.name) involvedNames.push(inc.playerOut.name);
               } else if (inc.incidentType === 'varDecision') {
