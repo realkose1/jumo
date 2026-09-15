@@ -67,9 +67,26 @@ const NATIONAL_TEAMS = { 10177: { name: '대한민국 U-23' } };
 // 대표팀 경기의 vs 문구는 소속팀명이 아니라 대표팀명을 쓴다(예: 'Qatar U23 vs 대한민국 U-23').
 const teamLabel = (team) => NATIONAL_TEAMS[team?.id]?.name || team?.name || '';
 
+// 이벤트(골·도움·카드)가 낡았는지. 종료 경기 전체가 낡았거나(staleResult), 라이브
+// 중인데 이벤트 시점이 현재 진행 시각보다 30분 넘게 과거거나(장애 복구 후 몰아보기),
+// 킥오프+경기 분(후반은 하프타임 15분 가산)으로 어림한 이벤트 실제 시각이 지금보다
+// 30분 넘게 과거면 낡았다. 마지막 조건은 배포·장애 직후 이미 끝난 경기의 골이
+// 새 알림처럼 뒤늦게 나가는 것을 막는다(2026-09-15 대표팀 방송 배포 직후 사례).
+function isStaleEvent(ev, { staleResult, isLive, elapsedNow, kickoffMs }) {
+  if (staleResult) return true;
+  const el = ev.time?.elapsed;
+  if (el == null) return false;
+  if (isLive && elapsedNow != null && elapsedNow - el > 30) return true;
+  if (kickoffMs) {
+    const evMs = kickoffMs + (el + (el > 45 ? 15 : 0)) * 60 * 1000;
+    if (Date.now() - evMs > 30 * 60 * 1000) return true;
+  }
+  return false;
+}
+
 // 대표팀 경기의 골·최종결과 방송 이벤트를 만든다. 순수 함수로 분리해 테스트하기
 // 쉽게 한다 — 실제 발송 여부(silent)·대상(broadcast)은 호출부/센더가 결정한다.
-function nationalMatchEvents({ fx, fid, evd, home, away, isLive, isFinal, elapsedNow, staleResult }) {
+function nationalMatchEvents({ fx, fid, evd, home, away, isLive, isFinal, elapsedNow, staleResult, kickoffMs }) {
   const out = [];
   const homeId = fx.teams?.home?.id, awayId = fx.teams?.away?.id;
   const tally = {}; // teamId → 누적 득점 (자책골 포함)
@@ -86,7 +103,7 @@ function nationalMatchEvents({ fx, fid, evd, home, away, isLive, isFinal, elapse
       : `${PLAYERS.find((p) => p.afPlayerId === ev.player?.id)?.name || ev.player?.name || ''} `;
     const pen = ev.detail === 'Penalty' ? '페널티킥 ' : '';
     const h = tally[homeId] || 0, a = tally[awayId] || 0;
-    const staleEv = staleResult || (isLive && elapsedNow != null && ev.time?.elapsed != null && elapsedNow - ev.time.elapsed > 30);
+    const staleEv = isStaleEvent(ev, { staleResult, isLive, elapsedNow, kickoffMs });
     out.push({
       key: `af-nat-goal-${fid}-${i}`, players: [],
       kind: 'national', broadcast: true, matchId: String(fid),
@@ -542,7 +559,7 @@ async function collectSoccer(events, liveStates) {
       const evd = await afGet(`/fixtures/events?fixture=${fid}`);
 
       if (isNationalMatch) {
-        events.push(...nationalMatchEvents({ fx, fid, evd, home, away, isLive, isFinal, elapsedNow, staleResult }));
+        events.push(...nationalMatchEvents({ fx, fid, evd, home, away, isLive, isFinal, elapsedNow, staleResult, kickoffMs }));
       }
 
       // ── 라이브 액티비티 상태 (잠금화면·다이나믹 아일랜드) ──────────────
@@ -595,9 +612,7 @@ async function collectSoccer(events, liveStates) {
       }
       (evd?.response || []).forEach((ev, i) => {
         const min = ev.time?.elapsed != null ? `${ev.time.elapsed}'` : '';
-        // 종료된 경기가 이미 낡았거나(staleResult), 라이브 중인데 이 이벤트 시점이
-        // 현재 진행 시각보다 30분 넘게 과거면(장애 복구 후 몰아보기) 낡은 이벤트다.
-        const staleEv = staleResult || (isLive && elapsedNow != null && ev.time?.elapsed != null && elapsedNow - ev.time.elapsed > 30);
+        const staleEv = isStaleEvent(ev, { staleResult, isLive, elapsedNow, kickoffMs });
         involved.forEach((p) => {
           const isPlayer = ev.player?.id === p.afPlayerId;
           const isAssist = ev.assist?.id === p.afPlayerId;
@@ -813,3 +828,4 @@ module.exports = async (req, res) => {
 };
 
 module.exports.nationalMatchEvents = nationalMatchEvents;
+module.exports.isStaleEvent = isStaleEvent;
