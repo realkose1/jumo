@@ -6,6 +6,9 @@
 // scoreboards miss; exact player-ID event attribution), MLB StatsAPI for
 // baseball — de-duplicates them against a Supabase `push_log` table, and
 // delivers an APNs alert to every device whose followed players are involved.
+// Asian Games national-team matches (NATIONAL_TEAMS) are the exception: no
+// per-player notifications go out for them — instead every Korea goal and the
+// final result are broadcast to all devices (see nationalMatchEvents()).
 //
 // Required env vars (Vercel → Project → Settings → Environment Variables):
 //   APIFOOTBALL_KEY same key the /api/apifootball proxy uses (soccer detection)
@@ -56,12 +59,65 @@ const PLAYERS = [
 ];
 
 // 아시안게임 U23 대표팀(리그 803, 팀 10177 'Korea Republic U23'). 이 경기는 개인
-// 라인업이 아니라 대표팀 소집 자체다 — playerIds 는 실제 출전 판정에 쓰지 않고,
-// 오직 푸시 대상(이 여섯 명 중 한 명이라도 팔로우하는 기기)을 고르는 데만 쓴다.
-// 차출 명단(index.html MANUAL_AVAILABILITY)과 항상 같아야 한다.
-const NATIONAL_TEAMS = { 10177: { name: '대한민국 U-23', playerIds: [20, 23, 22, 31, 32, 30] } };
+// 라인업이 아니라 대표팀 소집 자체이고, 알림도 개인(출전/골/도움/카드)이 아니라
+// 대한민국의 골·경기 결과를 팀 단위로 전원에게 방송한다(팔로우 여부 무관, 설정
+// 'national' 로만 끔) — 그래서 더 이상 소집 선수 명단(playerIds)을 들고 있지
+// 않는다. 방송 이벤트 생성은 아래 nationalMatchEvents() 참고.
+const NATIONAL_TEAMS = { 10177: { name: '대한민국 U-23' } };
 // 대표팀 경기의 vs 문구는 소속팀명이 아니라 대표팀명을 쓴다(예: 'Qatar U23 vs 대한민국 U-23').
 const teamLabel = (team) => NATIONAL_TEAMS[team?.id]?.name || team?.name || '';
+
+// 대표팀 경기의 골·최종결과 방송 이벤트를 만든다. 순수 함수로 분리해 테스트하기
+// 쉽게 한다 — 실제 발송 여부(silent)·대상(broadcast)은 호출부/센더가 결정한다.
+function nationalMatchEvents({ fx, fid, evd, home, away, isLive, isFinal, elapsedNow, staleResult }) {
+  const out = [];
+  const homeId = fx.teams?.home?.id, awayId = fx.teams?.away?.id;
+  const tally = {}; // teamId → 누적 득점 (자책골 포함)
+  (evd?.response || []).forEach((ev, i) => {
+    if (ev.type !== 'Goal' || ev.detail === 'Missed Penalty') return;
+    // API-Football 은 정상 골·자책골 모두 ev.team 을 '득점이 반영되는 팀'으로
+    // 기록한다 — 자책골도 ev.team.id 를 그대로 득점 팀 삼아 누적하면 된다.
+    const tid = ev.team?.id;
+    if (tid != null) tally[tid] = (tally[tid] || 0) + 1;
+    if (!NATIONAL_TEAMS[tid]) return; // 상대팀 득점은 방송하지 않는다
+    const min = `${ev.time?.elapsed}${ev.time?.extra ? `+${ev.time.extra}` : ''}'`;
+    const scorer = ev.detail === 'Own Goal'
+      ? '상대 자책골 '
+      : `${PLAYERS.find((p) => p.afPlayerId === ev.player?.id)?.name || ev.player?.name || ''} `;
+    const pen = ev.detail === 'Penalty' ? '페널티킥 ' : '';
+    const h = tally[homeId] || 0, a = tally[awayId] || 0;
+    const staleEv = staleResult || (isLive && elapsedNow != null && ev.time?.elapsed != null && elapsedNow - ev.time.elapsed > 30);
+    out.push({
+      key: `af-nat-goal-${fid}-${i}`, players: [],
+      kind: 'national', broadcast: true, matchId: String(fid),
+      title: '🇰🇷 대한민국 U-23 골!',
+      body: `${min} ${scorer}${pen}골! ${home} ${h} : ${a} ${away}`,
+      silent: staleEv,
+    });
+  });
+
+  if (isFinal) {
+    const gh = fx.goals?.home ?? 0, ga = fx.goals?.away ?? 0;
+    const koreaHome = !!NATIONAL_TEAMS[homeId];
+    const shootout = fx.score?.penalty?.home != null;
+    let title, body = `${home} ${gh} : ${ga} ${away} · 아시안게임 경기가 끝났습니다.`;
+    if (shootout) {
+      const ph = fx.score.penalty.home ?? 0, pa = fx.score.penalty.away ?? 0;
+      const koreaWon = koreaHome ? ph > pa : pa > ph;
+      title = koreaWon ? '🇰🇷 대한민국 U-23 승리!' : '🇰🇷 대한민국 U-23 패배';
+      body += ` (승부차기 ${ph} : ${pa})`;
+    } else {
+      const diff = koreaHome ? gh - ga : ga - gh;
+      title = diff > 0 ? '🇰🇷 대한민국 U-23 승리!' : diff < 0 ? '🇰🇷 대한민국 U-23 패배' : '🇰🇷 대한민국 U-23 무승부';
+    }
+    out.push({
+      key: `af-result-${fid}`, players: [],
+      kind: 'national', broadcast: true, matchId: String(fid),
+      title, body, silent: staleResult,
+    });
+  }
+  return out;
+}
 
 const norm = (s) => (s || '').toLowerCase().replace(/[.\s-]/g, '');
 const teamMatches = (compName, playerTeam) => {
@@ -348,17 +404,15 @@ async function collectSoccer(events, liveStates) {
       const fid = fx.fixture?.id;
       if (!fid || seenFixtures.has(fid)) continue;
       let involved = soccer.filter((p) => fx.teams?.home?.id === p.afTeamId || fx.teams?.away?.id === p.afTeamId);
-      // 대표팀(아시안게임) 경기 — 소속팀 id 로는 안 잡히니 NATIONAL_TEAMS 로 따로 확인하고,
-      // 차출된 여섯 명을 involved 에 얹는다(이미 있으면 중복 추가하지 않는다).
+      // 대표팀(아시안게임) 경기 — 소속팀 id 로는 안 잡히니 NATIONAL_TEAMS 로 따로 확인한다.
+      // 개인 알림(출전/골/도움/카드)은 대표팀 경기에 내지 않으므로 소집 선수를
+      // involved 에 얹지 않는다 — involved 는 그대로 비워 둬서 아래 개인 알림
+      // 코드(출전/결과/골/도움/카드)가 자연히 아무것도 만들지 않게 하고, 대신
+      // nationalMatchEvents() 가 팀 단위로 방송한다.
       const homeNational = NATIONAL_TEAMS[fx.teams?.home?.id];
       const awayNational = NATIONAL_TEAMS[fx.teams?.away?.id];
       const isNationalMatch = !!(homeNational || awayNational);
-      const nationalPlayerIds = [...new Set([...(homeNational?.playerIds || []), ...(awayNational?.playerIds || [])])];
-      if (isNationalMatch) {
-        const extra = PLAYERS.filter((p) => nationalPlayerIds.includes(p.id) && !involved.some((q) => q.id === p.id));
-        involved = [...involved, ...extra];
-      }
-      if (!involved.length) continue;
+      if (!involved.length && !isNationalMatch) continue;
       seenFixtures.add(fid);
 
       const st = fx.fixture.status?.short;
@@ -456,24 +510,8 @@ async function collectSoccer(events, liveStates) {
       // Finished & fully processed on an earlier run → skip (saves the events call).
       if (isFinal && await alreadyLogged(`af-done-${fid}`)) continue;
 
-      // 야구와 같은 이유 — 팀 경기라고 다 뛰는 게 아니다. 라인업으로 실제 출전을
-      // 확인한 뒤 대상을 좁힌다. 라인업이 아직/끝내 없으면 사실을 단정하지 않고 건너뛴다.
-      // 라인업은 캐시를 거치므로 매 실행 불러도 AF 호출이 늘지 않는다.
-      // (예전엔 시작 알림 후 조회를 건너뛰어 출전 여부를 알 수 없었다.)
       let starters = null, squad = null;
-      if (isNationalMatch) {
-        // 대표팀 경기는 개인 라인업을 알 방법이 없다(lineupSquad 의 ESPN 폴백은
-        // 소속팀 기준이라 못 쓴다) — squad 확정 없이 팀 단위로 시작/종료만 알린다.
-        // 골·도움·카드는 아래 per-play 루프가 afPlayerId 로 그대로 잡아준다.
-        if (isLive) {
-          events.push({ key: `af-start-${fid}`, players: nationalPlayerIds, matchId: String(fid),
-            kind: 'start', title: `⚽ ${vs}`, body: `${vs} 경기가 시작됐습니다.`, silent: staleStart });
-        }
-        if (isFinal) {
-          events.push({ key: `af-result-${fid}`, players: nationalPlayerIds, matchId: String(fid),
-            kind: 'result', title: '⚽ 경기 종료', body: `${home} ${fx.goals?.home ?? 0} : ${fx.goals?.away ?? 0} ${away}, 경기가 종료됐습니다.`, silent: staleResult });
-        }
-      } else {
+      if (!isNationalMatch) {
         // 야구와 같은 이유 — 팀 경기라고 다 뛰는 게 아니다. 라인업으로 실제 출전을
         // 확인한 뒤 대상을 좁힌다. 라인업이 아직/끝내 없으면 사실을 단정하지 않고 건너뛴다.
         // 라인업은 캐시를 거치므로 매 실행 불러도 AF 호출이 늘지 않는다.
@@ -496,9 +534,16 @@ async function collectSoccer(events, liveStates) {
             kind: 'result', title: '⚽ 경기 종료', body: `${home} ${fx.goals?.home ?? 0} : ${fx.goals?.away ?? 0} ${away}, 경기가 종료됐습니다.`, silent: staleResult });
         }
       }
+      // (대표팀 경기는 위 개인 출전/결과 알림을 만들지 않는다 — 킥오프 알림도,
+      // 라인업 확정(squad)도 없다. 골·최종결과는 evd 를 받은 뒤 아래에서
+      // nationalMatchEvents() 로 팀 단위 방송을 만든다.)
 
       // Per-play events — matched by API-Football player id (exact, no name fuzz).
       const evd = await afGet(`/fixtures/events?fixture=${fid}`);
+
+      if (isNationalMatch) {
+        events.push(...nationalMatchEvents({ fx, fid, evd, home, away, isLive, isFinal, elapsedNow, staleResult }));
+      }
 
       // ── 라이브 액티비티 상태 (잠금화면·다이나믹 아일랜드) ──────────────
       // 알림과 달리 중복 제거를 타지 않는다 — 점수·분이 바뀔 때마다 갱신해야
@@ -582,7 +627,7 @@ async function collectSoccer(events, liveStates) {
       // 나가지 않는다 — 명단을 확인했거나, 종료 후 2시간이 지나 더 기다릴 이유가
       // 없을 때만 마감한다. (명단 없는 경기는 2시간 동안 2분마다 1콜 = 60콜 상한)
       const longDone = kickoffMs && Date.now() - kickoffMs > (2 * 60 + 120) * 60 * 1000;
-      if (isFinal && (squad !== null || longDone)) {
+      if (isFinal && (isNationalMatch || squad !== null || longDone)) {
         events.push({ key: `af-done-${fid}`, players: [], silent: true });
       }
     }
@@ -746,9 +791,13 @@ module.exports = async (req, res) => {
       // 것을 막는다(af-done 처럼 원래 players:[] 라 자동으로 안 나가던 것과 달리,
       // 이제 진짜 알림에도 stale 판정이 붙으므로 이 체크가 필요하다).
       if (ev.silent) { silenced++; continue; }
-      const targets = tokens.filter((t) => Array.isArray(t.player_ids)
-        && ev.players.some((pid) => t.player_ids.includes(pid))
-        && allows(t, ev.kind));
+      // 대표팀 경기는 팔로우와 무관하게 앱이 모두에게 보여주므로 알림도 전원에게
+      // (설정 'national' 로만 끔) — player_ids 매칭을 건너뛴다.
+      const targets = ev.broadcast
+        ? tokens.filter((t) => allows(t, ev.kind))
+        : tokens.filter((t) => Array.isArray(t.player_ids)
+            && ev.players.some((pid) => t.player_ids.includes(pid))
+            && allows(t, ev.kind));
       // matchId를 함께 보내면 앱이 알림 탭 시 해당 경기 상세로 바로 이동한다.
       // (축구=AF fixture id로 앱 경기 id와 일치. 야구는 gamePk라 앱 id와 달라
       //  앱이 제목·본문의 팀명으로 폴백 매칭한다.)
@@ -762,3 +811,5 @@ module.exports = async (req, res) => {
 
   return res.status(200).json({ checked: events.length, fresh: fresh.length, sent, failed, silenced, liveSent });
 };
+
+module.exports.nationalMatchEvents = nationalMatchEvents;

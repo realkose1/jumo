@@ -7679,8 +7679,8 @@ function AddPlayerScreen({ followed, onToggle, onBack, playerOrder = [], setPlay
 // ─── MORE: NOTIFICATION SETTINGS ─────────────────────────────
 function NotifSettingsScreen({ onBack }) {
   const showToast = React.useContext(ToastCtx);
-  const DEFAULTS = { matchStart:true, goal:true, assist:true, result:true, card:true, lineup:false, liveActivity:true };
-  const LABELS = { matchStart:'경기 시작 알림', goal:'골·홈런 알림', assist:'어시스트 알림', result:'경기 결과', card:'경고·퇴장', lineup:'선발 라인업', liveActivity:'라이브 액티비티' };
+  const DEFAULTS = { matchStart:true, goal:true, assist:true, result:true, card:true, lineup:false, liveActivity:true, national:true };
+  const LABELS = { matchStart:'경기 시작 알림', goal:'골·홈런 알림', assist:'어시스트 알림', result:'경기 결과', card:'경고·퇴장', lineup:'선발 라인업', liveActivity:'라이브 액티비티', national:'대표팀 경기 알림' };
   const [s, setS] = React.useState(() => {
     try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('jumo_notif_settings') || '{}') }; }
     catch { return DEFAULTS; }
@@ -7702,6 +7702,7 @@ function NotifSettingsScreen({ onBack }) {
     { k:'goal', label:'골·홈런 알림', sub:'한국 선수 득점 시 즉시' },
     { k:'assist', label:'어시스트 알림', sub:'한국 선수 도움 시 즉시' },
     { k:'result', label:'경기 결과', sub:'경기 종료 후 최종 결과' },
+    { k:'national', label:'대표팀 경기 알림', sub:'아시안게임 등 대한민국 대표팀의 골·경기 결과 (팔로우와 무관)' },
     { k:'card', label:'경고·퇴장', sub:'한국 선수가 카드를 받으면' },
     { k:'lineup', label:'선발 라인업', sub:'발표되는 대로' },
     { k:'liveActivity', label:'라이브 액티비티', sub:'잠금화면·다이나믹 아일랜드에 실시간 경기 표시' },
@@ -8229,6 +8230,7 @@ const readPushPrefs = () => {
     result: s.result !== false,
     card:   s.card !== false,
     lineup: s.lineup === true,   // 라인업만 기본 꺼짐
+    national: s.national !== false,
   };
 };
 
