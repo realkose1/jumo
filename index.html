@@ -795,6 +795,45 @@ const NATIONAL_TEAMS = {
   'Korea Republic U23': { afTeamId: 10177, code: '대한민국 U-23', display: '대한민국 U-23',
                           players: ['양현준', '엄지성', '배준호', '김지수', '양민혁', '박승수'] },
 };
+
+// 아시안게임 U23 대표팀 명단(KFA 등번호 발표 2026-09-14, id 는 API-Football 클럽
+// 스쿼드 기준 2026-09-15). 김민승은 K3 소속이라 AF 에 색인이 안 돼 afId 가 없다 —
+// 이런 선수는 agPlayerName()/agPlayerNumber() 가 정규화한 영문명으로만 매칭한다.
+const AG_SQUAD = [
+  { afId: 237229, name: '김준홍', nameEn: 'Kim Joon-Hong', number: 1, pos: 'GK' },
+  { afId: null,   name: '김민승', nameEn: 'Kim Min-Seung', number: 12, pos: 'GK' },
+  { afId: 237228, name: '이승환', nameEn: 'Lee Seung-Hwan', number: 21, pos: 'GK' },
+  { afId: 472263, name: '강민준', nameEn: 'Kang Min-Jun', number: 2, pos: 'DF' },
+  { afId: 403340, name: '최우진', nameEn: 'Choi Woo-Jin', number: 3, pos: 'DF' },
+  { afId: 356197, name: '박성훈', nameEn: 'Park Seong-Hun', number: 4, pos: 'DF' },
+  { afId: 356237, name: '김지수', nameEn: 'Kim Ji-Soo', number: 5, pos: 'DF' },
+  { afId: 409426, name: '최석현', nameEn: 'Choi Seok-Hyun', number: 16, pos: 'DF' },
+  { afId: 510885, name: '박경섭', nameEn: 'Park Kyung-Sub', number: 20, pos: 'DF' },
+  { afId: 453266, name: '배현서', nameEn: 'Bae Hyun-Seo', number: 22, pos: 'DF' },
+  { afId: 453969, name: '신민하', nameEn: 'Shin Min-Ha', number: 23, pos: 'DF' },
+  { afId: 304951, name: '이기혁', nameEn: 'Lee Gi-Hyuk', number: 6, pos: 'MF' },
+  { afId: 237050, name: '엄지성', nameEn: 'Eom Ji-Sung', number: 7, pos: 'MF' },
+  { afId: 403349, name: '이승원', nameEn: 'Lee Seung-Won', number: 8, pos: 'MF' },
+  { afId: 357286, name: '배준호', nameEn: 'Bae Jun-Ho', number: 10, pos: 'MF' },
+  { afId: 304958, name: '양현준', nameEn: 'Yang Hyun-Jun', number: 11, pos: 'MF' },
+  { afId: 363021, name: '강상윤', nameEn: 'Kang Sang-Yoon', number: 13, pos: 'MF' },
+  { afId: 355171, name: '이현주', nameEn: 'Lee Hyun-Ju', number: 14, pos: 'MF' },
+  { afId: 403353, name: '황도윤', nameEn: 'Hwang Do-Yoon', number: 15, pos: 'MF' },
+  { afId: 423708, name: '양민혁', nameEn: 'Yang Min-Hyeok', number: 17, pos: 'MF' },
+  { afId: 423714, name: '박승수', nameEn: 'Park Seung-Soo', number: 19, pos: 'MF' },
+  { afId: 308648, name: '이영준', nameEn: 'Lee Young-Jun', number: 9, pos: 'FW' },
+  { afId: 423711, name: '김명준', nameEn: 'M. Kim', number: 18, pos: 'FW' },
+];
+const normEnName = (s) => (s || '').toLowerCase().replace(/[^a-z]/g, '');
+// AF 선수 객체({id, name}) → 아시안게임 명단 엔트리. id 우선, 없으면(김민승처럼
+// AF 색인이 안 된 선수) 정규화한 영문명으로 찾는다.
+const findAgPlayer = (afPlayer) => AG_SQUAD.find((p) => p.afId != null && p.afId === afPlayer?.id)
+  || AG_SQUAD.find((p) => normEnName(p.nameEn) === normEnName(afPlayer?.name));
+// 매치 못 하면 AF 원본 이름 그대로(fixMojibake 는 호출부에서 적용).
+const agPlayerName = (afPlayer) => findAgPlayer(afPlayer)?.name || afPlayer?.name || '';
+// 매치 못 하면 undefined — 호출부가 AF 원본 등번호로 폴백한다.
+const agPlayerNumber = (afPlayer) => findAgPlayer(afPlayer)?.number;
+
 // 대표팀 경기용 합성 '선수' 엔트리 — 실제 선수가 아니라 팀 전체를 가리킨다.
 // state 는 'upcoming'|'live'|'finished'.
 const nationalTeamEntry = (teamName, teamCode, state) => ({
@@ -4468,6 +4507,9 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
   // the existing renderers below already expect. This keeps the rendering JSX untouched.
   const transformAfEvents = (afResp) => {
     if (!Array.isArray(afResp)) return null;
+    // 아시안게임 대표팀(팀 10177) 이벤트만 AG_SQUAD 명단으로 이름을 바꾼다 —
+    // 다른 팀은 기존 fixMojibake 경로 그대로 둔다.
+    const nameOf = (afPlayer, teamId) => teamId === 10177 ? fixMojibake(agPlayerName(afPlayer)) : fixMojibake(afPlayer?.name);
     const incidents = afResp.map(e => {
       const isHome = e.team?.name === match.home.name;
       const base = { time: e.time?.elapsed, addedTime: e.time?.extra ?? undefined, isHome };
@@ -4477,19 +4519,19 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
         else if (e.detail === 'Penalty') cls = 'penalty';
         else if (e.detail === 'Missed Penalty') cls = 'missedPenalty';
         return { ...base, incidentType: 'goal', incidentClass: cls,
-          player: { name: fixMojibake(e.player?.name) }, assist1: e.assist?.name ? { name: fixMojibake(e.assist.name) } : null };
+          player: { name: nameOf(e.player, e.team?.id) }, assist1: e.assist?.name ? { name: nameOf(e.assist, e.team?.id) } : null };
       }
       if (e.type === 'Card') {
         let cls = 'yellow';
         if (e.detail === 'Red Card') cls = 'red';
         else if (e.detail === 'Second Yellow card') cls = 'yellowRed';
         return { ...base, incidentType: 'card', incidentClass: cls,
-          player: { name: fixMojibake(e.player?.name) }, reason: e.comments || '' };
+          player: { name: nameOf(e.player, e.team?.id) }, reason: e.comments || '' };
       }
       if (e.type === 'subst') {
         // API-Football: player = coming OFF (OUT), assist = coming ON (IN)
         return { ...base, incidentType: 'substitution',
-          playerIn: { name: fixMojibake(e.assist?.name) }, playerOut: { name: fixMojibake(e.player?.name) } };
+          playerIn: { name: nameOf(e.assist, e.team?.id) }, playerOut: { name: nameOf(e.player, e.team?.id) } };
       }
       if (e.type === 'Var') {
         return { ...base, incidentType: 'varDecision', text: e.detail || '' };
@@ -4511,8 +4553,12 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
     });
     const mapTeam = (afTeam) => {
       if (!afTeam) return null;
+      // 아시안게임 대표팀(팀 10177) 라인업만 AG_SQUAD 명단으로 이름·등번호를
+      // 바꾼다 — 다른 팀은 기존 fixMojibake/AF 등번호 그대로 둔다.
+      const isAG = afTeam.team?.id === 10177;
       const mapPlayer = (e, sub) => ({
-        player: { name: fixMojibake(e.player?.name), jerseyNumber: e.player?.number, id: e.player?.id,
+        player: { name: isAG ? fixMojibake(agPlayerName(e.player)) : fixMojibake(e.player?.name),
+                  jerseyNumber: e.player?.number ?? (isAG ? agPlayerNumber(e.player) : undefined), id: e.player?.id,
                   grid: e.player?.grid || null, pos: e.player?.pos || null },
         substitute: sub,
         statistics: ratingMap.has(e.player?.id) ? { rating: ratingMap.get(e.player.id) } : {},

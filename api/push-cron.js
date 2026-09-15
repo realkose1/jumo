@@ -67,6 +67,45 @@ const NATIONAL_TEAMS = { 10177: { name: '대한민국 U-23' } };
 // 대표팀 경기의 vs 문구는 소속팀명이 아니라 대표팀명을 쓴다(예: 'Qatar U23 vs 대한민국 U-23').
 const teamLabel = (team) => NATIONAL_TEAMS[team?.id]?.name || team?.name || '';
 
+// 아시안게임 U23 대표팀 명단(KFA 등번호 발표 2026-09-14, id 는 API-Football 클럽
+// 스쿼드 기준 2026-09-15). 김민승은 K3 소속이라 AF 에 색인이 안 돼 afId 가 없다 —
+// 이런 선수는 agPlayerName() 이 정규화한 영문명으로만 매칭한다.
+const AG_SQUAD = [
+  { afId: 237229, name: '김준홍', nameEn: 'Kim Joon-Hong', number: 1, pos: 'GK' },
+  { afId: null,   name: '김민승', nameEn: 'Kim Min-Seung', number: 12, pos: 'GK' },
+  { afId: 237228, name: '이승환', nameEn: 'Lee Seung-Hwan', number: 21, pos: 'GK' },
+  { afId: 472263, name: '강민준', nameEn: 'Kang Min-Jun', number: 2, pos: 'DF' },
+  { afId: 403340, name: '최우진', nameEn: 'Choi Woo-Jin', number: 3, pos: 'DF' },
+  { afId: 356197, name: '박성훈', nameEn: 'Park Seong-Hun', number: 4, pos: 'DF' },
+  { afId: 356237, name: '김지수', nameEn: 'Kim Ji-Soo', number: 5, pos: 'DF' },
+  { afId: 409426, name: '최석현', nameEn: 'Choi Seok-Hyun', number: 16, pos: 'DF' },
+  { afId: 510885, name: '박경섭', nameEn: 'Park Kyung-Sub', number: 20, pos: 'DF' },
+  { afId: 453266, name: '배현서', nameEn: 'Bae Hyun-Seo', number: 22, pos: 'DF' },
+  { afId: 453969, name: '신민하', nameEn: 'Shin Min-Ha', number: 23, pos: 'DF' },
+  { afId: 304951, name: '이기혁', nameEn: 'Lee Gi-Hyuk', number: 6, pos: 'MF' },
+  { afId: 237050, name: '엄지성', nameEn: 'Eom Ji-Sung', number: 7, pos: 'MF' },
+  { afId: 403349, name: '이승원', nameEn: 'Lee Seung-Won', number: 8, pos: 'MF' },
+  { afId: 357286, name: '배준호', nameEn: 'Bae Jun-Ho', number: 10, pos: 'MF' },
+  { afId: 304958, name: '양현준', nameEn: 'Yang Hyun-Jun', number: 11, pos: 'MF' },
+  { afId: 363021, name: '강상윤', nameEn: 'Kang Sang-Yoon', number: 13, pos: 'MF' },
+  { afId: 355171, name: '이현주', nameEn: 'Lee Hyun-Ju', number: 14, pos: 'MF' },
+  { afId: 403353, name: '황도윤', nameEn: 'Hwang Do-Yoon', number: 15, pos: 'MF' },
+  { afId: 423708, name: '양민혁', nameEn: 'Yang Min-Hyeok', number: 17, pos: 'MF' },
+  { afId: 423714, name: '박승수', nameEn: 'Park Seung-Soo', number: 19, pos: 'MF' },
+  { afId: 308648, name: '이영준', nameEn: 'Lee Young-Jun', number: 9, pos: 'FW' },
+  { afId: 423711, name: '김명준', nameEn: 'M. Kim', number: 18, pos: 'FW' },
+];
+const normEnName = (s) => (s || '').toLowerCase().replace(/[^a-z]/g, '');
+// AF 이벤트/라인업 선수 객체 → 아시안게임 명단 한글 이름. id 우선, 없으면(김민승처럼
+// AF 색인이 안 된 선수) 정규화한 영문명으로, 그것도 안 맞으면 AF 원본 이름 그대로.
+function agPlayerName(afPlayer) {
+  const byId = AG_SQUAD.find((p) => p.afId != null && p.afId === afPlayer?.id);
+  if (byId) return byId.name;
+  const byName = AG_SQUAD.find((p) => normEnName(p.nameEn) === normEnName(afPlayer?.name));
+  if (byName) return byName.name;
+  return afPlayer?.name || '';
+}
+
 // 이벤트(골·도움·카드)가 낡았는지. 종료 경기 전체가 낡았거나(staleResult), 라이브
 // 중인데 이벤트 시점이 현재 진행 시각보다 30분 넘게 과거거나(장애 복구 후 몰아보기),
 // 킥오프+경기 분(후반은 하프타임 15분 가산)으로 어림한 이벤트 실제 시각이 지금보다
@@ -100,7 +139,7 @@ function nationalMatchEvents({ fx, fid, evd, home, away, isLive, isFinal, elapse
     const min = `${ev.time?.elapsed}${ev.time?.extra ? `+${ev.time.extra}` : ''}'`;
     const scorer = ev.detail === 'Own Goal'
       ? '상대 자책골 '
-      : `${PLAYERS.find((p) => p.afPlayerId === ev.player?.id)?.name || ev.player?.name || ''} `;
+      : `${agPlayerName(ev.player) || PLAYERS.find((p) => p.afPlayerId === ev.player?.id)?.name || ev.player?.name || ''} `;
     const pen = ev.detail === 'Penalty' ? '페널티킥 ' : '';
     const h = tally[homeId] || 0, a = tally[awayId] || 0;
     const staleEv = isStaleEvent(ev, { staleResult, isLive, elapsedNow, kickoffMs });
