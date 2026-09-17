@@ -9529,22 +9529,25 @@ function App() {
         // 이어지므로 그때 온전한 목록이 저장된다.
         if (!quick) saveCachedMatches(koreanMatches);
 
-        // Save manual baseline once (first run) so we can rebuild totals each refresh
-        // by adding contributions from finished matches in the live cache.
-        if (!ALL_PLAYERS[0]._baselineSnapshot) {
-          ALL_PLAYERS.forEach(p => {
-            p._baselineSnapshot = {
-              goals: Number(p.goals) || 0,
-              assists: Number(p.assists) || 0,
-              matches: Number(p.matches) || 0,
-              hits: Number(p.hits) || 0,
-              homeRuns: Number(p.homeRuns) || 0,
-              rbi: Number(p.rbi) || 0,
-              rating: Number(p.rating) || 0,
-              avg: p.avg,
-            };
-          });
-        }
+        // Save manual baseline once per player (first run for that player) so we can
+        // rebuild totals each refresh by adding contributions from finished matches
+        // in the live cache. 예전엔 ALL_PLAYERS[0] 하나만 보고 판단해서, fetchOne 이
+        // 특정 선수의 스냅샷만 지워도(새 시즌 스탯 반영) 나머지 선수는 이미 있다고
+        // 오판해 새로 안 만들었다 — 그 결과 AF/ESPN 이 이미 포함한 최근 경기가
+        // 라이브 델타로 또 더해졌다(제보: 이강인 헤더 3골·9출전 vs 스탯 탭 2골·7경기).
+        ALL_PLAYERS.forEach(p => {
+          if (p._baselineSnapshot) return;
+          p._baselineSnapshot = {
+            goals: Number(p.goals) || 0,
+            assists: Number(p.assists) || 0,
+            matches: Number(p.matches) || 0,
+            hits: Number(p.hits) || 0,
+            homeRuns: Number(p.homeRuns) || 0,
+            rbi: Number(p.rbi) || 0,
+            rating: Number(p.rating) || 0,
+            avg: p.avg,
+          };
+        });
 
         // For each player: take baseline + add per-match deltas from finished matches
         const FINAL_STATUSES = ['STATUS_FINAL','STATUS_FULL_TIME','final','STATUS_END_PERIOD','STATUS_FINAL_PEN'];
@@ -9579,32 +9582,38 @@ function App() {
             if (seen.has(match.id)) return;
             seen.add(match.id);
             const player = ALL_PLAYERS[idx];
+            const kick = match.fullDate ? new Date(match.fullDate).getTime() : 0;
+            // 시즌 집계(AF/ESPN)를 받은 시각 이전에 킥오프한 경기는 이미 그 집계에
+            // 들어 있으니 더하지 않는다 — 그 뒤에 끝난 경기만 라이브 델타로 얹는다.
+            const alreadyInSeasonStats = player.statsAt && kick && kick < player.statsAt;
 
-            // Per-match contributions (additive)
-            if (player.sport === '축구') {
-              const mg = Number(kp.matchGoals) || 0;
-              const ma = Number(kp.matchAssists) || 0;
-              if (mg > 0) player.goals += mg;
-              if (ma > 0) player.assists += ma;
-              // Count appearance if event indicates play
-              const ev = kp.event || '';
-              const played = (kp.minutesPlayed || 0) > 0
-                || ev === '풀타임' || ev === '교체 아웃' || ev.includes('분 출전')
-                || mg > 0 || ma > 0;
-              if (played) player.matches += 1;
-            } else if (player.sport === '야구') {
-              const h = Number(kp.hits) || 0;
-              const hr = Number(kp.homeRuns) || 0;
-              const rbi = Number(kp.rbi) || 0;
-              if (h > 0) player.hits += h;
-              if (hr > 0) player.homeRuns += hr;
-              if (rbi > 0) player.rbi += rbi;
-              const didPlay = (kp.atBats || 0) > 0 || h > 0;
-              if (didPlay) player.matches += 1;
+            // Per-match contributions (additive) — 이미 집계에 포함된 경기는 건너뛴다.
+            if (!alreadyInSeasonStats) {
+              if (player.sport === '축구') {
+                const mg = Number(kp.matchGoals) || 0;
+                const ma = Number(kp.matchAssists) || 0;
+                if (mg > 0) player.goals += mg;
+                if (ma > 0) player.assists += ma;
+                // Count appearance if event indicates play
+                const ev = kp.event || '';
+                const played = (kp.minutesPlayed || 0) > 0
+                  || ev === '풀타임' || ev === '교체 아웃' || ev.includes('분 출전')
+                  || mg > 0 || ma > 0;
+                if (played) player.matches += 1;
+              } else if (player.sport === '야구') {
+                const h = Number(kp.hits) || 0;
+                const hr = Number(kp.homeRuns) || 0;
+                const rbi = Number(kp.rbi) || 0;
+                if (h > 0) player.hits += h;
+                if (hr > 0) player.homeRuns += hr;
+                if (rbi > 0) player.rbi += rbi;
+                const didPlay = (kp.atBats || 0) > 0 || h > 0;
+                if (didPlay) player.matches += 1;
+              }
             }
 
-            // Track latest rating/avg
-            const ts = match.fullDate ? new Date(match.fullDate).getTime() : 0;
+            // Track latest rating/avg (건너뛴 경기라도 라이브 평점·타율 추적은 계속한다)
+            const ts = kick;
             const cur = latestPerPlayer.get(idx) || { ts: 0 };
             if (ts >= cur.ts) {
               const upd = { ts };
@@ -9712,6 +9721,7 @@ function App() {
         p.goals = c.goals; p.assists = c.assists; p.matches = c.matches;
         if (c.rating) p.rating = c.rating;
         p.compStats = c.compStats; p.detailStats = c.detailStats;
+        if (c.at) p.statsAt = c.at;
         restored++;
       }
       if (restored && !cancelled) setLiveMatches(prev => [...prev]);
@@ -9744,6 +9754,7 @@ function App() {
             // → 새 시즌 기준으로 0으로 초기화한다. 평점은 UI가 0일 때 숨긴다.
             p.goals = 0; p.assists = 0; p.matches = 0; p.rating = 0;
             p.compStats = []; p.detailStats = null;
+            p.statsAt = Date.now(); // 이 시각 이전 킥오프 경기는 이미 이 집계(0)에 반영됨
             delete p._baselineSnapshot;
             return true;
           }
@@ -9797,6 +9808,7 @@ function App() {
             ['드리블 성공', det.dribbles],
             ['경합 승리',   det.duelsWon],
           ] : null;
+          p.statsAt = Date.now(); // 이 시각 이전 킥오프 경기는 이미 이 시즌 집계에 반영됨
           delete p._baselineSnapshot; // force baseline rebuild in next poll
           return true;
         } catch (e) {
@@ -9840,6 +9852,7 @@ function App() {
               ['태클',       g('totalTackles')],
               ['경고',       g('yellowCards')],
             ];
+            p.statsAt = Date.now(); // 이 시각 이전 킥오프 경기는 이미 이 시즌 집계에 반영됨
           } catch (e) {}
         }));
         if (!cancelled) setLiveMatches(prev => [...prev]);
@@ -9850,7 +9863,8 @@ function App() {
         for (const p of soccerPlayers) {
           if (!p.compStats) continue;   // 이번에도 못 받았으면 이전 캐시를 남겨둔다
           byId[p.id] = { goals: p.goals, assists: p.assists, matches: p.matches,
-                         rating: p.rating, compStats: p.compStats, detailStats: p.detailStats };
+                         rating: p.rating, compStats: p.compStats, detailStats: p.detailStats,
+                         at: p.statsAt || Date.now() };
         }
         const merged = { ...cached, ...byId };
         localStorage.setItem(STATS_CACHE_KEY, JSON.stringify({ season: afSeasonFor({}), byId: merged }));
