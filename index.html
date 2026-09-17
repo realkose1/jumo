@@ -6866,6 +6866,11 @@ const NEWS_PLAYERS = [
   { label:'설영우', query:'설영우' },
 ];
 
+// 아시안게임 기간에만 뉴스 탭에 '아시안게임' 칩을 띄운다(폐막 10/4 + 결산 기사 며칠).
+const AG_NEWS_WINDOW = { from:'2026-09-07', to:'2026-10-08' };
+const agNewsActive = (now = Date.now()) => { const d = new Date(now).toISOString().slice(0,10); return d >= AG_NEWS_WINDOW.from && d <= AG_NEWS_WINDOW.to; };
+const AG_NEWS_QUERIES = [ { label:'아시안게임', query:'아시안게임 축구 대표팀', ag:true }, { label:'아시안게임', query:'아시안게임 야구 대표팀', ag:true } ];
+
 const newsImageCache = {};
 
 const NEWS_PLAYER_IMG = {
@@ -7131,7 +7136,7 @@ function curateNews(pool, seed, limit) {
 
 function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScroll }) {
   const onTabScroll = useTabBarScrollSync(onTabBarScroll);
-  const NEWS_CATEGORIES = ['전체', '해외축구', 'MLB', '기타'];
+  const NEWS_CATEGORIES = ['전체', '아시안게임', '해외축구', 'MLB', '기타'];
   // 오버레이 헤더 높이 — 스크롤 영역 상단 여백과 맞춘다.
   const headRef = React.useRef(null);
   const [headH, setHeadH] = React.useState(0);
@@ -7285,6 +7290,11 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
 
   const detectCategory = (article) => {
     const haystack = `${article.title} ${article.description} ${article.source || ''}`;
+    // 아시안게임 기간엔 선수 쿼리로 들어온 기사(엄지성 해트트릭 등)도 대표팀
+    // 기사면 '아시안게임' 칩으로 묶는다 — 기존 SOCCER_PLAYERS/MLB_PLAYERS 판정보다 먼저 본다.
+    if (agNewsActive() && haystack.includes('아시안게임')) {
+      return { category:'아시안게임', sportType: (haystack.includes('야구') && !haystack.includes('축구')) ? 'baseball' : 'soccer', ag:true };
+    }
     if (SOCCER_PLAYERS.some(name => haystack.includes(name))) return { category:'해외축구', sportType:'soccer' };
     if (MLB_PLAYERS.some(name => haystack.includes(name))) return { category:'MLB', sportType:'baseball' };
     return { category:'기타', sportType:'other' };
@@ -7300,8 +7310,11 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
       try {
         // 13개 쿼리를 한꺼번에 쏘면 네이버 검색 API 버스트 제한에 걸려 절반이
         // 429 로 돌아온다(콘솔 실측) — 200ms 씩 흘려보낸다.
+        // 아시안게임 기간엔 대표팀 쿼리 2개를 이어 붙인다 — 인덱스를 이어가서
+        // stagger(200ms 간격)가 계속 늘어나게 한다.
+        const newsQueries = agNewsActive() ? [...NEWS_PLAYERS, ...AG_NEWS_QUERIES] : NEWS_PLAYERS;
         const responses = await Promise.all(
-          NEWS_PLAYERS.map((player, i) =>
+          newsQueries.map((player, i) =>
             new Promise(r => setTimeout(r, i * 200))
               .then(() => fetch(`${API_BASE}/api/naver-news?query=${encodeURIComponent(player.query)}`))
               .then(r => r.json())
@@ -7312,6 +7325,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
                 pubDate: item.pubDate,
                 description: stripHtml(item.description),
                 player: player.label,
+                ag: !!player.ag,
                 source: (() => {
                   try { return new URL(item.originallink || item.link).hostname; }
                   catch { return ''; }
@@ -7344,6 +7358,16 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
           // '경기도(京畿道)'의 '경기'가 경기 용어 '경기'에 걸린다 — 고양시 K팝 시상식
           // 기사가 이걸로 통과했다(제보). 지명은 지운 뒤 대조한다.
           const haystack = `${item.title} ${item.description}`.replace(/경기도/g, '');
+          if (item.ag) {
+            // 아시안게임 대표팀 뉴스: 팔로우 선수 이름이 없어도 살아남아야 하므로
+            // 선수명 규칙 대신 종목 키워드로만 판단한다(소속팀 개념이 없다).
+            if (!haystack.includes('아시안게임')) return false;
+            if (!(haystack.includes('축구') || haystack.includes('야구'))) return false;
+            if (EXCLUDE_KEYWORDS.some(kw => haystack.includes(kw))) return false;
+            if (!(MATCH_KEYWORDS.some(kw => haystack.includes(kw)) || SPORT_CONTEXT.some(kw => haystack.includes(kw)))) return false;
+            if (SOFT_ENTERTAINMENT.some(kw => haystack.includes(kw))) return false;
+            return true;
+          }
           if (EXCLUDE_KEYWORDS.some(kw => haystack.includes(kw))) return false;
           const named = PLAYER_NAMES.filter(name => haystack.includes(name));
           if (!named.length) return false;
@@ -7373,7 +7397,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
           // 거친 뒤 렌더 단계에서 회차별로 수행한다.
           setArticles(unique.slice(0, 120).map(item => {
             const meta = detectCategory(item);
-            return { ...item, category: meta.category, sportType: meta.sportType };
+            return { ...item, category: meta.category, sportType: meta.sportType, ag: !!(meta.ag || item.ag) };
           }));
         }
       } catch {
@@ -7402,7 +7426,8 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
   const allowedArticles = React.useMemo(() => {
     const pool = articles.filter(a =>
       enabledSportTypes.has(a.sportType) &&
-      (!followedArr || followedArr.some(name => `${a.title} ${a.description || ''}`.includes(name)))
+      // 아시안게임 대표팀 뉴스는 팔로우 선수와 무관한 팀 뉴스라 이름 필터를 건너뛴다.
+      (a.ag || !followedArr || followedArr.some(name => `${a.title} ${a.description || ''}`.includes(name)))
     );
     return curateNews(pool, refetchTrigger, 40);
   }, [articles, refetchTrigger, enabledSportTypes, followedNames]);
@@ -7412,6 +7437,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
 
   const enabledCategories = React.useMemo(() => {
     const categories = ['전체'];
+    if (agNewsActive() && (sportFeeds?.soccer || sportFeeds?.baseball)) categories.push('아시안게임');
     if (sportFeeds?.soccer) categories.push('해외축구');
     if (sportFeeds?.baseball) categories.push('MLB');
     return categories;
