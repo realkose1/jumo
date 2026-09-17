@@ -7137,6 +7137,8 @@ function curateNews(pool, seed, limit) {
 function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScroll }) {
   const onTabScroll = useTabBarScrollSync(onTabBarScroll);
   const NEWS_CATEGORIES = ['전체', '아시안게임', '해외축구', 'MLB', '기타'];
+  // 칩에 보이는 글자만 바꾼다(카테고리 키는 그대로).
+  const NEWS_CATEGORY_LABEL = { '아시안게임': '🇰🇷 아시안게임' };
   // 오버레이 헤더 높이 — 스크롤 영역 상단 여백과 맞춘다.
   const headRef = React.useRef(null);
   const [headH, setHeadH] = React.useState(0);
@@ -7483,7 +7485,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
               whiteSpace:'nowrap',
             }}
           >
-            {c}
+            {NEWS_CATEGORY_LABEL[c] || c}
           </button>
         ))}
       </div>
