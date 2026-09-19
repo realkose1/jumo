@@ -1,0 +1,29 @@
+name: ag-lineup
+# 아시안게임(리그 803) 한국 U-23 대표팀 경기 킥오프 60~100분 전, 한국 언론의
+# 선발 라인업 발표 기사를 찾아 Supabase sf_cache 에 자동으로 채워 넣는다.
+# 대회 기간에만 필요 — 2026-09-22 ~ 2026-10-04 지나면 이 워크플로는 삭제할 것.
+#
+# 매시 정각+20분, KST 12:20~21:20 사이에만 돈다(= UTC 03:20~12:20).
+# check --within 110 이 다음 경기가 110분 이내에 없으면 조용히 끝내서
+# 평소엔 API 호출을 거의 안 쓰게 한다.
+on:
+  schedule:
+    - cron: '20 3-12 * * *'
+  workflow_dispatch: {}
+jobs:
+  auto-lineup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 다음 경기가 임박했는지 확인(아니면 조용히 종료)
+        run: node scripts/ag-lineup.mjs check --within 110 || exit 0
+        env:
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      - name: 뉴스에서 선발 라인업 자동 추출·저장
+        # exit 2 = 아직 발표 전이거나 기사에서 정확히 11명을 못 뽑음(모호) → 실패 취급하지 않고 로그만 남긴다.
+        run: node scripts/ag-lineup.mjs auto || echo "auto 종료 코드 $? (2면 미발표/모호 — 정상)"
+        env:
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
