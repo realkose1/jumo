@@ -251,7 +251,6 @@ function explainForInjury(inj) {
   return {
     title,
     lines: [
-      (inj.note && inj.note !== inj.label) ? inj.note : '',
       inj.severity === 'high'
         ? '이 상태에서는 소속팀 경기에서 결장으로 표시하고 선발 예상을 계산하지 않아요'
         : '출전 여부가 불확실해요. 경기 명단이 나오면 그 기준으로 바뀝니다',
@@ -9935,6 +9934,10 @@ function App() {
       'groin injury':'사타구니 부상', 'back injury':'허리 부상', 'shoulder injury':'어깨 부상',
       'foot injury':'발 부상', 'illness':'질병', 'knock':'타박상', 'fitness':'컨디션 난조',
       'suspended':'출전 정지', 'red card':'퇴장 누적', 'coach decision':'감독 결정',
+      // 사유 없이 'Injury' 만 오는 경우가 흔하다 — 영문 그대로 배지에 찍히지 않게.
+      'injury':'부상', 'unknown injury':'부상', 'achilles tendon injury':'아킬레스건 부상',
+      'concussion':'뇌진탕', 'hip injury':'엉덩이 부상', 'rib injury':'갈비뼈 부상',
+      'virus':'질병', 'yellow cards':'경고 누적', 'personal reasons':'개인 사유',
     };
     const koReason = (reason) => REASON_KO[(reason || '').toLowerCase().trim()] || reason || '부상';
 
