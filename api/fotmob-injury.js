@@ -18,6 +18,15 @@ module.exports = async function handler(req, res) {
     return;
   }
 
+  // 킬 스위치. FotMob 은 약관상 자동 수집을 금지하는 소스라(2026-09-19 확인, 사용자
+  // 결정으로 일단 유지) 문제가 생기면 Vercel 환경변수 FOTMOB_DISABLED=1 만 넣고
+  // 재배포하면 앱 수정 없이 즉시 멈춘다. 앱은 injury:null 을 '정보 없음'으로 다룬다.
+  if (process.env.FOTMOB_DISABLED) {
+    res.setHeader('Cache-Control', 'public, s-maxage=3600');
+    res.status(200).json({ id, name: null, injury: null, duty: null, disabled: true });
+    return;
+  }
+
   try {
     const r = await fetch(`https://www.fotmob.com/api/data/playerData?id=${id}`, {
       headers: {
