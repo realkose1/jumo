@@ -9999,6 +9999,8 @@ function App() {
       'injury':'부상', 'unknown injury':'부상', 'achilles tendon injury':'아킬레스건 부상',
       'concussion':'뇌진탕', 'hip injury':'엉덩이 부상', 'rib injury':'갈비뼈 부상',
       'virus':'질병', 'yellow cards':'경고 누적', 'personal reasons':'개인 사유',
+      // AF 부상 명단에 대표팀 소집이 이렇게 온다(2026-09-19 양현준 실측).
+      'international duty':'대표팀 차출',
     };
     const koReason = (reason) => REASON_KO[(reason || '').toLowerCase().trim()] || reason || '부상';
 
