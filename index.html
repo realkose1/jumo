@@ -4573,9 +4573,16 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
   const [predXI, setPredXI] = React.useState(null);
   const [predLoading, setPredLoading] = React.useState(false);
   const predFetchedRef = React.useRef(null);   // match.id 당 한 번만 부른다
+  // 아시안게임 대표팀(10177) 라인업이 sf_cache 의 수동 입력(manual-lineup-*)에서
+  // 왔을 때만 채워진다 — 라인업 탭 캡션('KFA 발표 선발 · 기사 기준')에 쓴다.
+  const [manualLineup, setManualLineup] = React.useState(null);
 
   const isSoccerMatch = !((match.sport||'').includes('MLB') || (match.sport||'').includes('⚾'));
   const isMLBMatch = !isSoccerMatch;
+  // 아시안게임 대표팀(10177) 경기 — AF 가 라인업을 절대 안 주므로 수동 입력으로
+  // 보강하고, 예상 XI 도 이 팀 몫은 계산하지 않는다(최근 '클럽' 경기 라인업을
+  // 긁어오는 방식이라 대표팀엔 애초에 근거가 없다).
+  const isAgFixture = match.home?.id === 10177 || match.away?.id === 10177;
 
   // MLB summary covers events + stats + lineups in one shot
   React.useEffect(() => {
@@ -4656,8 +4663,10 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
         ],
       };
     };
-    const home = afLineupsResp.find(t => t.team?.name === match.home.name) || afLineupsResp[0];
-    const away = afLineupsResp.find(t => t.team?.name === match.away.name) || afLineupsResp[1];
+    // id 우선 매칭 — 대표팀(10177)은 표시명('대한민국 U-23')과 AF 원본 팀명
+    // ('Korea Republic U23')이 달라서 이름만으로는 못 찾는다.
+    const home = afLineupsResp.find(t => (match.home.id && t.team?.id === match.home.id) || t.team?.name === match.home.name) || afLineupsResp[0];
+    const away = afLineupsResp.find(t => (match.away.id && t.team?.id === match.away.id) || t.team?.name === match.away.name) || afLineupsResp[1];
     return { home: mapTeam(home), away: mapTeam(away) };
   };
 
@@ -4722,6 +4731,30 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
         const espn = await espnLineupsForMatch(match);
         if (espn) afLineups = espn;
       }
+      // 아시안게임 대표팀(10177)은 AF·ESPN 어디에도 라인업이 없다 — sf_cache 에
+      // 기사 기준으로 미리 넣어둔 수동 라인업(manual-lineup-{fixtureId})으로
+      // 보강한다. AF 팀 배열은 그대로 두고 10177 몫만 갈아 끼운다. 캐시하지 않고
+      // (af-detail-* 와 별도) 화면을 열 때마다 한 번만 조회한다.
+      if (isAgFixture) {
+        const hasAg = (afLineups || []).some(t => t.team?.id === 10177 && (t.startXI || []).length);
+        if (hasAg) {
+          setManualLineup(null);
+        } else {
+          try {
+            const r = await SB.from('sf_cache').select('date,events,updated_at').eq('date', `manual-lineup-${match.id}`).limit(1);
+            const row = (r && r.data || [])[0];
+            if (row?.events?.lineups?.length) {
+              afLineups = [...(afLineups || []).filter(t => t.team?.id !== 10177), ...row.events.lineups];
+              setManualLineup({ source: row.events.source, by: row.events.by,
+                formationGuessed: row.events.formationGuessed, enteredAt: row.events.enteredAt });
+            } else {
+              setManualLineup(null);
+            }
+          } catch (e) { setManualLineup(null); }   // 못 읽으면 없는 걸로 취급
+        }
+      } else {
+        setManualLineup(null);
+      }
       setLineupsData(transformAfLineups(afLineups, playersJson?.response));
       setLineupsLoading(false);
     })().catch(() => setLineupsLoading(false));
@@ -4742,7 +4775,9 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
     // 양 팀 모두 예측한다(제보: 상대팀도 보여야 한다). 팀별로 12시간 공유
     // 캐시를 타므로 같은 팀이 다시 나오면 호출이 없다. 홈 → 원정 순서는 실제
     // 라인업 화면과 같게 맞춘다.
-    const sides = [match.home, match.away].filter(t => t && t.id);
+    // 10177(아시안게임 대표팀)은 대상에서 뺀다 — '최근 6경기' 조회가 클럽
+    // 경기 전제라 대표팀엔 근거가 아예 없고, 있어도 수동 라인업이 우선한다.
+    const sides = [match.home, match.away].filter(t => t && t.id && t.id !== 10177);
     if (!sides.length) return;
 
     setPredLoading(true);
@@ -5524,7 +5559,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
 
         // pitchOnly: 헤더·SUBS 없이 피치(또는 격자 명단)만 반환한다 — 예상 XI 는
         // 자체 헤더(팀명 + '예상' 표기 + 캡션)를 바깥에서 그리고 이 피치만 재사용한다.
-        const renderTeam = (team, teamData, players, pitchOnly = false) => {
+        const renderTeam = (team, teamData, players, pitchOnly = false, caption = null) => {
           const starters = players.filter(p => p.substitute === false);
           const subs = players.filter(p => p.substitute === true);
           const kps = kpsFor(team);
@@ -5608,6 +5643,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
                   : (formation && <span style={{ ...NUM, fontSize:11, color:'var(--text4)', flexShrink:0 }}>{formation}</span>)}
               </div>
               {body}
+              {caption}
               {subs.length > 0 && (
                 <>
                   <div style={{ fontSize:10, fontWeight:700, color:'var(--text4)', letterSpacing:1, marginTop:10, marginBottom:6, paddingLeft:2 }}>SUBS</div>
@@ -5633,6 +5669,24 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
           );
         };
 
+        // 아시안게임 대표팀(10177) 라인업이 수동 입력에서 왔을 때 피치 아래에
+        // 붙이는 출처 캡션. 그 팀이 아니거나 아직 수동 입력이 없으면 null.
+        const manualCaptionFor = (team) => {
+          if (!manualLineup || team?.id !== 10177) return null;
+          const src = manualLineup.source;
+          return (
+            <div style={{ textAlign:'center', margin:'10px 2px 0', fontSize:11, color:'var(--text4)', lineHeight:1.6 }}>
+              <div>KFA 발표 선발 · 기사 기준{manualLineup.formationGuessed ? ' · 포메이션은 추정' : ''}</div>
+              {src?.title && (
+                <div onClick={src.url ? () => openExternal(src.url) : undefined}
+                  style={{ textDecoration: src.url ? 'underline' : 'none', cursor: src.url ? 'pointer' : 'default' }}>
+                  출처: {src.title}
+                </div>
+              )}
+            </div>
+          );
+        };
+
         if (homePlayers.length === 0 && awayPlayers.length === 0) {
           // 시작 전이면 '아직 안 나왔다'와 '끝내 없다'는 전혀 다른 뜻이다.
           // 그냥 '정보 없음'이라고만 쓰면 앱이 못 가져온 것처럼 읽힌다.
@@ -5640,7 +5694,12 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
           return (
             <div>
               <div style={{ textAlign:'center', padding:'40px 20px', color:'var(--text5)', fontSize:14, lineHeight:1.6 }}>
-                {notStarted ? (
+                {isAgFixture ? (
+                  <>
+                    <div style={{ fontWeight:700, color:'var(--text3)', marginBottom:6 }}>라인업 발표 전</div>
+                    <div style={{ fontSize:12 }}>선발 명단은 발표 후 반영돼요 (경기 1시간 전쯤)</div>
+                  </>
+                ) : notStarted ? (
                   <>
                     <div style={{ fontWeight:700, color:'var(--text3)', marginBottom:6 }}>라인업 발표 전</div>
                     <div style={{ fontSize:12 }}>경기 시작 직전에 공개됩니다.<br/>나오면 알림으로 알려드릴게요.</div>
@@ -5674,10 +5733,29 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
           );
         }
 
+        // 아시안게임 대표팀(10177) 쪽만 라인업이 있고 상대는 아직 없는 경우 —
+        // renderTeam 이 상대를 빈 격자('선발 명단 · 발표 중')로 그리면 실제로는
+        // 나온 적 없는 것처럼 오해를 준다. 한국만 그리고 상대는 정직하게 표시.
+        const koreaSide = match.home?.id === 10177 ? 'home' : (match.away?.id === 10177 ? 'away' : null);
+        if (koreaSide) {
+          const koreaPlayers = koreaSide === 'home' ? homePlayers : awayPlayers;
+          const oppPlayers = koreaSide === 'home' ? awayPlayers : homePlayers;
+          if (koreaPlayers.length > 0 && oppPlayers.length === 0) {
+            const koreaTeam = koreaSide === 'home' ? match.home : match.away;
+            const koreaData = koreaSide === 'home' ? lineupsData?.home : lineupsData?.away;
+            return (
+              <div style={{ padding:'14px 12px' }}>
+                {renderTeam(koreaTeam, koreaData, koreaPlayers, false, manualCaptionFor(koreaTeam))}
+                <div style={{ textAlign:'center', padding:'24px 20px', color:'var(--text5)', fontSize:12 }}>상대 라인업 미확인</div>
+              </div>
+            );
+          }
+        }
+
         return (
           <div style={{ padding:'14px 12px' }}>
-            {renderTeam(match.home, lineupsData?.home, homePlayers)}
-            {renderTeam(match.away, lineupsData?.away, awayPlayers)}
+            {renderTeam(match.home, lineupsData?.home, homePlayers, false, manualCaptionFor(match.home))}
+            {renderTeam(match.away, lineupsData?.away, awayPlayers, false, manualCaptionFor(match.away))}
           </div>
         );
       })()}
