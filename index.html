@@ -237,6 +237,31 @@ function explainForEvent(text) {
   };
 }
 
+// 부상·징계 등 상태 배지(STATUS_BADGE)에 맞는 설명을 돌려준다(없으면 null).
+// 대표팀 차출(kind==='national')은 수동 결장 설명이 이미 explainForEvent 에
+// 있으니 그리로 위임한다. 나머지는 일일 동기화가 채운 p.injury 필드를 읽는다.
+function explainForInjury(inj) {
+  if (!inj) return null;
+  if (inj.kind === 'national') return explainForEvent(inj.label);
+  const isBaseball = inj.kind === 'minors' || inj.kind === 'il';
+  const title = inj.kind === 'minors' ? '마이너리그 — MLB 경기에 나오지 않아요'
+    : inj.kind === 'doubtful' ? `${inj.label} — 출전 불투명`
+    : inj.kind === 'suspended' ? `${inj.label || '출전 정지'} — 징계 결장`
+    : `${inj.label || '부상'} — 결장 중`; // injured / il / 그 외
+  return {
+    title,
+    lines: [
+      (inj.note && inj.note !== inj.label) ? inj.note : '',
+      inj.severity === 'high'
+        ? '이 상태에서는 소속팀 경기에서 결장으로 표시하고 선발 예상을 계산하지 않아요'
+        : '출전 여부가 불확실해요. 경기 명단이 나오면 그 기준으로 바뀝니다',
+      isBaseball
+        ? 'MLB 공식 로스터 기준이며 하루 한 번 갱신돼요.'
+        : '데이터 제공처의 부상·징계 명단 기준이며 하루 한 번 갱신돼요. 회복해 명단에서 빠지면 배지도 사라집니다.',
+    ].filter(Boolean),
+  };
+}
+
 // 설명 툴팁 — 누른 배지 옆에 떠서 무엇에 대한 설명인지 분명하다.
 // 하단 시트로 만들었다가 바꿨다: 시트는 화면을 덮어 정작 설명 대상인 배지가
 // 가려지고, 이 정도 분량에는 과하다.
@@ -4848,8 +4873,10 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
                             </div>
                             );
                           })()}
-                          {injury && (() => { const s = injuryStyle(injury); return (
-                            <span style={{ fontSize:10, fontWeight:700, padding:'3px 7px', borderRadius:6, background:s.bg, color:s.fg, border:`0.5px solid ${s.bd}`, whiteSpace:'nowrap', lineHeight:1, flexShrink:0 }}><span style={{ color:s.ic, fontWeight:900, marginRight:4 }}>{s.icon}</span>{injury.label}</span>
+                          {injury && (() => { const s = injuryStyle(injury); const tip = explainForInjury(injury); return (
+                            <span
+                              onClick={tip ? (e) => { e.stopPropagation(); explain({ ...tip, rect: e.currentTarget.getBoundingClientRect() }); } : undefined}
+                              style={{ fontSize:10, fontWeight:700, padding:'3px 7px', borderRadius:6, background:s.bg, color:s.fg, border:`0.5px solid ${s.bd}`, whiteSpace:'nowrap', lineHeight:1, flexShrink:0, cursor: tip ? 'pointer' : undefined }}><span style={{ color:s.ic, fontWeight:900, marginRight:4 }}>{s.icon}</span>{injury.label}</span>
                           ); })()}
                           {pills.map((p, i) => (
                             <span key={i} style={{ fontSize:10, fontWeight:700, padding:'3px 7px', borderRadius:6, background:'rgba(245,196,0,0.15)', color:'var(--acc)', border:'0.5px solid rgba(245,196,0,0.3)', whiteSpace:'nowrap', lineHeight:1, flexShrink:0 }}>{p}</span>
@@ -5602,6 +5629,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
 
 // ─── SCREEN: PLAYER PROFILE ───────────────────────────────────
 function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache = {}, followedSet, onToggleFollow, muted = false, onToggleMute }) {
+  const explain = React.useContext(ExplainCtx);
   const [tab, setTab] = React.useState('overview');
   const followed = followedSet ? followedSet.has(player.id) : true;
   const handleFollowClick = () => {
@@ -5794,8 +5822,10 @@ function PlayerScreen({ player, onBack, onMatch, liveApiMatches = [], statsCache
             {player.name}
           </div>
           <div style={{ fontSize:12, color:'rgba(255,255,255,0.55)' }}>{player.nameEn} · {player.team} · {player.league}</div>
-          {player.injury && (() => { const s = injuryStyle(player.injury); return (
-            <div style={{ marginTop:10, display:'inline-flex', alignItems:'center', gap:6, background:s.bg, border:`0.5px solid ${s.bd}`, borderRadius:10, padding:'6px 10px' }}>
+          {player.injury && (() => { const s = injuryStyle(player.injury); const tip = explainForInjury(player.injury); return (
+            <div
+              onClick={tip ? (e) => { e.stopPropagation(); explain({ ...tip, rect: e.currentTarget.getBoundingClientRect() }); } : undefined}
+              style={{ marginTop:10, display:'inline-flex', alignItems:'center', gap:6, background:s.bg, border:`0.5px solid ${s.bd}`, borderRadius:10, padding:'6px 10px', cursor: tip ? 'pointer' : undefined }}>
               <span style={{ fontSize:16, fontWeight:900, color:s.ic }}>{s.icon}</span>
               <span style={{ fontSize:12, fontWeight:700, color:s.fg }}>{player.injury.label}</span>
             </div>
@@ -6573,6 +6603,7 @@ function SuggestPlayersBanner({ followed, onToggleFollow, onAdd, sportFeeds, fil
 }
 
 function PlayersScreen({ onPlayer, onAdd, onToggleFollow, onTabBarScroll, followed, statsCache = {}, isLoading = false, onRefresh, scrollTopKey = 0, liveApiMatches = [], sportFeeds, playerOrder = [], sportOrder = ['축구','야구'] }) {
+  const explain = React.useContext(ExplainCtx);
   // Static fallback team logo URLs by player name (used when no recent match cached)
   const TEAM_LOGO_FALLBACK = {
     '손흥민':'https://a.espncdn.com/i/teamlogos/soccer/500/18966.png',
@@ -6737,7 +6768,11 @@ function PlayersScreen({ onPlayer, onAdd, onToggleFollow, onTabBarScroll, follow
                     <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:7, flexWrap:'wrap' }}>
                       <span style={{ fontSize:16, fontWeight:800, color:'var(--text)', letterSpacing:-0.3 }}>{p.name}</span>
                       <span style={{ fontSize:10, color:'var(--text5)', fontWeight:500 }}>{p.nameEn}</span>
-                      {p.injury && <span title={p.injury.label} style={{ fontSize:13, fontWeight:900, color:injuryStyle(p.injury).ic }}>{injuryStyle(p.injury).icon}</span>}
+                      {p.injury && (() => { const tip = explainForInjury(p.injury); return (
+                        <span title={p.injury.label}
+                          onClick={tip ? (e) => { e.stopPropagation(); explain({ ...tip, rect: e.currentTarget.getBoundingClientRect() }); } : undefined}
+                          style={{ fontSize:13, fontWeight:900, color:injuryStyle(p.injury).ic, padding:4, margin:-4, cursor: tip ? 'pointer' : undefined }}>{injuryStyle(p.injury).icon}</span>
+                      ); })()}
                     </div>
                     <div style={{ fontSize:11, color:'var(--text3)' }}>{p.team} · {p.position}</div>
                   </div>
