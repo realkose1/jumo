@@ -363,6 +363,50 @@ async function alreadyLogged(eventKey) {
   return Array.isArray(rows) && rows.length > 0;
 }
 
+// ─── sf_cache 날짜 행 슬림(쓰기 시점) ──────────────────────────
+// index.html 의 같은 이름 헬퍼와 짝이다(이쪽이 서버 사본). 두 쪽 모두 같은
+// sf_cache 날짜 행을 쓰므로, 어느 쪽이 채웠든 앱이 읽는 내용이 같아야 한다.
+// AF 일일 목록은 전 세계 경기 1,100~1,600건(1~1.6MB)인데 앱은 콜드 스타트마다
+// 어제·오늘·내일 세 행을 읽는다 — 그대로 두면 3MB 가까이 내려받는다.
+// 모양(AF 원본 객체)은 유지하고 행·필드만 줄인다. 읽는 쪽은 옛 전체 모양
+// 행도 그대로 처리한다(전체 모양은 슬림 모양의 상위집합).
+const AF_KEEP_LEAGUES = new Set([
+  39, 40, 45, 46, 48, 702,  // 잉글랜드: EPL·챔피언십·FA컵·EFL 트로피·리그컵·PL2(박승수)
+  140, 141,                 // 스페인: 라리가·세군다
+  78, 81,                   // 독일: 분데스리가·DFB 포칼
+  135, 61, 88, 94,          // 세리에 A·리그 앙·에레디비시·프리메이라리가
+  144, 119, 179, 203,       // 벨기에·덴마크·스코틀랜드·튀르키예
+  253, 218, 286,            // MLS·오스트리아 분데스리가·세르비아 수페르리가
+  2, 3, 848, 531, 15,       // UCL·UEL·UECL·UEFA 슈퍼컵·클럽 월드컵
+  803,                      // 아시안게임(대표팀)
+  667, 10,                  // 친선(클럽·대표팀)
+]);
+// 서버 사본은 팀 id 로 잡는다(PLAYERS.afTeamId + 대표팀). 앱 사본은 팀 이름으로
+// 잡으므로, 같은 행을 두 쪽이 번갈아 써도 우리 경기는 어느 쪽에서도 안 빠진다.
+const AF_KEEP_TEAM_IDS = new Set([
+  ...PLAYERS.map((p) => p.afTeamId).filter(Boolean),
+  ...Object.keys(NATIONAL_TEAMS).map(Number),
+]);
+
+function slimAfFixtures(fixtures) {
+  if (!Array.isArray(fixtures)) return fixtures;
+  const out = [];
+  for (const f of fixtures) {
+    const tracked = AF_KEEP_TEAM_IDS.has(f?.teams?.home?.id) || AF_KEEP_TEAM_IDS.has(f?.teams?.away?.id);
+    if (!tracked && !AF_KEEP_LEAGUES.has(f?.league?.id)) continue;
+    const fx = f.fixture || {}, lg = f.league || {};
+    // 아무도 안 읽는 필드는 버린다: fixture.periods/referee, league.flag/logo/standings.
+    // fixture.venue 는 앱 경기 상세가 venue.city 를 쓰므로 남긴다.
+    out.push({
+      ...f,
+      fixture: { id: fx.id, date: fx.date, timezone: fx.timezone, timestamp: fx.timestamp,
+                 venue: fx.venue, status: fx.status },
+      league: { id: lg.id, name: lg.name, country: lg.country, round: lg.round, season: lg.season },
+    });
+  }
+  return out;
+}
+
 // 날짜별 경기 목록: Supabase sf_cache 를 먼저 보고, 낡았을 때만 AF 를 부른다.
 // 크론은 2분마다 도는데 이 목록은 그렇게 자주 바뀌지 않는다.
 async function fixturesForDate(date) {
@@ -370,20 +414,26 @@ async function fixturesForDate(date) {
   try {
     const rows = await sbSelect('sf_cache', `date=eq.${date}&select=events,updated_at`);
     const row = Array.isArray(rows) && rows[0];
-    if (row && Array.isArray(row.events) && row.events.length &&
+    // 슬림 이후로는 '경기 0건'도 정상 결과다(추적 팀·화이트리스트 리그가 하나도
+    // 없는 날). length 를 요구하면 그런 날엔 2분마다 AF 를 다시 부른다.
+    if (row && Array.isArray(row.events) &&
         Date.now() - new Date(row.updated_at).getTime() < FRESH_MS) {
       return { response: row.events };
     }
   } catch (e) { /* 캐시 불가 → 그냥 AF 로 */ }
   const data = await afGet(`/fixtures?date=${date}`);
   if (Array.isArray(data?.response) && data.response.length) {
+    // 캐시에도, 이 실행의 처리 대상에도 슬림한 목록을 쓴다 — 캐시 적중 경로가
+    // 돌려주는 것과 같은 내용이어야 실행마다 결과가 달라지지 않는다.
+    const slim = slimAfFixtures(data.response);
     try {
       await fetch(`${process.env.SUPABASE_URL}/rest/v1/sf_cache`, {
         method: 'POST',
         headers: { ...sbHeaders(), 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
-        body: JSON.stringify({ date, events: data.response, updated_at: new Date().toISOString() }),
+        body: JSON.stringify({ date, events: slim, updated_at: new Date().toISOString() }),
       });
     } catch (e) { /* 저장 실패는 무시 */ }
+    return { ...data, response: slim };
   }
   return data;
 }

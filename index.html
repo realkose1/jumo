@@ -923,6 +923,62 @@ const NATIONAL_TEAMS = {
                           players: ['양현준', '엄지성', '배준호', '김지수', '양민혁', '박승수'] },
 };
 
+// ─── sf_cache 날짜 행 슬림(쓰기 시점) ──────────────────────────
+// sf_cache 의 날짜 행(date='YYYY-MM-DD')에는 AF 가 준 전 세계 경기가 통째로
+// 들어가 있었다 — 하루 1,100~1,600경기, 1~1.6MB. 앱은 콜드 스타트마다 어제·
+// 오늘·내일 세 행을 읽으니 3MB 가까이 내려받았고(실측 2026-09-20: 한 요청에
+// 3.8초) 그 시간이 '최신 정보 불러오는 중'에 그대로 쌓였다. 정작 쓰는 건
+// 우리 선수 팀 경기와, 순위표 라이브 오버레이가 보는 몇몇 리그뿐이다.
+// 모양(AF 원본 객체)은 그대로 두고 행과 필드만 줄인다.
+// 읽는 쪽(transformApiFootballFixture / applyLiveToStandings / push-cron)은
+// 옛 전체 모양 행도 그대로 처리한다 — 전체 모양은 슬림 모양의 상위집합이다.
+//
+// 리그 화이트리스트: 순위표 오버레이(applyLiveToStandings)는 '그 리그의 모든
+// 경기'를 봐야 승점을 맞게 얹으므로, 우리 팀이 안 낀 경기도 리그 단위로 남긴다.
+// 실측(2026-09-19~21 실제 행)에서 우리 팀이 뛴 리그를 전수 확인해 채웠다.
+const AF_KEEP_LEAGUES = new Set([
+  39, 40, 45, 46, 48, 702,  // 잉글랜드: EPL·챔피언십·FA컵·EFL 트로피·리그컵·PL2(박승수)
+  140, 141,                 // 스페인: 라리가·세군다
+  78, 81,                   // 독일: 분데스리가·DFB 포칼
+  135, 61, 88, 94,          // 세리에 A·리그 앙·에레디비시·프리메이라리가
+  144, 119, 179, 203,       // 벨기에·덴마크·스코틀랜드·튀르키예
+  253, 218, 286,            // MLS·오스트리아 분데스리가·세르비아 수페르리가
+  2, 3, 848, 531, 15,       // UCL·UEL·UECL·UEFA 슈퍼컵·클럽 월드컵
+  803,                      // 아시안게임(대표팀)
+  667, 10,                  // 친선(클럽·대표팀)
+]);
+// 우리가 추적하는 팀. 앱 리더는 팀 '이름'으로 매칭하므로 이름 집합이 기준이고,
+// 팀 id 는 대표팀처럼 id 로만 잡는 경우를 위해 함께 본다(push-cron 의 서버 사본은
+// 반대로 자기 PLAYERS 표의 afTeamId 를 쓴다 — 둘이 같은 행을 쓰므로 결과는 합집합).
+const AF_KEEP_TEAM_NAMES = new Set([
+  ...Object.keys(KOREAN_PLAYERS),
+  ...Object.keys(KOREAN_PLAYERS_EXTRA),
+  ...Object.keys(NATIONAL_TEAMS),
+]);
+const AF_KEEP_TEAM_IDS = new Set(
+  Object.values(NATIONAL_TEAMS).map(t => t.afTeamId).filter(Boolean));
+
+function slimAfFixtures(fixtures) {
+  if (!Array.isArray(fixtures)) return fixtures;
+  const out = [];
+  for (const f of fixtures) {
+    const home = f?.teams?.home, away = f?.teams?.away;
+    const tracked = AF_KEEP_TEAM_NAMES.has(home?.name) || AF_KEEP_TEAM_NAMES.has(away?.name)
+                 || AF_KEEP_TEAM_IDS.has(home?.id)     || AF_KEEP_TEAM_IDS.has(away?.id);
+    if (!tracked && !AF_KEEP_LEAGUES.has(f?.league?.id)) continue;
+    const fx = f.fixture || {}, lg = f.league || {};
+    // 아무도 안 읽는 필드는 버린다: fixture.periods/referee, league.flag/logo/standings.
+    // fixture.venue 는 경기 상세가 venue.city 를 쓰므로 남긴다.
+    out.push({
+      ...f,
+      fixture: { id: fx.id, date: fx.date, timezone: fx.timezone, timestamp: fx.timestamp,
+                 venue: fx.venue, status: fx.status },
+      league: { id: lg.id, name: lg.name, country: lg.country, round: lg.round, season: lg.season },
+    });
+  }
+  return out;
+}
+
 // 아시안게임 U23 대표팀 명단(KFA 등번호 발표 2026-09-14, id 는 API-Football 클럽
 // 스쿼드 기준 2026-09-15). 김민승은 K3 소속이라 AF 에 색인이 안 돼 afId 가 없다 —
 // 이런 선수는 agPlayerName()/agPlayerNumber() 가 정규화한 영문명으로만 매칭한다.
@@ -9283,8 +9339,16 @@ function App() {
       if (!stat) return null;
       return { matches: stat.gamesPlayed, hits: stat.hits, homeRuns: stat.homeRuns, rbi: stat.rbi, avg: stat.avg, obp: stat.obp, ops: stat.ops };
     };
+    // 이 캐시는 선수 탭(PlayersScreen)·선수 상세(PlayerScreen)만 쓴다 — 홈 목록의
+    // 첫 페인트와는 무관하다. 그런데 마운트 즉시 ESPN 25건 + MLB 4건을 한꺼번에
+    // 쏴서, 정작 목록에 필요한 호출과 같은 커넥션·같은 프록시를 두고 경쟁했다.
+    // 시즌 스탯(afterListReady(1500))·부상 동기화와 같은 방식으로 목록 뒤로 미룬다.
+    let cancelled = false;
     const cache = {};
-    Promise.all(ALL_PLAYERS.map(async p => {
+    (async () => {
+    await afterListReady(2500);
+    if (cancelled) return;
+    await Promise.all(ALL_PLAYERS.map(async p => {
       try {
         if (p.sport === '축구' && p.espnLeague && p.espnId) {
           const res = await fetch(`${API_BASE}/api/espn-player-stats?league=${p.espnLeague}&id=${p.espnId}&season=${afSeasonFor(p)}`);
@@ -9298,7 +9362,10 @@ function App() {
           if (stats) cache[p.id] = stats;
         }
       } catch(e) {}
-    })).then(() => setPlayerStatsCache({...cache}));
+    }));
+    if (!cancelled) setPlayerStatsCache({...cache});
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   // Dynamic device dimensions based on viewport
@@ -9423,7 +9490,11 @@ function App() {
         await Promise.all(afDates.map(async date => {
           const cached = cacheMap[date];
           const ttlMs = ttlForDate(date, cached?.events);
-          const cachedHasFixtures = Array.isArray(cached?.events) && cached.events.length > 0;
+          // 슬림 이후로는 '경기 0건'도 정상 결과다 — 추적 팀도, 화이트리스트 리그도
+          // 없는 날(인터내셔널 브레이크 등)엔 슬림 결과가 빈 배열이 된다. 예전처럼
+          // length>0 을 요구하면 그런 날마다 캐시 미스로 보고 AF 를 다시 부른다.
+          // 행이 있고 배열이면(= 누군가 실제로 채웠으면) TTL 만으로 판단한다.
+          const cachedHasFixtures = Array.isArray(cached?.events);
           const isFresh = cachedHasFixtures && (Date.now() - new Date(cached.updated_at).getTime()) < ttlMs;
 
           let fixtures = isFresh ? cached.events : null;
@@ -9432,7 +9503,9 @@ function App() {
             const data = await afFetch(`path=fixtures&date=${date}`).catch(() => null);
             const fetched = data?.response;
             if (Array.isArray(fetched) && fetched.length > 0) {
-              fixtures = fetched;
+              fixtures = slimAfFixtures(fetched);
+              // API_BASE 가 빈 문자열이면 웹(개발·Vercel)에서 도는 중 — 네이티브 셸에선 안 찍는다.
+              if (!API_BASE) console.log('sf_cache 날짜 슬림', fetched.length, '→', fixtures.length);
               SB.from('sf_cache').upsert({ date, events: fixtures, updated_at: new Date().toISOString() }).then(() => {});
             } else {
               fixtures = cached?.events || [];
