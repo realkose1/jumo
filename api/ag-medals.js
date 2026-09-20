@@ -153,6 +153,18 @@ const EVENT_TOKEN_KO = {
   'Breaststroke': '평영',
   'Butterfly': '접영',
   'Medley': '혼영',
+  // 사격·양궁 등에서는 "Women"/"Men" 처럼 소유격 없이 오기도 한다(실측: '10m Air Rifle Women Individual').
+  'Men': '남자', 'Women': '여자', 'Rifle': '소총', 'Pistol': '권총', 'Trap': '트랩', 'Skeet': '스키트',
+  'Recurve': '리커브', 'Compound': '컴파운드', 'Sprint': '스프린트', 'Pursuit': '추발', 'Omnium': '옴니엄',
+  'Keirin': '경륜', 'Madison': '매디슨', 'Marathon': '마라톤', 'Hurdles': '허들', 'Jump': '점프', 'Throw': '던지기',
+  'Vault': '도마', 'Floor': '마루', 'Rings': '링', 'Beam': '평균대', 'Bars': '봉', 'Ribbon': '리본', 'Hoop': '후프',
+  'Ball': '볼', 'Clubs': '곤봉', 'Lightweight': '경량급', 'Single': '싱글', 'Double': '더블', 'Quadruple': '쿼드러플',
+  'Sculls': '스컬', 'Pair': '페어', 'Four': '포', 'Eight': '에이트', 'Kata': '카타', 'Kumite': '쿠미테',
+  'Poomsae': '품새', 'Kyorugi': '겨루기', 'Sanda': '산타', 'Taolu': '타올루', 'Boulder': '볼더', 'Lead': '리드',
+  'Speed': '스피드', 'Park': '파크', 'Street': '스트리트', 'Dressage': '마장마술', 'Jumping': '장애물', 'Eventing': '종합마술',
+  'Laser': '레이저', 'Windsurfing': '윈드서핑', 'Kite': '카이트', 'Duet': '듀엣', 'Synchronised': '싱크로', 'Synchronized': '싱크로',
+  'Springboard': '스프링보드', 'Platform': '플랫폼', 'Open': '오픈', 'Water': '오픈워터', 'Cross-country': '크로스컨트리',
+  'Downhill': '다운힐', 'Racing': '레이싱', 'Freestyle-Park': '프리스타일 파크',
 };
 
 function nameKo(orgDesc) {
@@ -171,6 +183,12 @@ function eventKo(eventDesc, discDesc) {
   s = s.replace(/Road Race/g, '도로');
   const relayKo = discDesc === 'Swimming' ? '계영' : '계주';
   s = s.replace(/Relay/g, relayKo);
+  s = s.replace(/Air Rifle/g, '공기소총').replace(/Air Pistol/g, '공기권총').replace(/Rapid Fire/g, '속사')
+       .replace(/3 Positions/g, '3자세').replace(/Team Pursuit/g, '단체추발').replace(/Team Sprint/g, '단체스프린트')
+       .replace(/Open Water/g, '오픈워터').replace(/Race Walk/g, '경보').replace(/All-Around/g, '개인종합')
+       .replace(/High Jump/g, '높이뛰기').replace(/Long Jump/g, '멀리뛰기').replace(/Triple Jump/g, '세단뛰기')
+       .replace(/Pole Vault/g, '장대높이뛰기').replace(/Shot Put/g, '포환던지기').replace(/Discus Throw/g, '원반던지기')
+       .replace(/Hammer Throw/g, '해머던지기').replace(/Javelin Throw/g, '창던지기').replace(/Steeplechase/g, '장애물');
   s = s
     .split(' ')
     .map((word) => (Object.prototype.hasOwnProperty.call(EVENT_TOKEN_KO, word) ? EVENT_TOKEN_KO[word] : word))
@@ -234,7 +252,8 @@ function mapMedalItem(item) {
     discKo: discKo(item.DiscDesc),
     eventDesc: item.EventDesc || null,
     eventKo: eventKo(item.EventDesc, item.DiscDesc),
-    athlete: item.Name || null,
+    // 공식 표기는 'SEO Changwan'(성 대문자). 읽기 좋게 성만 첫 글자 대문자로 바꾼다.
+    athlete: item.Name ? item.Name.replace(/\b([A-Z])([A-Z]+)\b/g, (m, a, b) => a + b.toLowerCase()) : null,
     isTeam: isTeamMedal(item),
   };
 }
