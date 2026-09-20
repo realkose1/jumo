@@ -123,20 +123,64 @@ function isStaleEvent(ev, { staleResult, isLive, elapsedNow, kickoffMs }) {
   return false;
 }
 
+// 골/도움/카드/VAR취소 키를 이벤트 배열의 인덱스(i) 대신 (선수 또는 팀, 분)으로
+// 만든다. API-Football 이 VAR로 취소된 골 이벤트를 배열에서 통째로 지우면 인덱스가
+// 밀리면서 그 뒤 골들이 새 인덱스로 다시 '새 이벤트'처럼 잡혀 중복 알림이 나갔다 —
+// 이제 인덱스에 의존하지 않는 안정 키를 쓴다. minuteKey() 는 분(추가시간 포함, 접미사
+// 없음)만 돌려주고, stableKey() 가 같은 접두사가 이미 나온 횟수만큼 -2, -3 을 붙인다
+// (같은 선수가 같은 분에 이벤트를 두 번 만드는 드문 경우 대비).
+function minuteKey(ev) {
+  return `${ev.time?.elapsed}${ev.time?.extra ? `+${ev.time.extra}` : ''}`;
+}
+function stableKey(prefix, counts) {
+  const n = (counts.get(prefix) || 0) + 1;
+  counts.set(prefix, n);
+  return n === 1 ? prefix : `${prefix}-${n}`;
+}
+// API-Football 의 VAR 이벤트(type:'Var') 중 '골 취소'만 판정한다. 'Goal cancelled' /
+// 'Goal Disallowed' 류만 잡고, 'Goal confirmed'/'Penalty confirmed'/'Penalty
+// cancelled' 등은 취소된 골이 아니므로(또는 애초에 골이 아니므로) 제외한다.
+function isVarGoalCancelled(detail) {
+  return /goal (cancelled|disallowed)/i.test(detail || '');
+}
+
 // 대표팀 경기의 골·최종결과 방송 이벤트를 만든다. 순수 함수로 분리해 테스트하기
 // 쉽게 한다 — 실제 발송 여부(silent)·대상(broadcast)은 호출부/센더가 결정한다.
 function nationalMatchEvents({ fx, fid, evd, home, away, isLive, isFinal, elapsedNow, staleResult, kickoffMs }) {
   const out = [];
   const homeId = fx.teams?.home?.id, awayId = fx.teams?.away?.id;
-  const tally = {}; // teamId → 누적 득점 (자책골 포함)
-  (evd?.response || []).forEach((ev, i) => {
+  const tally = {}; // teamId → 누적 득점 (자책골 포함). VAR 로 취소돼도 여기서는 빼지
+  // 않는다(4번: 근사치로 둔다 — 취소 반영은 fx.goals 로 오는 최종 스코어가 이미
+  // 정확하므로 경기 종료 알림엔 영향 없고, 골 알림 본문의 중간 스코어만 아주 잠깐
+  // 어긋날 수 있다).
+  const keyCounts = new Map(); // 같은 접두사 중복 시 -2, -3 을 붙이기 위한 카운터
+  (evd?.response || []).forEach((ev) => {
+    if (ev.type === 'Var') {
+      if (!isVarGoalCancelled(ev.detail)) return;
+      const tid = ev.team?.id;
+      if (!NATIONAL_TEAMS[tid]) return; // 상대팀 골 취소는 방송하지 않는다
+      const min = minuteKey(ev);
+      const scorer = ev.player?.id
+        ? `${agPlayerName(ev.player) || PLAYERS.find((p) => p.afPlayerId === ev.player?.id)?.name || ev.player?.name || ''} `
+        : '';
+      const h = tally[homeId] || 0, a = tally[awayId] || 0;
+      const staleEv = isStaleEvent(ev, { staleResult, isLive, elapsedNow, kickoffMs });
+      out.push({
+        key: stableKey(`af-nat-goalcancel-${fid}-${min}`, keyCounts), players: [],
+        kind: 'national', broadcast: true, matchId: String(fid),
+        title: '🇰🇷 대한민국 U-23 골 취소',
+        body: `${min}' ${scorer}골이 VAR 판정으로 취소됐습니다. ${home} ${h} : ${a} ${away}`,
+        silent: staleEv,
+      });
+      return;
+    }
     if (ev.type !== 'Goal' || ev.detail === 'Missed Penalty') return;
     // API-Football 은 정상 골·자책골 모두 ev.team 을 '득점이 반영되는 팀'으로
     // 기록한다 — 자책골도 ev.team.id 를 그대로 득점 팀 삼아 누적하면 된다.
     const tid = ev.team?.id;
     if (tid != null) tally[tid] = (tally[tid] || 0) + 1;
     if (!NATIONAL_TEAMS[tid]) return; // 상대팀 득점은 방송하지 않는다
-    const min = `${ev.time?.elapsed}${ev.time?.extra ? `+${ev.time.extra}` : ''}'`;
+    const min = minuteKey(ev);
     const scorer = ev.detail === 'Own Goal'
       ? '상대 자책골 '
       : `${agPlayerName(ev.player) || PLAYERS.find((p) => p.afPlayerId === ev.player?.id)?.name || ev.player?.name || ''} `;
@@ -144,10 +188,10 @@ function nationalMatchEvents({ fx, fid, evd, home, away, isLive, isFinal, elapse
     const h = tally[homeId] || 0, a = tally[awayId] || 0;
     const staleEv = isStaleEvent(ev, { staleResult, isLive, elapsedNow, kickoffMs });
     out.push({
-      key: `af-nat-goal-${fid}-${i}`, players: [],
+      key: stableKey(`af-nat-goal-${fid}-${tid}-${min}`, keyCounts), players: [],
       kind: 'national', broadcast: true, matchId: String(fid),
       title: '🇰🇷 대한민국 U-23 골!',
-      body: `${min} ${scorer}${pen}골! ${home} ${h} : ${a} ${away}`,
+      body: `${min}' ${scorer}${pen}골! ${home} ${h} : ${a} ${away}`,
       silent: staleEv,
     });
   });
@@ -598,7 +642,36 @@ async function collectSoccer(events, liveStates) {
       const evd = await afGet(`/fixtures/events?fixture=${fid}`);
 
       if (isNationalMatch) {
-        events.push(...nationalMatchEvents({ fx, fid, evd, home, away, isLive, isFinal, elapsedNow, staleResult, kickoffMs }));
+        const natEvents = nationalMatchEvents({ fx, fid, evd, home, away, isLive, isFinal, elapsedNow, staleResult, kickoffMs });
+        events.push(...natEvents);
+
+        // ── 사라짐 폴백(대표팀) ──────────────────────────────────────────
+        // AF 가 Var 이벤트 없이 골 이벤트 자체를 통째로 지우는 경우가 있다(취소
+        // 확정 후 정리). 라이브 경기에 한해 이전에 기록한 af-nat-goal-* 키 중
+        // 이번 회차엔 없는 것을 찾아 취소로 간주한다. 종료된 경기는 절대 하지
+        // 않는다(AF 의 경기 후 정리 작업이 스팸을 낼 수 있다).
+        if (isLive) {
+          const currentNatGoalKeys = new Set(
+            natEvents.filter((e) => e.key.startsWith('af-nat-goal-')).map((e) => e.key));
+          const priorNat = await sbSelect('push_log', `event_key=like.af-nat-goal-${fid}-*&select=event_key`);
+          for (const row of (priorNat || [])) {
+            const k = row.event_key;
+            if (!k || currentNatGoalKeys.has(k)) continue;
+            const m = k.match(/^af-nat-goal-(\d+)-\d+-(.+)$/);
+            if (!m) continue;
+            const min = m[2];
+            const elapsedGuess = parseInt(min, 10);
+            const staleEv = isStaleEvent({ time: { elapsed: elapsedGuess } }, { staleResult, isLive, elapsedNow, kickoffMs });
+            events.push({
+              key: k.replace(/^af-nat-goal-(\d+)-\d+-/, 'af-nat-goalcancel-$1-'), players: [],
+              kind: 'national', broadcast: true, matchId: String(fid),
+              title: '🇰🇷 대한민국 U-23 골 취소',
+              // 이벤트 자체가 사라져 득점자를 다시 알 수 없다 — VAR 문구 없이 취소만 알린다.
+              body: `${min}' 골이 취소됐습니다. ${home} ${fx.goals?.home ?? 0} : ${fx.goals?.away ?? 0} ${away}`,
+              silent: staleEv,
+            });
+          }
+        }
       }
 
       // ── 라이브 액티비티 상태 (잠금화면·다이나믹 아일랜드) ──────────────
@@ -649,32 +722,75 @@ async function collectSoccer(events, liveStates) {
           },
         });
       }
-      (evd?.response || []).forEach((ev, i) => {
-        const min = ev.time?.elapsed != null ? `${ev.time.elapsed}'` : '';
+      // 골/도움/카드/VAR취소 키 중복 카운터 — 이 경기(fid) 안에서만 유효.
+      const clubKeyCounts = new Map();
+      const fixtureClubEvents = [];
+      (evd?.response || []).forEach((ev) => {
+        const min = minuteKey(ev);
+        const minDisp = ev.time?.elapsed != null ? `${min}'` : '';
         const staleEv = isStaleEvent(ev, { staleResult, isLive, elapsedNow, kickoffMs });
+        if (ev.type === 'Var' && isVarGoalCancelled(ev.detail)) {
+          const p = involved.find((q) => q.afPlayerId === ev.player?.id);
+          if (p) {
+            fixtureClubEvents.push({
+              key: stableKey(`af-goalcancel-${fid}-${p.id}-${min}`, clubKeyCounts), players: [p.id], matchId: String(fid),
+              kind: 'goal', title: '⚽ 골 취소', body: `${vs} 경기 ${minDisp}, ${p.name}의 골이 VAR 판정으로 취소됐습니다.`, silent: staleEv,
+            });
+          }
+          return;
+        }
         involved.forEach((p) => {
           const isPlayer = ev.player?.id === p.afPlayerId;
           const isAssist = ev.assist?.id === p.afPlayerId;
           if (ev.type === 'Goal' && ev.detail !== 'Missed Penalty') {
             if (isPlayer && ev.detail !== 'Own Goal') {
               const pen = ev.detail === 'Penalty' ? '페널티킥으로 ' : '';
-              events.push({ key: `af-goal-${fid}-${p.id}-${i}`, players: [p.id], matchId: String(fid),
-                kind: 'goal', title: `⚽ ${p.name} 골!`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} ${pen}골을 터뜨렸습니다!`, silent: staleEv });
+              fixtureClubEvents.push({ key: stableKey(`af-goal-${fid}-${p.id}-${min}`, clubKeyCounts), players: [p.id], matchId: String(fid),
+                kind: 'goal', title: `⚽ ${p.name} 골!`, body: `${vs} 경기 ${minDisp}, ${p.name}${josa(p.name, '이', '가')} ${pen}골을 터뜨렸습니다!`, silent: staleEv });
             } else if (isAssist) {
-              events.push({ key: `af-assist-${fid}-${p.id}-${i}`, players: [p.id], matchId: String(fid),
-                kind: 'assist', title: `⚽ ${p.name} 도움!`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} 도움을 기록했습니다!`, silent: staleEv });
+              fixtureClubEvents.push({ key: stableKey(`af-assist-${fid}-${p.id}-${min}`, clubKeyCounts), players: [p.id], matchId: String(fid),
+                kind: 'assist', title: `⚽ ${p.name} 도움!`, body: `${vs} 경기 ${minDisp}, ${p.name}${josa(p.name, '이', '가')} 도움을 기록했습니다!`, silent: staleEv });
             }
           } else if (ev.type === 'Card' && isPlayer) {
             if (ev.detail === 'Red Card') {
-              events.push({ key: `af-red-${fid}-${p.id}-${i}`, players: [p.id], matchId: String(fid),
-                kind: 'card', title: `⚽ ${p.name} 퇴장`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} 퇴장당했습니다.`, silent: staleEv });
+              fixtureClubEvents.push({ key: stableKey(`af-red-${fid}-${p.id}-${min}`, clubKeyCounts), players: [p.id], matchId: String(fid),
+                kind: 'card', title: `⚽ ${p.name} 퇴장`, body: `${vs} 경기 ${minDisp}, ${p.name}${josa(p.name, '이', '가')} 퇴장당했습니다.`, silent: staleEv });
             } else if (ev.detail === 'Yellow Card') {
-              events.push({ key: `af-yellow-${fid}-${p.id}-${i}`, players: [p.id], matchId: String(fid),
-                kind: 'card', title: `⚽ ${p.name} 경고`, body: `${vs} 경기 ${min}, ${p.name}${josa(p.name, '이', '가')} 경고를 받았습니다.`, silent: staleEv });
+              fixtureClubEvents.push({ key: stableKey(`af-yellow-${fid}-${p.id}-${min}`, clubKeyCounts), players: [p.id], matchId: String(fid),
+                kind: 'card', title: `⚽ ${p.name} 경고`, body: `${vs} 경기 ${minDisp}, ${p.name}${josa(p.name, '이', '가')} 경고를 받았습니다.`, silent: staleEv });
             }
           }
         });
       });
+      events.push(...fixtureClubEvents);
+
+      // ── 사라짐 폴백(클럽) ────────────────────────────────────────────────
+      // AF 가 Var 이벤트 없이 골 이벤트 자체를 통째로 지우는 경우가 있다. 라이브
+      // 경기에 한해(종료 경기는 AF 의 사후 정리가 스팸을 낼 수 있어 제외) 이전에
+      // 기록한 af-goal-* 키 중 이번 회차엔 없는 것을 찾아 취소로 간주한다.
+      if (isLive && involved.length) {
+        const currentGoalKeys = new Set(
+          fixtureClubEvents.filter((e) => e.key.startsWith(`af-goal-${fid}-`)).map((e) => e.key));
+        const priorGoal = await sbSelect('push_log', `event_key=like.af-goal-${fid}-*&select=event_key`);
+        for (const row of (priorGoal || [])) {
+          const k = row.event_key;
+          if (!k || currentGoalKeys.has(k)) continue;
+          const m = k.match(/^af-goal-\d+-(\d+)-(.+)$/);
+          if (!m) continue;
+          const pid = Number(m[1]), min = m[2];
+          const p = involved.find((q) => q.id === pid) || PLAYERS.find((q) => q.id === pid);
+          if (!p) continue;
+          const elapsedGuess = parseInt(min, 10);
+          const staleEv = isStaleEvent({ time: { elapsed: elapsedGuess } }, { staleResult, isLive, elapsedNow, kickoffMs });
+          events.push({
+            key: k.replace(/^af-goal-/, 'af-goalcancel-'), players: [p.id], matchId: String(fid),
+            kind: 'goal', title: '⚽ 골 취소',
+            // 이벤트 자체가 사라져 VAR 여부를 알 수 없다 — VAR 문구 없이 취소만 알린다.
+            body: `${vs} 경기 ${min}', ${p.name}의 골이 취소됐습니다.`,
+            silent: staleEv,
+          });
+        }
+      }
 
       // Mark finished fixtures as fully processed AFTER their events were parsed.
       // 단, 라인업을 못 받은 회차(한도 초과·AF 지연)에 찍으면 결과 알림이 영영
@@ -868,3 +984,6 @@ module.exports = async (req, res) => {
 
 module.exports.nationalMatchEvents = nationalMatchEvents;
 module.exports.isStaleEvent = isStaleEvent;
+module.exports.minuteKey = minuteKey;
+module.exports.stableKey = stableKey;
+module.exports.isVarGoalCancelled = isVarGoalCancelled;
