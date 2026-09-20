@@ -1521,6 +1521,27 @@ const manualAvailabilityFor = (name, now = Date.now()) => {
   if (m.to && now > Date.parse(m.to + 'T23:59:59+09:00')) return null;
   return { label: m.label, severity: 'medium', kind: m.kind, note: m.note, manual: true };
 };
+// 대표팀 엔트리(kind:'team')는 합성 항목이라 결장 개념이 없다 — 항상 가용.
+// 코리안 더비 등 팔로우한 선수가 둘 이상일 때 히어로의 '주인공'을 고르는 데 쓴다.
+const heroAvailable = (kp) => !!kp && (kp.isTeam || !manualAvailabilityFor(kp.name));
+// 매치에서 히어로가 내세울 대표 선수: 팔로우(또는 전체) 목록 중 가용한 첫 번째,
+// 없으면 기존 m.koreanPlayer로 그대로 폴백(아무도 못 찾는 것보다 낫다).
+const heroRepOf = (m) => {
+  if (!m) return null;
+  const ks = (m.followedKoreans?.length ? m.followedKoreans : (m.koreanPlayers || [m.koreanPlayer])).filter(Boolean);
+  return ks.find(heroAvailable) || m.koreanPlayer || null;
+};
+// '미참여' 이벤트 라벨 — 히어로 후보 판정(getHighlightMatch)과 일정 탭 강조
+// 프레임 판정(rowEmphasis)이 같은 기준을 쓰도록 모듈 레벨로 뺐다.
+const HERO_EXCLUDE_EV = new Set(['미출전', '벤치', '벤치 대기', '부상', '마이너', '대기 명단', '확인 불가']);
+// 일정 탭 행 강조용: 이 경기에 걸린 선수 중 실제로 뛰고 있는(또는 뛸) 선수가
+// 있는지. 대표팀 엔트리는 결장 개념이 없어 항상 인정, 그 외엔 차출 등으로
+// 결장 중이 아니고 '미출전/벤치' 류 이벤트가 아니어야 한다.
+const rowEmphasis = (m) => {
+  const ks = (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean);
+  if (!ks.length) return false;
+  return ks.some(k => k.isTeam || (heroAvailable(k) && !HERO_EXCLUDE_EV.has(k.event || '')));
+};
 
 // ─── HELPER: Dynamic date generator ──────────────────────────
 function getRelativeDate(hoursFromNow) {
@@ -2887,16 +2908,23 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
   // Highlight: pick the match with the biggest Korean-player impact from today's pool.
   // Live » goals » assists » recency. Excludes matches where the Korean did not play.
   const getHighlightMatch = () => {
-    // 미참여(미출전·벤치·부상·마이너·대기)는 상단 하이라이트 후보에서 아예 제외.
-    // 실제 출전(스탯 라인·출전 중·선발 등)과 시작 전(출전 예상)만 후보로 둔다.
-    const HERO_EXCLUDE = new Set(['미출전', '벤치', '부상', '마이너', '대기 명단', '확인 불가']);
+    // 미참여(미출전·벤치·벤치 대기·부상·마이너·대기·확인 불가)는 상단 하이라이트
+    // 후보에서 아예 제외. 실제 출전(스탯 라인·출전 중·선발 등)과 시작 전(출전
+    // 예상)만 후보로 둔다. 이 기준(HERO_EXCLUDE_EV)은 일정 탭 강조 판정
+    // (rowEmphasis)과 동일해야 화면 간 판정이 어긋나지 않는다.
     const heroEligible = (m) => {
-      const ev = m.koreanPlayer?.event || '';
-      if (HERO_EXCLUDE.has(ev)) return false;
+      // 코리안 더비처럼 팔로우한 선수가 둘 이상이면 대표(koreanPlayer) 한 명만
+      // 보고 판단하지 않는다 — 그 중 한 명이라도 결장 중이 아니면 후보로 남긴다.
+      const ks = (m.followedKoreans?.length ? m.followedKoreans : (m.koreanPlayers || [m.koreanPlayer])).filter(Boolean);
       // 대표팀 차출(아시안게임 등)로 소속팀 명단에서 빠진 선수의 소속팀 경기는
-      // 그의 경기가 아니다 — '출격 대기' 히어로로 올리지 않는다(오늘의 경기
-      // 목록에는 차출 라벨과 함께 그대로 남긴다).
-      if (!m.koreanPlayer?.isTeam && manualAvailabilityFor(m.koreanPlayer?.name)) return false;
+      // 그의 경기가 아니다 — 팔로우한 선수 전원이 결장 중이면 '출격 대기' 히어로로
+      // 올리지 않는다(오늘의 경기 목록에는 차출 라벨과 함께 그대로 남긴다).
+      if (ks.length && !ks.some(heroAvailable)) return false;
+      // 이벤트/시작 여부 판정은 실제로 뛸 수 있는 대표 선수 기준으로 한다 —
+      // m.koreanPlayer가 결장 중이어도 다른 팔로우 선수가 가용하면 그 선수를 본다.
+      const repKp = heroRepOf(m);
+      const ev = repKp?.event || '';
+      if (HERO_EXCLUDE_EV.has(ev)) return false;
       // 이미 시작된(라이브·종료) 경기인데 아직 '출전 예상'이면 출전 여부를 모르는
       // 상태다. 히어로가 '출전 여부 확인 중'이라고 단정하지 않도록 후보에서 뺀다.
       // (같은 경기 카드는 자기 상태를 그대로 보여주면 되고, 히어로만 침묵한다.)
@@ -2990,7 +3018,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
   const highlightMatch = highlightData?.match;
   // 카드와 같은 훅을 쓴다 — 두 화면이 다른 분을 보여주지 않게.
   const hlLiveMinute = useLiveMinute(highlightMatch);
-  const highlightPlayer = highlightMatch ? ALL_PLAYERS.find(p => p.name === highlightMatch.koreanPlayer?.name) : null;
+  const highlightPlayer = highlightMatch ? ALL_PLAYERS.find(p => p.name === heroRepOf(highlightMatch)?.name) : null;
   const heroPlayer = highlightPlayer;
   // Generate highlight text based on priority
   const getHighlightText = () => {
@@ -2999,7 +3027,10 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
     const m = highlightMatch;
     const isLive = m.live || m.time === 'LIVE';
     // 코리안 더비·같은 팀 복수 선수면 팔로우한 전원을 히어로 문구에 싣는다.
-    const heroKoreans = (m.followedKoreans?.length ? m.followedKoreans : (m.koreanPlayers || [m.koreanPlayer])).filter(Boolean);
+    const heroKoreansAll = (m.followedKoreans?.length ? m.followedKoreans : (m.koreanPlayers || [m.koreanPlayer])).filter(Boolean);
+    // 대표팀 차출 등으로 결장 중인 선수는 히어로 문구에서 뺀다 — 전원이 결장 중일
+    // 때만(이론상 heroEligible이 이미 걸러 냄) 원래 목록으로 폴백해 빈 문구를 막는다.
+    const heroKoreans = heroKoreansAll.filter(heroAvailable).length ? heroKoreansAll.filter(heroAvailable) : heroKoreansAll;
     const heroNames = heroKoreans.map(k => k.name).join(' · ');
 
     switch (highlightData.priority) {
@@ -3075,7 +3106,8 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
       case 5: // Upcoming
         // lineupConfirmed 는 '경기'가 아니라 '선수'에 붙는 값이라 m 에서 읽으면
         // 늘 undefined 였다 — 라인업이 나와도 히어로는 계속 '출격 대기'.
-        const heroKps = (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean);
+        const heroKpsAll = (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean);
+        const heroKps = heroKpsAll.filter(heroAvailable).length ? heroKpsAll.filter(heroAvailable) : heroKpsAll;
         const ev5 = heroKps[0]?.event;
         // 여러 선수가 걸린 경기에서 첫 선수의 상태를 전원 상태처럼 붙이면 안 된다
         // (한 명은 선발인데 다른 한 명은 벤치인 경우). 상태가 갈리면 중립 라벨로.
@@ -3097,7 +3129,11 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
   // Build finished match headline helper
   const buildFinishedHeadline = (m) => {
     if (!m?.koreanPlayer) return { main: '', sub: '' };
-    const kp = m.koreanPlayer;
+    // m.koreanPlayer가 대표팀 차출 등으로 결장 중이면, 팔로우한 다른 가용 선수를
+    // 대신 주인공으로 삼는다(코리안 더비에서 한쪽이 차출로 빠진 경우 등).
+    const finKoreansAll = (m.followedKoreans?.length ? m.followedKoreans : (m.koreanPlayers || [m.koreanPlayer])).filter(Boolean);
+    const finKoreans = finKoreansAll.filter(heroAvailable).length ? finKoreansAll.filter(heroAvailable) : finKoreansAll;
+    const kp = heroAvailable(m.koreanPlayer) ? m.koreanPlayer : (finKoreans[0] || m.koreanPlayer);
     const name = kp.name;
     const matchGoals = m.events?.filter(e => e.type === 'goal' && e.player === name).length || 0;
     const matchAssists = m.events?.filter(e => e.type === 'assist' && e.player === name).length || 0;
@@ -3152,11 +3188,11 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
 
   // landscape image map: Korean name → filename in image/landscape/
   const LANDSCAPE_MAP = { '손흥민': 'heungmin.jpg', '이강인': 'kangin.jpg', '김민재': 'minjae.jpg', '황희찬': 'heechan.jpg', '황인범': 'inbeom.jpg', '조규성': 'guesung.jpg', '이한범': 'hanbeom.jpg', '오현규': 'hyungyu.jpg', '양현준': 'hyunjun.jpg', '백승호': 'seungho.jpg', '배준호': 'junho.jpg', '엄지성': 'jisung.jpg', '설영우': 'youngwoo.jpg', '김하성': 'haseong.jpg', '이정후': 'junghoo.jpg', '김혜성': 'hyeseong.jpg', '이재성': 'jaesung.jpg', '홍현석': 'hyunseok.jpg', '정우영': 'wooyeong.jpg', '카스트로프': 'castrop.jpg', '박승수': 'seungsoo.jpg', '김지수': 'jisoo.jpg', '양민혁': 'minhyeok.jpg', '이태석': 'taeseok.jpg', '김민수': 'minsu.jpg', '김예건': 'yegeon.jpg', '송성문': 'songsm.jpg' };
+  const heroRepName = heroRepOf(highlightMatch)?.name;
   React.useEffect(() => {
-    const playerName = highlightMatch?.koreanPlayer?.name;
-    const landscapeFile = LANDSCAPE_MAP[playerName];
+    const landscapeFile = LANDSCAPE_MAP[heroRepName];
     setHlBgImg(landscapeFile ? `image/landscape/${landscapeFile}` : null);
-  }, [highlightMatch?.koreanPlayer?.name]);
+  }, [heroRepName]);
 
 
   // 오늘 경기가 없을 때 대신 보여줄 다음 경기들(가까운 순 3경기, 예정만).
@@ -3247,7 +3283,16 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
           </button>
         </div>
       ) : isFinishedHighlight ? (() => {
-        const kp = highlightMatch.koreanPlayer;
+        // 코리안 더비 등 팔로우한 선수가 둘 이상이면 대표(koreanPlayer)가 아시안게임
+        // 차출 등으로 결장 중일 수 있다 — 그럴 땐 실제로 뛴 선수를 주인공으로 삼는다.
+        const finKoreans = (() => {
+          const all = (highlightMatch.followedKoreans?.length
+            ? highlightMatch.followedKoreans
+            : (highlightMatch.koreanPlayers || [highlightMatch.koreanPlayer])).filter(Boolean);
+          const avail = all.filter(heroAvailable);
+          return avail.length ? avail : all;
+        })();
+        const kp = heroAvailable(highlightMatch.koreanPlayer) ? highlightMatch.koreanPlayer : (finKoreans[0] || highlightMatch.koreanPlayer);
         const isMLB = (highlightMatch.sport||'').includes('MLB') || (highlightMatch.sport||'').includes('⚾');
         const homeIsKorean = kp.team === highlightMatch.home.code;
         const eventsGoals = (highlightMatch.events||[]).filter(e=>e.type==='goal'&&e.player===kp.name).length;
@@ -3277,9 +3322,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
           statParts.push(minText);
         }
         // 코리안 더비·같은 팀 복수 선수: 팔로우한 전원을 '이름 핵심스탯'으로 압축 나열.
-        const finKoreans = (highlightMatch.followedKoreans?.length
-          ? highlightMatch.followedKoreans
-          : (highlightMatch.koreanPlayers || [kp])).filter(Boolean);
+        // (finKoreans는 위에서 결장 중인 선수를 제외해 이미 계산했다.)
         const shortFor = (k) => {
           const g = (k.matchGoals > 0) ? k.matchGoals : (highlightMatch.events||[]).filter(e=>e.type==='goal'&&e.player===k.name).length;
           const a = (k.matchAssists > 0) ? k.matchAssists : (highlightMatch.events||[]).filter(e=>e.type==='assist'&&e.player===k.name).length;
@@ -6534,9 +6577,10 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
 
   // 강조할 경기 하나: 진행 중인 것 중 가장 이른 것 → 없으면 아직 시작 안 한 것
   // 중 가장 이른 것 → 둘 다 없으면(전부 종료) 강조 없음. 목록이 이미 시간
-  // 오름차순이라 먼저 걸리는 게 가장 이른 경기다.
-  const highlightMatch = sortedMatches.find(m => m.live || m.time === 'LIVE')
-    || sortedMatches.find(m => new Date(m.fullDate) >= now)
+  // 오름차순이라 먼저 걸리는 게 가장 이른 경기다. 단, 우리 선수가 실제로
+  // 뛰지 않는(미출전·벤치·차출 등) 경기는 강조 후보에서 뺀다(rowEmphasis).
+  const highlightMatch = sortedMatches.find(m => (m.live || m.time === 'LIVE') && rowEmphasis(m))
+    || sortedMatches.find(m => new Date(m.fullDate) >= now && rowEmphasis(m))
     || null;
   const highlightId = highlightMatch ? highlightMatch.id : null;
   const highlightIsLive = !!(highlightMatch && (highlightMatch.live || highlightMatch.time === 'LIVE'));
@@ -6661,8 +6705,10 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
             const isHi = highlightId != null && m.id === highlightId;
             // 라이브는 강조 경기 하나만이 아니라 전부 노란 테두리로(사용자 요청). 자동
             // 스크롤 기준(highlightRowRef)과 '다음 경기' 배지는 여전히 강조 경기 하나뿐.
+            // 단, 우리 선수가 실제로 뛰지 않는 라이브 경기(미출전·벤치·차출 등)는
+            // 강조하지 않는다 — rowEmphasis로 걸러 낸다.
             const isLiveRow = !!(m.live || m.time === 'LIVE');
-            const framed = isHi || isLiveRow;
+            const framed = isHi || (isLiveRow && rowEmphasis(m));
             const isFinished = m.status === 'STATUS_FINAL' || m.status === 'STATUS_FULL_TIME' || m.status === 'final' || m.status === 'STATUS_END_PERIOD' || m.status === 'STATUS_FINAL_PEN';
             const kp = m.koreanPlayer;
             const rawLeague = (m.competition || m.sport || '').replace(/^[⚽⚾🏀🎾]\s*/,'');
@@ -11588,7 +11634,11 @@ function App() {
         const list = (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean);
         const mine = list.filter(kp => followedNames.has(kp.name));
         if (list.length < 2) return { ...m, followedKoreans: mine };
-        const ordered = [...mine, ...list.filter(kp => !followedNames.has(kp.name))];
+        // 팔로우한 선수 중에도 대표팀 차출 등으로 결장 중인 선수가 있을 수 있다 —
+        // 코리안 더비에서 한쪽이 차출로 빠졌으면 실제로 뛰는 선수가 카드·히어로의
+        // 주인공이어야 하므로 가용한 선수를 앞으로 정렬한다.
+        const mineOrdered = [...mine].sort((a, b) => (heroAvailable(b) ? 1 : 0) - (heroAvailable(a) ? 1 : 0));
+        const ordered = [...mineOrdered, ...list.filter(kp => !followedNames.has(kp.name))];
         return { ...m, koreanPlayers: ordered, koreanPlayer: ordered[0], followedKoreans: mine };
       }),
     [liveMatches, sportFeeds, followedNames]
