@@ -1199,6 +1199,78 @@ const isPlayingKorean = (kp) => {
   return true;   // 선발 출전 · 출전 중 · 교체 출전 중 · 교체 아웃 · 야구 스탯 라인
 };
 
+// 종료 경기에서 우리 선수 팀이 이겼는지 — 평가 요청 '좋은 순간' 판정에 쓴다.
+// HomeV2 히어로의 동명 로직과 같은 기준(중복이지만 그쪽은 그 함수 안에 갇혀 있다).
+const matchKoreanWon = (m) => {
+  const kp = m?.koreanPlayer;
+  if (!kp || !m?.home || !m?.away) return false;
+  const isHome = kp.team === m.home.code;
+  const mine = isHome ? m.home.score : m.away.score;
+  const theirs = isHome ? m.away.score : m.home.score;
+  return (mine ?? 0) > (theirs ?? 0);
+};
+// 종료 경기에서 우리 선수가 골·도움·안타·홈런 등 긍정적 활약을 했는지.
+const matchIsPositive = (m) => {
+  const kp = m?.koreanPlayer || {};
+  return (kp.matchGoals || 0) > 0 || (kp.matchAssists || 0) > 0 ||
+         (kp.hits || 0) > 0 || (kp.homeRuns || 0) > 0 || matchKoreanWon(m);
+};
+
+// ─── App Store 평가 요청 (SKStoreReviewController, @capacitor-community/in-app-review) ──
+// 가드(모두 만족해야 요청):
+//  - 네이티브 앱에서만
+//  - 최초 실행 후 3일 이상 지남
+//  - 마지막 요청(성공 여부와 무관, 기록 시점 기준) 후 120일 이상
+//  - 서로 다른 날짜로 5일 이상 접속
+// 그 위에 '좋은 순간'(경기 상세에서 긍정적 결과 확인 / 3번째 선수 팔로우)에만 부른다.
+// iOS 는 SKStoreReviewController 자체가 연 3회 제한을 두므로, 실제로 시트가
+// 떴는지는 알 수 없다 — 그래서 호출 자체를 기준으로 기록한다.
+const REVIEW_STATE_KEY = 'jumo_review_prompt';
+const REVIEW_MIN_DAYS_SINCE_INSTALL = 3;
+const REVIEW_MIN_DAYS_BETWEEN_ASKS = 120;
+const REVIEW_MIN_ACTIVE_DAYS = 5;
+
+function readReviewState() {
+  try { return JSON.parse(localStorage.getItem(REVIEW_STATE_KEY) || '{}'); }
+  catch { return {}; }
+}
+function writeReviewState(next) {
+  try { localStorage.setItem(REVIEW_STATE_KEY, JSON.stringify(next)); } catch {}
+}
+// 앱을 켤 때마다 한 번 불러 최초 실행 시각을 기록하고 오늘 날짜를 접속일
+// 집합에 더한다(참여도 = 서로 다른 접속 날짜 수).
+function trackReviewActivity() {
+  const s = readReviewState();
+  const now = Date.now();
+  if (!s.firstLaunchAt) s.firstLaunchAt = now;
+  const today = new Date(now).toISOString().slice(0, 10);
+  const days = new Set(s.activeDays || []);
+  days.add(today);
+  s.activeDays = [...days];
+  writeReviewState(s);
+  return s;
+}
+async function maybeAskForReview(reason) {
+  try {
+    const Cap = window.Capacitor;
+    const InAppReview = Cap?.Plugins?.InAppReview;
+    if (!Cap?.isNativePlatform?.() || !InAppReview) return; // 실제 기기(네이티브)에서만
+    const s = trackReviewActivity();
+    const now = Date.now();
+    if ((now - (s.firstLaunchAt || now)) / 86400000 < REVIEW_MIN_DAYS_SINCE_INSTALL) return;
+    if (s.lastAskedAt && (now - s.lastAskedAt) / 86400000 < REVIEW_MIN_DAYS_BETWEEN_ASKS) return;
+    if ((s.activeDays || []).length < REVIEW_MIN_ACTIVE_DAYS) return;
+    // iOS가 실제로 시트를 띄웠는지와 무관하게 '요청 시도' 시점을 기록한다.
+    writeReviewState({ ...s, lastAskedAt: now });
+    await InAppReview.requestReview();
+  } catch (e) { console.warn('review prompt failed', reason, e); }
+}
+// 시뮬레이터 확인용 — 위 가드를 전부 건너뛰고 강제로 리뷰 시트를 요청한다.
+window.__jumoAskReview = async () => {
+  try { await window.Capacitor?.Plugins?.InAppReview?.requestReview(); }
+  catch (e) { console.warn('review prompt (force) failed', e); }
+};
+
 // API-Football 이 일부 선수 이름을 UTF-8 이중 인코딩 상태로 준다('O. HÃ¸jlund').
 // 프록시는 fetch().json() 그대로라 원본 문제다. 'Ã'/'Â' 뒤에 연속 바이트 패턴이
 // 보이면 한 번 되돌린다(Ã=C3 계열뿐 아니라 Å¾=ž 처럼 C4·C5 선행 바이트도). 실패하면 원문 그대로.
@@ -4754,6 +4826,11 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
   const player = ALL_PLAYERS.find(p => p.name === match.koreanPlayer?.name);
   const isLive = match.live;
   const isFinished = match.status === 'STATUS_FINAL' || match.status === 'STATUS_FULL_TIME' || match.status === 'final' || match.status === 'STATUS_END_PERIOD' || match.status === 'STATUS_FINAL_PEN';
+  // 팔로우 선수가 활약한(골·도움·안타·홈런 또는 팀 승리) 종료 경기를 열어봤다 —
+  // 평가 요청 '좋은 순간' 중 하나.
+  React.useEffect(() => {
+    if (isFinished && matchIsPositive(match)) maybeAskForReview('positive-match-detail');
+  }, [isFinished, match.id]);
   const [lineupsData, setLineupsData] = React.useState(null);
   const [lineupsLoading, setLineupsLoading] = React.useState(false);
   const [statsData, setStatsData] = React.useState(null);
@@ -7692,6 +7769,13 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
   }, []);
   const [scrolled, setScrolled] = React.useState(false);
   const [category, setCategory] = React.useState('전체');
+  // 딥링크(jumo://asiangames 등)가 뉴스 탭 진입과 동시에 카테고리를 지정할 수
+  // 있도록 setter 를 window 에 노출한다 — NewsScreen 은 항상 마운트돼 있으므로
+  // (탭 전환은 display:none/contents 로만 처리) 앱 시작 직후에도 이미 등록돼 있다.
+  React.useEffect(() => {
+    window.__jumoSetNewsCategory = setCategory;
+    return () => { if (window.__jumoSetNewsCategory === setCategory) window.__jumoSetNewsCategory = null; };
+  }, []);
   const [articles, setArticles] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
@@ -8863,6 +8947,8 @@ function App() {
     try { return { ...TWEAK_DEFAULTS, ...JSON.parse(localStorage.getItem('jumo_tweaks')||'{}') }; }
     catch { return TWEAK_DEFAULTS; }
   });
+  // 평가 요청 가드용 참여도 집계 — 최초 실행 시각·접속일을 매 실행 한 번씩 기록한다.
+  React.useEffect(() => { trackReviewActivity(); }, []);
   const [tab, setTab] = React.useState('home');
   const [nativeTabBar, setNativeTabBar] = React.useState(false); // native iOS glass tab bar present → hide CSS one
   const [screen, setScreen] = React.useState('main');
@@ -9035,6 +9121,8 @@ function App() {
     const player = ALL_PLAYERS.find(p => p.id === id);
     const name = player?.name || '선수';
     if (!opts.silent) showToast(wasFollowed ? `${name} 팔로우 해제` : `${name} 팔로우 추가`);
+    // 3번째 선수를 처음 팔로우한 순간 — 앱에 어느 정도 정착했다는 신호(평가 요청 좋은 타이밍).
+    if (!wasFollowed && ids.length === 3) maybeAskForReview('third-follow');
     return n;
   });
   const [toast, setToast] = React.useState(null);
@@ -11484,6 +11572,60 @@ function App() {
       setScreen('main');
     });
   }, [tab, screen]);
+
+  // ─── URL 스킴 딥링크 (jumo://) ────────────────────────────────
+  // jumo://asiangames → 뉴스탭 + 아시안게임 카테고리, jumo://news → 뉴스탭,
+  // jumo://schedule → 일정탭, jumo://match/<id> → liveMatches 에 있으면 그 경기
+  // 상세, 없으면 일정탭, jumo://home 또는 그 외 → 홈.
+  const handleDeepLink = React.useCallback((rawUrl) => {
+    if (!rawUrl) return;
+    let path = '';
+    try {
+      const u = new URL(rawUrl);
+      // jumo://asiangames → host='asiangames', pathname=''. jumo://match/123 → host='match', pathname='/123'.
+      path = (u.hostname || '') + (u.pathname || '');
+    } catch { path = String(rawUrl).replace(/^jumo:\/\//, ''); }
+    path = path.replace(/^\/+/, '').toLowerCase();
+
+    if (path === 'asiangames') {
+      handleTab('news');
+      try { window.__jumoSetNewsCategory?.('아시안게임'); } catch {}
+      return;
+    }
+    if (path === 'news') { handleTab('news'); return; }
+    if (path === 'schedule') { handleTab('schedule'); return; }
+    if (path.startsWith('match/')) {
+      const id = path.slice('match/'.length);
+      const hit = liveMatches.find(m => String(m.id) === String(id));
+      if (hit) { goMatch(hit); return; }
+      handleTab('schedule');
+      return;
+    }
+    handleTab('home'); // jumo://home 또는 알 수 없는 경로
+  }, [handleTab, liveMatches, goMatch]);
+
+  // handleDeepLink 는 liveMatches 가 바뀔 때마다 새로 만들어지므로 이 효과도 다시
+  // 돈다 — 리스너는 매번 갈아끼워도 되지만, 콜드 스타트 URL 은 한 번만 처리해야
+  // 한다(안 그러면 목록이 갱신될 때마다 같은 화면으로 튄다).
+  const launchUrlHandledRef = React.useRef(false);
+  React.useEffect(() => {
+    const CapApp = window.Capacitor?.Plugins?.App;
+    if (!window.Capacitor?.isNativePlatform?.() || !CapApp) return;
+    let handle;
+    (async () => {
+      try {
+        handle = await CapApp.addListener('appUrlOpen', ({ url }) => handleDeepLink(url));
+        // 콜드 스타트: 딥링크로 앱이 막 실행되면 appUrlOpen 이벤트가 안 오므로
+        // getLaunchUrl 로 한 번 더 확인한다.
+        if (!launchUrlHandledRef.current) {
+          launchUrlHandledRef.current = true;
+          const launch = await CapApp.getLaunchUrl();
+          if (launch?.url) handleDeepLink(launch.url);
+        }
+      } catch (e) { console.warn('deep link init failed', e); }
+    })();
+    return () => { try { handle?.remove(); } catch {} };
+  }, [handleDeepLink]);
 
   // Bridge for the native iOS Liquid Glass tab bar (MainViewController.swift):
   // native calls __nativeTab(id) on tap, and __enableNativeTabBar() to tell the

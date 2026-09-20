@@ -10,6 +10,8 @@
   },
   "comment": "Capacitor packages are iOS-build-only; kept in devDependencies so Vercel's serverless-function build (production deps) installs nothing and does not stall.",
   "devDependencies": {
+    "@capacitor-community/in-app-review": "^6.0.0",
+    "@capacitor/app": "^6.0.3",
     "@capacitor/cli": "^6.1.2",
     "@capacitor/core": "^6.1.2",
     "@capacitor/ios": "^6.1.2",
