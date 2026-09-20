@@ -487,7 +487,16 @@ async function collectSoccer(events, liveStates) {
     return rosters;
   };
 
-  const soccer = PLAYERS.filter((p) => p.sport === 'soccer');
+  // 대표팀 차출 등으로 소속팀 명단에서 빠져 있는 선수. 이 기간엔 소속팀 경기의
+  // 개인 알림(라인업 '명단 제외'·출전·결과·골)을 아예 만들지 않는다 — 앱의
+  // MANUAL_AVAILABILITY(index.html)와 같은 명단·기간을 유지할 것.
+  // (2026-09-20 제보: 아시안게임 차출 선수에게 소속팀 '명단 포함되지 않았다' 알림이 갔다.)
+  const MANUAL_OUT = [
+    { ids: [20, 23, 22, 31, 32, 30], from: '2026-09-07', to: '2026-10-05', reason: '아시안게임 차출' },
+  ];
+  const today = new Date().toISOString().slice(0, 10);
+  const manualOut = new Set(MANUAL_OUT.filter((m) => today >= m.from && today <= m.to).flatMap((m) => m.ids));
+  const soccer = PLAYERS.filter((p) => p.sport === 'soccer' && !manualOut.has(p.id));
   const ymd = (off) => new Date(Date.now() + off * 86400000).toISOString().slice(0, 10);
   const seenFixtures = new Set(); // a fixture can appear in both date responses
 
