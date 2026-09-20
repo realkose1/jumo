@@ -7503,7 +7503,177 @@ function curateNews(pool, seed, limit) {
   return out;
 }
 
-function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScroll }) {
+// ─── 아시안게임 메달 패널 (뉴스 탭, '아시안게임' 카테고리 전용) ──────────
+// 국가 코드 → 국기 이모지. 매핑에 없는 나라는 이모지 없이 이름만 보여준다.
+const AG_ORG_FLAG = {
+  CHN:'🇨🇳', JPN:'🇯🇵', KOR:'🇰🇷', KAZ:'🇰🇿', IND:'🇮🇳', UZB:'🇺🇿', TPE:'🇹🇼', THA:'🇹🇭',
+  IRI:'🇮🇷', INA:'🇮🇩', PRK:'🇰🇵', HKG:'🇭🇰', MAS:'🇲🇾', PHI:'🇵🇭', VIE:'🇻🇳', SGP:'🇸🇬',
+  QAT:'🇶🇦', KSA:'🇸🇦', BRN:'🇧🇭',
+};
+const AG_MEDAL_EMOJI = { gold:'🥇', silver:'🥈', bronze:'🥉' };
+// API 응답을 5분간 모듈 전역에 캐시 — 탭을 들락거려도 재요청하지 않는다.
+let AG_MEDALS_CACHE = { data: null, ts: 0 };
+const AG_MEDALS_TTL = 5 * 60 * 1000;
+// KST 기준 YYYY-MM-DD (오늘의 메달 판정용)
+function agDateKeyKST(d) { return new Intl.DateTimeFormat('en-CA', { timeZone:'Asia/Seoul' }).format(new Date(d)); }
+function agMonthDayKST(d) {
+  const p = new Intl.DateTimeFormat('en-US', { timeZone:'Asia/Seoul', month:'numeric', day:'numeric' })
+    .formatToParts(new Date(d)).reduce((acc, x) => (acc[x.type] = x.value, acc), {});
+  return `${p.month}.${p.day}`;
+}
+
+function AgMedalPanel({ agMatches, onMatch, refetchTrigger }) {
+  const [data, setData] = React.useState(AG_MEDALS_CACHE.data);
+  const [loading, setLoading] = React.useState(!AG_MEDALS_CACHE.data);
+  const prevTrigger = React.useRef(refetchTrigger);
+
+  React.useEffect(() => {
+    const forced = refetchTrigger !== prevTrigger.current;
+    prevTrigger.current = refetchTrigger;
+    const fresh = AG_MEDALS_CACHE.data && (Date.now() - AG_MEDALS_CACHE.ts < AG_MEDALS_TTL);
+    if (fresh && !forced) { setData(AG_MEDALS_CACHE.data); setLoading(false); return; }
+
+    // 개발용 탈출구 — API(api/ag-medals)가 아직 배포되기 전에도 오케스트레이터가
+    // 배포된 사이트에서 렌더를 검증할 수 있도록, window.__agMedalsMock 이 있으면
+    // 그 값을 그대로 데이터로 쓰고 fetch 는 건너뛴다. 콘솔에서
+    // `window.__agMedalsMock = { updatedAt, standings, korea, koreaByDiscipline, latest, koreaMedals }`
+    // 형태로 지정하면 된다(계약은 이 파일의 AgMedalPanel 주석 참고).
+    if (window.__agMedalsMock) {
+      AG_MEDALS_CACHE = { data: window.__agMedalsMock, ts: Date.now() };
+      setData(window.__agMedalsMock);
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(!AG_MEDALS_CACHE.data);
+    fetch(`${API_BASE}/api/ag-medals`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(json => {
+        if (cancelled || !json) return;
+        AG_MEDALS_CACHE = { data: json, ts: Date.now() };
+        setData(json);
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [refetchTrigger]);
+
+  if (loading && !data) {
+    // 컴팩트 스켈레톤 — 뉴스 목록을 막지 않도록 로딩도 짧게만 보여준다.
+    return (
+      <div style={{ padding:'0 16px', display:'flex', flexDirection:'column', gap:10, marginBottom:12 }}>
+        <div className="shimmer" style={{ height:110, borderRadius:16 }}/>
+        <div className="shimmer" style={{ height:90, borderRadius:16 }}/>
+      </div>
+    );
+  }
+
+  // 응답이 없거나(에러) 내용이 비어 있으면 조용히 숨긴다 — 뉴스 목록은 그대로 보여야 한다.
+  if (!data || (!data.korea && (!data.standings || data.standings.length === 0))) return null;
+
+  const { updatedAt, standings = [], korea, koreaMedals = [] } = data;
+
+  const top5 = standings.slice(0, 5);
+  const koreaRow = top5.some(r => r.org === 'KOR') ? null : standings.find(r => r.org === 'KOR');
+
+  const renderRow = (r, highlight) => (
+    <div key={r.org} style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 4px', background: highlight ? 'rgba(245,196,0,0.10)' : 'transparent', borderRadius:6 }}>
+      <span style={{ ...NUM, fontSize:11, fontWeight:700, width:16, textAlign:'center', color: highlight ? 'var(--acc)' : 'var(--text4)', flexShrink:0 }}>{r.rank}</span>
+      <span style={{ fontSize:12, width:18, flexShrink:0, textAlign:'center' }}>{AG_ORG_FLAG[r.org] || ''}</span>
+      <span style={{ fontSize:12, fontWeight: highlight ? 700 : 600, color: highlight ? 'var(--acc)' : 'var(--text)', flex:1, minWidth:0, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{r.nameKo || r.name}</span>
+      <span style={{ ...NUM, fontSize:11, color:'var(--text3)', width:16, textAlign:'right', flexShrink:0 }}>{r.gold}</span>
+      <span style={{ ...NUM, fontSize:11, color:'var(--text3)', width:16, textAlign:'right', flexShrink:0 }}>{r.silver}</span>
+      <span style={{ ...NUM, fontSize:11, color:'var(--text3)', width:16, textAlign:'right', flexShrink:0 }}>{r.bronze}</span>
+      <span style={{ ...NUM, fontSize:11, fontWeight:700, color:'var(--text2)', width:18, textAlign:'right', flexShrink:0 }}>{r.total}</span>
+    </div>
+  );
+
+  const today = agDateKeyKST(Date.now());
+  const todaysMedals = koreaMedals.filter(m => agDateKeyKST(m.date) === today);
+  const showList = todaysMedals.length ? todaysMedals : koreaMedals.slice(0, 3);
+  const listHeader = todaysMedals.length ? '오늘의 메달' : '최근 메달';
+
+  const openMedalNews = (m) => {
+    const athlete = m.isTeam ? '대표팀' : (m.athlete || '');
+    const q = `${m.discKo || m.disc || ''} ${athlete} 아시안게임`.trim();
+    const url = `https://m.search.naver.com/search.naver?where=news&query=${encodeURIComponent(q)}`;
+    if (typeof openExternal === 'function') openExternal(url); else window.open(url, '_blank', 'noopener');
+  };
+
+  // 다음(또는 진행 중) 대표팀 경기 한 줄 — 없으면 표시하지 않는다.
+  const nowTs = Date.now();
+  const sortedMatches = (agMatches || []).slice().sort((a, b) => new Date(a.fullDate || 0) - new Date(b.fullDate || 0));
+  const liveMatch = sortedMatches.find(m => m.live || m.time === 'LIVE');
+  const nextMatch = liveMatch || sortedMatches.find(m => m.fullDate && new Date(m.fullDate).getTime() >= nowTs) || null;
+
+  return (
+    <div style={{ padding:'0 16px', display:'flex', flexDirection:'column', gap:10, marginBottom:12 }}>
+      {korea && (
+        <div style={{ background:'var(--surface)', borderRadius:16, border:'0.5px solid var(--border)', padding:14 }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <span style={{ fontSize:22 }}>🇰🇷</span>
+              <div>
+                <div style={{ fontSize:11, color:'var(--text4)', fontWeight:600 }}>대한민국</div>
+                <div style={{ ...NUM, fontSize:22, fontWeight:800, color:'var(--text)', letterSpacing:-0.5 }}>{korea.rank}위</div>
+              </div>
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:4 }}>
+              <div style={{ display:'flex', gap:8 }}>
+                <span style={{ ...NUM, fontSize:12, fontWeight:700, color:'var(--text2)' }}>🥇 {korea.gold}</span>
+                <span style={{ ...NUM, fontSize:12, fontWeight:700, color:'var(--text2)' }}>🥈 {korea.silver}</span>
+                <span style={{ ...NUM, fontSize:12, fontWeight:700, color:'var(--text2)' }}>🥉 {korea.bronze}</span>
+              </div>
+              <div style={{ fontSize:10, color:'var(--text4)' }}>합계 {korea.total}</div>
+            </div>
+          </div>
+          {top5.length > 0 && (
+            <div style={{ marginTop:12, borderTop:'0.5px solid var(--border)', paddingTop:6 }}>
+              {top5.map(r => renderRow(r, r.org === 'KOR'))}
+              {koreaRow && (<>
+                <div style={{ height:1, background:'var(--border)', margin:'4px 0' }}/>
+                {renderRow(koreaRow, true)}
+              </>)}
+            </div>
+          )}
+        </div>
+      )}
+
+      {showList.length > 0 && (
+        <div style={{ background:'var(--surface)', borderRadius:16, border:'0.5px solid var(--border)', padding:'12px 14px' }}>
+          <div style={{ fontSize:12, fontWeight:700, color:'var(--text3)', marginBottom:6 }}>{listHeader}</div>
+          {showList.map((m, i) => (
+            <div key={i} onClick={() => openMedalNews(m)} style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 0', cursor:'pointer', borderTop: i > 0 ? '0.5px solid var(--border)' : 'none' }}>
+              <span style={{ fontSize:16, flexShrink:0 }}>{AG_MEDAL_EMOJI[m.medal] || '🏅'}</span>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:12, fontWeight:600, color:'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{m.discKo || m.disc} · {m.eventKo || m.eventDesc}</div>
+                <div style={{ fontSize:10, color:'var(--text4)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{m.isTeam ? '대표팀' : m.athlete}</div>
+              </div>
+              <span style={{ ...NUM, fontSize:10, color:'var(--text4)', flexShrink:0 }}>{todaysMedals.length ? formatHHMM(m.date) : agMonthDayKST(m.date)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {nextMatch && (
+        <div onClick={onMatch ? () => onMatch(nextMatch) : undefined} style={{ background:'var(--surface)', borderRadius:16, border:'0.5px solid var(--border)', padding:'10px 14px', display:'flex', alignItems:'center', gap:8, cursor: onMatch ? 'pointer' : 'default' }}>
+          <span style={{ fontSize:14, flexShrink:0 }}>⚽</span>
+          <span style={{ fontSize:12, fontWeight:600, color:'var(--text2)', flex:1, minWidth:0, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+            {nextMatch.home?.name || nextMatch.home?.code} vs {nextMatch.away?.name || nextMatch.away?.code}
+          </span>
+          <span style={{ ...NUM, fontSize:11, fontWeight:700, color: (nextMatch.live || nextMatch.time === 'LIVE') ? 'var(--acc)' : 'var(--text4)', flexShrink:0 }}>
+            {(nextMatch.live || nextMatch.time === 'LIVE') ? `진행 중 ${nextMatch.home?.score ?? 0}:${nextMatch.away?.score ?? 0}` : `${agMonthDayKST(nextMatch.fullDate)} ${formatHHMM(nextMatch.fullDate)} KST`}
+          </span>
+        </div>
+      )}
+
+      {updatedAt && <div style={{ fontSize:10, color:'var(--text5)', textAlign:'center', padding:'2px 0 4px' }}>공식 결과 시스템 기준 · {formatHHMM(updatedAt)} 갱신</div>}
+    </div>
+  );
+}
+
+function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScroll, agMatches, onMatch }) {
   const onTabScroll = useTabBarScrollSync(onTabBarScroll);
   const NEWS_CATEGORIES = ['전체', '아시안게임', '해외축구', 'MLB', '기타'];
   // 칩에 보이는 글자만 바꾼다(카테고리 키는 그대로).
@@ -7869,6 +8039,11 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
           <span style={{ fontSize:12, color:'var(--text3)', fontWeight:600 }}>{refreshing ? '새로고침 중...' : pullY >= PULL_THRESHOLD ? '놓아서 새로고침' : '당겨서 새로고침'}</span>
         </div>
       </div>
+
+      {/* 아시안게임 메달 패널 — '아시안게임' 카테고리를 볼 때만, 기사 목록 위에 */}
+      {agNewsActive() && category === '아시안게임' && (
+        <AgMedalPanel agMatches={agMatches} onMatch={onMatch} refetchTrigger={refetchTrigger}/>
+      )}
 
       {/* Articles */}
       <div style={{ padding:'0 16px', display:'flex', flexDirection:'column', gap:12 }}>
@@ -11644,6 +11819,12 @@ function App() {
     [liveMatches, sportFeeds, followedNames]
   );
 
+  // 뉴스 탭의 아시안게임 메달 패널 '다음 대표팀 경기' 줄에 쓸 대표팀 경기만 골라둔다.
+  const agMatches = React.useMemo(
+    () => filteredLiveMatches.filter(m => (m.koreanPlayers || [m.koreanPlayer]).some(kp => kp?.isTeam)),
+    [filteredLiveMatches]
+  );
+
   // 드래그 중 다른 상태 변화로 리렌더가 끼어들어도 위치가 튀지 않도록, 렌더
   // 시점의 ref 값으로 인라인 스타일을 만든다(프레임 갱신은 applyDrag 가 DOM 에 직접).
   const dragW = dragging ? edgeWidth() : 0;
@@ -11683,7 +11864,7 @@ function App() {
               <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} onTabBarScroll={onTabBarScroll} tweaks={tweaks} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} scrollTopKey={tabScrollKeys.home} onRefresh={refreshFromPull} unreadCount={unreadCount} nativeTabBar={nativeTabBar}/></div>
               <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} onTabBarScroll={onTabBarScroll} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} onRefresh={refreshFromPull} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
               <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} onToggleFollow={toggleFollow} onTabBarScroll={onTabBarScroll} followed={followed} playerOrder={playerOrder} sportOrder={sportOrder} statsCache={playerStatsCache} isLoading={isInitialLoad && apiLoading} onRefresh={refreshFromPull} scrollTopKey={tabScrollKeys.players} liveApiMatches={filteredLiveMatches} sportFeeds={sportFeeds}/></div>
-              <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news} followedNames={followedNames} onTabBarScroll={onTabBarScroll}/></div>
+              <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news} followedNames={followedNames} onTabBarScroll={onTabBarScroll} agMatches={agMatches} onMatch={goMatch}/></div>
               <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed} profile={profile} onUpdateProfile={updateProfile} sub={moreSub} setSub={setMoreSub} onShowGuide={() => setShowOnboarding(true)} deviceId={deviceId}/></div>
               {dragging && !dragTop && <div ref={scrimRef} style={{ position:'absolute', inset:0, zIndex:40, pointerEvents:'none', background:`rgba(0,0,0,${0.18 * (1 - dragP)})` }}/>}
           </div>
