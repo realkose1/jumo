@@ -3909,24 +3909,30 @@ const TEAM_TTL = {
 };
 const teamCacheMem = {};   // key → { data, at }
 // slim: 네트워크 응답을 화면에 필요한 필드만 남기는 변환(캐시에도 이 형태로 저장).
-async function afCachedResponse(key, ttl, query, slim) {
+// meta: 선택. 넘기면 이 스냅샷을 실제로 확보한 시각(ms epoch, sf_cache 행이면
+// 그 updated_at, 방금 네트워크로 받았으면 그 순간)을 meta.fetchedAt 에 채워 준다
+// — 반환값(data) 모양은 그대로라 기존 호출부는 손댈 필요 없다. 순위표 라이브
+// 오버레이가 '스냅샷을 언제 받았는지' 알아야 해서 추가했다.
+async function afCachedResponse(key, ttl, query, slim, meta) {
   let stale = teamCacheMem[key] || null;
-  if (stale && Date.now() - stale.at < ttl) return stale.data;
+  if (stale && Date.now() - stale.at < ttl) { if (meta) meta.fetchedAt = stale.at; return stale.data; }
   try {
     const r = await SB.from('sf_cache').select('date,events,updated_at').eq('date', key).limit(1);
     const row = (r && r.data || [])[0];
     if (row && row.events != null) {
       const at = new Date(row.updated_at).getTime();
       if (!stale || at > stale.at) { stale = { data: row.events, at }; teamCacheMem[key] = stale; }
-      if (Date.now() - at < ttl) return stale.data;
+      if (Date.now() - at < ttl) { if (meta) meta.fetchedAt = stale.at; return stale.data; }
     }
   } catch (e) { /* 공유 캐시를 못 읽으면 네트워크로 간다 */ }
   const j = await afFetch(query).catch(() => null);
   const resp = j && Array.isArray(j.response) ? j.response : null;
   // afFetch 는 한도 초과·오류를 null 로 준다 — 그럴 땐 만료된 캐시라도 보여준다.
-  if (resp == null) return stale ? stale.data : null;
+  if (resp == null) { if (meta && stale) meta.fetchedAt = stale.at; return stale ? stale.data : null; }
   const data = slim ? slim(resp) : resp;
-  teamCacheMem[key] = { data, at: Date.now() };
+  const at = Date.now();
+  teamCacheMem[key] = { data, at };
+  if (meta) meta.fetchedAt = at;
   SB.from('sf_cache').upsert({ date: key, events: data, updated_at: new Date().toISOString() })
     .then(() => {}, () => {});
   return data;
@@ -4167,6 +4173,78 @@ const SQUAD_POS = [
   ['Midfielder', '미드필더'], ['Attacker', '공격수'],
 ];
 
+// ─── 순위표 라이브 오버레이 (FotMob 식 '잠정 순위') ───────────────────
+// AF standings 는 1시간 캐시(TEAM_TTL.standings)라 진행 중이거나 막 끝난 경기가
+// 반영되지 않는다. sf_cache 에 이미 있는(별도 AF 호출 없이) 당일 픽스처로 승점·
+// 득실을 임시로 얹어 재정렬한다. 순수 함수 — 네트워크·상태 접근 없음.
+//   rows: 파싱된 standings 행
+//   fixtures: sf_cache 'events' 원본 배열(raw AF fixture 객체, 여러 리그 섞여 있을 수 있음)
+//   fetchedAt: 이 standings 스냅샷을 실제로 받아온 시각(ms epoch) — afCachedResponse 의
+//     meta.fetchedAt (캐시 행이면 그 updated_at, 방금 네트워크로 받았으면 그 순간).
+// 불변식: 스냅샷을 받은 시각(fetchedAt) 이전에 끝났을 수 있는 경기는 절대 얹지
+// 않는다 → 이중 계산 불가. (AF standings 의 row.update 는 날짜 단위 정밀도라
+// '킥오프+2시간 < update' 비교로는 당일 경기를 전부 이중 반영했다 — 실측: 리그
+// 140/78 은 update 가 '2026-09-20T00:00:00+00:00' 인데 스냅샷엔 이미 9/19 경기
+// 결과가 반영돼 있었다. 그래서 폐기하고 fetchedAt 기준으로 바꿨다.)
+// 라이브로 얹은 경기가 끝난 뒤 standings 스냅샷이 다시 fetch 되면(1시간 TTL)
+// 그 결과가 스냅샷 자체에 포함되므로, 다음 오버레이 계산에선 자연히 제외돼
+// 정합된다 — 별도 처리가 필요 없다.
+// 반환: { rows(재정렬·live/recent 표시 포함), liveCount, recentCount }
+function applyLiveToStandings(rows, fixtures, leagueId, season, fetchedAt) {
+  if (!Array.isArray(rows) || !rows.length || !Array.isArray(fixtures) || !fixtures.length) {
+    return { rows: rows || [], liveCount: 0, recentCount: 0 };
+  }
+  // prevRank 를 여기서 스냅샷 순위로 고정해 둔다 — 재정렬 후 rank 와 비교해 ▲▼ 를 낸다.
+  const byId = new Map(rows.map(r => [r.id, {
+    ...r, prevRank: r.rank, live: false, recent: false, liveScore: null, oppName: null,
+  }]));
+  let liveCount = 0, recentCount = 0;
+
+  fixtures.forEach(fx => {
+    if (fx?.league?.id !== leagueId || fx?.league?.season !== season) return;
+    const short = fx.fixture?.status?.short;
+    const isLive = AF_LIVE_SHORT.has(short);
+    const isFinal = AF_FINAL_SHORT.has(short);
+    if (!isLive && !isFinal) return;
+    const hs = fx.goals?.home, as = fx.goals?.away;
+    if (hs == null || as == null) return;
+
+    const homeRow = byId.get(fx.teams?.home?.id);
+    const awayRow = byId.get(fx.teams?.away?.id);
+    if (!homeRow && !awayRow) return;
+
+    if (isFinal) {
+      // 스냅샷을 받은 시각이 이 경기가 끝날 수 있었던 가장 이른 시각(킥오프+90분)
+      // 보다 뒤라면, 그 스냅샷이 이미 이 결과를 반영했을 수 있다 — 안전하게
+      // 건너뛴다(표가 다음 1시간 refetch 까지 살짝 뒤처지는 건 감수한다).
+      // fetchedAt 을 모르면(정상 흐름에선 발생하지 않음) 역시 건너뛴다.
+      const kickoff = new Date(fx.fixture?.date || 0).getTime();
+      if (fetchedAt == null || !(fetchedAt < kickoff + 90 * 60e3)) return;
+    }
+
+    if (isLive) liveCount++; else recentCount++;
+    const scoreStr = `${hs}-${as}`;
+    const bump = (row, gf, ga, oppName) => {
+      row.played += 1;
+      row.gf += gf; row.ga += ga; row.gd = row.gf - row.ga;
+      if (gf > ga) { row.win += 1; row.pts += 3; }
+      else if (gf === ga) { row.draw += 1; row.pts += 1; }
+      else { row.lose += 1; }
+      row.live = row.live || isLive;
+      row.recent = row.recent || (!isLive && isFinal);
+      row.liveScore = scoreStr;
+      row.oppName = oppName;
+    };
+    if (homeRow) bump(homeRow, hs, as, awayRow?.name || fx.teams?.away?.name || '');
+    if (awayRow) bump(awayRow, as, hs, homeRow?.name || fx.teams?.home?.name || '');
+  });
+
+  const merged = Array.from(byId.values());
+  merged.sort((a, b) => (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf) || (a.prevRank - b.prevRank));
+  merged.forEach((r, i) => { r.rank = i + 1; });
+  return { rows: merged, liveCount, recentCount };
+}
+
 // ─── SCREEN: TEAM DETAIL ──────────────────────────────────────
 // 경기 상세에서 팀을 누르면 열린다. 팀 id 는 API-Football 경기에만 실려 있어
 // 야구(statsapi)·ESPN 경기에서는 진입 자체가 막혀 있다(의도된 동작).
@@ -4207,6 +4285,10 @@ function TeamScreen({ team, onBack, onMatch, onPlayer, liveApiMatches = [] }) {
       id: p.id, name: p.name || '', number: p.number ?? null, position: p.position || '', age: p.age ?? null,
     }))));
 
+  // standingsMeta.current.fetchedAt: standings 스냅샷을 실제로 받아온 시각(ms epoch).
+  // afCachedResponse 가 채워 준다 — 라이브 오버레이가 '이 스냅샷이 어떤 경기까지
+  // 반영했을 수 있는지' 판단하는 기준이 된다(밑 computeLiveOverlay 참고).
+  const standingsMeta = React.useRef({});
   const standings = useLazyAf(tab === 'standings' && hasLeague, () => afCachedResponse(
     `af-standings-${team.leagueId}-${season}`, TEAM_TTL.standings,
     `path=standings&league=${team.leagueId}&season=${season}`,
@@ -4217,9 +4299,46 @@ function TeamScreen({ team, onBack, onMatch, onPlayer, liveApiMatches = [] }) {
       return rows.map(r => ({
         rank: r.rank, id: r.team?.id, name: r.team?.name || '', logo: r.team?.logo || null,
         played: r.all?.played ?? 0, win: r.all?.win ?? 0, draw: r.all?.draw ?? 0, lose: r.all?.lose ?? 0,
+        // gf/ga 는 라이브 오버레이(applyLiveToStandings)가 쓴다.
+        gf: r.all?.goals?.for ?? 0, ga: r.all?.goals?.against ?? 0,
         gd: r.goalsDiff ?? 0, pts: r.points ?? 0,
       }));
-    }));
+    }, standingsMeta.current));
+
+  // 순위표 라이브 오버레이 — standings 스냅샷 위에 오늘·어제 sf_cache 픽스처로
+  // 진행 중/막 끝난 경기를 얹는다. 새 AF 호출은 하지 않는다(이미 있는 캐시만 읽음).
+  const [liveOverlay, setLiveOverlay] = React.useState(null);
+  const computeLiveOverlay = React.useCallback(async () => {
+    if (!hasLeague || !standings.data || !standings.data.length) { setLiveOverlay(null); return; }
+    // UTC 기준 'YYYY-MM-DD' — api/push-cron.js 의 ymd() 와 같은 규칙이다. 이 크론이
+    // 2분마다 sf_cache 를 채우므로(로컬 자정 기준으로 쓰는 클라 로더보다 더 자주,
+    // 더 신선하게) 라이브 반영엔 이쪽 키가 유리하다. 두 규칙이 다른 키를 쓸 수 있어
+    // 하루 중 두 날짜 문자열이 sf_cache 에 공존할 수도 있지만, 오늘·어제(UTC) 두
+    // 키를 모두 읽으므로 어느 쪽이 채웠어도 걸린다.
+    const now = Date.now();
+    const todayKey = new Date(now).toISOString().slice(0, 10);
+    const yestKey = new Date(now - 86400000).toISOString().slice(0, 10);
+    let cachedRows = [];
+    try {
+      const r = await SB.from('sf_cache').select('date,events').in('date', [todayKey, yestKey]);
+      cachedRows = r?.data || [];
+    } catch (e) { return; }   // 못 읽으면 스냅샷 그대로 둔다(오버레이 갱신 skip)
+    const fixtures = cachedRows.flatMap(row => Array.isArray(row.events) ? row.events : []);
+    setLiveOverlay(applyLiveToStandings(standings.data, fixtures, team.leagueId, season, standingsMeta.current.fetchedAt));
+  }, [hasLeague, standings.data, team.leagueId, season]);
+
+  // 순위 탭이 열려 있는 동안 60초마다 갱신, 탭을 벗어나거나 언마운트되면 정리.
+  React.useEffect(() => {
+    if (tab !== 'standings') return;
+    computeLiveOverlay();
+    const id = setInterval(computeLiveOverlay, 60000);
+    return () => clearInterval(id);
+  }, [tab, computeLiveOverlay]);
+
+  // 우리 앱 라이브 목록(15초 갱신)이 바뀌면 60초를 기다리지 않고 바로 한 번 더 반영한다.
+  React.useEffect(() => {
+    if (tab === 'standings') computeLiveOverlay();
+  }, [liveApiMatches]);
 
   const tabs = [
     { id: 'overview', label: '개요' },
@@ -4498,28 +4617,57 @@ function TeamScreen({ team, onBack, onMatch, onPlayer, liveApiMatches = [] }) {
       )}
 
       {/* 순위 */}
-      {tab === 'standings' && (
+      {tab === 'standings' && (() => {
+        // 오버레이가 있으면(당일 라이브/최근 경기 반영) 그걸, 없으면 스냅샷 그대로.
+        const displayRows = liveOverlay ? liveOverlay.rows : standings.data;
+        const liveCount = liveOverlay?.liveCount || 0;
+        const recentCount = liveOverlay?.recentCount || 0;
+        return (
         <div style={{ padding:'4px 16px 28px' }}>
           {standings.loading ? <TeamLoading/> : !standings.data ? <TeamEmpty text="불러올 수 없어요"/> : standings.data.length === 0 ? <TeamEmpty text="순위 정보가 없어요"/> : (
-            <div style={card}>
+            <React.Fragment>
+              {(liveCount > 0 || recentCount > 0) && (
+                <div style={{ padding:'0 4px 8px', fontSize:11, fontWeight:600, color:'var(--text4)' }}>
+                  {liveCount > 0 ? '🔴 진행 중 경기 반영 · 잠정 순위' : '최근 결과 반영 · 잠정 순위'}
+                </div>
+              )}
+              <div style={card}>
               <div style={{ display:'flex', alignItems:'center', gap:8, padding:'9px 12px', borderBottom:'0.5px solid var(--border)', fontSize:10, color:'var(--text4)', fontWeight:600 }}>
-                <span style={{ width:18, textAlign:'center', flexShrink:0 }}>#</span>
+                <span style={{ width:32, textAlign:'center', flexShrink:0 }}>#</span>
                 <span style={{ flex:1, minWidth:0 }}>팀</span>
                 <span style={{ width:22, textAlign:'center', flexShrink:0 }}>경기</span>
                 <span style={{ width:48, textAlign:'center', flexShrink:0 }}>승무패</span>
                 <span style={{ width:28, textAlign:'right', flexShrink:0 }}>득실</span>
                 <span style={{ width:26, textAlign:'right', flexShrink:0 }}>승점</span>
               </div>
-              {standings.data.map((r, i) => {
+              {displayRows.map((r, i) => {
                 const me = r.id === teamId;
+                // prevRank 는 오버레이가 있을 때만 실려 온다 — 재정렬로 순위가
+                // 바뀐 행에만 ▲▼ 를 보여준다.
+                const delta = (r.prevRank != null && r.rank !== r.prevRank) ? r.prevRank - r.rank : 0;
                 return (
                   <div key={r.id || i} style={{ display:'flex', alignItems:'center', gap:8, padding:'9px 12px',
-                    borderBottom: i === standings.data.length - 1 ? 'none' : '0.5px solid var(--border)',
+                    borderBottom: i === displayRows.length - 1 ? 'none' : '0.5px solid var(--border)',
                     background: me ? 'rgba(245,196,0,0.10)' : 'transparent' }}>
-                    <span style={{ ...NUM, fontSize:11, fontWeight:700, width:18, textAlign:'center', flexShrink:0, color: me ? 'var(--acc)' : 'var(--text4)' }}>{r.rank}</span>
+                    <span style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:2, width:32, flexShrink:0 }}>
+                      {r.live && <span aria-hidden style={{ width:5, height:5, borderRadius:'50%', background:'#ff3b30', flexShrink:0 }}/>}
+                      <span style={{ ...NUM, fontSize:11, fontWeight:700, color: me ? 'var(--acc)' : 'var(--text4)' }}>{r.rank}</span>
+                      {delta !== 0 && (
+                        <span style={{ ...NUM, fontSize:9, fontWeight:700, color: delta > 0 ? '#2ecc71' : '#ff3b30' }}>
+                          {delta > 0 ? `▲${delta}` : `▼${-delta}`}
+                        </span>
+                      )}
+                    </span>
                     <div style={{ flex:1, minWidth:0, display:'flex', alignItems:'center', gap:7 }}>
                       <TeamBadge code={(r.name || '').slice(0, 3).toUpperCase()} size={16} logo={r.logo}/>
-                      <span style={{ fontSize:12, fontWeight: me ? 700 : 600, color: me ? 'var(--acc)' : 'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{r.name}</span>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:12, fontWeight: me ? 700 : 600, color: me ? 'var(--acc)' : 'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{r.name}</div>
+                        {(r.live || r.recent) && (
+                          <div style={{ fontSize:10, color:'var(--text4)', marginTop:1, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                            vs {r.oppName} {r.liveScore}{r.live ? ' 진행 중' : ''}
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <span style={{ ...NUM, fontSize:11, color:'var(--text3)', width:22, textAlign:'center', flexShrink:0 }}>{r.played}</span>
                     <span style={{ ...NUM, fontSize:11, color:'var(--text3)', width:48, textAlign:'center', flexShrink:0 }}>{r.win}-{r.draw}-{r.lose}</span>
@@ -4528,10 +4676,12 @@ function TeamScreen({ team, onBack, onMatch, onPlayer, liveApiMatches = [] }) {
                   </div>
                 );
               })}
-            </div>
+              </div>
+            </React.Fragment>
           )}
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
