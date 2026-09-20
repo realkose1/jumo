@@ -429,19 +429,43 @@ const isPlayerAllowed = (p, feeds) => feeds?.[playerSportKey(p)] !== false;
 // 비었다). 시즌 스탯 22건과 부상 22건이 각자 스태거로 흐르다 합산이 초당 5회를
 // 넘긴 게 원인이라, 개별 스태거 대신 모든 호출을 한 줄로 세워 간격을 보장한다.
 const AF_MIN_GAP_MS = 320;                 // ≈3회/초 — 초당 5회 한도 아래
-let afGate = Promise.resolve();
 let afLastAt = 0;
+// 게이트는 단순 FIFO 가 아니라 2단 우선순위 스케줄러다.
+// 앱이 뜨자마자 배경 작업(시즌 스탯 22건·부상 22건)이 줄을 채우면, 홈 목록에
+// 필요한 호출(날짜별 fixtures·라인업·이벤트)이 그 뒤에 서서 320ms × 40여 건을
+// 기다렸다 — 실측: 목록 표시까지 17초, 8초 안전 타임아웃이 먼저 터졌다.
+// → high 큐를 먼저 비우고, 비었을 때만 low 를 내보낸다. 간격(AF_MIN_GAP_MS)은
+//   '실제 네트워크 호출 시작' 사이에만 적용한다(응답을 기다리지 않는다 —
+//   예전 게이트도 시작 시점만 줄 세웠다).
+const afQueues = { high: [], low: [] };
+let afPumping = false;
+async function afPump() {
+  if (afPumping) return;
+  afPumping = true;
+  try {
+    while (afQueues.high.length || afQueues.low.length) {
+      const wait = AF_MIN_GAP_MS - (Date.now() - afLastAt);
+      if (wait > 0) await new Promise(r => setTimeout(r, wait));
+      // 기다리는 동안 high 가 들어왔을 수 있다 — 꺼내는 건 '지금' 정한다.
+      const job = afQueues.high.shift() || afQueues.low.shift();
+      if (!job) break;
+      afLastAt = Date.now();
+      job();                                  // 발사만 하고 응답은 기다리지 않는다
+    }
+  } finally { afPumping = false; }
+}
+const afEnqueue = (task, priority) => new Promise((resolve, reject) => {
+  (priority === 'low' ? afQueues.low : afQueues.high).push(() => {
+    try { task().then(resolve, reject); } catch (e) { reject(e); }
+  });
+  afPump();
+});
 // 최근 30분 안에 한도 소진을 봤으면 참. 30분이 지나면 다시 AF 를 찔러본다
 // (09:00 리셋을 자동으로 알아채기 위해).
 const afQuotaExhausted = () => Date.now() - (window.__afQuotaHitAt || 0) < 30 * 60 * 1000;
-function afFetch(query, { retries = 1 } = {}) {
-  const slot = afGate.then(async () => {
-    const wait = AF_MIN_GAP_MS - (Date.now() - afLastAt);
-    if (wait > 0) await new Promise(r => setTimeout(r, wait));
-    afLastAt = Date.now();
-  });
-  afGate = slot;
-  return slot.then(async () => {
+// priority: 'high'(기본, 화면이 기다리는 호출) | 'low'(배경 보강·프리페치)
+function afFetch(query, { retries = 1, priority = 'high' } = {}) {
+  return afEnqueue(async () => {
     // 일일 한도가 소진된 동안에는 아예 부르지 않는다. 어차피 전부 errors 로
     // 반려되는데, 그동안 앱은 시간당 1,500회씩 프록시를 두드리고 있었다(실측).
     // 게다가 한도 소진으로 데이터가 라이브 상태에서 굳으면 앱이 그 경기를 계속
@@ -455,14 +479,32 @@ function afFetch(query, { retries = 1 } = {}) {
     // 분당 한도는 잠깐 쉬면 풀리지만, 일일 한도(errors.requests)는 그날 끝이다.
     if (j?.errors?.rateLimit && retries > 0) {
       await new Promise(r2 => setTimeout(r2, 2500));
-      return afFetch(query, { retries: retries - 1 });
+      return afFetch(query, { retries: retries - 1, priority });
     }
     // 일일 한도 소진은 그날 끝이다 — 시각을 남겨 폴링이 ESPN 폴백으로 갈아타게 한다.
     if (j?.errors?.requests) window.__afQuotaHitAt = Date.now();
     const failed = j?.errors && (j.errors.rateLimit || j.errors.requests || j.errors.token);
     return failed ? null : j;
-  });
+  }, priority);
 }
+
+// ─── '목록이 화면에 떴다' 전역 신호 ──────────────────────────────
+// App 안의 notifyListReady 와 같은 사건을 컴포넌트 밖에서도 기다릴 수 있게 한다.
+// 첫 화면에 필요 없는 배경 작업(시즌 스탯·부상 동기화·뉴스 첫 조회)은 이 신호
+// 뒤로 미뤄, 목록이 뜨기 전에는 같은 서버·같은 게이트를 두고 경쟁하지 않는다.
+let listReadyFired = false;
+const listReadyCbs = [];
+const markListReady = () => {
+  if (listReadyFired) return;
+  listReadyFired = true;
+  listReadyCbs.splice(0).forEach(f => { try { f(); } catch (e) {} });
+};
+const onListReady = (fn) => { if (listReadyFired) fn(); else listReadyCbs.push(fn); };
+// 목록이 끝내 안 뜨더라도(네트워크 장애) 배경 작업이 영영 멈추진 않게 한다.
+setTimeout(markListReady, 15000);
+// 목록이 뜬 뒤 delayMs 만큼 더 쉬었다 재개한다 — 목록 직후의 상세 보강 호출과도
+// 겹치지 않게.
+const afterListReady = (delayMs = 0) => new Promise(res => onListReady(() => setTimeout(res, delayMs)));
 
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
@@ -4211,7 +4253,7 @@ async function fetchPredictedXI(teamId, leagueId) {
     return null;
   };
 
-  const fixJson = await afFetch(`path=fixtures&team=${teamId}&last=6`).catch(() => null);
+  const fixJson = await afFetch(`path=fixtures&team=${teamId}&last=6`, { priority: 'high' }).catch(() => null);
   const fixtures = Array.isArray(fixJson?.response) ? fixJson.response : [];
   // 목록 자체를 못 받은 건 한도 초과·네트워크일 수 있다 — 캐시하지 않고 그냥 물러난다.
   if (fixtures.length === 0) return null;
@@ -4223,7 +4265,7 @@ async function fetchPredictedXI(teamId, leagueId) {
 
   const lineupJsons = await Promise.all(
     chosen.map(fx => fx.fixture?.id
-      ? afFetch(`path=fixtures/lineups&fixture=${fx.fixture.id}`).catch(() => null)
+      ? afFetch(`path=fixtures/lineups&fixture=${fx.fixture.id}`, { priority: 'high' }).catch(() => null)
       : Promise.resolve(null))
   );
   const records = lineupJsons.map(lj => {
@@ -7750,7 +7792,7 @@ function AgMedalPanel({ agMatches, onMatch, refetchTrigger }) {
   );
 }
 
-function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScroll, agMatches, onMatch }) {
+function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScroll, agMatches, onMatch, active = false }) {
   const onTabScroll = useTabBarScrollSync(onTabBarScroll);
   const NEWS_CATEGORIES = ['전체', '아시안게임', '해외축구', 'MLB', '기타'];
   // 칩에 보이는 글자만 바꾼다(카테고리 키는 그대로).
@@ -7780,6 +7822,17 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
   const [refetchTrigger, setRefetchTrigger] = React.useState(0);
+  // NewsScreen 은 탭 전환과 무관하게 항상 마운트돼 있다(display:none/contents).
+  // 그래서 첫 조회(네이버 검색 17건 + 이미지)가 앱 시작과 동시에 나가 홈 목록과
+  // 같은 서버를 두고 경쟁했다. 뉴스 탭을 처음 열 때, 또는 목록이 뜨고 3초 뒤
+  // (둘 중 먼저) 시작한다.
+  const [newsGateOpen, setNewsGateOpen] = React.useState(false);
+  React.useEffect(() => { if (active) setNewsGateOpen(true); }, [active]);
+  React.useEffect(() => {
+    let t = null;
+    onListReady(() => { t = setTimeout(() => setNewsGateOpen(true), 3000); });
+    return () => { if (t) clearTimeout(t); };
+  }, []);
 
   const [pullY, setPullY] = React.useState(0);
   const [refreshing, setRefreshing] = React.useState(false);
@@ -7926,6 +7979,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
   };
 
   React.useEffect(() => {
+    if (!newsGateOpen) return;          // 첫 화면(경기 목록)이 끝날 때까지 대기
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -8038,7 +8092,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
 
     fetchAllPlayerNews();
     return () => { cancelled = true; };
-  }, [refetchTrigger]);
+  }, [refetchTrigger, newsGateOpen]);
 
   // Only show news that actually mentions a player the user still follows
   // (unfollowing in 선수 편집 removes their articles here too). Filter by article
@@ -9168,6 +9222,7 @@ function App() {
   const listReadyRef = React.useRef([]);
   const waitListReady = () => new Promise(res => { listReadyRef.current.push(res); });
   const notifyListReady = () => {
+    markListReady();
     const rs = listReadyRef.current; listReadyRef.current = [];
     rs.forEach(r => { try { r(); } catch (e) {} });
   };
@@ -10358,13 +10413,18 @@ function App() {
       }
       if (restored && !cancelled) setLiveMatches(prev => [...prev]);
 
+      // 여기부터는 첫 화면에 필요 없는 보강이다 — 목록이 뜨고 1.5초 뒤에 시작한다.
+      // (캐시 복원은 위에서 이미 끝났으니 그동안에도 스탯 화면은 비지 않는다.)
+      await afterListReady(1500);
+      if (cancelled) return;
+
       // AF 가 이번 실행에서 실제로 채운 선수. ESPN 폴백이 이들을 덮지 않게 한다.
       // p.compStats 만 보고 판단하면 캐시 복원·재시도 타이밍에 따라 AF 결과가
       // 평점 없는 ESPN 값으로 덮여버렸다(제보: 배준호·김민재 시즌 평점 안 보임).
       const afOk = new Set();
       const fetchOne = async (p) => {
         try {
-          const j = await afFetch(`path=players&id=${p.apiFootballId}&season=${afSeasonFor(p)}`);
+          const j = await afFetch(`path=players&id=${p.apiFootballId}&season=${afSeasonFor(p)}`, { priority: 'low' });
           if (!j) return false;   // 호출 실패·한도 초과 → 기존 값(캐시)을 유지한다
           // Club competitions only. API-Football uses `team.name` = national team
           // (e.g., 'South Korea') for national team appearances and the club name
@@ -10552,6 +10612,11 @@ function App() {
         }
       } catch {}
 
+      // 캐시가 없어 실제로 동기화해야 할 때만 네트워크로 간다 — 목록이 뜨고
+      // 1.5초 뒤로 미뤄, 첫 화면이 statsapi·ESPN·AF 호출과 경쟁하지 않게 한다.
+      await afterListReady(1500);
+      if (cancelled) return;
+
       const map = {};
 
       // ── MLB: statsapi roster status ──
@@ -10621,7 +10686,7 @@ function App() {
         await Promise.all(soccer.map(async (p, i) => {
           // 간격은 afFetch 큐가 보장한다(개별 스태거는 합산 시 한도를 넘겼다).
           try {
-            const j = await afFetch(`path=injuries&player=${p.apiFootballId}&season=${afSeasonFor(p)}`);
+            const j = await afFetch(`path=injuries&player=${p.apiFootballId}&season=${afSeasonFor(p)}`, { priority: 'low' });
             if (!j) return; // 호출 실패·한도 초과 → 기존 값 유지
             const rows = j.response || [];
             if (!rows.length) { map[p.name] = null; return; } // no injuries this season → available
@@ -12006,7 +12071,7 @@ function App() {
               <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} onTabBarScroll={onTabBarScroll} tweaks={tweaks} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} scrollTopKey={tabScrollKeys.home} onRefresh={refreshFromPull} unreadCount={unreadCount} nativeTabBar={nativeTabBar}/></div>
               <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} onTabBarScroll={onTabBarScroll} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} onRefresh={refreshFromPull} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
               <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} onToggleFollow={toggleFollow} onTabBarScroll={onTabBarScroll} followed={followed} playerOrder={playerOrder} sportOrder={sportOrder} statsCache={playerStatsCache} isLoading={isInitialLoad && apiLoading} onRefresh={refreshFromPull} scrollTopKey={tabScrollKeys.players} liveApiMatches={filteredLiveMatches} sportFeeds={sportFeeds}/></div>
-              <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news} followedNames={followedNames} onTabBarScroll={onTabBarScroll} agMatches={agMatches} onMatch={goMatch}/></div>
+              <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen active={tab === 'news'} sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news} followedNames={followedNames} onTabBarScroll={onTabBarScroll} agMatches={agMatches} onMatch={goMatch}/></div>
               <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed} profile={profile} onUpdateProfile={updateProfile} sub={moreSub} setSub={setMoreSub} onShowGuide={() => setShowOnboarding(true)} deviceId={deviceId}/></div>
               {dragging && !dragTop && <div ref={scrimRef} style={{ position:'absolute', inset:0, zIndex:40, pointerEvents:'none', background:`rgba(0,0,0,${0.18 * (1 - dragP)})` }}/>}
           </div>
