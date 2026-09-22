@@ -63,7 +63,7 @@ const PLAYERS = [
 // 대한민국의 골·경기 결과를 팀 단위로 전원에게 방송한다(팔로우 여부 무관, 설정
 // 'national' 로만 끔) — 그래서 더 이상 소집 선수 명단(playerIds)을 들고 있지
 // 않는다. 방송 이벤트 생성은 아래 nationalMatchEvents() 참고.
-const NATIONAL_TEAMS = { 10177: { name: '대한민국 U-23' } };
+const NATIONAL_TEAMS = { 10177: { name: '대한민국 U-23' }, 17: { name: '대한민국' } }; // 17 = A대표팀 'South Korea'
 // 대표팀 경기의 vs 문구는 소속팀명이 아니라 대표팀명을 쓴다(예: 'Qatar U23 vs 대한민국 U-23').
 const teamLabel = (team) => NATIONAL_TEAMS[team?.id]?.name || team?.name || '';
 
@@ -168,7 +168,7 @@ function nationalMatchEvents({ fx, fid, evd, home, away, isLive, isFinal, elapse
       out.push({
         key: stableKey(`af-nat-goalcancel-${fid}-${min}`, keyCounts), players: [],
         kind: 'national', broadcast: true, matchId: String(fid),
-        title: '🇰🇷 대한민국 U-23 골 취소',
+        title: `🇰🇷 ${NATIONAL_TEAMS[tid]?.name || '대한민국'} 골 취소`,
         body: `${min}' ${scorer}골이 VAR 판정으로 취소됐습니다. ${home} ${h} : ${a} ${away}`,
         silent: staleEv,
       });
@@ -190,7 +190,7 @@ function nationalMatchEvents({ fx, fid, evd, home, away, isLive, isFinal, elapse
     out.push({
       key: stableKey(`af-nat-goal-${fid}-${tid}-${min}`, keyCounts), players: [],
       kind: 'national', broadcast: true, matchId: String(fid),
-      title: '🇰🇷 대한민국 U-23 골!',
+      title: `🇰🇷 ${NATIONAL_TEAMS[tid]?.name || '대한민국'} 골!`,
       body: `${min}' ${scorer}${pen}골! ${home} ${h} : ${a} ${away}`,
       silent: staleEv,
     });
@@ -199,16 +199,17 @@ function nationalMatchEvents({ fx, fid, evd, home, away, isLive, isFinal, elapse
   if (isFinal) {
     const gh = fx.goals?.home ?? 0, ga = fx.goals?.away ?? 0;
     const koreaHome = !!NATIONAL_TEAMS[homeId];
+    const natName = (NATIONAL_TEAMS[homeId] || NATIONAL_TEAMS[awayId])?.name || '대한민국';
     const shootout = fx.score?.penalty?.home != null;
     let title, body = `${home} ${gh} : ${ga} ${away} · 아시안게임 경기가 끝났습니다.`;
     if (shootout) {
       const ph = fx.score.penalty.home ?? 0, pa = fx.score.penalty.away ?? 0;
       const koreaWon = koreaHome ? ph > pa : pa > ph;
-      title = koreaWon ? '🇰🇷 대한민국 U-23 승리!' : '🇰🇷 대한민국 U-23 패배';
+      title = koreaWon ? `🇰🇷 ${natName} 승리!` : `🇰🇷 ${natName} 패배`;
       body += ` (승부차기 ${ph} : ${pa})`;
     } else {
       const diff = koreaHome ? gh - ga : ga - gh;
-      title = diff > 0 ? '🇰🇷 대한민국 U-23 승리!' : diff < 0 ? '🇰🇷 대한민국 U-23 패배' : '🇰🇷 대한민국 U-23 무승부';
+      title = diff > 0 ? `🇰🇷 ${natName} 승리!` : diff < 0 ? `🇰🇷 ${natName} 패배` : `🇰🇷 ${natName} 무승부`;
     }
     out.push({
       key: `af-result-${fid}`, players: [],
@@ -724,7 +725,7 @@ async function collectSoccer(events, liveStates) {
             events.push({
               key: k.replace(/^af-nat-goal-(\d+)-\d+-/, 'af-nat-goalcancel-$1-'), players: [],
               kind: 'national', broadcast: true, matchId: String(fid),
-              title: '🇰🇷 대한민국 U-23 골 취소',
+              title: `🇰🇷 ${(homeNational || awayNational)?.name || '대한민국'} 골 취소`,
               // 이벤트 자체가 사라져 득점자를 다시 알 수 없다 — VAR 문구 없이 취소만 알린다.
               body: `${min}' 골이 취소됐습니다. ${home} ${fx.goals?.home ?? 0} : ${fx.goals?.away ?? 0} ${away}`,
               silent: staleEv,

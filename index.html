@@ -921,6 +921,8 @@ const KOREAN_PLAYERS_EXTRA = {
 const NATIONAL_TEAMS = {
   'Korea Republic U23': { afTeamId: 10177, code: '대한민국 U-23', display: '대한민국 U-23',
                           players: ['양현준', '엄지성', '배준호', '김지수', '양민혁', '박승수'] },
+  // A대표팀(AF 팀 17 'South Korea'). 친선·예선·본선 모두 대표팀 카드 하나로 보여준다.
+  'South Korea': { afTeamId: 17, code: '대한민국', display: '대한민국', players: [] },
 };
 
 // ─── sf_cache 날짜 행 슬림(쓰기 시점) ──────────────────────────
@@ -2563,7 +2565,7 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
                       🇰🇷 {kp.name}
                     </div>
                     <div style={{ fontSize:11, color:'var(--text3)' }}>
-                      {kp.isTeam ? '아시안게임' : `${kp.team} #${kp.number}`}
+                      {kp.isTeam ? (m.competition || '대표팀 경기') : `${kp.team} #${kp.number}`}
                     </div>
                   </div>
                 </div>
