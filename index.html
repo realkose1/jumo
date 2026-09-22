@@ -1044,8 +1044,7 @@ const teamResultLabel = (m, kp) => {
   const mine = isHome ? m.home?.score : m.away?.score;
   const theirs = isHome ? m.away?.score : m.home?.score;
   if (mine == null || theirs == null) return '경기 종료';
-  const score = `${mine}:${theirs}`;
-  return mine > theirs ? `${score} 승리` : mine < theirs ? `${score} 패배` : `${score} 무승부`;
+  return mine > theirs ? '승리' : mine < theirs ? '패배' : '무승부';   // 점수는 위 스코어보드에 이미 있다
 };
 
 function koreansForTeam(teamName, teamCode, sport, matchState) {
