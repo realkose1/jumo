@@ -1034,6 +1034,20 @@ const nationalTeamEntry = (teamName, teamCode, state) => ({
 
 // 팀명으로 그 팀의 한국 선수 전원을 돌려준다(0~N명). team 코드는 카드·스코어 비교에
 // 쓰이므로 함께 붙인다. 대표팀이면 선수 개개인이 아니라 팀 엔트리 하나만 돌려준다.
+// 대표팀 엔트리의 결과 문구: 경기가 끝났으면 '경기 종료' 대신 승리/무승부/패배로.
+// (제보: 히어로에 '경기 종료'만 떠서 이겼는지 알 수 없었다.)
+const teamResultLabel = (m, kp) => {
+  if (!kp?.isTeam) return kp?.event || '';
+  const isFin = m.status ? isFinalStatus(m.status) : kp.event === '경기 종료';
+  if (!isFin) return kp.event || '경기 종료';
+  const isHome = kp.team === m.home?.code;
+  const mine = isHome ? m.home?.score : m.away?.score;
+  const theirs = isHome ? m.away?.score : m.home?.score;
+  if (mine == null || theirs == null) return '경기 종료';
+  const score = `${mine}:${theirs}`;
+  return mine > theirs ? `${score} 승리` : mine < theirs ? `${score} 패배` : `${score} 무승부`;
+};
+
 function koreansForTeam(teamName, teamCode, sport, matchState) {
   if (NATIONAL_TEAMS[teamName]) return [nationalTeamEntry(teamName, teamCode, matchState)];
   const primary = KOREAN_PLAYERS[teamName];
@@ -3315,7 +3329,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
     let main = name;
     if (kp.isTeam) {
       // 대표팀 엔트리 — 개인 출전 문구('출전' 등) 대신 경기 상태만 붙인다.
-      main = `${name} ${kp.event || '경기 종료'}`;
+      main = `${name} ${teamResultLabel(m, kp) || '경기 종료'}`;
     } else if (isMLB) {
       const parts = [];
       if (kp.hits > 0) parts.push(`${kp.hits}안타`);
@@ -3474,7 +3488,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
         const statParts = [];
         if (kp.isTeam) {
           // 대표팀 엔트리 — 개인 기록이 없으니 경기 상태 그대로.
-          statParts.push(kp.event || '경기 종료');
+          statParts.push(teamResultLabel(highlightMatch, kp) || '경기 종료');
         } else if (isMLB) {
           const h = kp.hits || 0, hr = kp.homeRuns || 0, rbi = kp.rbi || 0, r = kp.runs || 0, sb = kp.stolenBases || 0;
           if (h > 0) statParts.push(`${h}안타`);
