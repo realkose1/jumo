@@ -4190,12 +4190,19 @@ function aggregatePredictedXI(records) {
       if (idx < cur.lastIdx) cur.lastIdx = idx;   // idx 가 작을수록 최근 경기
       formationCounts.set(rec.formation, cur);
     }
+    // 그 경기 라인업의 grid('행:열')로 선수가 실제로 선 줄(수비 0 … 공격 1)을 기억한다.
+    // AF 의 pos 는 G/D/M/F 넷뿐이라 미드필더 3줄(4-2-3-1)을 구분 못 한다 — 과거
+    // 경기의 실제 줄 위치가 훨씬 정확하다(제보: 수비수·2선이 뒤섞여 그려짐).
+    const rows = rec.startXI.map(e => parseInt(String(e.player?.grid || '').split(':')[0], 10)).filter(r => r >= 1);
+    const maxRow = rows.length ? Math.max(...rows) : 0;
     rec.startXI.forEach(e => {
       const p = e.player || {};
       if (p.id == null) return;
       let cur = playerMap.get(p.id);
-      if (!cur) { cur = { id: p.id, starts: 0, lastIdx: idx }; playerMap.set(p.id, cur); }
+      if (!cur) { cur = { id: p.id, starts: 0, lastIdx: idx, rowSum: 0, rowN: 0 }; playerMap.set(p.id, cur); }
       cur.starts += 1;
+      const row = parseInt(String(p.grid || '').split(':')[0], 10);
+      if (row >= 2 && maxRow >= 3) { cur.rowSum += (row - 2) / (maxRow - 2); cur.rowN += 1; }
       if (idx <= cur.lastIdx) {
         cur.lastIdx = idx;
         cur.name = fixMojibake(p.name);
@@ -4258,21 +4265,27 @@ function aggregatePredictedXI(records) {
     for (let k = 0; k < slot.size; k++) {
       if (!remaining.length) break;
       let best = 0, bestDist = Infinity;
+      // 줄 목표(0=수비 … 1=공격)와 선수의 평균 줄 위치(grid 기반)의 거리. grid 를
+      // 못 본 선수는 포지션 밴드(1~5)를 0~1 로 환산해 대신 쓴다.
+      const nLines = lineSizes.length;
+      const target = nLines === 1 ? 0.5 : slot.li / (nLines - 1);
       remaining.forEach((p, i) => {
-        const d = Math.abs((predXiBandOf(p.pos) ?? 3) - slot.band);
-        if (d < bestDist) { bestDist = d; best = i; }   // 동점이면 먼저 나온 쪽 = 선발 많은 쪽
+        const rowNorm = p.rowN ? p.rowSum / p.rowN : (((predXiBandOf(p.pos) ?? 3) - 1) / 4);
+        const d = Math.abs(rowNorm - target);
+        if (d < bestDist - 1e-9) { bestDist = d; best = i; }   // 동점이면 먼저 나온 쪽 = 선발 많은 쪽
       });
       slot.picks.push(remaining.splice(best, 1)[0]);
     }
   });
+  slots.forEach(s => s.picks.forEach((p, k) => { p.grid = `${s.li + 2}:${k + 1}`; }));
   const outfield = slots.flatMap(s => s.picks);
-  while (outfield.length < 10 && remaining.length > 0) outfield.push(remaining.shift());
+  while (outfield.length < 10 && remaining.length > 0) { const p = remaining.shift(); p.grid = null; outfield.push(p); }
   if (outfield.length < 10) return null;
+  gk.grid = '1:1';
 
   const players = [gk, ...outfield].map(p => ({
-    // grid 는 과거 경기(다른 포메이션)의 좌표라 이번 포메이션과 안 맞을 수 있어
-    // 비운다 — layoutLineup 이 포지션 밴드 기준으로 다시 배치하게 한다.
-    player: { name: p.name, jerseyNumber: p.number, id: p.id, grid: null, pos: p.pos },
+    // grid 는 위에서 정한 줄(포메이션 기준)로 새로 매긴다 — layoutLineup 이 그대로 그린다.
+    player: { name: p.name, jerseyNumber: p.number, id: p.id, grid: p.grid || null, pos: p.pos },
     substitute: false,
     statistics: {},
   }));
@@ -4288,7 +4301,7 @@ async function fetchPredictedXI(teamId, leagueId) {
   if (mem && Date.now() - mem.at < (mem.neg ? PREDXI_FAIL_TTL : PREDXI_TTL)) return mem.data;
 
   // 키에 버전(v2)을 둔다 — 배치 규칙이 바뀌면 12시간 캐시가 옛 결과를 붙들고 있다.
-  const cacheKey = `af-predxi3-${teamId}-${leagueId}`;
+  const cacheKey = `af-predxi4-${teamId}-${leagueId}`;
   try {
     const r = await SB.from('sf_cache').select('date,events,updated_at').eq('date', cacheKey).limit(1);
     const row = (r && r.data || [])[0];
