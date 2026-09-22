@@ -11050,6 +11050,17 @@ function App() {
 
   // ── API-Football fixture transformer ─────────────────────────────────
   // Maps a fixture object from api-sports.io to our standard match shape.
+  // 팀 이름만으로 매칭하면 동명 구단에 걸린다 — 브라질 3부 'FC Porto'(id 25115)가
+  // 황인범 경기로 홈에 떴다(2026-09-22 제보). 이름이 맞아도 API-Football 팀 id 를
+  // 아는 구단이면 id 까지 같아야 우리 팀으로 본다(표는 push-cron PLAYERS 의 afTeamId).
+  const AF_TEAM_ID_BY_NAME = {"Los Angeles FC": 1616,"Atletico Madrid": 530,"Rangers": 257,"Glasgow Rangers": 257,"Atlético Madrid": 530,"Atletico de Madrid": 530,"Club Atletico de Madrid": 530,"Bayern Munich": 157,"Bayern München": 157,"FC Bayern München": 157,"FC Bayern": 157,"Schalke 04": 174,"FC Schalke 04": 174,"Schalke": 174,"Midtjylland": 397,"FC Midtjylland": 397,"FC Porto": 212,"Club Brugge": 569,"Club Brugge KV": 569,"Mainz": 164,"FSV Mainz 05": 164,"1. FSV Mainz 05": 164,"Union Berlin": 182,"1. FC Union Berlin": 182,"Borussia Mönchengladbach": 163,"Borussia Monchengladbach": 163,"Newcastle United U21": 7199,"Newcastle U21": 7199,"Brentford": 55,"Westerlo": 261,"KVC Westerlo": 261,"Austria Vienna": 601,"Austria Wien": 601,"Porto": 212,"Celtic": 247,"Celtic FC": 247,"Besiktas": 549,"Beşiktaş": 549,"Besiktas JK": 549,"Beşiktaş JK": 549,"Birmingham City": 54,"Birmingham": 54,"Stoke City": 75,"Stoke": 75,"Swansea City": 76,"Swansea": 76,"Augsburg": 170,"FC Augsburg": 170};
+  const isOurTeam = (name, id) => {
+    if (!name) return false;
+    if (NATIONAL_TEAMS[name]) return true;
+    if (!(KOREAN_PLAYERS[name] || KOREAN_PLAYERS_EXTRA[name])) return false;
+    const known = AF_TEAM_ID_BY_NAME[name];
+    return known == null || id == null || known === id;
+  };
   const transformApiFootballFixture = (fx) => {
     if (!fx?.fixture || !fx?.teams) return null;
     const tourneyName = (fx.league?.name || '').toLowerCase();
@@ -11071,8 +11082,8 @@ function App() {
 
     // Match against KOREAN_PLAYERS map. Use ONLY the full team name to avoid
     // false positives like Wolfsberg→WOL→황희찬 from the 3-letter slice.
-    const homeHasKo = !!(KOREAN_PLAYERS[homeTeamName] || KOREAN_PLAYERS_EXTRA[homeTeamName] || NATIONAL_TEAMS[homeTeamName]);
-    const awayHasKo = !!(KOREAN_PLAYERS[awayTeamName] || KOREAN_PLAYERS_EXTRA[awayTeamName] || NATIONAL_TEAMS[awayTeamName]);
+    const homeHasKo = isOurTeam(homeTeamName, fx.teams.home?.id);
+    const awayHasKo = isOurTeam(awayTeamName, fx.teams.away?.id);
     if (!homeHasKo && !awayHasKo) return null;
 
     // Use player's canonical team abbrev from ALL_PLAYERS for both card display
