@@ -7869,7 +7869,7 @@ function AgMedalPanel({ agMatches, onMatch, refetchTrigger }) {
                 <span style={{ ...NUM, fontSize:12, fontWeight:700, color:'var(--text2)' }}>🥈 {korea.silver}</span>
                 <span style={{ ...NUM, fontSize:12, fontWeight:700, color:'var(--text2)' }}>🥉 {korea.bronze}</span>
               </div>
-              <div style={{ fontSize:10, color:'var(--text4)' }}>합계 {korea.total}</div>
+              <div style={{ fontSize:10, color:'var(--text4)' }}>합계 {korea.total}{updatedAt ? ` · ${formatHHMM(updatedAt)} 기준` : ''}</div>
             </div>
           </div>
           {top5.length > 0 && (
