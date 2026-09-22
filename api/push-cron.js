@@ -863,6 +863,43 @@ async function collectSoccer(events, liveStates) {
   }
 }
 
+// ── 대표팀 다음 경기 확정 알림 ──────────────────────────────────────────
+// 토너먼트는 조별리그가 끝나야 다음 경기(상대·일시)가 생긴다. 한 시간에 한 번
+// 대표팀의 다음 경기 2개를 조회해 처음 보는 경기면 전원에게 방송한다
+// (앱 홈·일정에는 날짜 캐시로 자동 반영되지만, 알림은 여기서만 나간다).
+// 2분 크론이라 정각 직후 회차(분 < 2)에만 돈다 → AF 하루 24콜.
+const ROUND_KO = [
+  [/final/i, '결승'], [/semi/i, '준결승'], [/quarter/i, '8강'], [/round of 16|16/i, '16강'],
+  [/3rd place|bronze/i, '3·4위전'], [/group/i, '조별리그'],
+];
+const roundKo = (round) => (ROUND_KO.find(([re]) => re.test(round || '')) || [])[1] || (round || '');
+const kstLabel = (iso) => {
+  const d = new Date(iso);
+  const p = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, weekday: 'short' }).formatToParts(d)
+    .reduce((a, x) => (a[x.type] = x.value, a), {});
+  return `${p.month}/${p.day}(${p.weekday}) ${p.hour}:${p.minute} KST`;
+};
+async function collectNationalSchedule(events) {
+  if (new Date().getUTCMinutes() >= 2) return;
+  for (const [teamId, nat] of Object.entries(NATIONAL_TEAMS)) {
+    const j = await afGet(`/fixtures?team=${teamId}&next=2`);
+    for (const fx of j?.response || []) {
+      const fid = fx.fixture?.id;
+      if (!fid || !fx.fixture?.date) continue;
+      // 킥오프 3시간 이내면 이미 홈에 떠 있는 경기 — 새 소식이 아니다.
+      if (new Date(fx.fixture.date).getTime() - Date.now() < 3 * 60 * 60 * 1000) continue;
+      const home = teamLabel(fx.teams?.home), away = teamLabel(fx.teams?.away);
+      const opp = fx.teams?.home?.id === Number(teamId) ? away : home;
+      const round = roundKo(fx.league?.round);
+      events.push({
+        key: `af-nat-sched-${fid}`, players: [], kind: 'national', broadcast: true, matchId: String(fid),
+        title: `🇰🇷 ${nat.name} 다음 경기 확정`,
+        body: `${round ? round + ' · ' : ''}vs ${opp} · ${kstLabel(fx.fixture.date)}`,
+      });
+    }
+  }
+}
+
 async function collectBaseball(events) {
   // MLB 경기는 미국 현지(주로 저녁) 기준 날짜로 등록돼 UTC 날짜와 어긋난다. UTC '오늘'만
   // 조회하면 미국 저녁(=UTC 다음날)에 진행 중인 경기를 통째로 놓친다(soccer는 ESPN
@@ -963,6 +1000,7 @@ module.exports = async (req, res) => {
   const liveStates = [];
   try { await collectSoccer(events, liveStates); } catch (e) { console.warn('soccer', e?.message); }
   try { await collectBaseball(events); } catch (e) { console.warn('mlb', e?.message); }
+  try { await collectNationalSchedule(events); } catch (e) { console.warn('nat-sched', e?.message); }
 
   // ── 라이브 액티비티 갱신 ────────────────────────────────────────────────
   // 알림 중복 제거(fresh)와 무관하게 먼저 처리한다 — 새 '알림'이 없어도
