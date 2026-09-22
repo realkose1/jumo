@@ -4971,7 +4971,12 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
     // 다른 팀은 기존 fixMojibake 경로 그대로 둔다.
     const nameOf = (afPlayer, teamId) => teamId === 10177 ? fixMojibake(agPlayerName(afPlayer)) : fixMojibake(afPlayer?.name);
     const incidents = afResp.map(e => {
-      const isHome = e.team?.name === match.home.name;
+      // 팀 id 로 먼저 맞춘다 — 대표팀 경기는 match.home.name 이 표시명('대한민국 U-23')이라
+      // AF 의 'Korea Republic U23' 과 이름이 달라 전부 원정(상대) 이벤트로 찍혔다(제보:
+      // 한국 골에 사우디 국기). 이름 비교는 id 가 없는 ESPN 변환 이벤트용 폴백.
+      const isHome = (e.team?.id != null && match.home?.id != null)
+        ? e.team.id === match.home.id
+        : e.team?.name === match.home.name;
       const base = { time: e.time?.elapsed, addedTime: e.time?.extra ?? undefined, isHome };
       if (e.type === 'Goal') {
         let cls = 'normal';
