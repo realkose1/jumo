@@ -4220,7 +4220,9 @@ function aggregatePredictedXI(records) {
   const byStartsRecency = (a, b) => (b.starts - a.starts) || (a.lastIdx - b.lastIdx);
   const gkCandidates = allPlayers.filter(p => predXiBandOf(p.pos) === 0).sort(byStartsRecency);
   const gk = gkCandidates[0] || [...allPlayers].sort(byStartsRecency)[0];
-  const rest = allPlayers.filter(p => p.id !== gk.id).sort(byStartsRecency);
+  // 골키퍼는 한 명뿐이다 — 로테이션으로 두 번째 GK 가 선발 횟수가 많아도 필드
+  // 라인에 넣지 않는다(제보: GK 가 수비수 자리에 그려짐). 밴드 0 은 전부 제외.
+  const rest = allPlayers.filter(p => p.id !== gk.id && predXiBandOf(p.pos) !== 0).sort(byStartsRecency);
 
   let lineSizes = (formation && /^\d+(-\d+)+$/.test(formation)) ? formation.split('-').map(Number) : null;
   if (lineSizes && lineSizes.reduce((a, b) => a + b, 0) !== 10) lineSizes = null;
@@ -4286,7 +4288,7 @@ async function fetchPredictedXI(teamId, leagueId) {
   if (mem && Date.now() - mem.at < (mem.neg ? PREDXI_FAIL_TTL : PREDXI_TTL)) return mem.data;
 
   // 키에 버전(v2)을 둔다 — 배치 규칙이 바뀌면 12시간 캐시가 옛 결과를 붙들고 있다.
-  const cacheKey = `af-predxi2-${teamId}-${leagueId}`;
+  const cacheKey = `af-predxi3-${teamId}-${leagueId}`;
   try {
     const r = await SB.from('sf_cache').select('date,events,updated_at').eq('date', cacheKey).limit(1);
     const row = (r && r.data || [])[0];
