@@ -161,7 +161,7 @@ function nationalMatchEvents({ fx, fid, evd, home, away, isLive, isFinal, elapse
       if (!NATIONAL_TEAMS[tid]) return; // 상대팀 골 취소는 방송하지 않는다
       const min = minuteKey(ev);
       const scorer = ev.player?.id
-        ? `${agPlayerName(ev.player) || PLAYERS.find((p) => p.afPlayerId === ev.player?.id)?.name || ev.player?.name || ''} `
+        ? `${PLAYERS.find((p) => p.afPlayerId === ev.player?.id)?.name || agPlayerName(ev.player) || ev.player?.name || ''} `
         : '';
       const h = tally[homeId] || 0, a = tally[awayId] || 0;
       const staleEv = isStaleEvent(ev, { staleResult, isLive, elapsedNow, kickoffMs });
@@ -183,7 +183,7 @@ function nationalMatchEvents({ fx, fid, evd, home, away, isLive, isFinal, elapse
     const min = minuteKey(ev);
     const scorer = ev.detail === 'Own Goal'
       ? '상대 자책골 '
-      : `${agPlayerName(ev.player) || PLAYERS.find((p) => p.afPlayerId === ev.player?.id)?.name || ev.player?.name || ''} `;
+      : `${PLAYERS.find((p) => p.afPlayerId === ev.player?.id)?.name || agPlayerName(ev.player) || ev.player?.name || ''} `;
     const pen = ev.detail === 'Penalty' ? '페널티킥 ' : '';
     const h = tally[homeId] || 0, a = tally[awayId] || 0;
     const staleEv = isStaleEvent(ev, { staleResult, isLive, elapsedNow, kickoffMs });
@@ -201,7 +201,10 @@ function nationalMatchEvents({ fx, fid, evd, home, away, isLive, isFinal, elapse
     const koreaHome = !!NATIONAL_TEAMS[homeId];
     const natName = (NATIONAL_TEAMS[homeId] || NATIONAL_TEAMS[awayId])?.name || '대한민국';
     const shootout = fx.score?.penalty?.home != null;
-    let title, body = `${home} ${gh} : ${ga} ${away} · 아시안게임 경기가 끝났습니다.`;
+    const compKo = /Asian Games/i.test(fx.league?.name || '') ? '아시안게임 경기가'
+      : /Friendl/i.test(fx.league?.name || '') ? '친선 경기가'
+      : /World Cup/i.test(fx.league?.name || '') ? '월드컵 경기가' : '대표팀 경기가';
+    let title, body = `${home} ${gh} : ${ga} ${away} · ${compKo} 끝났습니다.`;
     if (shootout) {
       const ph = fx.score.penalty.home ?? 0, pa = fx.score.penalty.away ?? 0;
       const koreaWon = koreaHome ? ph > pa : pa > ph;
