@@ -9308,10 +9308,23 @@ function App() {
   };
   // 지난 실행의 목록이 있으면 그걸로 시작한다 — 첫 프레임부터 실제 내용이 뜬다.
   const bootCacheRef = React.useRef(loadCachedMatches());
-  const [liveMatches, setLiveMatches] = React.useState(() => bootCacheRef.current?.matches || []);
+  // 캐시가 충분히 최근일 때만 첫 프레임에 그대로 쓴다. 몇 시간 지난 목록을 먼저
+  // 띄우면 히어로·오늘의 경기가 '지난 내용'으로 떴다가 갱신되며 바뀌는 게 눈에
+  // 띈다(제보). 지금은 최신 목록이 1~3초면 오므로 낡은 캐시는 스켈레톤이 낫다 —
+  // 단, 네트워크가 실패하면 그때 낡은 캐시라도 보여준다(아래 폴백).
+  const MATCH_CACHE_FRESH_MS = 20 * 60 * 1000;
+  const bootFresh = !!bootCacheRef.current && (Date.now() - bootCacheRef.current.at) <= MATCH_CACHE_FRESH_MS;
+  const [liveMatches, setLiveMatches] = React.useState(() => bootFresh ? bootCacheRef.current.matches : []);
   const [apiLoading, setApiLoading] = React.useState(true); // Start with true for initial load
   // 캐시로 이미 내용을 그렸다면 '첫 로드'가 아니다 → 스켈레톤 대신 갱신 바를 쓴다.
-  const [isInitialLoad, setIsInitialLoad] = React.useState(!bootCacheRef.current);
+  const [isInitialLoad, setIsInitialLoad] = React.useState(!bootFresh);
+  // 낡은 캐시 폴백: 최신 목록을 못 받은 채 로딩이 끝나면(안전장치·실패) 빈 화면
+  // 대신 지난 목록이라도 띄운다.
+  const fallbackToStaleCache = React.useCallback(() => {
+    const boot = bootCacheRef.current;
+    if (!boot || bootFresh) return;
+    setLiveMatches(prev => (prev && prev.length) ? prev : boot.matches);
+  }, [bootFresh]);
   // 갱신 바는 '알릴 가치가 있는' 갱신에만 뜬다 — 부팅 직후와 오래 비웠다 돌아온
   // 경우. 20~60초마다 도는 배경 폴링까지 표시하면 계속 깜빡여 성가시다.
   const [refreshing, setRefreshing] = React.useState(false);
@@ -9470,6 +9483,7 @@ function App() {
       // Safety: even if a network call hangs indefinitely, never lock the UI.
       const safetyTimer = setTimeout(() => {
         console.warn('⏱️ fetchLiveMatches safety timeout — clearing loading state');
+        fallbackToStaleCache();
         setApiLoading(false);
         setIsInitialLoad(false);
       }, 8000);
@@ -10452,6 +10466,7 @@ function App() {
         console.log(`✅ ${new Date().toLocaleTimeString('ko-KR')} | 한국 선수 경기: ${koreanMatches.length}개`);
       } catch (error) {
         console.error('❌ Failed to fetch matches:', error);
+        fallbackToStaleCache();
       } finally {
         clearTimeout(safetyTimer);
         setApiLoading(false);
@@ -10459,7 +10474,7 @@ function App() {
         lastPublishAtRef.current = Date.now();   // 복귀 시 낡음 판단 기준
         notifyListReady();   // 실패로 끝나도 갱신 표시는 내린다
       }
-  }, []);
+  }, [fallbackToStaleCache]);
 
   // 당겨서 새로고침용 — 목록이 반영되는 즉시 스피너를 내린다(상세는 뒤에서 계속).
   const refreshFromPull = React.useCallback(
