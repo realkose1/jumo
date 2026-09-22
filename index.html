@@ -5295,6 +5295,49 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
               <span style={{ fontSize:12, fontWeight:600, color:'var(--text2)', textAlign:'center' }}>{match.away.name}</span>
             </div>
           </div>
+          {/* 득점자 목록(FotMob 식) — 엠블럼/스코어 줄 바로 아래, 상태·킥오프 줄 위.
+              incidentsData 는 events 탭 fetch 로 채워지고(기본 탭이 events 라 마운트 시
+              바로 온다) 라이브 중엔 폴링으로 갱신되므로 여기서도 그대로 반영된다.
+              야구는 건너뛴다. */}
+          {isSoccerMatch && (() => {
+            const goals = (incidentsData?.incidents || []).filter(inc =>
+              inc.incidentType === 'goal' && inc.incidentClass !== 'missedPenalty');
+            if (goals.length === 0) return null;
+            // FotMob 표기: 성만(마지막 토큰) 표시, 단 한글 이름은 전체 표기 유지.
+            const shortName = (name) => {
+              const n = String(name || '').trim();
+              if (!n) return '';
+              if (/[가-힣]/.test(n)) return n;
+              const parts = n.split(/\s+/);
+              return parts[parts.length - 1];
+            };
+            const timeStr = (g) => g.addedTime ? `${g.time}+${g.addedTime}'` : `${g.time}'`;
+            const suffix = (g) => g.incidentClass === 'penalty' ? ' (PK)' : g.incidentClass === 'ownGoal' ? ' (자책)' : '';
+            const buildLines = (isHome) => {
+              const order = [];
+              const byName = new Map();
+              goals.filter(g => g.isHome === isHome).forEach(g => {
+                const name = shortName(g.player?.name);
+                if (!byName.has(name)) { byName.set(name, []); order.push(name); }
+                byName.get(name).push(`${timeStr(g)}${suffix(g)}`);
+              });
+              return order.map(name => `${name} ${byName.get(name).join(', ')}`);
+            };
+            const homeLines = buildLines(true);
+            const awayLines = buildLines(false);
+            const col = { flex:'0 1 42%', maxWidth:'42%', fontSize:11, color:'var(--text3)', lineHeight:1.5 };
+            return (
+              <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'center', gap:8, marginTop:6 }}>
+                <div style={{ ...col, textAlign:'right' }}>
+                  {homeLines.map((l, i) => <div key={i}>{l}</div>)}
+                </div>
+                <span style={{ fontSize:11, flexShrink:0, marginTop:1 }}>⚽</span>
+                <div style={{ ...col, textAlign:'left' }}>
+                  {awayLines.map((l, i) => <div key={i}>{l}</div>)}
+                </div>
+              </div>
+            );
+          })()}
           {(isLive || isFinished) && kickoffText && (
             <div style={{ textAlign:'center', marginTop:-8, marginBottom:14, fontSize:11, color:'var(--text4)', letterSpacing:-0.1 }}>
               {kickoffText}
