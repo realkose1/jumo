@@ -5308,6 +5308,10 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
               const n = String(name || '').trim();
               if (!n) return '';
               if (/[가-힣]/.test(n)) return n;
+              // 우리 선수는 한글 이름으로(AF 영문 'Hwang In-Beom' 이 'In-Beom' 으로 잘리던 것).
+              const norm = (x) => x.toLowerCase().replace(/[^a-z]/g, '');
+              const ours = ALL_PLAYERS.find(p => p.nameEn && norm(p.nameEn) === norm(n));
+              if (ours) return ours.name;
               const parts = n.split(/\s+/);
               return parts[parts.length - 1];
             };
@@ -5327,7 +5331,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
             const awayLines = buildLines(false);
             const col = { flex:'0 1 42%', maxWidth:'42%', fontSize:11, color:'var(--text3)', lineHeight:1.5 };
             return (
-              <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'center', gap:8, marginTop:6 }}>
+              <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'center', gap:8, marginTop:6, marginBottom:8 }}>
                 <div style={{ ...col, textAlign:'right' }}>
                   {homeLines.map((l, i) => <div key={i}>{l}</div>)}
                 </div>
