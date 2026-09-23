@@ -997,6 +997,11 @@ module.exports = async (req, res) => {
   if (secret && req.query?.secret !== secret && req.headers['x-cron-secret'] !== secret) {
     return res.status(401).json({ error: 'unauthorized' });
   }
+  // 서울 지하철 라이브 푸시 체인 하트비트 — 끊긴 체인을 되살린다(2초 제한, 실패해도 Jumo 동작엔 영향 없음)
+  try {
+    const hb = fetch('https://seoul-subway-lyart.vercel.app/api/la?op=kick', { signal: AbortSignal.timeout(2000) }).catch(() => {});
+    globalThis[Symbol.for('@vercel/request-context')]?.get?.()?.waitUntil?.(hb);
+  } catch (e) { /* 무시 */ }
   if (!process.env.APNS_KEY || !process.env.SUPABASE_SERVICE_KEY) {
     return res.status(500).json({ error: 'missing env (APNS_KEY / SUPABASE_SERVICE_KEY)' });
   }
