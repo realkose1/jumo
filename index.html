@@ -8023,15 +8023,87 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
   React.useEffect(() => { if (scrollTopKey > 0) { SCROLL_MEM.news = 0; scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } }, [scrollTopKey]);
   useScrollMemory('news', scrollRef);
 
-  const handleTouchStart = (e) => { touchStartY.current = e.touches[0].clientY; };
+  // ── 카테고리 칩 가로 스와이프 ──────────────────────────────────
+  // 같은 스크롤 컨테이너의 터치 핸들러(당겨서 새로고침)를 확장한다 —
+  // 별도 레이어를 붙이면 두 제스처가 서로 손가락을 뺏는다. 첫 ~10px 이동으로
+  // 방향을 잠그고(가로/세로), 이후엔 그 방향으로만 반응한다.
+  const touchStartX = React.useRef(0);
+  const swipeRef = React.useRef(null); // { locked:null|'h'|'v', dx, dy, ignore, t0 }
+  const listContentRef = React.useRef(null);
+  const chipRefs = React.useRef({});
+  const switchAnimIdRef = React.useRef(0);
+  const [switchAnim, setSwitchAnim] = React.useState(null); // { anim, id }
+
+  const handleTouchStart = (e) => {
+    const t = e.touches[0];
+    touchStartY.current = t.clientY;
+    touchStartX.current = t.clientX;
+    // 왼쪽 24px 이내에서 시작하면 iOS 뒤로가기/앱 엣지 스와이프 영역이라
+    // 스와이프로 다루지 않는다(App 의 edgeWidth 엣지 판정과 같은 24px).
+    // 가로 스크롤 가능한 자식(메달판 표 등) 위에서 시작해도 마찬가지.
+    const edge = t.clientX < 24;
+    const insideHScroll = !!(e.target && e.target.closest && e.target.closest('[data-hscroll]'));
+    swipeRef.current = { locked: null, dx: 0, dy: 0, ignore: edge || insideHScroll, t0: Date.now() };
+  };
   const handleTouchMove = (e) => {
+    const s = swipeRef.current;
+    const t = e.touches[0];
+    const dx = t.clientX - touchStartX.current;
+    const dy = t.clientY - touchStartY.current;
+    if (s && !s.ignore) {
+      s.dx = dx; s.dy = dy;
+      if (!s.locked && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+        s.locked = Math.abs(dx) > Math.abs(dy) * 1.5 ? 'h' : 'v';
+      }
+      if (s.locked === 'h') {
+        // 가로 스와이프 중 — 당겨서 새로고침은 건너뛰고 목록만 살짝 따라 움직인다.
+        const clamped = Math.max(-40, Math.min(40, dx * 0.25));
+        if (listContentRef.current) {
+          listContentRef.current.style.transition = 'none';
+          listContentRef.current.style.transform = `translateX(${clamped}px)`;
+          listContentRef.current.style.opacity = String(1 - Math.min(Math.abs(dx) / 200, 0.35));
+        }
+        return;
+      }
+    }
+    // 세로(또는 방향 판정 전) — 기존 당겨서 새로고침 로직.
     if (refreshing) return;
     const scrollTop = scrollRef.current?.scrollTop || 0;
     if (scrollTop > 0) return;
-    const dy = e.touches[0].clientY - touchStartY.current;
     if (dy > 0) setPullY(Math.min(dy * 0.45, PULL_THRESHOLD + 16));
   };
   const handleTouchEnd = () => {
+    const s = swipeRef.current;
+    swipeRef.current = null;
+    if (s && !s.ignore && s.locked === 'h') {
+      const dt = Math.max(1, Date.now() - s.t0);
+      const velocity = Math.abs(s.dx) / dt;
+      const visible = NEWS_CATEGORIES.filter(c => enabledCategories.includes(c));
+      const idx = visible.indexOf(category);
+      if ((Math.abs(s.dx) > 60 || velocity > 0.4) && idx !== -1) {
+        const dir = s.dx < 0 ? 1 : -1; // 왼쪽 스와이프 → 다음 칩, 오른쪽 → 이전 칩
+        const nextIdx = idx + dir;
+        if (nextIdx >= 0 && nextIdx < visible.length) {
+          const nextCat = visible[nextIdx];
+          switchAnimIdRef.current += 1;
+          setSwitchAnim({ anim: dir > 0 ? 'obSlideFromRight' : 'obSlideFromLeft', id: switchAnimIdRef.current });
+          setCategory(nextCat);
+          scrollRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+          if (typeof haptic === 'function') haptic('light');
+          requestAnimationFrame(() => {
+            chipRefs.current[nextCat]?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+          });
+          return;
+        }
+      }
+      // 임계값 미달 — 원위치로 되돌린다.
+      if (listContentRef.current) {
+        listContentRef.current.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
+        listContentRef.current.style.transform = '';
+        listContentRef.current.style.opacity = '';
+      }
+      return;
+    }
     if (pullY >= PULL_THRESHOLD && !refreshing) {
       setRefreshing(true);
       setPullY(PULL_THRESHOLD);
@@ -8327,6 +8399,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
         {NEWS_CATEGORIES.filter(c => enabledCategories.includes(c)).map(c => (
           <button
             key={c}
+            ref={el => { chipRefs.current[c] = el; }}
             onClick={() => setCategory(c)}
             style={{
               flexShrink:0,
@@ -8348,7 +8421,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
         ))}
       </div>
       </div>
-      <div ref={scrollRef} onScroll={e => { const s = e.currentTarget.scrollTop > 4; setScrolled(p => p !== s ? s : p); onTabScroll(e); }} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} style={{ flex:1, overflow:'auto', background:'var(--bg)', minHeight:0 }} className="scrollbar-hide jumo-page">
+      <div ref={scrollRef} onScroll={e => { const s = e.currentTarget.scrollTop > 4; setScrolled(p => p !== s ? s : p); onTabScroll(e); }} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchEnd} style={{ flex:1, overflow:'auto', background:'var(--bg)', minHeight:0 }} className="scrollbar-hide jumo-page">
         {/* 오버레이 헤더가 가리는 만큼 비워둔다 — 스크롤하면 내용이 그 아래로 흐른다 */}
         <div style={{ height: headH, flexShrink: 0 }}/>
       {/* Pull-to-refresh indicator */}
@@ -8359,6 +8432,9 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
         </div>
       </div>
 
+      {/* 카테고리 가로 스와이프로 칩을 바꿀 때 이 안쪽만 밀리고, 전환 시 짧게
+          슬라이드 인 된다(key 를 바꿔 리마운트시켜 애니메이션을 매번 재생한다) */}
+      <div ref={listContentRef} key={switchAnim ? switchAnim.id : 'base'} style={switchAnim ? { animation: `${switchAnim.anim} 0.18s ease` } : undefined}>
       {/* 아시안게임 메달 패널 — '아시안게임' 카테고리를 볼 때만, 기사 목록 위에 */}
       {agNewsActive() && category === '아시안게임' && (
         <AgMedalPanel agMatches={agMatches} onMatch={onMatch} refetchTrigger={refetchTrigger}/>
@@ -8445,6 +8521,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
           );
         })}
         <div style={{ height:20 }}/>
+      </div>
       </div>
       </div>
     </div>
