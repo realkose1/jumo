@@ -11226,7 +11226,7 @@ function App() {
       'Premiership':'SPL','Süper Lig':'TUR','Eredivisie':'NED','Primeira Liga':'POR',
       'Jupiler Pro League':'BEL','Major League Soccer':'MLS','Superliga':'DEN','La Liga':'ESP',
       'Championship':'CHA','Serbian SuperLiga':'SRB','UEFA Champions League':'UCL',
-      'UEFA Europa League':'UEL','UEFA Conference League':'UECL','Asian Games':'AG',
+      'UEFA Europa League':'UEL','UEFA Conference League':'UECL','Asian Games':'AG','Friendlies':'A매치',
     };
     const leagueAbbr = TOURNEY_ABBR[tournamentName] || tournamentName.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,4);
 
@@ -11254,7 +11254,7 @@ function App() {
       koreanPlayers: koreanPlayers.map(kp => kp.isTeam ? kp : ({ ...kp, event: (isFinished || isTimedOut) ? '확인 불가' : '출전 예상', minutesPlayed: 0, matchGoals: 0, matchAssists: 0 })),
       isKoreanDerby,
       // 카드·일정의 대회 줄에 그대로 찍히므로 아시안게임은 한글로.
-      competition: tournamentName === 'Asian Games' ? '아시안게임' : tournamentName,
+      competition: tournamentName === 'Asian Games' ? '아시안게임' : tournamentName === 'Friendlies' ? '국가대표 친선' : tournamentName,
       competitionLogo: fx.league?.logo || null,
       venue: fx.fixture.venue?.city || '',
       time: timeDisplay,
