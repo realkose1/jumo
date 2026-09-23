@@ -2505,7 +2505,7 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
           const hours = Math.floor(diff / (1000 * 60 * 60));
           const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
           const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-          setCountdown(`${hours}시간 ${minutes}분 ${seconds}초 뒤 시작`);
+          setCountdown(`${hours}시간 ${minutes}분 ${seconds}초 남음`);
         } else {
           setCountdown('곧 시작');
         }
@@ -2534,7 +2534,7 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
     } else if (isTomorrow) {
       timeLabel = '내일';
     } else {
-      timeLabel = `${date.getMonth() + 1}월 ${date.getDate()}일`;
+      timeLabel = `${date.getMonth() + 1}/${date.getDate()}`;   // 두 줄로 꺾이지 않게 짧게
     }
 
     // 오늘이면 '오후 7:30' 처럼 12시간제, 내일·날짜 머리글에는 오전/오후가 없으니 24시간제('내일 19:30').
@@ -2733,7 +2733,7 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
                 </div>
               ) : (
                 <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                  <span style={{ fontSize:20, fontWeight:700, color:'var(--text)', letterSpacing:-0.3 }}>
+                  <span style={{ fontSize:20, fontWeight:700, color:'var(--text)', letterSpacing:-0.3, whiteSpace:'nowrap' }}>
                     {timeLabel} {timeValue}
                   </span>
                   {countdown && (
@@ -5220,7 +5220,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
           const hours = Math.floor(diff / (1000 * 60 * 60));
           const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
           const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-          setCountdown(`${hours}시간 ${minutes}분 ${seconds}초 뒤 시작`);
+          setCountdown(`${hours}시간 ${minutes}분 ${seconds}초 남음`);
         } else {
           setCountdown('곧 시작');
         }
@@ -5249,7 +5249,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
     } else if (isTomorrow) {
       timeLabel = '내일';
     } else {
-      timeLabel = `${date.getMonth() + 1}월 ${date.getDate()}일`;
+      timeLabel = `${date.getMonth() + 1}/${date.getDate()}`;   // 두 줄로 꺾이지 않게 짧게
     }
 
     // 오늘이면 '오후 7:30' 처럼 12시간제, 내일·날짜 머리글에는 오전/오후가 없으니 24시간제('내일 19:30').
