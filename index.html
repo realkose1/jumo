@@ -1712,6 +1712,48 @@ const manualAvailabilityFor = (name, now = Date.now()) => {
   if (m.to && now > Date.parse(m.to + 'T23:59:59+09:00')) return null;
   return { label: m.label, severity: 'medium', kind: m.kind, note: m.note, manual: true };
 };
+// 국제 브레이크(A매치 기간) 판정 — 홈 히어로가 비어(대표팀 경기도, 소속팀 경기도
+// 하이라이트가 없을) 때 그 자리를 'INTERNATIONAL BREAK' 히어로로 채울지 정한다.
+// 아래 둘 중 하나만 있어도 켠다:
+//  1) MANUAL_AVAILABILITY 에 'A대표팀 소집' 라벨이 지금(KST) 활성인 선수가 있다.
+//     소집 구간(from~to)은 '9/21–10/7' 형태 문구로도 함께 준다.
+//  2) 매치 목록에 A대표팀(대한민국, 아시안게임 제외) 경기가 5일 이내 킥오프
+//     예정이거나 1일 이내에 끝났다.
+const internationalWindowNow = (matches = [], now = Date.now()) => {
+  const nowMs = typeof now === 'number' ? now : now.getTime();
+  const activeCallups = Object.entries(MANUAL_AVAILABILITY)
+    .filter(([name, m]) => m.label === 'A대표팀 소집' && manualAvailabilityFor(name, nowMs))
+    .map(([name, m]) => ({ name, from: m.from, to: m.to }));
+
+  const fmtMD = (iso) => {
+    const d = new Date(iso + 'T00:00:00+09:00');
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  };
+  let range = null;
+  if (activeCallups.length) {
+    const from = activeCallups.reduce((a, c) => (!a || c.from < a) ? c.from : a, null);
+    const to = activeCallups.reduce((a, c) => (!a || c.to > a) ? c.to : a, null);
+    range = (from && to) ? `${fmtMD(from)}–${fmtMD(to)}` : null;
+  }
+
+  const aTeamMatches = matches.filter(m => {
+    const kp = m.koreanPlayer;
+    if (!kp?.isTeam || kp.team !== NATIONAL_TEAMS['South Korea'].code) return false;
+    if (m.competition === '아시안게임' || m.leagueId === 803) return false;
+    return true;
+  });
+  const FIVE_DAYS = 5 * 86400000, ONE_DAY = 86400000;
+  const hasNearbyMatch = aTeamMatches.some(m => {
+    if (!m.fullDate) return false;
+    const t = new Date(m.fullDate).getTime();
+    if (m.live || m.time === 'LIVE') return true;
+    if (isFinalStatus(m.status)) return (nowMs - t) >= 0 && (nowMs - t) <= ONE_DAY;
+    return (t - nowMs) >= 0 && (t - nowMs) <= FIVE_DAYS;
+  });
+
+  if (!activeCallups.length && !hasNearbyMatch) return null;
+  return { active: true, range, callups: activeCallups, matches: aTeamMatches };
+};
 // 대표팀 엔트리(kind:'team')는 합성 항목이라 결장 개념이 없다 — 항상 가용.
 // 코리안 더비 등 팔로우한 선수가 둘 이상일 때 히어로의 '주인공'을 고르는 데 쓴다.
 const heroAvailable = (kp) => !!kp && (kp.isTeam || !manualAvailabilityFor(kp.name));
@@ -2085,6 +2127,99 @@ function NationalHeroChip({ match }) {
     <span style={{ fontSize:10, fontWeight:800, padding:'3px 8px', borderRadius:6, background:'rgba(205,46,58,0.22)', border:'0.5px solid rgba(205,46,58,0.5)', color:'#ff8a94' }}>
       {isAG ? '🇰🇷 아시안게임' : '🇰🇷 A매치'}
     </span>
+  );
+}
+
+// 홈 히어로가 비었을 때(내세울 하이라이트가 없을 때) 국제 브레이크(A매치) 기간이면
+// 대신 채우는 히어로 — 소집·경기 정보가 아예 없어도 앱이 휑해 보이지 않게 한다.
+// internationalWindowNow() 가 '활성' 판정을 이미 마쳤으므로 여기선 그 결과로
+// 라이브 > 예정 > (24시간 내) 종료 순으로 대표팀 경기를 골라 문구를 만든다.
+function InternationalBreakHero({ window: intlWindow, followedOrderedNames = [], onMatch, onNotif, unreadCount = 0, nativeTabBar = false, now }) {
+  const matches = intlWindow?.matches || [];
+  const liveMatch = matches.find(m => m.live || m.time === 'LIVE');
+  const upcomingMatch = !liveMatch ? matches
+    .filter(m => m.fullDate && !isFinalStatus(m.status) && new Date(m.fullDate) > now)
+    .sort((a, b) => new Date(a.fullDate) - new Date(b.fullDate))[0] : null;
+  const lastFinished = (!liveMatch && !upcomingMatch) ? matches
+    .filter(m => isFinalStatus(m.status) && m.fullDate)
+    .sort((a, b) => new Date(b.fullDate) - new Date(a.fullDate))[0] : null;
+  const recentFinished = (lastFinished && (now - new Date(lastFinished.fullDate).getTime()) <= 86400000) ? lastFinished : null;
+  const target = liveMatch || upcomingMatch || recentFinished || null;
+
+  // 대표팀(한국) 쪽이 아닌 반대 팀 이름 — vs 상대 표기에 쓴다.
+  const oppOf = (m) => {
+    if (!m) return '';
+    const isHome = m.home?.code === m.koreanPlayer?.team;
+    return (isHome ? m.away?.name : m.home?.name) || '';
+  };
+
+  // 소집 명단 — 팔로우한 선수를 먼저 두고, 최대 3명 + '외 N명'.
+  const callupNames = intlWindow?.callups?.map(c => c.name) || [];
+  const orderedCallups = [
+    ...followedOrderedNames.filter(n => callupNames.includes(n)),
+    ...callupNames.filter(n => !followedOrderedNames.includes(n)),
+  ];
+  const shownNames = orderedCallups.slice(0, 3);
+  const restCount = orderedCallups.length - shownNames.length;
+  const callupLine = orderedCallups.length
+    ? `소집 ${orderedCallups.length}명 · ${shownNames.join(' · ')}${restCount > 0 ? ` 외 ${restCount}명` : ''}`
+    : '';
+
+  const days = ['일','월','화','수','목','금','토'];
+  let main = 'A매치 기간', sub = '', scoreNode = null;
+  if (liveMatch) {
+    scoreNode = (
+      <div style={{ display:'flex', alignItems:'center', gap:10, margin:'6px 0 2px' }}>
+        <TeamBadge code={liveMatch.home.code} size={28} logo={liveMatch.home.logo}/>
+        <span style={{ fontVariantNumeric:'tabular-nums', fontSize:32, fontWeight:900, color:'#fff', letterSpacing:-1 }}>{liveMatch.home.score ?? 0}</span>
+        <span style={{ fontSize:20, color:'rgba(255,255,255,0.4)', fontWeight:300 }}>:</span>
+        <span style={{ fontVariantNumeric:'tabular-nums', fontSize:32, fontWeight:900, color:'rgba(255,255,255,0.5)', letterSpacing:-1 }}>{liveMatch.away.score ?? 0}</span>
+        <TeamBadge code={liveMatch.away.code} size={28} logo={liveMatch.away.logo}/>
+      </div>
+    );
+    main = `대한민국 vs ${oppOf(liveMatch)}`;
+  } else if (upcomingMatch) {
+    const d = new Date(upcomingMatch.fullDate);
+    main = `vs ${oppOf(upcomingMatch)}`;
+    const diff = Math.max(0, d.getTime() - now);
+    const totalMin = Math.floor(diff / 60000);
+    const dday = Math.floor(totalMin / 1440);
+    const hh = Math.floor((totalMin % 1440) / 60);
+    const mm = totalMin % 60;
+    const countdown = dday > 0 ? `${dday}일 ${hh}시간 남음` : `${hh}시간 ${mm}분 남음`;
+    const hhStr = String(d.getHours()).padStart(2, '0');
+    const mmStr = String(d.getMinutes()).padStart(2, '0');
+    sub = `${d.getMonth() + 1}/${d.getDate()} (${days[d.getDay()]}) ${hhStr}:${mmStr} · ${upcomingMatch.competition || ''} · ${countdown}`;
+  } else if (recentFinished) {
+    main = teamResultLabel(recentFinished, recentFinished.koreanPlayer) || '경기 종료';
+    sub = `${recentFinished.home?.name} ${recentFinished.home?.score}-${recentFinished.away?.score} ${recentFinished.away?.name}`;
+  }
+
+  return (
+    <div onClick={() => target && onMatch(target)} style={{ position:'relative', height:260, overflow:'hidden', marginBottom:0, background:'#111', cursor: target ? 'pointer' : 'default' }}>
+      <NationalHeroBackdrop/>
+      <div style={{ position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.18) 26%, rgba(0,0,0,0.72) 100%)' }}/>
+      <div style={{ position:'absolute', top:12, left:20, right:20, display:'flex', justifyContent:'space-between', alignItems:'center', zIndex:2 }}>
+        <span style={{ fontSize:15, fontWeight:900, color:'#fff', letterSpacing:2, textTransform:'uppercase' }}>JUMO</span>
+        <button onClick={e => { e.stopPropagation(); onNotif(); }} style={{ ...LG.base, ...LG.circle, color:'rgba(255,255,255,0.85)', position:'relative', display: nativeTabBar ? 'none' : 'flex' }}>
+          <svg width="18" height="18" viewBox="0 0 22 22" fill="none"><path d="M11 2a7 7 0 00-7 7v4l-1.5 2.5h17L18 13V9a7 7 0 00-7-7z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" fill="none"/><path d="M9 18.5a2 2 0 004 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+          {unreadCount > 0 && <span style={{ position:'absolute', top:-2, right:-2, minWidth:16, height:16, padding:'0 4px', borderRadius:8, background:'#e63030', color:'#fff', fontSize:9, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 0 0 1.5px rgba(0,0,0,0.4)' }}>{unreadCount > 99 ? '99+' : unreadCount}</span>}
+        </button>
+      </div>
+      <div style={{ position:'absolute', bottom:20, left:20, right:20, zIndex:2 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
+          {liveMatch && <LiveDot/>}
+          <span style={{ fontSize:11, fontWeight:800, letterSpacing:1.5, color:'rgba(255,255,255,0.75)' }}>INTERNATIONAL BREAK</span>
+          <span style={{ fontSize:10, fontWeight:800, padding:'3px 8px', borderRadius:6, background:'rgba(205,46,58,0.22)', border:'0.5px solid rgba(205,46,58,0.5)', color:'#ff8a94' }}>
+            🇰🇷 A매치 기간{intlWindow?.range ? ` ${intlWindow.range}` : ''}
+          </span>
+        </div>
+        {scoreNode}
+        <div style={{ fontSize:24, fontWeight:900, color:'#fff', lineHeight:1.15, letterSpacing:-0.5, marginTop: scoreNode ? 10 : 0 }}>{main}</div>
+        {sub && <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:8 }}>{sub}</div>}
+        {callupLine && <div style={{ fontSize:11, color:'rgba(255,255,255,0.55)', marginTop:10 }}>{callupLine}</div>}
+      </div>
+    </div>
   );
 }
 
@@ -3012,7 +3147,7 @@ function TodayMatchesCarousel({ todayMatches, matches, now, onMatch, tweaks }) {
 }
 
 // ─── SCREEN: HOME V2 — Editorial ─────────────────────────────
-function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoading = false, scrollTopKey = 0, onRefresh, unreadCount = 0, nativeTabBar = false, onTabBarScroll }) {
+function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoading = false, scrollTopKey = 0, onRefresh, unreadCount = 0, nativeTabBar = false, onTabBarScroll, followed, playerOrder = [] }) {
   const onTabScroll = useTabBarScrollSync(onTabBarScroll);
   const homeScrollRef = React.useRef(null);
   React.useEffect(() => { if (scrollTopKey > 0) { SCROLL_MEM.home = 0; homeScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } }, [scrollTopKey]);
@@ -3062,6 +3197,14 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
 
   // Filter matches for today (including past results)
   const now = currentTime;
+  // 국제 브레이크(A매치) 판정 — 히어로가 빌 때(showHero=false) 대신 채울지 여기서
+  // 미리 계산해 둔다. now(초 단위로 갱신되는 currentTime)가 바뀔 때만 다시 본다.
+  const intlWindow = React.useMemo(() => internationalWindowNow(allMatches, now.getTime()), [allMatches, now]);
+  // 소집 명단 표시 순서 — 팔로우한 선수를 앞세운다(선수 편집 화면과 같은 규칙).
+  const followedOrderedNames = React.useMemo(() => {
+    if (!followed) return [];
+    return byOrder(ALL_PLAYERS.filter(p => followed.has(p.id)), playerOrder, p => p.id).map(p => p.name);
+  }, [followed, playerOrder]);
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
   const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
   const twelveHoursLater = new Date(now.getTime() + 12 * 60 * 60 * 1000);
@@ -3495,8 +3638,13 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
       </div>
 
       {/* ── HIGHLIGHT CARD: 라이브/종료만 노출. 예정·없음이면 컴팩트 헤더(JUMO+벨)만.
-             단, 이적 기념 기간이면(라이브 경기가 없을 때) 이적 히어로가 자리를 차지한다. ── */}
+             단, 이적 기념 기간이면(라이브 경기가 없을 때) 이적 히어로가 자리를 차지하고,
+             국제 브레이크(A매치) 기간이면 대신 'INTERNATIONAL BREAK' 히어로가 채운다. ── */}
       {spotlightHero ? spotlightHero : !showHero ? (
+        intlWindow ? (
+          <InternationalBreakHero window={intlWindow} followedOrderedNames={followedOrderedNames}
+            onMatch={onMatch} onNotif={onNotif} unreadCount={unreadCount} nativeTabBar={nativeTabBar} now={now.getTime()}/>
+        ) : (
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'calc(env(safe-area-inset-top) + 14px) 20px 4px' }}>
           <span style={{ fontSize:17, fontWeight:900, color:'var(--text)', letterSpacing:1.5 }}>JUMO</span>
           <button onClick={onNotif} style={{ ...LG.base, ...LG.circle, color:'var(--text)', position:'relative', display: nativeTabBar ? 'none' : 'flex' }}>
@@ -3504,6 +3652,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
             {unreadCount > 0 && <span style={{ position:'absolute', top:-2, right:-2, minWidth:16, height:16, padding:'0 4px', borderRadius:8, background:'#e63030', color:'#fff', fontSize:9, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 0 0 1.5px rgba(0,0,0,0.4)' }}>{unreadCount > 99 ? '99+' : unreadCount}</span>}
           </button>
         </div>
+        )
       ) : isFinishedHighlight ? (() => {
         // 코리안 더비 등 팔로우한 선수가 둘 이상이면 대표(koreanPlayer)가 아시안게임
         // 차출 등으로 결장 중일 수 있다 — 그럴 땐 실제로 뛴 선수를 주인공으로 삼는다.
@@ -12369,7 +12518,7 @@ function App() {
               도중에 다시 돌아 카드가 옆으로 미끄러졌다(제보). 살려두면 스크롤
               위치도 그대로 보존되고, 제스처 시작 시점의 마운트 부담도 사라진다. */}
           <div ref={behindRef} style={{ display:'flex', flexDirection:'column', flex:1, minHeight:0, transform: (dragging && !dragTop) ? `translateX(${parallaxX}px)` : undefined, willChange: dragging ? 'transform' : undefined, pointerEvents: screen === 'main' ? undefined : 'none' }}>
-              <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} onTabBarScroll={onTabBarScroll} tweaks={tweaks} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} scrollTopKey={tabScrollKeys.home} onRefresh={refreshFromPull} unreadCount={unreadCount} nativeTabBar={nativeTabBar}/></div>
+              <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} onTabBarScroll={onTabBarScroll} tweaks={tweaks} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} scrollTopKey={tabScrollKeys.home} onRefresh={refreshFromPull} unreadCount={unreadCount} nativeTabBar={nativeTabBar} followed={followed} playerOrder={playerOrder}/></div>
               <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} onTabBarScroll={onTabBarScroll} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} onRefresh={refreshFromPull} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
               <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} onToggleFollow={toggleFollow} onTabBarScroll={onTabBarScroll} followed={followed} playerOrder={playerOrder} sportOrder={sportOrder} statsCache={playerStatsCache} isLoading={isInitialLoad && apiLoading} onRefresh={refreshFromPull} scrollTopKey={tabScrollKeys.players} liveApiMatches={filteredLiveMatches} sportFeeds={sportFeeds}/></div>
               <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen active={tab === 'news'} sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news} followedNames={followedNames} onTabBarScroll={onTabBarScroll} agMatches={agMatches} onMatch={goMatch}/></div>
