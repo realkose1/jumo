@@ -2059,6 +2059,35 @@ function LiveDot() {
   );
 }
 
+// 대표팀 경기 히어로 배경 — 소속팀 엠블럼 대신 태극 무늬로 'A매치다움'을 준다.
+// 클럽 크레스트가 흐릿하게 뜨는 자리(우측)에 태극 마크를 대신 그린다.
+function NationalHeroBackdrop() {
+  return (
+    <div style={{ position:'absolute', inset:0, background:'linear-gradient(135deg, #2a0d14 0%, #1a1030 45%, #0a1f45 100%)' }}>
+      <svg width="240" height="240" viewBox="0 0 240 240" style={{ position:'absolute', right:-40, top:'50%', transform:'translateY(-50%)', opacity:0.18 }}>
+        <defs>
+          <clipPath id="taegeukClip"><circle cx="120" cy="120" r="110"/></clipPath>
+        </defs>
+        <g clipPath="url(#taegeukClip)">
+          <rect x="0" y="0" width="240" height="240" fill="#0a1f45"/>
+          <path d="M120,10 A110,110 0 0 1 120,230 A55,55 0 0 1 120,120 A55,55 0 0 0 120,10 Z" fill="#CD2E3A"/>
+          <path d="M120,230 A110,110 0 0 1 120,10 A55,55 0 0 1 120,120 A55,55 0 0 0 120,230 Z" fill="#0047A0"/>
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+// 히어로 상단 라벨 옆 A매치/아시안게임 칩 — 'LIVE NOW' 등과 나란히 붙는다.
+function NationalHeroChip({ match }) {
+  const isAG = match?.competition === '아시안게임' || match?.leagueId === 803;
+  return (
+    <span style={{ fontSize:10, fontWeight:800, padding:'3px 8px', borderRadius:6, background:'rgba(205,46,58,0.22)', border:'0.5px solid rgba(205,46,58,0.5)', color:'#ff8a94' }}>
+      {isAG ? '🇰🇷 아시안게임' : '🇰🇷 A매치'}
+    </span>
+  );
+}
+
 const teamLogoCache = {};
 
 function TeamBadge({ code, size=36, logo }) {
@@ -3380,6 +3409,8 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
   // landscape image map: Korean name → filename in image/landscape/
   const LANDSCAPE_MAP = { '손흥민': 'heungmin.jpg', '이강인': 'kangin.jpg', '김민재': 'minjae.jpg', '황희찬': 'heechan.jpg', '황인범': 'inbeom.jpg', '조규성': 'guesung.jpg', '이한범': 'hanbeom.jpg', '오현규': 'hyungyu.jpg', '양현준': 'hyunjun.jpg', '백승호': 'seungho.jpg', '배준호': 'junho.jpg', '엄지성': 'jisung.jpg', '설영우': 'youngwoo.jpg', '김하성': 'haseong.jpg', '이정후': 'junghoo.jpg', '김혜성': 'hyeseong.jpg', '이재성': 'jaesung.jpg', '홍현석': 'hyunseok.jpg', '정우영': 'wooyeong.jpg', '카스트로프': 'castrop.jpg', '박승수': 'seungsoo.jpg', '김지수': 'jisoo.jpg', '양민혁': 'minhyeok.jpg', '이태석': 'taeseok.jpg', '김민수': 'minsu.jpg', '김예건': 'yegeon.jpg', '송성문': 'songsm.jpg' };
   const heroRepName = heroRepOf(highlightMatch)?.name;
+  // 대표팀 경기(A대표팀·U-23)면 소속팀 크레스트 대신 태극 배경/칩을 쓴다.
+  const heroIsNational = !!heroRepOf(highlightMatch)?.isTeam;
   React.useEffect(() => {
     const landscapeFile = LANDSCAPE_MAP[heroRepName];
     setHlBgImg(landscapeFile ? `image/landscape/${landscapeFile}` : null);
@@ -3547,8 +3578,10 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
         );
         return (
           <div onClick={() => onMatch(highlightMatch)} style={{ position:'relative', height:260, overflow:'hidden', cursor:'pointer', background:'#111' }}>
-            {hlBgImg
+            {(hlBgImg && !heroIsNational)
               ? <img key={hlBgImg} src={hlBgImg} alt="" style={{ position:'absolute', top:0, left:0, bottom:0, width:'113%', height:'100%', objectFit:'cover', objectPosition:'left 20%', animation:'fadeIn 0.7s ease' }}/>
+              : heroIsNational
+              ? <NationalHeroBackdrop/>
               : <div style={{ position:'absolute', inset:0, background:'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)' }}>
                   {highlightMatch?.home?.logo && <img src={highlightMatch.home.logo} alt="" style={{ position:'absolute', right:-30, top:'50%', transform:'translateY(-50%)', width:200, height:200, objectFit:'contain', opacity:0.08, filter:'blur(2px)' }}/>}
                 </div>
@@ -3572,6 +3605,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
                   const dayDiff = Math.floor((startOfToday - d) / 86400000) + 1;
                   return dayDiff <= 1 ? '어제 경기 종료' : `${d.getMonth() + 1}.${d.getDate()} 경기 종료`;
                 })()}</span>
+                {heroIsNational && <NationalHeroChip match={highlightMatch}/>}
               </div>
               {scoreNode}
               <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:8 }}>{highlightMatch.home.name} vs {highlightMatch.away.name} · {highlightMatch.competition}</div>
@@ -3585,8 +3619,10 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
       })() : (
       <div onClick={() => highlightMatch && onMatch(highlightMatch)} style={{ position:'relative', height:260, overflow:'hidden', marginBottom:0, background:'#111', cursor: highlightMatch ? 'pointer' : 'default' }}>
         {/* Background */}
-        {hlBgImg
+        {(hlBgImg && !heroIsNational)
           ? <img key={hlBgImg} src={hlBgImg} alt="" style={{ position:'absolute', top:0, left:0, bottom:0, width:'113%', height:'100%', objectFit:'cover', objectPosition:'left 20%', animation:'fadeIn 0.7s ease' }}/>
+          : heroIsNational
+          ? <NationalHeroBackdrop/>
           : <div style={{ position:'absolute', inset:0, background:'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)' }}>
               {highlightMatch?.home?.logo && <img src={highlightMatch.home.logo} alt="" style={{ position:'absolute', right:-30, top:'50%', transform:'translateY(-50%)', width:200, height:200, objectFit:'contain', opacity:0.08, filter:'blur(2px)' }}/>}
             </div>
@@ -3606,6 +3642,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
           <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
             {highlightData?.priority === 1 && <LiveDot/>}
             <span style={{ fontSize:11, fontWeight:700, color: highlightData?.priority === 1 ? 'var(--acc)' : 'rgba(255,255,255,0.7)', letterSpacing:1.5 }}>{highlightText.status}</span>
+            {heroIsNational && <NationalHeroChip match={highlightMatch}/>}
           </div>
           {highlightText.scoreNode || null}
           <div style={{ display:'flex', alignItems:'center', gap:10, marginTop: highlightText.scoreNode ? 10 : 0 }}>
