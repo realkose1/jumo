@@ -7971,6 +7971,43 @@ function agMonthDayKST(d) {
   return `${p.month}.${p.day}`;
 }
 
+// 뉴스 '전체' 상단 한 줄 — 한국 순위와 금·은·동·합계만. AgMedalPanel 과 같은 캐시를 쓴다.
+function AgKoreaMedalStrip({ refetchTrigger, onOpen }) {
+  const [data, setData] = React.useState(AG_MEDALS_CACHE.data);
+  React.useEffect(() => {
+    const fresh = AG_MEDALS_CACHE.data && (Date.now() - AG_MEDALS_CACHE.ts < AG_MEDALS_TTL);
+    if (fresh) { setData(AG_MEDALS_CACHE.data); return; }
+    let cancelled = false;
+    fetch(`${API_BASE}/api/ag-medals`).then(r => (r.ok ? r.json() : null)).then(json => {
+      if (cancelled || !json) return;
+      AG_MEDALS_CACHE = { data: json, ts: Date.now() };
+      setData(json);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [refetchTrigger]);
+  const k = data?.korea;
+  if (!k) return null;
+  return (
+    <div onClick={onOpen} style={{ margin:'0 16px 12px', padding:'11px 14px', background:'var(--surface)', borderRadius:14,
+      border:'0.5px solid var(--border)', display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
+      <span style={{ fontSize:18 }}>🇰🇷</span>
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ fontSize:11, color:'var(--text4)', fontWeight:600 }}>아시안게임 종합</div>
+        <div style={{ ...NUM, fontSize:16, fontWeight:800, color:'var(--text)' }}>{k.rank}위</div>
+      </div>
+      <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:3 }}>
+        <div style={{ display:'flex', gap:8 }}>
+          <span style={{ ...NUM, fontSize:12, fontWeight:700, color:'var(--text2)' }}>🥇 {k.gold}</span>
+          <span style={{ ...NUM, fontSize:12, fontWeight:700, color:'var(--text2)' }}>🥈 {k.silver}</span>
+          <span style={{ ...NUM, fontSize:12, fontWeight:700, color:'var(--text2)' }}>🥉 {k.bronze}</span>
+        </div>
+        <div style={{ fontSize:10, color:'var(--text4)' }}>합계 {k.total}{data.updatedAt ? ` · ${formatHHMM(data.updatedAt)} 기준` : ''}</div>
+      </div>
+      <span style={{ fontSize:14, color:'var(--text5)' }}>›</span>
+    </div>
+  );
+}
+
 function AgMedalPanel({ agMatches, onMatch, refetchTrigger }) {
   const [data, setData] = React.useState(AG_MEDALS_CACHE.data);
   const [loading, setLoading] = React.useState(!AG_MEDALS_CACHE.data);
@@ -8201,8 +8238,10 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
     const dy = t.clientY - touchStartY.current;
     if (s && !s.ignore) {
       s.dx = dx; s.dy = dy;
-      if (!s.locked && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
-        s.locked = Math.abs(dx) > Math.abs(dy) * 1.5 ? 'h' : 'v';
+      // 판정을 너그럽게: 엄지로 왼쪽으로 밀면 궤적이 호를 그려 dy 가 커진다 —
+      // 1.5배 기준에선 왼쪽 스와이프가 자주 세로로 판정됐다(제보).
+      if (!s.locked && (Math.abs(dx) > 12 || Math.abs(dy) > 12)) {
+        s.locked = Math.abs(dx) > Math.abs(dy) * 0.9 ? 'h' : 'v';
       }
       if (s.locked === 'h') {
         // 가로 스와이프 중 — 당겨서 새로고침은 건너뛰고 목록만 살짝 따라 움직인다.
@@ -8229,7 +8268,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
       const velocity = Math.abs(s.dx) / dt;
       const visible = NEWS_CATEGORIES.filter(c => enabledCategories.includes(c));
       const idx = visible.indexOf(category);
-      if ((Math.abs(s.dx) > 60 || velocity > 0.4) && idx !== -1) {
+      if ((Math.abs(s.dx) > 45 || velocity > 0.3) && idx !== -1) {
         const dir = s.dx < 0 ? 1 : -1; // 왼쪽 스와이프 → 다음 칩, 오른쪽 → 이전 칩
         const nextIdx = idx + dir;
         if (nextIdx >= 0 && nextIdx < visible.length) {
@@ -8587,6 +8626,13 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
       {/* 아시안게임 메달 패널 — '아시안게임' 카테고리를 볼 때만, 기사 목록 위에 */}
       {agNewsActive() && category === '아시안게임' && (
         <AgMedalPanel agMatches={agMatches} onMatch={onMatch} refetchTrigger={refetchTrigger}/>
+      )}
+      {/* '전체'에서는 우리나라 순위·메달 수만 한 줄로. 누르면 아시안게임 칩으로. */}
+      {agNewsActive() && category === '전체' && (
+        <AgKoreaMedalStrip refetchTrigger={refetchTrigger} onOpen={() => {
+          setCategory('아시안게임');
+          requestAnimationFrame(() => chipRefs.current['아시안게임']?.scrollIntoView({ inline:'center', block:'nearest', behavior:'smooth' }));
+        }}/>
       )}
 
       {/* Articles */}
