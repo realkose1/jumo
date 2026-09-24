@@ -8191,6 +8191,18 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
   }, []);
   const [scrolled, setScrolled] = React.useState(false);
   const [category, setCategory] = React.useState('전체');
+  // 스와이프 중 칩 점등을 먼저 옮긴다(넘김 애니메이션이 끝나기 전에). null 이면 category.
+  const [chipFocus, setChipFocus] = React.useState(null);
+  const chipFocusRef = React.useRef(null);
+  const focusChip = (c) => {
+    if (chipFocusRef.current === c) return;
+    chipFocusRef.current = c;
+    setChipFocus(c);
+    if (c) {
+      if (typeof haptic === 'function') haptic('light');
+      requestAnimationFrame(() => chipRefs.current[c]?.scrollIntoView({ inline:'center', block:'nearest', behavior:'smooth' }));
+    }
+  };
   // 딥링크(jumo://asiangames 등)가 뉴스 탭 진입과 동시에 카테고리를 지정할 수
   // 있도록 setter 를 window 에 노출한다 — NewsScreen 은 항상 마운트돼 있으므로
   // (탭 전환은 display:none/contents 로만 처리) 앱 시작 직후에도 이미 등록돼 있다.
@@ -8280,6 +8292,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
     const strip = stripRef.current;
     if (!nextCat || !strip) return false;
     pagerAnimRef.current = true;
+    focusChip(nextCat);
     setStrip(-dir * pagerWidth(), `transform ${ms}ms cubic-bezier(0.2,0.8,0.3,1)`);
     let done = false, timer = null;
     const finish = () => {
@@ -8287,7 +8300,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
       done = true;
       strip.removeEventListener('transitionend', onEnd);
       clearTimeout(timer);
-      if (typeof haptic === 'function') haptic('light');
+      // 햅틱·칩 점등은 손을 뗀 순간(또는 드래그가 절반을 넘긴 순간) 이미 했다.
       // 줄 원위치·스크롤 맨 위·칩 가운데 정렬은 새 카테고리가 그려지는
       // 같은 프레임(layout effect)에서 한다 — 여기서 먼저 되돌리면 한 프레임
       // 옛 페이지가 튀어 보인다.
@@ -8303,6 +8316,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
     // 칸 엘리먼트는 key(카테고리)로 재사용되며 역할(이웃↔현재)이 바뀐다 —
     // 이웃일 때 붙인 translateY 가 남지 않게 지운다.
     Object.values(paneRefs.current).forEach(el => { if (el) el.style.transform = ''; });
+    chipFocusRef.current = null; setChipFocus(null);
     if (!pagerResetRef.current) return;
     pagerResetRef.current = false;
     pagerAnimRef.current = false;
@@ -8372,6 +8386,14 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
         // 넘어갈 칩이 없는 쪽은 고무줄처럼 저항을 준다.
         if ((x > 0 && !s.hasPrev) || (x < 0 && !s.hasNext)) x = x * 0.3 / (1 + Math.abs(x) / 300);
         s.x = x;
+        // 절반을 넘기면 옆 칩을 미리 점등하고 햅틱 — 손을 떼면 넘어간다는 신호.
+        {
+          const cats = visibleCats(), idx = cats.indexOf(category);
+          const W = pagerWidth();
+          const tgt = x < -W * 0.35 && s.hasNext ? cats[idx + 1] : x > W * 0.35 && s.hasPrev ? cats[idx - 1] : null;
+          if (tgt) focusChip(tgt);
+          else if (chipFocusRef.current) { chipFocusRef.current = null; setChipFocus(null); }
+        }
         s.hist.push({ x, t: performance.now() });
         if (s.hist.length > 6) s.hist.shift();
         setStrip(x);
@@ -8410,6 +8432,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
       // 임계값 미달 — 스프링처럼 원위치로. 세로 스크롤은 바로 풀고, 이웃 칸
       // 클립 확장은 스프링이 끝난 뒤에 푼다(도중에 풀면 옆 칸이 잘려 보인다).
       setStrip(0, 'transform 0.32s cubic-bezier(0.2,0.9,0.3,1.15)');
+      if (chipFocusRef.current) { chipFocusRef.current = null; setChipFocus(null); }
       if (scrollRef.current) scrollRef.current.style.overflowY = 'auto';
       pagerIdleTimerRef.current = setTimeout(() => {
         pagerIdleTimerRef.current = null;
@@ -8817,7 +8840,8 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
             onClick={() => goCategory(c)}
             style={{
               flexShrink:0,
-              background: category === c ? 'var(--acc)' : 'var(--border)',
+              background: (chipFocus || category) === c ? 'var(--acc)' : 'var(--border)',
+              transition:'background 0.12s ease, color 0.12s ease',
               border:'none',
               height:CTRL_H,
               boxSizing:'border-box',
@@ -8825,7 +8849,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
               padding:'0 16px',
               fontSize:13,
               fontWeight:600,
-              color: category === c ? '#000' : 'var(--text2)',
+              color: (chipFocus || category) === c ? '#000' : 'var(--text2)',
               cursor:'pointer',
               whiteSpace:'nowrap',
             }}
