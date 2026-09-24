@@ -1036,6 +1036,24 @@ const nationalTeamEntry = (teamName, teamCode, state) => ({
 // 쓰이므로 함께 붙인다. 대표팀이면 선수 개개인이 아니라 팀 엔트리 하나만 돌려준다.
 // 대표팀 엔트리의 결과 문구: 경기가 끝났으면 '경기 종료' 대신 승리/무승부/패배로.
 // (제보: 히어로에 '경기 종료'만 떠서 이겼는지 알 수 없었다.)
+// 대표팀 라이브 문구: 스코어로 흐름을 요약한다.
+const teamLiveLabel = (m, kp) => {
+  const isHome = kp.team === m.home?.code;
+  const mine = Number(isHome ? m.home?.score : m.away?.score) || 0;
+  const theirs = Number(isHome ? m.away?.score : m.home?.score) || 0;
+  const diff = mine - theirs;
+  const ht = /HT|하프/i.test(String(m.status || '') + String(m.minute || ''));
+  const pre = ht ? '전반 종료 · ' : '';
+  if (mine === 0 && theirs === 0) return `${pre}득점 없이 진행 중`;
+  if (diff > 0) {
+    if (theirs === 0 && mine === 1) return `${pre}선제골로 앞서는 중`;
+    if (theirs === 0) return `${pre}추가골로 ${diff}골 차 리드`;
+    return `${pre}${diff}골 차 리드 중`;
+  }
+  if (diff === 0) return `${pre}동점 접전 중`;
+  return `${pre}${-diff}골 차 추격 중`;
+};
+
 const teamResultLabel = (m, kp) => {
   if (!kp?.isTeam) return kp?.event || '';
   const isFin = m.status ? isFinalStatus(m.status) : kp.event === '경기 종료';
@@ -3448,6 +3466,16 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
                      : onPitch.length === 0 ? (heroKoreans[0] || m.koreanPlayer)
                      : null;
           const ev = (solo || m.koreanPlayer)?.event || '';
+          // 대표팀은 '출전 중'이 어색하다 — 스코어 흐름으로 말한다(선제골·추가골·동점·추격).
+          if ((solo || m.koreanPlayer)?.isTeam) {
+            const tk = solo || m.koreanPlayer;
+            return {
+              status: `LIVE NOW · ${hlLiveMinute || m.minute || ''}\'`,
+              main: `${tk.name} ${teamLiveLabel(m, tk)}`,
+              scoreNode,
+              sub: `${m.home.name} vs ${m.away.name} · ${m.competition}`
+            };
+          }
           const evLabel =
             ev === '교체 출전 중' ? '교체 출전 중' : ev === '교체 아웃' ? '교체 아웃' :
             ev === '선발 출전' ? '선발 출전' :
