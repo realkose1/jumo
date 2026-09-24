@@ -1038,20 +1038,15 @@ const nationalTeamEntry = (teamName, teamCode, state) => ({
 // (제보: 히어로에 '경기 종료'만 떠서 이겼는지 알 수 없었다.)
 // 대표팀 라이브 문구: 스코어로 흐름을 요약한다.
 const teamLiveLabel = (m, kp) => {
+  // 히어로 제목은 한 줄이어야 한다 — 'U-23' 이 붙어도 넘치지 않게 짧게 쓴다.
   const isHome = kp.team === m.home?.code;
   const mine = Number(isHome ? m.home?.score : m.away?.score) || 0;
   const theirs = Number(isHome ? m.away?.score : m.home?.score) || 0;
   const diff = mine - theirs;
-  const ht = /HT|하프/i.test(String(m.status || '') + String(m.minute || ''));
-  const pre = ht ? '전반 종료 · ' : '';
-  if (mine === 0 && theirs === 0) return `${pre}득점 없이 진행 중`;
-  if (diff > 0) {
-    if (theirs === 0 && mine === 1) return `${pre}선제골로 앞서는 중`;
-    if (theirs === 0) return `${pre}추가골로 ${diff}골 차 리드`;
-    return `${pre}${diff}골 차 리드 중`;
-  }
-  if (diff === 0) return `${pre}동점 접전 중`;
-  return `${pre}${-diff}골 차 추격 중`;
+  if (mine === 0 && theirs === 0) return '경기 중';
+  if (diff > 0) return theirs === 0 ? (mine === 1 ? '선제골!' : '추가골!') : '리드 중';
+  if (diff === 0) return '동점';
+  return '추격 중';
 };
 
 const teamResultLabel = (m, kp) => {
