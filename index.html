@@ -6259,7 +6259,8 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
                 {/* 피치 라인 */}
                 <div style={{ position:'absolute', inset:10, border:'1px solid rgba(255,255,255,0.18)', borderRadius:8, pointerEvents:'none' }}/>
                 <div style={{ position:'absolute', left:10, right:10, top:'50%', height:1, background:'rgba(255,255,255,0.14)', pointerEvents:'none' }}/>
-                <div style={{ position:'absolute', left:'50%', top:'46%', width:74, height:74, marginLeft:-37, border:'1px solid rgba(255,255,255,0.14)', borderRadius:'50%', pointerEvents:'none' }}/>
+                {/* 센터 서클은 하프라인(50%)에 중심을 맞춘다 — 예전 top:46% 는 원이 선 아래로 처져 보였다 */}
+                <div style={{ position:'absolute', left:'50%', top:'50%', width:74, height:74, marginLeft:-37, marginTop:-37, border:'1px solid rgba(255,255,255,0.14)', borderRadius:'50%', pointerEvents:'none' }}/>
                 <div style={{ position:'relative', display:'flex', flexDirection:'column', gap:16 }}>
                   {layout.lines.map((list, li) => (
                     <div key={li} style={{ display:'flex', justifyContent:'space-evenly', alignItems:'flex-start' }}>
