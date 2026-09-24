@@ -1678,7 +1678,8 @@ const STATUS_BADGE = {
   minors:    { bg:'rgba(150,160,175,0.16)', fg:'#aeb6c2', bd:'rgba(150,160,175,0.35)', icon:'▼', ic:'#97a1b0' },
 };
 const injuryStyle = (inj) => STATUS_BADGE[inj?.kind] || STATUS_BADGE.injured;
-STATUS_BADGE.national = { bg:'rgba(80,140,255,0.16)', fg:'#8ab4ff', bd:'rgba(80,140,255,0.4)', icon:'⚑', ic:'#6ea0ff' };
+// 대표팀 차출·소집 표시는 태극기 이모지(예전 ⚑ 깃발은 무슨 뜻인지 안 읽혔다 — 제보).
+STATUS_BADGE.national = { bg:'rgba(80,140,255,0.16)', fg:'#8ab4ff', bd:'rgba(80,140,255,0.4)', icon:'🇰🇷', ic:'#6ea0ff' };
 
 // ─── 수동 결장 정보 ────────────────────────────────────────────
 // API 결장 피드는 부상·징계·비활성만 준다(실측: 셀틱 시즌 전체가 Knee Injury·
