@@ -5556,7 +5556,9 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
           })()}
           {/* Korean player highlight */}
           {(() => {
-            const koreans = match.koreanPlayers || [match.koreanPlayer];
+            // 대표팀 경기는 팀 엔트리뿐이라 카드가 위 스코어보드와 같은 정보를 반복한다 — 숨긴다.
+            const koreans = (match.koreanPlayers || [match.koreanPlayer]).filter(k => k && !k.isTeam);
+            if (!koreans.length) return null;
             const renderKoreanCard = (kp, idx) => {
               const playerObj = ALL_PLAYERS.find(p => p.name === kp.name);
               const injury = playerObj?.injury;
