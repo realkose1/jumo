@@ -8609,7 +8609,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
         ))}
       </div>
       </div>
-      <div ref={scrollRef} onScroll={e => { const s = e.currentTarget.scrollTop > 4; setScrolled(p => p !== s ? s : p); onTabScroll(e); }} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchEnd} style={{ flex:1, overflow:'auto', background:'var(--bg)', minHeight:0 }} className="scrollbar-hide jumo-page">
+      <div ref={scrollRef} onScroll={e => { const s = e.currentTarget.scrollTop > 4; setScrolled(p => p !== s ? s : p); onTabScroll(e); }} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchEnd} style={{ flex:1, overflowX:'hidden', overflowY:'auto', background:'var(--bg)', minHeight:0, touchAction:'pan-y' }} className="scrollbar-hide jumo-page">
         {/* 오버레이 헤더가 가리는 만큼 비워둔다 — 스크롤하면 내용이 그 아래로 흐른다 */}
         <div style={{ height: headH, flexShrink: 0 }}/>
       {/* Pull-to-refresh indicator */}
