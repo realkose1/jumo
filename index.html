@@ -2111,9 +2111,12 @@ function NationalHeroBackdrop() {
           <clipPath id="taegeukClip"><circle cx="120" cy="120" r="110"/></clipPath>
         </defs>
         <g clipPath="url(#taegeukClip)">
-          <rect x="0" y="0" width="240" height="240" fill="#0a1f45"/>
-          <path d="M120,10 A110,110 0 0 1 120,230 A55,55 0 0 1 120,120 A55,55 0 0 0 120,10 Z" fill="#CD2E3A"/>
-          <path d="M120,230 A110,110 0 0 1 120,10 A55,55 0 0 1 120,120 A55,55 0 0 0 120,230 Z" fill="#0047A0"/>
+          {/* 태극기 문양: 빨강(양)이 위, 파랑(음)이 아래. 가르는 선은 건(왼쪽 위)–곤(오른쪽 아래)
+              대각선을 따라 약 33.7° 기울어 있다(예전엔 좌우로 갈라져 있었다 — 제보). */}
+          <g transform="rotate(33.69 120 120)">
+            <rect x="0" y="0" width="240" height="240" fill="#0047A0"/>
+            <path d="M10,120 A110,110 0 0 1 230,120 A55,55 0 0 0 120,120 A55,55 0 0 1 10,120 Z" fill="#CD2E3A"/>
+          </g>
         </g>
       </svg>
     </div>
@@ -7972,6 +7975,14 @@ function agMonthDayKST(d) {
 }
 
 // 뉴스 '전체' 상단 한 줄 — 한국 순위와 금·은·동·합계만. AgMedalPanel 과 같은 캐시를 쓴다.
+// 뉴스 카테고리 전환 페이지 인(화면 폭만큼 반대편에서 들어온다).
+(() => { try {
+  const st = document.createElement('style');
+  st.textContent = '@keyframes newsPageInRight{from{transform:translate3d(100%,0,0);opacity:.35}to{transform:none;opacity:1}}'
+    + '@keyframes newsPageInLeft{from{transform:translate3d(-100%,0,0);opacity:.35}to{transform:none;opacity:1}}';
+  document.head.appendChild(st);
+} catch {} })();
+
 function AgKoreaMedalStrip({ refetchTrigger, onOpen }) {
   const [data, setData] = React.useState(AG_MEDALS_CACHE.data);
   React.useEffect(() => {
@@ -8244,12 +8255,25 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
         s.locked = Math.abs(dx) > Math.abs(dy) * 0.9 ? 'h' : 'v';
       }
       if (s.locked === 'h') {
-        // 가로 스와이프 중 — 당겨서 새로고침은 건너뛰고 목록만 살짝 따라 움직인다.
-        const clamped = Math.max(-40, Math.min(40, dx * 0.25));
-        if (listContentRef.current) {
-          listContentRef.current.style.transition = 'none';
-          listContentRef.current.style.transform = `translateX(${clamped}px)`;
-          listContentRef.current.style.opacity = String(1 - Math.min(Math.abs(dx) / 200, 0.35));
+        // 가로 스와이프 중 — 목록이 손가락을 1:1 로 따라온다(예전엔 0.25배라
+        // 제스처보다 화면이 늦게 따라오는 느낌이었다). 판정 문턱(12px)만큼은 빼서
+        // 잠기는 순간 튀지 않게 하고, 더 넘어갈 칩이 없는 쪽은 고무줄처럼 저항을 준다.
+        if (s.startDx == null) s.startDx = dx;
+        let x = dx - s.startDx;
+        const visible = NEWS_CATEGORIES.filter(c => enabledCategories.includes(c));
+        const idx = visible.indexOf(category);
+        const atEdge = (x < 0 && idx >= visible.length - 1) || (x > 0 && idx <= 0);
+        if (atEdge) x = x * 0.3 / (1 + Math.abs(x) / 300);
+        s.x = x;
+        const now = performance.now();
+        if (s.lastT) s.v = (x - (s.lastX || 0)) / Math.max(1, now - s.lastT);   // px/ms
+        s.lastT = now; s.lastX = x;
+        const el = listContentRef.current;
+        if (el) {
+          el.style.transition = 'none';
+          el.style.willChange = 'transform';
+          el.style.transform = `translate3d(${x}px,0,0)`;
+          el.style.opacity = String(1 - Math.min(Math.abs(x) / (window.innerWidth * 1.4), 0.4));
         }
         return;
       }
@@ -8264,31 +8288,47 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
     const s = swipeRef.current;
     swipeRef.current = null;
     if (s && !s.ignore && s.locked === 'h') {
-      const dt = Math.max(1, Date.now() - s.t0);
-      const velocity = Math.abs(s.dx) / dt;
+      const x = s.x || 0;
+      const velocity = Math.abs(s.v || 0);
       const visible = NEWS_CATEGORIES.filter(c => enabledCategories.includes(c));
       const idx = visible.indexOf(category);
-      if ((Math.abs(s.dx) > 45 || velocity > 0.3) && idx !== -1) {
-        const dir = s.dx < 0 ? 1 : -1; // 왼쪽 스와이프 → 다음 칩, 오른쪽 → 이전 칩
+      const W = window.innerWidth || 375;
+      // 화면 1/4 을 넘겼거나, 그 방향으로 튕겼으면 넘긴다(속도 방향이 반대면 취소).
+      const flingDir = (s.v || 0) < 0 ? -1 : 1;
+      const passed = Math.abs(x) > W * 0.22 || (velocity > 0.35 && Math.sign(x) === flingDir);
+      const el = listContentRef.current;
+      if (passed && idx !== -1 && x !== 0) {
+        const dir = x < 0 ? 1 : -1; // 왼쪽 스와이프 → 다음 칩, 오른쪽 → 이전 칩
         const nextIdx = idx + dir;
         if (nextIdx >= 0 && nextIdx < visible.length) {
           const nextCat = visible[nextIdx];
-          switchAnimIdRef.current += 1;
-          setSwitchAnim({ anim: dir > 0 ? 'obSlideFromRight' : 'obSlideFromLeft', id: switchAnimIdRef.current });
-          setCategory(nextCat);
-          scrollRef.current?.scrollTo({ top: 0, behavior: 'auto' });
           if (typeof haptic === 'function') haptic('light');
-          requestAnimationFrame(() => {
-            chipRefs.current[nextCat]?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
-          });
+          // 1) 지금 페이지를 손을 뗀 속도 그대로 화면 밖으로 밀어낸다.
+          const remain = W - Math.abs(x);
+          const outMs = Math.max(90, Math.min(220, remain / Math.max(velocity, 1.2)));
+          if (el) {
+            el.style.transition = `transform ${outMs}ms cubic-bezier(0.2,0.8,0.3,1), opacity ${outMs}ms linear`;
+            el.style.transform = `translate3d(${-dir * W}px,0,0)`;
+            el.style.opacity = '0.3';
+          }
+          // 2) 다 나가면 카테고리를 바꾸고 반대편에서 새 페이지가 들어온다.
+          setTimeout(() => {
+            switchAnimIdRef.current += 1;
+            setSwitchAnim({ anim: dir > 0 ? 'newsPageInRight' : 'newsPageInLeft', id: switchAnimIdRef.current });
+            setCategory(nextCat);
+            scrollRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+            requestAnimationFrame(() => {
+              chipRefs.current[nextCat]?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+            });
+          }, outMs);
           return;
         }
       }
-      // 임계값 미달 — 원위치로 되돌린다.
-      if (listContentRef.current) {
-        listContentRef.current.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
-        listContentRef.current.style.transform = '';
-        listContentRef.current.style.opacity = '';
+      // 임계값 미달 — 스프링처럼 원위치로.
+      if (el) {
+        el.style.transition = 'transform 0.32s cubic-bezier(0.2,0.9,0.3,1.15), opacity 0.2s ease';
+        el.style.transform = 'translate3d(0,0,0)';
+        el.style.opacity = '';
       }
       return;
     }
@@ -8622,7 +8662,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
 
       {/* 카테고리 가로 스와이프로 칩을 바꿀 때 이 안쪽만 밀리고, 전환 시 짧게
           슬라이드 인 된다(key 를 바꿔 리마운트시켜 애니메이션을 매번 재생한다) */}
-      <div ref={listContentRef} key={switchAnim ? switchAnim.id : 'base'} style={switchAnim ? { animation: `${switchAnim.anim} 0.18s ease` } : undefined}>
+      <div ref={listContentRef} key={switchAnim ? switchAnim.id : 'base'} style={switchAnim ? { animation: `${switchAnim.anim} 0.26s cubic-bezier(0.2,0.8,0.25,1)` } : undefined}>
       {/* 아시안게임 메달 패널 — '아시안게임' 카테고리를 볼 때만, 기사 목록 위에 */}
       {agNewsActive() && category === '아시안게임' && (
         <AgMedalPanel agMatches={agMatches} onMatch={onMatch} refetchTrigger={refetchTrigger}/>
