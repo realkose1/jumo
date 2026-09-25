@@ -5606,7 +5606,8 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
                           <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>{kp.name} {!kp.isTeam && <span style={{ ...NUM, color:'var(--text4)', fontWeight:400 }}>#{kp.number}</span>}</div>
-                          {kp.event && !isStatLine && (() => {
+                          {/* 차출·소집 라벨은 옆의 🇰🇷 배지와 같은 내용이라 한 번만 보여준다(제보: 두 번 뜸) */}
+                          {kp.event && !isStatLine && !(injury && injury.label === formattedEvent) && (() => {
                             const tip = explainForEvent(formattedEvent);
                             return (
                             <div
