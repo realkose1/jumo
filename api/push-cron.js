@@ -65,7 +65,9 @@ const PLAYERS = [
 // 않는다. 방송 이벤트 생성은 아래 nationalMatchEvents() 참고.
 const NATIONAL_TEAMS = { 10177: { name: '대한민국 U-23' }, 17: { name: '대한민국' } }; // 17 = A대표팀 'South Korea'
 // 대표팀 경기의 vs 문구는 소속팀명이 아니라 대표팀명을 쓴다(예: 'Qatar U23 vs 대한민국 U-23').
-const teamLabel = (team) => NATIONAL_TEAMS[team?.id]?.name || team?.name || '';
+// AF 는 올림픽(U-21) 대표팀 친선도 10177('Korea Republic U23')로 준다 — 아시안게임(803)이 아니면 '올림픽 대표팀'.
+const natNameFor = (id, leagueId) => (Number(id) === 10177 && leagueId != null && leagueId !== 803) ? '올림픽 대표팀' : NATIONAL_TEAMS[id]?.name;
+const teamLabel = (team, leagueId) => (NATIONAL_TEAMS[team?.id] && natNameFor(team.id, leagueId)) || team?.name || '';
 
 // 아시안게임 U23 대표팀 명단(KFA 등번호 발표 2026-09-14, id 는 API-Football 클럽
 // 스쿼드 기준 2026-09-15). 김민승은 K3 소속이라 AF 에 색인이 안 돼 afId 가 없다 —
@@ -168,7 +170,7 @@ function nationalMatchEvents({ fx, fid, evd, home, away, isLive, isFinal, elapse
       out.push({
         key: stableKey(`af-nat-goalcancel-${fid}-${min}`, keyCounts), players: [],
         kind: 'national', broadcast: true, matchId: String(fid),
-        title: `🇰🇷 ${NATIONAL_TEAMS[tid]?.name || '대한민국'} 골 취소`,
+        title: `🇰🇷 ${natNameFor(tid, fx.league?.id) || '대한민국'} 골 취소`,
         body: `${min}' ${scorer}골이 VAR 판정으로 취소됐습니다. ${home} ${h} : ${a} ${away}`,
         silent: staleEv,
       });
@@ -190,7 +192,7 @@ function nationalMatchEvents({ fx, fid, evd, home, away, isLive, isFinal, elapse
     out.push({
       key: stableKey(`af-nat-goal-${fid}-${tid}-${min}`, keyCounts), players: [],
       kind: 'national', broadcast: true, matchId: String(fid),
-      title: `🇰🇷 ${NATIONAL_TEAMS[tid]?.name || '대한민국'} 골!`,
+      title: `🇰🇷 ${natNameFor(tid, fx.league?.id) || '대한민국'} 골!`,
       body: `${min}' ${scorer}${pen}골! ${home} ${h} : ${a} ${away}`,
       silent: staleEv,
     });
@@ -199,7 +201,7 @@ function nationalMatchEvents({ fx, fid, evd, home, away, isLive, isFinal, elapse
   if (isFinal) {
     const gh = fx.goals?.home ?? 0, ga = fx.goals?.away ?? 0;
     const koreaHome = !!NATIONAL_TEAMS[homeId];
-    const natName = (NATIONAL_TEAMS[homeId] || NATIONAL_TEAMS[awayId])?.name || '대한민국';
+    const natName = natNameFor(NATIONAL_TEAMS[homeId] ? homeId : awayId, fx.league?.id) || '대한민국';
     const shootout = fx.score?.penalty?.home != null;
     const compKo = /Asian Games/i.test(fx.league?.name || '') ? '아시안게임 경기가'
       : /Friendl/i.test(fx.league?.name || '') ? '친선 경기가'
@@ -548,6 +550,7 @@ async function collectSoccer(events, liveStates) {
   const MANUAL_OUT = [
     { ids: [20, 23, 22, 31, 32, 30], from: '2026-09-07', to: '2026-10-05', reason: '아시안게임 차출' },
     { ids: [1, 2, 3, 6, 7, 8, 25, 19, 21, 24, 26, 33, 35], from: '2026-09-21', to: '2026-10-07', reason: 'A대표팀 소집' },
+    { ids: [36], from: '2026-09-21', to: '2026-10-07', reason: '올림픽 대표팀 소집' },
   ];
   const today = new Date().toISOString().slice(0, 10);
   const manualOut = new Set(MANUAL_OUT.filter((m) => today >= m.from && today <= m.to).flatMap((m) => m.ids));
@@ -592,7 +595,7 @@ async function collectSoccer(events, liveStates) {
       const staleResult = isFinal && kickoffMs && Date.now() - kickoffMs > 3.5 * 60 * 60 * 1000; // 경기는 보통 2시간, 킥오프 3.5시간 후 종료 알림은 낡은 소식
       const staleStart = isLive && ((elapsedNow != null && elapsedNow > 30) || (kickoffMs && Date.now() - kickoffMs > 45 * 60 * 1000));
 
-      const home = teamLabel(fx.teams.home), away = teamLabel(fx.teams.away);
+      const home = teamLabel(fx.teams.home, fx.league?.id), away = teamLabel(fx.teams.away, fx.league?.id);
       const vs = `${home} vs ${away}`;
       const names = involved.map((p) => p.name);
 
@@ -729,7 +732,7 @@ async function collectSoccer(events, liveStates) {
             events.push({
               key: k.replace(/^af-nat-goal-(\d+)-\d+-/, 'af-nat-goalcancel-$1-'), players: [],
               kind: 'national', broadcast: true, matchId: String(fid),
-              title: `🇰🇷 ${(homeNational || awayNational)?.name || '대한민국'} 골 취소`,
+              title: `🇰🇷 ${natNameFor(homeNational ? fx.teams?.home?.id : fx.teams?.away?.id, fx.league?.id) || '대한민국'} 골 취소`,
               // 이벤트 자체가 사라져 득점자를 다시 알 수 없다 — VAR 문구 없이 취소만 알린다.
               body: `${min}' 골이 취소됐습니다. ${home} ${fx.goals?.home ?? 0} : ${fx.goals?.away ?? 0} ${away}`,
               silent: staleEv,
@@ -893,12 +896,12 @@ async function collectNationalSchedule(events) {
       if (!fid || !fx.fixture?.date) continue;
       // 킥오프 3시간 이내면 이미 홈에 떠 있는 경기 — 새 소식이 아니다.
       if (new Date(fx.fixture.date).getTime() - Date.now() < 3 * 60 * 60 * 1000) continue;
-      const home = teamLabel(fx.teams?.home), away = teamLabel(fx.teams?.away);
+      const home = teamLabel(fx.teams?.home, fx.league?.id), away = teamLabel(fx.teams?.away, fx.league?.id);
       const opp = fx.teams?.home?.id === Number(teamId) ? away : home;
       const round = roundKo(fx.league?.round);
       events.push({
         key: `af-nat-sched-${fid}`, players: [], kind: 'national', broadcast: true, matchId: String(fid),
-        title: `🇰🇷 ${nat.name} 다음 경기 확정`,
+        title: `🇰🇷 ${natNameFor(teamId, fx.league?.id) || nat.name} 다음 경기 확정`,
         body: `${round ? round + ' · ' : ''}vs ${opp} · ${kstLabel(fx.fixture.date)}`,
       });
     }

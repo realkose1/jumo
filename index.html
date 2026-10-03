@@ -1715,6 +1715,9 @@ const MANUAL_AVAILABILITY = {
   // A대표팀 9·10월 A매치 소집(모레노호 30인, 2026-09-14 발표). 9/21 천안 소집,
   // 9/24 에콰도르·9/28 우루과이·10/2 베네수엘라·10/6 우즈베키스탄 — 마지막 경기
   // 다음 날까지 소속팀 경기에서 뺀다. (출처: 뉴시스 명단 기사)
+  // 올림픽(U-21) 대표팀 김은중호 호주 원정(10/3·10/6), 9/21 소집 — 2026-09-15 명단 발표(뉴스핌).
+  '김예건': { kind:'national', label:'올림픽 대표팀 소집', from:'2026-09-21', to:'2026-10-07',
+             note:'U-21 올림픽 대표팀 호주 원정 친선 2연전(10/3·10/6) 소집으로 소속팀 경기에 나서지 않아요.' },
   ...Object.fromEntries(['손흥민','이강인','김민재','황희찬','황인범','조규성','이한범','오현규','백승호','설영우','이재성','이태석','김민수']
     .map(n => [n, { kind:'national', label:'A대표팀 소집', from:'2026-09-21', to:'2026-10-07',
                     note:'9·10월 A매치 4연전(9/24·9/28·10/2·10/6) 대표팀 소집으로 소속팀 경기에 나서지 않아요.' }])),
@@ -2142,7 +2145,7 @@ function NationalHeroChip({ match }) {
   const isAG = match?.competition === '아시안게임' || match?.leagueId === 803;
   return (
     <span style={{ fontSize:10, fontWeight:800, padding:'3px 8px', borderRadius:6, background:'rgba(205,46,58,0.22)', border:'0.5px solid rgba(205,46,58,0.5)', color:'#ff8a94' }}>
-      {isAG ? '🇰🇷 아시안게임' : '🇰🇷 A매치'}
+      {isAG ? '🇰🇷 아시안게임' : (match?.home?.name === '올림픽 대표팀' || match?.away?.name === '올림픽 대표팀') ? '🇰🇷 올림픽팀 친선' : '🇰🇷 A매치'}
     </span>
   );
 }
@@ -11693,8 +11696,13 @@ function App() {
 
     // 같은 팀에 한국 선수가 둘 이상일 수 있다(미트윌란: 조규성+이한범). 대표팀이면
     // koreansForTeam 이 팀 엔트리 하나만 돌려준다.
-    const homeKoreans = koreansForTeam(homeTeamName, homeCode, '축구', matchState);
-    const awayKoreans = koreansForTeam(awayTeamName, awayCode, '축구', matchState);
+    // AF 는 올림픽(U-21) 대표팀 친선도 'Korea Republic U23'(10177)으로 준다 — 아시안게임
+    // (리그 803)이 아니면 '올림픽 대표팀'으로 부른다(제보: 결승 날 호주전 'U-23' 이 따로 떠 헷갈림).
+    const natDisplay = (n) => (NATIONAL_TEAMS[n]?.afTeamId === 10177 && fx.league?.id !== 803)
+      ? '올림픽 대표팀' : NATIONAL_TEAMS[n]?.display;
+    const renameNat = (list, n) => list.map(k => k.isTeam ? { ...k, name: natDisplay(n) || k.name } : k);
+    const homeKoreans = renameNat(koreansForTeam(homeTeamName, homeCode, '축구', matchState), homeTeamName);
+    const awayKoreans = renameNat(koreansForTeam(awayTeamName, awayCode, '축구', matchState), awayTeamName);
     const koreanPlayers = [...homeKoreans, ...awayKoreans];
     const koreanPlayer = koreanPlayers[0];
     const isKoreanDerby = homeKoreans.length > 0 && awayKoreans.length > 0 && !koreanPlayer?.isTeam;
@@ -11728,8 +11736,8 @@ function App() {
       // id/leagueId/leagueSeason 은 팀 상세 화면(TeamScreen)이 쓴다. API-Football
       // 경기에만 있고 야구(statsapi)·ESPN 경기에는 없다 — 없으면 팀 상세로 들어갈 수
       // 없게 막는 게 의도된 동작이다.
-      home: { name: NATIONAL_TEAMS[homeTeamName]?.display || homeTeamName, code: homeCode, score: (liveAfterTimeout || isFinished || isTimedOut) ? (fx.goals?.home ?? 0) : null, logo: fx.teams.home?.logo || null, id: fx.teams.home?.id || null },
-      away: { name: NATIONAL_TEAMS[awayTeamName]?.display || awayTeamName, code: awayCode, score: (liveAfterTimeout || isFinished || isTimedOut) ? (fx.goals?.away ?? 0) : null, logo: fx.teams.away?.logo || null, id: fx.teams.away?.id || null },
+      home: { name: natDisplay(homeTeamName) || homeTeamName, code: homeCode, score: (liveAfterTimeout || isFinished || isTimedOut) ? (fx.goals?.home ?? 0) : null, logo: fx.teams.home?.logo || null, id: fx.teams.home?.id || null },
+      away: { name: natDisplay(awayTeamName) || awayTeamName, code: awayCode, score: (liveAfterTimeout || isFinished || isTimedOut) ? (fx.goals?.away ?? 0) : null, logo: fx.teams.away?.logo || null, id: fx.teams.away?.id || null },
       leagueId: fx.league?.id || null,
       leagueSeason: fx.league?.season || null,
       // 종료 경기의 기본값은 '미출전'이 아니라 '확인 불가'다 — 라인업·이벤트를 아직
