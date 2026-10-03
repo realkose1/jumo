@@ -7735,7 +7735,7 @@ const NEWS_PLAYERS = [
 ];
 
 // 아시안게임 기간에만 뉴스 탭에 '아시안게임' 칩을 띄운다(폐막 10/4 + 결산 기사 며칠).
-const AG_NEWS_WINDOW = { from:'2026-09-07', to:'2026-10-08' };
+const AG_NEWS_WINDOW = { from:'2026-09-07', to:'2026-10-05' };   // 10/3 결승 후 결산 기사 이틀까지
 const agNewsActive = (now = Date.now()) => { const d = new Date(now).toISOString().slice(0,10); return d >= AG_NEWS_WINDOW.from && d <= AG_NEWS_WINDOW.to; };
 const AG_NEWS_QUERIES = [ { label:'아시안게임', query:'아시안게임 축구 대표팀', ag:true }, { label:'아시안게임', query:'아시안게임 야구 대표팀', ag:true } ];
 
@@ -9128,7 +9128,7 @@ function NotifSettingsScreen({ onBack }) {
     { k:'goal', label:'골·홈런 알림', sub:'한국 선수 득점 시 즉시' },
     { k:'assist', label:'어시스트 알림', sub:'한국 선수 도움 시 즉시' },
     { k:'result', label:'경기 결과', sub:'경기 종료 후 최종 결과' },
-    { k:'national', label:'대표팀 경기 알림', sub:'아시안게임 등 대한민국 대표팀의 골·경기 결과 (팔로우와 무관)' },
+    { k:'national', label:'대표팀 경기 알림', sub:'A매치·올림픽 등 대한민국 대표팀의 골·경기 결과 (팔로우와 무관)' },
     { k:'card', label:'경고·퇴장', sub:'한국 선수가 카드를 받으면' },
     { k:'lineup', label:'선발 라인업', sub:'발표되는 대로' },
     { k:'liveActivity', label:'라이브 액티비티', sub:'잠금화면·다이나믹 아일랜드에 실시간 경기 표시' },
