@@ -1773,6 +1773,33 @@ const internationalWindowNow = (matches = [], now = Date.now()) => {
 };
 // 대표팀 엔트리(kind:'team')는 합성 항목이라 결장 개념이 없다 — 항상 가용.
 // 코리안 더비 등 팔로우한 선수가 둘 이상일 때 히어로의 '주인공'을 고르는 데 쓴다.
+// 이 경기에 걸린 우리 선수가 전원 출전 불가(대표팀 차출·소집, 결장급 부상)인가.
+// 홈 하단 목록·일정 탭에서 흐리게(또는 설정에 따라 숨김) 처리한다. 대표팀 엔트리는 해당 없음.
+const matchNoChance = (m) => {
+  const kps = (m?.koreanPlayers || [m?.koreanPlayer]).filter(Boolean);
+  return kps.length > 0 && kps.every(kp => {
+    if (kp.isTeam) return false;
+    if (manualAvailabilityFor(kp.name)) return true;
+    const inj = ALL_PLAYERS.find(p => p.name === kp.name)?.injury;
+    return !!inj && inj.severity === 'high';
+  });
+};
+// 더보기 설정: 출전 불가 경기 숨기기(기본 꺼짐 = 흐리게만).
+const HIDE_UNAVAILABLE_KEY = 'jumo_hide_unavailable';
+const readHideUnavailable = () => { try { return localStorage.getItem(HIDE_UNAVAILABLE_KEY) === '1'; } catch { return false; } };
+function useHideUnavailable() {
+  const [v, setV] = React.useState(readHideUnavailable);
+  React.useEffect(() => {
+    const on = () => setV(readHideUnavailable());
+    window.addEventListener('jumo:hide-unavailable', on);
+    return () => window.removeEventListener('jumo:hide-unavailable', on);
+  }, []);
+  return v;
+}
+const setHideUnavailable = (v) => {
+  try { localStorage.setItem(HIDE_UNAVAILABLE_KEY, v ? '1' : '0'); } catch {}
+  try { window.dispatchEvent(new Event('jumo:hide-unavailable')); } catch {}
+};
 const heroAvailable = (kp) => !!kp && (kp.isTeam || !manualAvailabilityFor(kp.name));
 // 매치에서 히어로가 내세울 대표 선수: 팔로우(또는 전체) 목록 중 가용한 첫 번째,
 // 없으면 기존 m.koreanPlayer로 그대로 폴백(아무도 못 찾는 것보다 낫다).
@@ -3168,6 +3195,7 @@ function TodayMatchesCarousel({ todayMatches, matches, now, onMatch, tweaks }) {
 
 // ─── SCREEN: HOME V2 — Editorial ─────────────────────────────
 function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoading = false, scrollTopKey = 0, onRefresh, unreadCount = 0, nativeTabBar = false, onTabBarScroll, followed, playerOrder = [] }) {
+  const hideUnavailable = useHideUnavailable();   // 더보기 설정: 출전 불가 경기 숨기기
   const onTabScroll = useTabBarScrollSync(onTabBarScroll);
   const homeScrollRef = React.useRef(null);
   React.useEffect(() => { if (scrollTopKey > 0) { SCROLL_MEM.home = 0; homeScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } }, [scrollTopKey]);
@@ -3951,9 +3979,10 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
         // 경기'로 떼어내지 않는다(제보).
         const isLiveRow = (m) => m.live || m.time === 'LIVE';
         const merged = (remaining.length ? remaining : fallback).concat(finishedToday);
+        const mergedVis = hideUnavailable ? merged.filter(m => !matchNoChance(m)) : merged;
         const thisWeekMatches = [
-          ...merged.filter(isLiveRow),
-          ...merged.filter(m => !isLiveRow(m))
+          ...mergedVis.filter(isLiveRow),
+          ...mergedVis.filter(m => !isLiveRow(m))
             .sort((a, b) => new Date(a.fullDate || 0) - new Date(b.fullDate || 0)),
         ];
         if (thisWeekMatches.length === 0) return null;
@@ -3987,13 +4016,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
               // 우리 선수가 이 경기에 나올 수 없으면(대표팀 차출·소집, 중상 부상 등) 줄을
               // 흐리게 — 출전 확률 0% 경기라는 게 한눈에 보이게(사용자 요청).
               // 대표팀 엔트리(isTeam)는 해당 없음.
-              const kpsAll = (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean);
-              const noChance = kpsAll.length > 0 && kpsAll.every(kp => {
-                if (kp.isTeam) return false;
-                if (manualAvailabilityFor(kp.name)) return true;
-                const inj = ALL_PLAYERS.find(p => p.name === kp.name)?.injury;
-                return !!inj && inj.severity === 'high';
-              });
+              const noChance = matchNoChance(m);
               const nameStyle = (code) => ({
                 fontSize: 14,
                 fontWeight: 600,   // 한국 선수 소속팀만 굵게 하지 않는다(사용자 요청) — 양 팀 같은 무게
@@ -7042,7 +7065,8 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
   });
 
   // 하루치가 아니라 범위 전체를 시간 순서대로 한 줄로 잇는다.
-  const sortedMatches = allMatches.slice().sort((a, b) => new Date(a.fullDate) - new Date(b.fullDate));
+  const hideUnavailable = useHideUnavailable();
+  const sortedMatches = allMatches.filter(m => !(hideUnavailable && matchNoChance(m))).sort((a, b) => new Date(a.fullDate) - new Date(b.fullDate));
   const sectionDates = [];
   sortedMatches.forEach(m => {
     const ds = new Date(m.fullDate).toDateString();
@@ -7183,6 +7207,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
             // 강조하지 않는다 — rowEmphasis로 걸러 낸다.
             const isLiveRow = !!(m.live || m.time === 'LIVE');
             const framed = isHi || (isLiveRow && rowEmphasis(m));
+            const noChance = matchNoChance(m);   // 우리 선수 출전 불가 → 팀 이름 흐리게
             const isFinished = m.status === 'STATUS_FINAL' || m.status === 'STATUS_FULL_TIME' || m.status === 'final' || m.status === 'STATUS_END_PERIOD' || m.status === 'STATUS_FINAL_PEN';
             const kp = m.koreanPlayer;
             const rawLeague = (m.competition || m.sport || '').replace(/^[⚽⚾🏀🎾]\s*/,'');
@@ -7284,7 +7309,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
                         flex:1 몫을 넘겨 가운데 시각 칸을 밀어낸다(제보: 글라드바흐 줄만 열이 어긋남).
                         overflowWrap 으로 단어 중간에서도 끊게 해 두 칸 폭을 항상 같게 유지한다. */}
                     <div style={{ display:'flex', alignItems:'center', gap:6, flex:1, minWidth:0, justifyContent:'flex-end' }}>
-                      <span style={{ fontSize:13, fontWeight: 600, color:'var(--text)', textAlign:'right', lineHeight:1.3, overflowWrap:'anywhere' }}>{shortTeamName(m.home.name)}</span>
+                      <span style={{ fontSize:13, fontWeight: 600, color: noChance ? 'var(--text5)' : 'var(--text)', textAlign:'right', lineHeight:1.3, overflowWrap:'anywhere' }}>{shortTeamName(m.home.name)}</span>
                       <TeamBadge code={m.home.code} size={24} logo={m.home.logo}/>
                     </div>
                     {/* Center: score or time */}
@@ -7309,7 +7334,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
                     {/* Away */}
                     <div style={{ display:'flex', alignItems:'center', gap:6, flex:1, minWidth:0 }}>
                       <TeamBadge code={m.away.code} size={24} logo={m.away.logo}/>
-                      <span style={{ fontSize:13, fontWeight: 600, color:'var(--text)', lineHeight:1.3, overflowWrap:'anywhere' }}>{shortTeamName(m.away.name)}</span>
+                      <span style={{ fontSize:13, fontWeight: 600, color: noChance ? 'var(--text5)' : 'var(--text)', lineHeight:1.3, overflowWrap:'anywhere' }}>{shortTeamName(m.away.name)}</span>
                     </div>
                   </div>
                 </div>
@@ -9423,6 +9448,7 @@ function FeedbackScreen({ onBack, deviceId, profile }) {
 }
 
 function MoreScreen({ sportFeeds, onToggleSportFeed, profile, onUpdateProfile, sub, setSub, onShowGuide, deviceId }) {
+  const hideUnavailable = useHideUnavailable();
   if (sub === 'notif')      return <NotifSettingsScreen onBack={() => setSub(null)}/>;
   if (sub === 'sports')     return <SportFeedScreen onBack={() => setSub(null)} sportFeeds={sportFeeds} onToggleSportFeed={onToggleSportFeed}/>;
   if (sub === 'profile')    return <ProfileEditScreen profile={profile} onSave={onUpdateProfile} onBack={() => setSub(null)}/>;
@@ -9432,6 +9458,8 @@ function MoreScreen({ sportFeeds, onToggleSportFeed, profile, onUpdateProfile, s
     { label:'개인화', items:[
       { id:'sports',    icon:'🏆', color:'#e03030', title:'종목별 피드',   sub:'관심 종목 선택',         chevron:true },
       { id:'notif',     icon:'🔔', color:'#ff9500', title:'알림 설정',     sub:'경기 시작, 이벤트 알림', chevron:true },
+      { id:'hideOut',   icon:'🙈', color:'#5856d6', title:'출전 불가 경기 숨기기', sub:'차출·부상으로 우리 선수가 못 뛰는 경기를 홈·일정에서 숨겨요',
+        toggle:true, val: hideUnavailable, onToggle: () => setHideUnavailable(!hideUnavailable) },
     ]},
     { label:'앱 정보', items:[
       { id:'guide',    icon:'📖', color:'#48484a', title:'사용 설명 보기', sub:'온보딩 가이드 다시 보기', chevron:true, action: onShowGuide },
