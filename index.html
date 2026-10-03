@@ -3984,10 +3984,20 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
               // 안 들어온다 → 우리 선수 팀만 볼드로 남기고 상대 팀은 일반 굵기.
               // (더비처럼 양 팀에 한국 선수가 있으면 둘 다 볼드)
               const koSides = (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean).map(kp => kp.team);
+              // 우리 선수가 이 경기에 나올 수 없으면(대표팀 차출·소집, 중상 부상 등) 줄을
+              // 흐리게 — 출전 확률 0% 경기라는 게 한눈에 보이게(사용자 요청).
+              // 대표팀 엔트리(isTeam)는 해당 없음.
+              const kpsAll = (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean);
+              const noChance = kpsAll.length > 0 && kpsAll.every(kp => {
+                if (kp.isTeam) return false;
+                if (manualAvailabilityFor(kp.name)) return true;
+                const inj = ALL_PLAYERS.find(p => p.name === kp.name)?.injury;
+                return !!inj && inj.severity === 'high';
+              });
               const nameStyle = (code) => ({
                 fontSize: 14,
                 fontWeight: 600,   // 한국 선수 소속팀만 굵게 하지 않는다(사용자 요청) — 양 팀 같은 무게
-                color: 'var(--text)',
+                color: noChance ? 'var(--text5)' : 'var(--text)',
                 overflowWrap: 'anywhere',   // 'Mönchengladbach' 같은 긴 한 단어가 칸 밖으로 넘치지 않게
               });
 
