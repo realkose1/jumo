@@ -548,11 +548,11 @@ async function collectSoccer(events, liveStates) {
   // MANUAL_AVAILABILITY(index.html)와 같은 명단·기간을 유지할 것.
   // (2026-09-20 제보: 아시안게임 차출 선수에게 소속팀 '명단 포함되지 않았다' 알림이 갔다.)
   const MANUAL_OUT = [
-    { ids: [20, 23, 22, 31, 32, 30], from: '2026-09-07', to: '2026-10-05', reason: '아시안게임 차출' },
+    { ids: [20, 23, 22, 31, 32, 30], from: '2026-09-07', to: '2026-10-04', reason: '아시안게임 차출' },
     { ids: [1, 2, 3, 6, 7, 8, 25, 19, 21, 24, 26, 33, 35], from: '2026-09-21', to: '2026-10-07', reason: 'A대표팀 소집' },
     { ids: [36], from: '2026-09-21', to: '2026-10-07', reason: '올림픽 대표팀 소집' },
   ];
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);   // KST 날짜
   const manualOut = new Set(MANUAL_OUT.filter((m) => today >= m.from && today <= m.to).flatMap((m) => m.ids));
   const soccer = PLAYERS.filter((p) => p.sport === 'soccer' && !manualOut.has(p.id));
   const ymd = (off) => new Date(Date.now() + off * 86400000).toISOString().slice(0, 10);

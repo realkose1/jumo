@@ -1706,7 +1706,7 @@ STATUS_BADGE.national = { bg:'rgba(80,140,255,0.16)', fg:'#8ab4ff', bd:'rgba(80,
 // 9/15·9/22, 대회는 10/4 폐막 — 결승·귀국까지 잡아 10/5 로 둔다. 조기 탈락하면
 // 더 일찍 복귀하므로 그때 to 를 당길 것. (출처: KFA 최종 명단 발표 2026-07-09)
 const AG_NOTE = '2026 아이치·나고야 아시안게임 U-23 대표팀 소집으로 소속팀 명단에서 빠져 있어요.';
-const AG = (extra) => ({ kind:'national', label:'아시안게임 차출', from:'2026-09-07', to:'2026-10-05', note: AG_NOTE + (extra ? ' ' + extra : '') });
+const AG = (extra) => ({ kind:'national', label:'아시안게임 차출', from:'2026-09-07', to:'2026-10-04', note: AG_NOTE + (extra ? ' ' + extra : '') });
 const MANUAL_AVAILABILITY = {
   '양현준': AG('와일드카드(24세 이상) 발탁.'),
   '엄지성': AG('와일드카드(24세 이상) 발탁.'),
@@ -1937,7 +1937,7 @@ const TRANSFER_SPOTLIGHTS = [
     headline: '대한민국, 아시안게임 4연패',
     sub: '결승 1 : 0 일본 · 2026 아이치·나고야',
     announced: '2026-10-03',
-    days: 3,
+    days: 2,   // 10/4 폐막일까지(10/5 00:00 KST 종료)
     newsQuery: '아시안게임 축구 금메달 일본',
     newsMust: ['금메달'],
     matchId: '1643349',
@@ -7803,8 +7803,9 @@ const NEWS_PLAYERS = [
 ];
 
 // 아시안게임 기간에만 뉴스 탭에 '아시안게임' 칩을 띄운다(폐막 10/4 + 결산 기사 며칠).
-const AG_NEWS_WINDOW = { from:'2026-09-07', to:'2026-10-05' };   // 10/3 결승 후 결산 기사 이틀까지
-const agNewsActive = (now = Date.now()) => { const d = new Date(now).toISOString().slice(0,10); return d >= AG_NEWS_WINDOW.from && d <= AG_NEWS_WINDOW.to; };
+const AG_NEWS_WINDOW = { from:'2026-09-07', to:'2026-10-04' };   // 10/4 폐막일 자정(KST)까지
+// 날짜는 KST 로 비교한다(예전엔 UTC 라 자정이 아니라 오전 9시에 바뀌었다).
+const agNewsActive = (now = Date.now()) => { const d = new Date(now + 9 * 3600e3).toISOString().slice(0,10); return d >= AG_NEWS_WINDOW.from && d <= AG_NEWS_WINDOW.to; };
 const AG_NEWS_QUERIES = [ { label:'아시안게임', query:'아시안게임 축구 대표팀', ag:true }, { label:'아시안게임', query:'아시안게임 야구 대표팀', ag:true } ];
 
 const newsImageCache = {};
