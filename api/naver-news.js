@@ -13,9 +13,13 @@ module.exports = async (req, res) => {
   }
 
   const query = req.query.query || '';
-  const display = req.query.display || '20';
-  const sort = req.query.sort || 'date';
-  const path = `/v1/search/news.json?query=${encodeURIComponent(query)}&display=${display}&sort=${sort}`;
+  // 숫자 파라미터는 정수로 걸러 범위를 자른다(경로에 그대로 붙으므로 검증 필수).
+  // 네이버 제약: display 1~100, start 1~1000. start 는 뉴스 탭 무한 스크롤 페이징용.
+  const toInt = (v, def, min, max) => { const n = parseInt(v, 10); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : def; };
+  const display = toInt(req.query.display, 20, 1, 100);
+  const start = toInt(req.query.start, 1, 1, 1000);
+  const sort = req.query.sort === 'sim' ? 'sim' : 'date';
+  const path = `/v1/search/news.json?query=${encodeURIComponent(query)}&display=${display}&sort=${sort}&start=${start}`;
 
   const data = await new Promise((resolve, reject) => {
     const r = https.request({

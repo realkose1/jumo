@@ -8318,6 +8318,23 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
   const [refetchTrigger, setRefetchTrigger] = React.useState(0);
+  // ── 무한 스크롤 ────────────────────────────────────────────────
+  // 첫 화면은 큐레이션 40건. 바닥 근처까지 내리면 쿼리별로 다음 페이지(start=21,41,…)를
+  // 받아 articles 에 이어 붙이고, visibleLimit 를 30 씩 올려 목록을 늘린다.
+  const NEWS_PAGE = 20, NEWS_FIRST_LIMIT = 40, NEWS_MORE_STEP = 30;
+  const [visibleLimit, setVisibleLimit] = React.useState(NEWS_FIRST_LIMIT);
+  const [loadingMore, setLoadingMore] = React.useState(false);
+  const [, setExhaustVer] = React.useState(0);          // exhaustedRef 가 바뀌면 다시 그리기용
+  const pageRef = React.useRef({});                      // 쿼리 → 다음 start (첫 페이지 뒤 21)
+  const exhaustedRef = React.useRef(new Set());          // 더 받을 게 없는 쿼리
+  const newsGenRef = React.useRef(0);                    // 새로고침 회차 — 늦게 온 응답 폐기용
+  const newsReadyRef = React.useRef(false);              // 첫 조회 완료 후에만 loadMore
+  const loadingMoreRef = React.useRef(false);
+  const loadMoreCooldownRef = React.useRef(0);           // 전부 실패했을 때 잠깐 쉬기
+  const autoMoreRef = React.useRef(0);                   // 스크롤 없이 이어 받은 연속 횟수
+  const loadMoreRef = React.useRef(null);
+  const categoryRef = React.useRef('전체');
+  categoryRef.current = category;
   // NewsScreen 은 탭 전환과 무관하게 항상 마운트돼 있다(display:none/contents).
   // 그래서 첫 조회(네이버 검색 17건 + 이미지)가 앱 시작과 동시에 나가 홈 목록과
   // 같은 서버를 두고 경쟁했다. 뉴스 탭을 처음 열 때, 또는 목록이 뜨고 3초 뒤
@@ -8671,9 +8688,118 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
     return { category:'기타', sportType:'other' };
   };
 
+  // 네이버 뉴스 한 페이지 조회 + 기사 정규화. start 가 없으면 첫 페이지(기본 display).
+  // 실패(네트워크·429 등 items 없음)는 null — '결과 0건(소진)'과 구분한다.
+  const fetchNewsPage = (q, start) =>
+    fetch(`${API_BASE}/api/naver-news?query=${encodeURIComponent(q.query)}${start ? `&display=${NEWS_PAGE}&start=${start}` : ''}`)
+      .then(r => r.json())
+      .then(data => {
+        if (!data || !Array.isArray(data.items)) return null;
+        return {
+          count: data.items.length,
+          items: data.items.map(item => ({
+            title: stripHtml(item.title),
+            link: item.originallink || item.link,
+            naverLink: item.link,
+            pubDate: item.pubDate,
+            description: stripHtml(item.description),
+            player: q.label,
+            ag: !!q.ag,
+            source: (() => {
+              try { return new URL(item.originallink || item.link).hostname; }
+              catch { return ''; }
+            })(),
+          })),
+        };
+      })
+      .catch(() => null);
+
+  // Allowlist of sports-focused outlets (host substrings)
+  const SPORTS_HOSTS = [
+    'spotvnews', 'xportsnews', 'osen', 'mydaily', 'starnewskorea', 'isplus', 'sportsq',
+    'sportsworldi', 'sportsseoul', 'sportschosun', 'mksports', 'sports.news', 'sports.donga',
+    'sports.chosun', 'sports.hankyung', 'sports.joongang', 'sports.khan', 'sports.kbsm',
+    'sports.naver', 'sports.daum', 'footballist', 'thespike', 'thefootballist',
+    'interfootball', 'bestelevenmag', 'soccerline', 'fourfourtwo', 'soccerphile',
+    'baseballrising', 'mhns.co.kr', 'sportstoday', 'isportskorea', 'sportsdonga',
+    'soccertown', 'soccerassociation', 'football-asian', 'fmkorea',
+    'sportalkorea', 'gettyimages', 'tvdaily', 'sportv', 'jtbcgolf',
+  ];
+  const isSportsHost = (host) => {
+    const h = (host || '').toLowerCase();
+    return SPORTS_HOSTS.some(k => h.includes(k));
+  };
+  const newsKey = (a) => `${a.title}|${a.link}`;
+
+  // 첫 페이지·추가 페이지가 같이 쓰는 필터(스포츠 매체·낚시·키워드·동명이인 …).
+  const filterNewsItems = (rawItems) => rawItems.filter(item => {
+    if (!isSportsHost(item.source)) return false;
+    if (isClickbaitForKorean(item.title)) return false;
+    // '경기도(京畿道)'의 '경기'가 경기 용어 '경기'에 걸린다 — 고양시 K팝 시상식
+    // 기사가 이걸로 통과했다(제보). 지명은 지운 뒤 대조한다.
+    const haystack = `${item.title} ${item.description}`.replace(/경기도/g, '');
+    if (item.ag) {
+      // 아시안게임 대표팀 뉴스: 팔로우 선수 이름이 없어도 살아남아야 하므로
+      // 선수명 규칙 대신 종목 키워드로만 판단한다(소속팀 개념이 없다).
+      if (!haystack.includes('아시안게임')) return false;
+      if (!(haystack.includes('축구') || haystack.includes('야구'))) return false;
+      if (EXCLUDE_KEYWORDS.some(kw => haystack.includes(kw))) return false;
+      if (!(MATCH_KEYWORDS.some(kw => haystack.includes(kw)) || SPORT_CONTEXT.some(kw => haystack.includes(kw)))) return false;
+      if (SOFT_ENTERTAINMENT.some(kw => haystack.includes(kw))) return false;
+      return true;
+    }
+    if (EXCLUDE_KEYWORDS.some(kw => haystack.includes(kw))) return false;
+    const named = PLAYER_NAMES.filter(name => haystack.includes(name));
+    if (!named.length) return false;
+    if (!MATCH_KEYWORDS.some(kw => haystack.includes(kw))) return false;
+    // 동명이인 방어: 일반 스포츠 맥락이 있거나, 언급된 선수의 소속팀·리그가
+    // 나와야 한다. 둘 다 없으면 이름만 같은 기사로 본다.
+    const hasTeam = named.some(n => (PLAYER_CONTEXT[n] || []).some(kw => haystack.includes(kw)));
+    const hasGeneric = SPORT_CONTEXT.some(kw => haystack.includes(kw));
+    if (!hasTeam && !hasGeneric) return false;
+    // 같은 종목 동명이인은 스포츠 맥락 검사를 그대로 통과하므로,
+    // 그쪽 선수의 표지가 보이면 여기서 끊는다.
+    if (!hasTeam && named.some(n => (PLAYER_NEGATIVE[n] || []).some(kw => haystack.includes(kw)))) return false;
+    // 약한 연예 신호는 '소속팀·리그가 안 나올 때만' 배제 근거로 쓴다.
+    // 이 말들은 스포츠 기사에도 정상적으로 나온다 — MLS 올스타전에 영화배우가
+    // 나오거나('손흥민, 2대 팔콘과 축구 대결'), '승리의 주연' 같은 표현으로.
+    // 소속팀이 적힌 기사는 동명이인일 리 없으니 그대로 통과시킨다.
+    if (!hasTeam && SOFT_ENTERTAINMENT.some(kw => haystack.includes(kw))) return false;
+    return true;
+  });
+  const byNewest = (a, b) => new Date(b.pubDate) - new Date(a.pubDate);
+  const withCategory = (item) => {
+    const meta = detectCategory(item);
+    return { ...item, category: meta.category, sportType: meta.sportType, ag: !!(meta.ag || item.ag) };
+  };
+
+  // 카테고리별로 더 받아 올 쿼리. 꺼 둔 종목의 선수 쿼리는 뺀다(어차피 걸러진다).
+  const queriesForCategory = (cat) => {
+    const isSoccerQ = p => SOCCER_PLAYERS.includes(p.label);
+    const isMlbQ = p => MLB_PLAYERS.includes(p.label);
+    const ag = agNewsActive() ? AG_NEWS_QUERIES : [];
+    let qs;
+    if (cat === '해외축구') qs = NEWS_PLAYERS.filter(isSoccerQ);
+    else if (cat === 'MLB') qs = NEWS_PLAYERS.filter(isMlbQ);
+    else if (cat === '아시안게임') qs = [...ag, ...NEWS_PLAYERS.filter(p => isSoccerQ(p) || isMlbQ(p))];
+    else qs = [...NEWS_PLAYERS, ...ag];
+    return qs.filter(q => q.ag || (isSoccerQ(q) ? enabledSportTypes.has('soccer') : isMlbQ(q) ? enabledSportTypes.has('baseball') : true));
+  };
+
   React.useEffect(() => {
     if (!newsGateOpen) return;          // 첫 화면(경기 목록)이 끝날 때까지 대기
     let cancelled = false;
+    // 새로고침 — 페이지 위치·소진 표시·노출 한도를 처음으로 되돌린다.
+    newsGenRef.current++;
+    pageRef.current = {};
+    exhaustedRef.current = new Set();
+    newsReadyRef.current = false;
+    loadingMoreRef.current = false;
+    loadMoreCooldownRef.current = 0;
+    autoMoreRef.current = 0;
+    setLoadingMore(false);
+    setVisibleLimit(NEWS_FIRST_LIMIT);
+    setExhaustVer(v => v + 1);
     setLoading(true);
     setError(null);
     setArticles([]);
@@ -8687,90 +8813,31 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
         const newsQueries = agNewsActive() ? [...NEWS_PLAYERS, ...AG_NEWS_QUERIES] : NEWS_PLAYERS;
         const responses = await Promise.all(
           newsQueries.map((player, i) =>
-            new Promise(r => setTimeout(r, i * 200))
-              .then(() => fetch(`${API_BASE}/api/naver-news?query=${encodeURIComponent(player.query)}`))
-              .then(r => r.json())
-              .then(data => (data.items || []).map(item => ({
-                title: stripHtml(item.title),
-                link: item.originallink || item.link,
-                naverLink: item.link,
-                pubDate: item.pubDate,
-                description: stripHtml(item.description),
-                player: player.label,
-                ag: !!player.ag,
-                source: (() => {
-                  try { return new URL(item.originallink || item.link).hostname; }
-                  catch { return ''; }
-                })(),
-              })))
-              .catch(() => [])
+            new Promise(r => setTimeout(r, i * 200)).then(() => fetchNewsPage(player))
           )
         );
 
-        // Allowlist of sports-focused outlets (host substrings)
-        const SPORTS_HOSTS = [
-          'spotvnews', 'xportsnews', 'osen', 'mydaily', 'starnewskorea', 'isplus', 'sportsq',
-          'sportsworldi', 'sportsseoul', 'sportschosun', 'mksports', 'sports.news', 'sports.donga',
-          'sports.chosun', 'sports.hankyung', 'sports.joongang', 'sports.khan', 'sports.kbsm',
-          'sports.naver', 'sports.daum', 'footballist', 'thespike', 'thefootballist',
-          'interfootball', 'bestelevenmag', 'soccerline', 'fourfourtwo', 'soccerphile',
-          'baseballrising', 'mhns.co.kr', 'sportstoday', 'isportskorea', 'sportsdonga',
-          'soccertown', 'soccerassociation', 'football-asian', 'fmkorea',
-          'sportalkorea', 'gettyimages', 'tvdaily', 'sportv', 'jtbcgolf',
-        ];
-        const isSportsHost = (host) => {
-          const h = (host || '').toLowerCase();
-          return SPORTS_HOSTS.some(k => h.includes(k));
-        };
+        if (!cancelled) {
+          // 다음 페이지 위치: 성공한 쿼리는 21 부터, 실패한 쿼리는 처음(1)부터 다시.
+          // 첫 페이지가 display 보다 적게 왔으면 그 쿼리는 더 받을 게 없다.
+          responses.forEach((res, i) => {
+            const q = newsQueries[i];
+            pageRef.current[q.query] = res ? NEWS_PAGE + 1 : 1;
+            if (res && res.count < NEWS_PAGE) exhaustedRef.current.add(q.query);
+          });
+        }
 
-        const merged = responses.flat();
-        const filtered = merged.filter(item => {
-          if (!isSportsHost(item.source)) return false;
-          if (isClickbaitForKorean(item.title)) return false;
-          // '경기도(京畿道)'의 '경기'가 경기 용어 '경기'에 걸린다 — 고양시 K팝 시상식
-          // 기사가 이걸로 통과했다(제보). 지명은 지운 뒤 대조한다.
-          const haystack = `${item.title} ${item.description}`.replace(/경기도/g, '');
-          if (item.ag) {
-            // 아시안게임 대표팀 뉴스: 팔로우 선수 이름이 없어도 살아남아야 하므로
-            // 선수명 규칙 대신 종목 키워드로만 판단한다(소속팀 개념이 없다).
-            if (!haystack.includes('아시안게임')) return false;
-            if (!(haystack.includes('축구') || haystack.includes('야구'))) return false;
-            if (EXCLUDE_KEYWORDS.some(kw => haystack.includes(kw))) return false;
-            if (!(MATCH_KEYWORDS.some(kw => haystack.includes(kw)) || SPORT_CONTEXT.some(kw => haystack.includes(kw)))) return false;
-            if (SOFT_ENTERTAINMENT.some(kw => haystack.includes(kw))) return false;
-            return true;
-          }
-          if (EXCLUDE_KEYWORDS.some(kw => haystack.includes(kw))) return false;
-          const named = PLAYER_NAMES.filter(name => haystack.includes(name));
-          if (!named.length) return false;
-          if (!MATCH_KEYWORDS.some(kw => haystack.includes(kw))) return false;
-          // 동명이인 방어: 일반 스포츠 맥락이 있거나, 언급된 선수의 소속팀·리그가
-          // 나와야 한다. 둘 다 없으면 이름만 같은 기사로 본다.
-          const hasTeam = named.some(n => (PLAYER_CONTEXT[n] || []).some(kw => haystack.includes(kw)));
-          const hasGeneric = SPORT_CONTEXT.some(kw => haystack.includes(kw));
-          if (!hasTeam && !hasGeneric) return false;
-          // 같은 종목 동명이인은 스포츠 맥락 검사를 그대로 통과하므로,
-          // 그쪽 선수의 표지가 보이면 여기서 끊는다.
-          if (!hasTeam && named.some(n => (PLAYER_NEGATIVE[n] || []).some(kw => haystack.includes(kw)))) return false;
-          // 약한 연예 신호는 '소속팀·리그가 안 나올 때만' 배제 근거로 쓴다.
-          // 이 말들은 스포츠 기사에도 정상적으로 나온다 — MLS 올스타전에 영화배우가
-          // 나오거나('손흥민, 2대 팔콘과 축구 대결'), '승리의 주연' 같은 표현으로.
-          // 소속팀이 적힌 기사는 동명이인일 리 없으니 그대로 통과시킨다.
-          if (!hasTeam && SOFT_ENTERTAINMENT.some(kw => haystack.includes(kw))) return false;
-          return true;
-        });
-
+        const filtered = filterNewsItems(responses.flatMap(res => (res ? res.items : [])));
         const unique = Array.from(
-          new Map(filtered.map(item => [`${item.title}|${item.link}`, item])).values()
-        ).sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+          new Map(filtered.map(item => [newsKey(item), item])).values()
+        ).sort(byNewest);
 
         if (!cancelled) {
           // 풀을 넉넉히 남겨둔다(최신순 120개). 실제 큐레이션은 팔로우·종목 필터를
-          // 거친 뒤 렌더 단계에서 회차별로 수행한다.
-          setArticles(unique.slice(0, 120).map(item => {
-            const meta = detectCategory(item);
-            return { ...item, category: meta.category, sportType: meta.sportType, ag: !!(meta.ag || item.ag) };
-          }));
+          // 거친 뒤 렌더 단계에서 회차별로 수행한다. first: 첫 페이지 기사 — 큐레이션 머리.
+          setArticles(unique.slice(0, 120).map(item => ({ ...withCategory(item), first: true })));
+          newsReadyRef.current = true;
+          setExhaustVer(v => v + 1);
         }
       } catch {
         if (!cancelled) setError('프록시 서버에 연결할 수 없습니다');
@@ -8795,14 +8862,88 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
   // 큐레이션은 팔로우·종목 필터를 통과한 기사에 대해 마지막에 수행한다.
   // (필터 전에 40개로 줄이면, 그 중 필터를 통과한 것만 남아 회차마다 노출 수가
   //  들쭉날쭉해진다 — 실측에서 29건 → 25건으로 줄었다.)
-  const allowedArticles = React.useMemo(() => {
+  // 머리(첫 페이지 기사 중 큐레이션 40건)는 고정하고, 그 뒤에 나머지를 최신순으로
+  // 이어 붙여 visibleLimit 까지 늘린다. 풀 전체를 다시 curateNews 에 넣으면 기사가
+  // 추가될 때마다 선수 큐 회전이 달라져 위쪽 목록이 통째로 바뀐다.
+  const { allowedArticles, poolHidden } = React.useMemo(() => {
     const pool = articles.filter(a =>
       enabledSportTypes.has(a.sportType) &&
       // 아시안게임 대표팀 뉴스는 팔로우 선수와 무관한 팀 뉴스라 이름 필터를 건너뛴다.
       (a.ag || !followedArr || followedArr.some(name => `${a.title} ${a.description || ''}`.includes(name)))
     );
-    return curateNews(pool, refetchTrigger, 40);
-  }, [articles, refetchTrigger, enabledSportTypes, followedNames]);
+    const head = curateNews(pool.filter(a => a.first), refetchTrigger, NEWS_FIRST_LIMIT);
+    const headKeys = new Set(head.map(newsKey));
+    const rest = pool.filter(a => !headKeys.has(newsKey(a)));   // articles 가 최신순이라 그대로 최신순
+    const extra = rest.slice(0, Math.max(0, visibleLimit - NEWS_FIRST_LIMIT));
+    return { allowedArticles: [...head, ...extra], poolHidden: rest.length - extra.length };
+  }, [articles, refetchTrigger, enabledSportTypes, followedNames, visibleLimit]);
+
+  // 현재 카테고리 바닥 근처에서 다음 페이지를 받아 온다. fromUser=false 는 로드 직후
+  // 아직 바닥이면 이어 받는 자동 호출(연속 2회까지).
+  const loadMore = async (fromUser = true) => {
+    if (!newsReadyRef.current || loadingMoreRef.current) return;
+    if (fromUser) autoMoreRef.current = 0;
+    const qs = queriesForCategory(categoryRef.current).filter(q => !exhaustedRef.current.has(q.query));
+    if (!qs.length) {
+      // 받을 쿼리는 없지만 이미 받아 둔 기사가 가려져 있으면 한도만 올려 보여준다.
+      if (poolHidden > 0) setVisibleLimit(l => l + NEWS_MORE_STEP);
+      return;
+    }
+    if (Date.now() < loadMoreCooldownRef.current) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    const gen = newsGenRef.current;
+    try {
+      // 첫 조회와 같이 버스트 제한을 피해 150ms 씩 흘려보낸다.
+      const results = await Promise.all(qs.map((q, i) =>
+        new Promise(r => setTimeout(r, i * 150))
+          .then(() => fetchNewsPage(q, pageRef.current[q.query] || NEWS_PAGE + 1))
+      ));
+      if (gen !== newsGenRef.current) return;   // 그 사이 새로고침됨
+      const raw = [];
+      let okCount = 0;
+      results.forEach((res, i) => {
+        if (!res) return;                        // 실패한 쿼리는 위치를 그대로 두고 다음에 재시도
+        okCount++;
+        const q = qs[i];
+        const start = pageRef.current[q.query] || NEWS_PAGE + 1;
+        const next = start + NEWS_PAGE;
+        pageRef.current[q.query] = next;
+        if (res.count < NEWS_PAGE || next > 1000) exhaustedRef.current.add(q.query);   // 네이버 start 상한 1000
+        raw.push(...res.items);
+      });
+      if (!okCount) { loadMoreCooldownRef.current = Date.now() + 3000; return; }
+      const fresh = filterNewsItems(raw).map(withCategory);
+      setArticles(prev => {
+        const seen = new Set(prev.map(newsKey));
+        const add = [];
+        for (const a of fresh) { const k = newsKey(a); if (!seen.has(k)) { seen.add(k); add.push(a); } }
+        return add.length ? [...prev, ...add].sort(byNewest) : prev;
+      });
+      setVisibleLimit(l => l + NEWS_MORE_STEP);
+      setExhaustVer(v => v + 1);
+      // 이 카테고리에 해당하는 새 기사가 적어 아직 바닥이면 스크롤 없이도 이어 받는다.
+      setTimeout(() => {
+        const el = scrollRef.current;
+        if (gen === newsGenRef.current && el && autoMoreRef.current < 2 && el.scrollTop + el.clientHeight > el.scrollHeight - 600) {
+          autoMoreRef.current++;
+          loadMoreRef.current && loadMoreRef.current(false);
+        }
+      }, 300);
+    } finally {
+      if (gen === newsGenRef.current) { loadingMoreRef.current = false; setLoadingMore(false); }
+    }
+  };
+  loadMoreRef.current = loadMore;
+  const catExhausted = (cat) => poolHidden === 0 && queriesForCategory(cat).every(q => exhaustedRef.current.has(q.query));
+  const onNewsScroll = (e) => {
+    const el = e.currentTarget;
+    const s = el.scrollTop > 4;
+    setScrolled(p => p !== s ? s : p);
+    onTabScroll(e);
+    // 현재 칸 바닥 600px 안쪽 — 이웃 칸은 스와이프 중에만 보이고 스크롤은 같이 하므로 현재만 보면 된다.
+    if (el.scrollTop + el.clientHeight > el.scrollHeight - 600 && !loading && !error && !loadingMoreRef.current && !catExhausted(categoryRef.current)) loadMore(true);
+  };
 
   const enabledCategories = React.useMemo(() => {
     const categories = ['전체'];
@@ -8915,6 +9056,17 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
             </a>
           );
         })}
+        {/* 무한 스크롤 꼬리 — 현재 칸만, 목록이 비어 있으면 없음 */}
+        {isCurrent && !loading && !error && arts.length > 0 && (loadingMore || catExhausted(cat)) && (
+          loadingMore ? (
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, padding:20 }}>
+              <div style={{ width:16, height:16, borderRadius:'50%', border:'2px solid var(--border)', borderTopColor:'var(--acc)', animation:'spin 0.8s linear infinite' }}/>
+              <span style={{ fontSize:12, color:'var(--text5)' }}>뉴스 더 불러오는 중</span>
+            </div>
+          ) : (
+            <div style={{ textAlign:'center', fontSize:12, color:'var(--text5)', padding:20 }}>모든 뉴스를 불러왔어요</div>
+          )
+        )}
         <div style={{ height:20 }}/>
       </div>
       </>
@@ -8963,7 +9115,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
         ))}
       </div>
       </div>
-      <div ref={scrollRef} onScroll={e => { const s = e.currentTarget.scrollTop > 4; setScrolled(p => p !== s ? s : p); onTabScroll(e); }} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchEnd} style={{ flex:1, overflowX:'hidden', overflowY:'auto', background:'var(--bg)', minHeight:0, touchAction:'pan-y' }} className="scrollbar-hide jumo-page">
+      <div ref={scrollRef} onScroll={onNewsScroll} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchEnd} style={{ flex:1, overflowX:'hidden', overflowY:'auto', background:'var(--bg)', minHeight:0, touchAction:'pan-y' }} className="scrollbar-hide jumo-page">
         {/* 오버레이 헤더가 가리는 만큼 비워둔다 — 스크롤하면 내용이 그 아래로 흐른다 */}
         <div style={{ height: headH, flexShrink: 0 }}/>
       {/* Pull-to-refresh indicator */}
