@@ -1927,11 +1927,62 @@ const TRANSFER_SPOTLIGHTS = [
     sub: '라리가 · 등번호 7번',
     announced: '2026-07-25',
   },
+  // 축전 히어로 — 대표팀 우승 등. image 대신 newsQuery 를 주면 관련 기사 대표 사진(og:image)을
+  // 받아 배경으로 쓰고 출처를 밝힌다(뉴스 탭 썸네일과 같은 방식). 사진이 없으면 태극 배경.
+  {
+    kind: 'celebration',
+    badge: '🥇 금메달',
+    headline: '대한민국, 아시안게임 4연패',
+    sub: '결승 1 : 0 일본 · 2026 아이치·나고야',
+    announced: '2026-10-03',
+    days: 3,
+    newsQuery: '아시안게임 축구 금메달 일본',
+    newsMust: ['금메달'],
+    matchId: '1643349',
+  },
 ];
 const activeTransferSpotlight = (nowMs) => TRANSFER_SPOTLIGHTS.find(s => {
   const start = new Date(`${s.announced}T00:00:00+09:00`).getTime();   // KST 자정
-  return nowMs >= start && nowMs < start + SPOTLIGHT_DAYS * 86400000;
+  return nowMs >= start && nowMs < start + (s.days || SPOTLIGHT_DAYS) * 86400000;
 }) || null;
+
+// 축전 히어로 배경용 기사 사진: 네이버 뉴스 검색 → 최신 기사들의 og:image 를 차례로 시도.
+// 6시간 localStorage 캐시(앱을 켤 때마다 기사 페이지를 긁지 않게).
+function useSpotlightNewsImage(spot) {
+  const key = spot?.newsQuery ? `jumo_spot_img_${spot.announced}_${spot.newsQuery}` : null;
+  const [img, setImg] = React.useState(() => {
+    if (!key) return null;
+    try { const c = JSON.parse(localStorage.getItem(key) || 'null'); if (c && Date.now() - c.at < 6 * 3600e3) return c.v; } catch {}
+    return null;
+  });
+  React.useEffect(() => {
+    if (!key || img) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`${API_BASE}/api/naver-news?query=${encodeURIComponent(spot.newsQuery)}`);
+        const items = ((await r.json())?.items || [])
+          .map(it => ({ title: (it.title || '').replace(/<[^>]+>/g, ''), link: it.originallink || it.link, at: Date.parse(it.pubDate) || 0 }))
+          .filter(it => it.link && (spot.newsMust || []).every(w => it.title.includes(w)))
+          .sort((a, b) => b.at - a.at)
+          .slice(0, 6);
+        for (const it of items) {
+          if (cancelled) return;
+          const d = await fetch(`${API_BASE}/api/news-image?url=${encodeURIComponent(it.link)}`).then(x => x.ok ? x.json() : null).catch(() => null);
+          if (d?.image) {
+            let host = ''; try { host = new URL(it.link).hostname.replace(/^www\./, ''); } catch {}
+            const v = { image: d.image, link: it.link, host, title: it.title };
+            try { localStorage.setItem(key, JSON.stringify({ at: Date.now(), v })); } catch {}
+            if (!cancelled) setImg(v);
+            return;
+          }
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [key]);
+  return img;
+}
 
 
 const PLAYER_EXTRA = {
@@ -3631,10 +3682,20 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
 
   // 이적 스포트라이트 히어로 — 로딩 중에도(스켈레톤 화면에서도) 그대로 쓰기 위해
   // 별도로 만들어 둔다.
+  const spotNews = useSpotlightNewsImage(spotlight);
+  const spotImage = spotlight?.image || spotNews?.image || null;
+  const spotMatch = spotlight?.matchId ? (liveApiMatches || []).find(m => String(m.id) === String(spotlight.matchId)) : null;
   const spotlightHero = spotlight ? (
-    <div onClick={() => spotlightPlayer && onPlayer(spotlightPlayer)}
-         style={{ position:'relative', height:260, overflow:'hidden', marginBottom:0, background:'#111', cursor: spotlightPlayer ? 'pointer' : 'default' }}>
-      <img src={spotlight.image} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'50% 20%', animation:'fadeIn 0.7s ease' }}/>
+    <div onClick={() => { if (spotMatch) onMatch(spotMatch); else if (spotlightPlayer) onPlayer(spotlightPlayer); else if (spotNews?.link) openExternal(spotNews.link); }}
+         style={{ position:'relative', height:260, overflow:'hidden', marginBottom:0, background:'#111', cursor:'pointer' }}>
+      {spotImage
+        ? <img src={spotImage} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'50% 25%', animation:'fadeIn 0.7s ease' }}/>
+        : <NationalHeroBackdrop/>}
+      {spotlight.kind === 'celebration' && (
+        // 축전: 금빛 광채와 흩날리는 금가루로 '경사'임을 분명히.
+        <div style={{ position:'absolute', inset:0, pointerEvents:'none',
+          background:'radial-gradient(ellipse at 75% 30%, rgba(255,205,60,0.35) 0%, rgba(255,205,60,0) 55%)' }}/>
+      )}
       <div style={{ position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.18) 26%, rgba(0,0,0,0.72) 100%)' }}/>
       <div style={{ position:'absolute', top:12, left:20, right:20, display:'flex', justifyContent:'space-between', alignItems:'center', zIndex:2 }}>
         <span style={{ fontSize:15, fontWeight:900, color:'#fff', letterSpacing:2, textTransform:'uppercase' }}>JUMO</span>
@@ -3650,6 +3711,9 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
         <div style={{ fontSize:26, fontWeight:900, color:'#fff', lineHeight:1.15, letterSpacing:-0.5 }}>{spotlight.headline}</div>
         <div style={{ fontSize:12, color:'rgba(255,255,255,0.72)', marginTop:9 }}>{spotlight.sub}</div>
       </div>
+      {!spotlight.image && spotNews?.host && (
+        <div style={{ position:'absolute', right:12, bottom:8, zIndex:2, fontSize:9, color:'rgba(255,255,255,0.5)' }}>사진: {spotNews.host}</div>
+      )}
     </div>
   ) : null;
 
