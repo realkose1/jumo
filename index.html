@@ -11833,7 +11833,8 @@ function App() {
       source: 'apifootball',
       live: liveAfterTimeout,
       minute,
-      sport: `⚽ ${leagueAbbr}`,
+      // 올림픽(U-21) 대표팀 친선은 'A매치'가 아니다.
+      sport: `⚽ ${(natDisplay(homeTeamName) === '올림픽 대표팀' || natDisplay(awayTeamName) === '올림픽 대표팀') ? '친선' : leagueAbbr}`,
       leagueKey: '',
       // id/leagueId/leagueSeason 은 팀 상세 화면(TeamScreen)이 쓴다. API-Football
       // 경기에만 있고 야구(statsapi)·ESPN 경기에는 없다 — 없으면 팀 상세로 들어갈 수
