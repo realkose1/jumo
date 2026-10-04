@@ -1663,14 +1663,16 @@ function compactBadgeEvent(ev) {
   const m = /^(\d+타수\s*\d+안타)/.exec(ev || '');
   return m ? m[1] : (ev || '');
 }
-function formatExpectedEvent(kp, allMatches) {
+// matchAt: 그 경기 킥오프(ISO). 차출 기간은 '오늘'이 아니라 경기 날짜로 판정한다 —
+// 소집이 10/7 에 끝나는데 10/10 경기에 'A대표팀 소집'이 뜨던 문제(제보 확인 중 발견).
+function formatExpectedEvent(kp, allMatches, matchAt) {
   if (!kp) return '';
   // 대표팀 엔트리는 팀 전체를 가리키는 합성 항목이다 — 선발 확률·차출 라벨 같은
   // 개인 판정을 붙이지 않고 경기 상태 라벨(경기 예정/진행 중/경기 종료)을 그대로 쓴다.
   if (kp.isTeam) return kp.event || '';
   if (kp.event === '출전 예상') {
     // 대표팀 차출 등 수동 결장 중이면 '선발 예상 N%' 는 거짓말이다 — 사유를 적는다.
-    const man = manualAvailabilityFor(kp.name);
+    const man = manualAvailabilityFor(kp.name, matchAt ? Date.parse(matchAt) : Date.now());
     if (man) return man.label;
     const p = computeStartProbability(kp.name, allMatches);
     // 계산하는 값은 '선발' 확률이다. 벤치에서 늘 출전하는 선수를 '출전 예상 20%'로
@@ -1779,7 +1781,7 @@ const matchNoChance = (m) => {
   const kps = (m?.koreanPlayers || [m?.koreanPlayer]).filter(Boolean);
   return kps.length > 0 && kps.every(kp => {
     if (kp.isTeam) return false;
-    if (manualAvailabilityFor(kp.name)) return true;
+    if (manualAvailabilityFor(kp.name, m.fullDate ? Date.parse(m.fullDate) : Date.now())) return true;
     const inj = ALL_PLAYERS.find(p => p.name === kp.name)?.injury;
     return !!inj && inj.severity === 'high';
   });
@@ -2853,7 +2855,7 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
 
                 {/* Event info - TOP RIGHT (마이너는 우측 상단에 표시하지 않고 하단 MLB 라벨로 대체) */}
                 {kp.event && kp.event !== '마이너' && (() => {
-                  const label = compactBadgeEvent(formatExpectedEvent(kp, allMatches));
+                  const label = compactBadgeEvent(formatExpectedEvent(kp, allMatches, m.fullDate));
                   const tip = explainForEvent(label);
                   return (
                   <div
@@ -2948,7 +2950,7 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
                   ) : (
                     <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                       <span style={{ fontSize:13, fontWeight:700, color:'var(--text4)' }}>미출전</span>
-                      <span style={{ fontSize:11, color:'var(--text5)' }}>· {manualAvailabilityFor(kp.name)?.label || '엔트리 제외 또는 부상'}</span>
+                      <span style={{ fontSize:11, color:'var(--text5)' }}>· {manualAvailabilityFor(kp.name, m.fullDate ? Date.parse(m.fullDate) : Date.now())?.label || '엔트리 제외 또는 부상'}</span>
                     </div>
                   )}
                 </div>
@@ -5684,7 +5686,9 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
             if (!koreans.length) return null;
             const renderKoreanCard = (kp, idx) => {
               const playerObj = ALL_PLAYERS.find(p => p.name === kp.name);
-              const injury = playerObj?.injury;
+              // 수동 결장(차출)은 이 경기 날짜가 기간 안일 때만 배지로 보인다.
+              const injury = (playerObj?.injury?.manual && !manualAvailabilityFor(kp.name, match.fullDate ? Date.parse(match.fullDate) : Date.now()))
+                ? null : playerObj?.injury;
               // 대표팀 엔트리는 선수가 아니라 팀이다 — 사진 대신 해당 진영 로고를 쓴다.
               const kpSide = kp.isTeam ? (match.home.code === kp.team ? match.home : match.away.code === kp.team ? match.away : null) : null;
               const eventsGoals = (match.events||[]).filter(e=>e.type==='goal'&&e.player===kp.name).length;
@@ -5699,7 +5703,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
                 <div key={idx} onClick={() => goKoreanPlayer(kp)} style={{ background:'rgba(245,196,0,0.08)', borderRadius:10, padding:'10px 14px', border:'0.5px solid rgba(245,196,0,0.3)', display:'flex', alignItems:'center', gap:10, marginTop: idx > 0 ? 8 : 0, cursor: (onPlayer && !kp.isTeam) ? 'pointer' : 'default' }}>
                   <span style={{ fontSize:18 }}>🇰🇷</span>
                   {(() => {
-                    const formattedEvent = formatExpectedEvent(kp, liveApiMatches);
+                    const formattedEvent = formatExpectedEvent(kp, liveApiMatches, match.fullDate);
                     // Baseball stat-line detection (e.g. "4타수 2안타 1홈런 2타점")
                     const isStatLine = /\d+타수.+안타/.test(formattedEvent);
                     return (
@@ -7310,7 +7314,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
                 // 알 수 없다. 개인 기록 대신 경기 상태로 바꾼다.
                 labelParts.push(multiKp
                   ? (m.live || m.time === 'LIVE' ? '진행 중' : '경기 종료')
-                  : formatExpectedEvent(kp, liveApiMatches));
+                  : formatExpectedEvent(kp, liveApiMatches, m.fullDate));
               }
             }
 
