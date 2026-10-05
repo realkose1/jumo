@@ -7807,6 +7807,25 @@ const AG_NEWS_WINDOW = { from:'2026-09-07', to:'2026-10-04' };   // 10/4 폐막�
 // 날짜는 KST 로 비교한다(예전엔 UTC 라 자정이 아니라 오전 9시에 바뀌었다).
 const agNewsActive = (now = Date.now()) => { const d = new Date(now + 9 * 3600e3).toISOString().slice(0,10); return d >= AG_NEWS_WINDOW.from && d <= AG_NEWS_WINDOW.to; };
 const AG_NEWS_QUERIES = [ { label:'아시안게임', query:'아시안게임 축구 대표팀', ag:true }, { label:'아시안게임', query:'아시안게임 야구 대표팀', ag:true } ];
+// 국내 리그(K리그·KBO) 뉴스 — 추적 선수와 무관한 '국내축구'·'국내야구' 칩용 쿼리.
+// domestic 태그로 AG 기사처럼 선수명 필터 대신 전용 규칙(filterNewsItems)을 탄다.
+const DOMESTIC_NEWS_QUERIES = [
+  { label:'K리그1', query:'K리그1', domestic:'soccer' },
+  { label:'K리그 축구', query:'K리그 축구', domestic:'soccer' },
+  { label:'코리아컵 축구', query:'코리아컵 축구', domestic:'soccer' },
+  { label:'KBO 프로야구', query:'KBO 프로야구', domestic:'baseball' },
+  { label:'프로야구 경기 결과', query:'프로야구 경기 결과', domestic:'baseball' },
+  { label:'KBO 포스트시즌', query:'KBO 포스트시즌', domestic:'baseball' },
+];
+// 국내 기사 판정용 표지 — 국내 리그·구단 이름이 하나는 있어야 한다.
+const DOMESTIC_MARKER = {
+  soccer: /K리그|코리아컵|FC서울|울산|전북|포항|수원|강원|대전|광주|제주|인천|대구|김천|안양|성남|부천|부산 아이파크|전남/,
+  baseball: /KBO|프로야구|LG 트윈스|두산|SSG|키움|KIA|삼성 라이온즈|롯데|한화|NC 다이노스|KT 위즈|포스트시즌|한국시리즈/,
+};
+// 해외 리그 기사는 국내 칩에서 뺀다(표지가 없을 때만 — '메이저리그 출신 KBO 신인' 같은 건 살린다).
+const DOMESTIC_OVERSEAS_RE = /MLB|메이저리그|프리미어리그|분데스리가|라리가/;
+const DOMESTIC_CATEGORY = { soccer:'국내축구', baseball:'국내야구' };
+const isDomesticCategory = (c) => c === '국내축구' || c === '국내야구';
 
 const newsImageCache = {};
 
@@ -8074,6 +8093,18 @@ function curateNews(pool, seed, limit) {
   return out;
 }
 
+// 해외(팔로우 선수) 기사 사이에 국내 리그 기사를 4번째마다 하나씩 끼운다 —
+// 선수 뉴스가 '전체' 상단을 계속 차지하게. 한쪽이 바닥나면 남은 쪽을 그대로 이어 붙인다.
+function mixDomestic(over, dom, limit = Infinity) {
+  const out = [];
+  let i = 0, j = 0;
+  while ((i < over.length || j < dom.length) && out.length < limit) {
+    if (j < dom.length && (out.length % 4 === 3 || i >= over.length)) out.push(dom[j++]);
+    else out.push(over[i++]);
+  }
+  return out;
+}
+
 // ─── 아시안게임 메달 패널 (뉴스 탭, '아시안게임' 카테고리 전용) ──────────
 // 국가 코드 → 국기 이모지. 매핑에 없는 나라는 이모지 없이 이름만 보여준다.
 const AG_ORG_FLAG = {
@@ -8281,9 +8312,8 @@ function AgMedalPanel({ agMatches, onMatch, refetchTrigger }) {
   );
 }
 
-function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScroll, agMatches, onMatch, active = false }) {
+function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScroll, agMatches, onMatch, active = false, sportOrder = ['축구','야구'] }) {
   const onTabScroll = useTabBarScrollSync(onTabBarScroll);
-  const NEWS_CATEGORIES = ['전체', '아시안게임', '해외축구', 'MLB', '기타'];
   // 칩에 보이는 글자만 바꾼다(카테고리 키는 그대로).
   const NEWS_CATEGORY_LABEL = { '아시안게임': '🇰🇷 아시안게임' };
   // 오버레이 헤더 높이 — 스크롤 영역 상단 여백과 맞춘다.
@@ -8380,7 +8410,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
   const pagerResetRef = React.useRef(false);  // 카테고리 전환 직후 줄을 원위치로(layout effect)
   const pagerIdleTimerRef = React.useRef(null);
 
-  const visibleCats = () => NEWS_CATEGORIES.filter(c => enabledCategories.includes(c));
+  const visibleCats = () => enabledCategories;
   const pagerWidth = () => pagerRef.current?.clientWidth || window.innerWidth || 375;
   const setStrip = (x, transition) => {
     const el = stripRef.current;
@@ -8683,13 +8713,20 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
 
   const detectCategory = (article) => {
     const haystack = `${article.title} ${article.description} ${article.source || ''}`;
+    const domesticTag = article.domestic || null;
     // 아시안게임 기간엔 선수 쿼리로 들어온 기사(엄지성 해트트릭 등)도 대표팀
     // 기사면 '아시안게임' 칩으로 묶는다 — 기존 SOCCER_PLAYERS/MLB_PLAYERS 판정보다 먼저 본다.
     if (agNewsActive() && haystack.includes('아시안게임')) {
       return { category:'아시안게임', sportType: (haystack.includes('야구') && !haystack.includes('축구')) ? 'baseball' : 'soccer', ag:true };
     }
-    if (SOCCER_PLAYERS.some(name => haystack.includes(name))) return { category:'해외축구', sportType:'soccer' };
-    if (MLB_PLAYERS.some(name => haystack.includes(name))) return { category:'MLB', sportType:'baseball' };
+    // 국내 리그 쿼리로 들어온 기사에 추적 선수가 나오면 선수 기사가 우선(해외축구·MLB).
+    // 단 K리그에 같은 이름의 선수가 있어(김민재·김혜성 …) 국내 기사에서는 소속팀·리그
+    // 별칭이 같이 나올 때만 선수로 본다 — 별칭 표가 없는 선수는 이름만으로 본다.
+    const playerHit = (name) => haystack.includes(name) &&
+      (!domesticTag || !PLAYER_CONTEXT[name] || PLAYER_CONTEXT[name].some(kw => haystack.includes(kw)));
+    if (SOCCER_PLAYERS.some(playerHit)) return { category:'해외축구', sportType:'soccer' };
+    if (MLB_PLAYERS.some(playerHit)) return { category:'MLB', sportType:'baseball' };
+    if (domesticTag) return { category: DOMESTIC_CATEGORY[domesticTag], sportType: domesticTag };
     return { category:'기타', sportType:'other' };
   };
 
@@ -8710,6 +8747,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
             description: stripHtml(item.description),
             player: q.label,
             ag: !!q.ag,
+            domestic: q.domestic || null,   // 'soccer' | 'baseball' — 국내 리그 쿼리 태그
             source: (() => {
               try { return new URL(item.originallink || item.link).hostname; }
               catch { return ''; }
@@ -8753,6 +8791,15 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
       if (SOFT_ENTERTAINMENT.some(kw => haystack.includes(kw))) return false;
       return true;
     }
+    if (item.domestic) {
+      // 국내 리그(K리그·KBO) 뉴스: 팔로우 선수와 무관하므로 선수명 규칙 대신
+      // 낚시·제외어·경기 맥락·국내 표지로만 판단한다. 해외 리그 기사는 뺀다.
+      if (EXCLUDE_KEYWORDS.some(kw => haystack.includes(kw))) return false;
+      if (!(MATCH_KEYWORDS.some(kw => haystack.includes(kw)) || SPORT_CONTEXT.some(kw => haystack.includes(kw)))) return false;
+      const marked = (DOMESTIC_MARKER[item.domestic] || DOMESTIC_MARKER.soccer).test(haystack);
+      if (DOMESTIC_OVERSEAS_RE.test(haystack) && !marked) return false;
+      return marked;
+    }
     if (EXCLUDE_KEYWORDS.some(kw => haystack.includes(kw))) return false;
     const named = PLAYER_NAMES.filter(name => haystack.includes(name));
     if (!named.length) return false;
@@ -8783,12 +8830,15 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
     const isSoccerQ = p => SOCCER_PLAYERS.includes(p.label);
     const isMlbQ = p => MLB_PLAYERS.includes(p.label);
     const ag = agNewsActive() ? AG_NEWS_QUERIES : [];
+    const dom = DOMESTIC_NEWS_QUERIES;
     let qs;
     if (cat === '해외축구') qs = NEWS_PLAYERS.filter(isSoccerQ);
     else if (cat === 'MLB') qs = NEWS_PLAYERS.filter(isMlbQ);
+    else if (cat === '국내축구') qs = dom.filter(q => q.domestic === 'soccer');
+    else if (cat === '국내야구') qs = dom.filter(q => q.domestic === 'baseball');
     else if (cat === '아시안게임') qs = [...ag, ...NEWS_PLAYERS.filter(p => isSoccerQ(p) || isMlbQ(p))];
-    else qs = [...NEWS_PLAYERS, ...ag];
-    return qs.filter(q => q.ag || (isSoccerQ(q) ? enabledSportTypes.has('soccer') : isMlbQ(q) ? enabledSportTypes.has('baseball') : true));
+    else qs = [...NEWS_PLAYERS, ...dom, ...ag];
+    return qs.filter(q => q.domestic ? enabledSportTypes.has(q.domestic) : q.ag || (isSoccerQ(q) ? enabledSportTypes.has('soccer') : isMlbQ(q) ? enabledSportTypes.has('baseball') : true));
   };
 
   React.useEffect(() => {
@@ -8815,7 +8865,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
         // 429 로 돌아온다(콘솔 실측) — 200ms 씩 흘려보낸다.
         // 아시안게임 기간엔 대표팀 쿼리 2개를 이어 붙인다 — 인덱스를 이어가서
         // stagger(200ms 간격)가 계속 늘어나게 한다.
-        const newsQueries = agNewsActive() ? [...NEWS_PLAYERS, ...AG_NEWS_QUERIES] : NEWS_PLAYERS;
+        const newsQueries = [...NEWS_PLAYERS, ...DOMESTIC_NEWS_QUERIES, ...(agNewsActive() ? AG_NEWS_QUERIES : [])];
         const responses = await Promise.all(
           newsQueries.map((player, i) =>
             new Promise(r => setTimeout(r, i * 200)).then(() => fetchNewsPage(player))
@@ -8870,18 +8920,28 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
   // 머리(첫 페이지 기사 중 큐레이션 40건)는 고정하고, 그 뒤에 나머지를 최신순으로
   // 이어 붙여 visibleLimit 까지 늘린다. 풀 전체를 다시 curateNews 에 넣으면 기사가
   // 추가될 때마다 선수 큐 회전이 달라져 위쪽 목록이 통째로 바뀐다.
-  const { allowedArticles, poolHidden } = React.useMemo(() => {
+  const { allowedArticles, poolHidden, domAll } = React.useMemo(() => {
     const pool = articles.filter(a =>
       enabledSportTypes.has(a.sportType) &&
-      // 아시안게임 대표팀 뉴스는 팔로우 선수와 무관한 팀 뉴스라 이름 필터를 건너뛴다.
-      (a.ag || !followedArr || followedArr.some(name => `${a.title} ${a.description || ''}`.includes(name)))
+      // 아시안게임 대표팀·국내 리그 뉴스는 팔로우 선수와 무관한 기사라 이름 필터를 건너뛴다.
+      (a.ag || isDomesticCategory(a.category) || !followedArr || followedArr.some(name => `${a.title} ${a.description || ''}`.includes(name)))
     );
-    const head = curateNews(pool.filter(a => a.first), refetchTrigger, NEWS_FIRST_LIMIT);
+    // '전체'는 선수 뉴스가 주인공 — 국내 기사는 4건에 1건만 끼운다(머리·이어붙이는 뒷부분 모두).
+    const over = pool.filter(a => !isDomesticCategory(a.category));
+    const dom = pool.filter(a => isDomesticCategory(a.category));
+    const headOver = curateNews(over.filter(a => a.first), refetchTrigger, NEWS_FIRST_LIMIT);
+    const headDom = curateNews(dom.filter(a => a.first), refetchTrigger, Math.ceil(NEWS_FIRST_LIMIT / 4));
+    const head = mixDomestic(headOver, headDom, NEWS_FIRST_LIMIT);
     const headKeys = new Set(head.map(newsKey));
-    const rest = pool.filter(a => !headKeys.has(newsKey(a)));   // articles 가 최신순이라 그대로 최신순
+    const notHead = a => !headKeys.has(newsKey(a));   // articles 가 최신순이라 그대로 최신순
+    const rest = mixDomestic(over.filter(notHead), dom.filter(notHead));
     const extra = rest.slice(0, Math.max(0, visibleLimit - NEWS_FIRST_LIMIT));
-    return { allowedArticles: [...head, ...extra], poolHidden: rest.length - extra.length };
+    // 국내 칩은 선수 기사에 밀리지 않게 자기 기사만 최신순으로 따로 보여준다.
+    const domAll = { '국내축구': dom.filter(a => a.category === '국내축구'), '국내야구': dom.filter(a => a.category === '국내야구') };
+    return { allowedArticles: [...head, ...extra], poolHidden: rest.length - extra.length, domAll };
   }, [articles, refetchTrigger, enabledSportTypes, followedNames, visibleLimit]);
+  // 아직 안 보이는(한도에 가려진) 기사 수 — 국내 칩은 자기 목록 기준.
+  const hiddenFor = (cat) => domAll[cat] ? Math.max(0, domAll[cat].length - visibleLimit) : poolHidden;
 
   // 현재 카테고리 바닥 근처에서 다음 페이지를 받아 온다. fromUser=false 는 로드 직후
   // 아직 바닥이면 이어 받는 자동 호출(연속 2회까지).
@@ -8891,7 +8951,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
     const qs = queriesForCategory(categoryRef.current).filter(q => !exhaustedRef.current.has(q.query));
     if (!qs.length) {
       // 받을 쿼리는 없지만 이미 받아 둔 기사가 가려져 있으면 한도만 올려 보여준다.
-      if (poolHidden > 0) setVisibleLimit(l => l + NEWS_MORE_STEP);
+      if (hiddenFor(categoryRef.current) > 0) setVisibleLimit(l => l + NEWS_MORE_STEP);
       return;
     }
     if (Date.now() < loadMoreCooldownRef.current) return;
@@ -8940,7 +9000,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
     }
   };
   loadMoreRef.current = loadMore;
-  const catExhausted = (cat) => poolHidden === 0 && queriesForCategory(cat).every(q => exhaustedRef.current.has(q.query));
+  const catExhausted = (cat) => hiddenFor(cat) === 0 && queriesForCategory(cat).every(q => exhaustedRef.current.has(q.query));
   const onNewsScroll = (e) => {
     const el = e.currentTarget;
     const s = el.scrollTop > 4;
@@ -8950,13 +9010,19 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
     if (el.scrollTop + el.clientHeight > el.scrollHeight - 600 && !loading && !error && !loadingMoreRef.current && !catExhausted(categoryRef.current)) loadMore(true);
   };
 
+  // 칩 순서: 전체 · (아시안게임 기간) · 선수 설정의 종목 순서대로 [해외축구·국내축구] / [MLB·국내야구].
+  // 꺼 둔 종목(sportFeeds)의 칩은 둘 다 숨긴다. 페이저·스와이프도 이 목록을 그대로 쓴다.
+  const sportOrderKey = sportOrder.join();
   const enabledCategories = React.useMemo(() => {
     const categories = ['전체'];
     if (agNewsActive() && (sportFeeds?.soccer || sportFeeds?.baseball)) categories.push('아시안게임');
-    if (sportFeeds?.soccer) categories.push('해외축구');
-    if (sportFeeds?.baseball) categories.push('MLB');
+    const order = [...sportOrder, ...['축구','야구'].filter(s => !sportOrder.includes(s))];   // 순서에 빠진 종목 방어
+    order.forEach(s => {
+      if (s === '축구' && sportFeeds?.soccer) categories.push('해외축구', '국내축구');
+      else if (s === '야구' && sportFeeds?.baseball) categories.push('MLB', '국내야구');
+    });
     return categories;
-  }, [sportFeeds]);
+  }, [sportFeeds, sportOrderKey]);
 
   React.useEffect(() => {
     if (!enabledCategories.includes(category)) {
@@ -8968,7 +9034,9 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
   // 이웃 칸(isCurrent=false)은 스와이프 중 보이는 첫 화면만 필요하므로 카드 8장까지만,
   // 사진은 캐시에 있는 것만(새로 조회하지 않음) 그린다.
   const renderCategoryBody = (cat, isCurrent) => {
-    const all = cat === '전체' ? allowedArticles : allowedArticles.filter(a => a.category === cat);
+    const all = cat === '전체' ? allowedArticles
+      : domAll[cat] ? domAll[cat].slice(0, visibleLimit)
+      : allowedArticles.filter(a => a.category === cat);
     const arts = isCurrent ? all : all.slice(0, 8);
     return (
       <>
@@ -9094,7 +9162,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
       <div ref={headRef} style={{ position:'absolute', top:0, left:0, right:0, zIndex:20, paddingTop:'env(safe-area-inset-top)', background: scrolled ? 'rgba(11,11,13,0.55)' : 'var(--bg)', backdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', WebkitBackdropFilter: scrolled ? 'saturate(180%) blur(22px)' : 'none', borderBottom: `0.5px solid ${scrolled ? 'var(--border)' : 'transparent'}`, transition: 'background 0.28s ease, backdrop-filter 0.28s ease, border-color 0.28s ease' }}>
       <TabHeader title="뉴스"/>
       <div style={{ display:'flex', gap:8, overflowX:'auto', padding:'0 16px 14px' }} className="scrollbar-hide">
-        {NEWS_CATEGORIES.filter(c => enabledCategories.includes(c)).map(c => (
+        {enabledCategories.map(c => (
           <button
             key={c}
             ref={el => { chipRefs.current[c] = el; }}
@@ -9137,7 +9205,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
       <div ref={pagerRef} style={{ position:'relative', overflow:'hidden' }}>
         <div ref={stripRef} style={{ position:'relative' }}>
           {(() => {
-            const cats = NEWS_CATEGORIES.filter(c => enabledCategories.includes(c));
+            const cats = enabledCategories;
             const idx = cats.indexOf(category);
             const slots = [[idx > 0 ? cats[idx - 1] : null, -1], [category, 0], [idx !== -1 ? cats[idx + 1] : null, 1]];
             return slots.map(([c, pos]) => c ? (
@@ -13008,7 +13076,7 @@ function App() {
               <div style={{ display: tab === 'home' ? 'contents' : 'none' }}><HomeComponent onMatch={goMatch} onPlayer={goPlayer} onNotif={goNotif} onTabBarScroll={onTabBarScroll} tweaks={tweaks} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} scrollTopKey={tabScrollKeys.home} onRefresh={refreshFromPull} unreadCount={unreadCount} nativeTabBar={nativeTabBar} followed={followed} playerOrder={playerOrder}/></div>
               <div style={{ display: tab === 'schedule' ? 'contents' : 'none' }}><ScheduleScreen onMatch={goMatch} onTabBarScroll={onTabBarScroll} liveApiMatches={filteredLiveMatches} isLoading={isInitialLoad && apiLoading} onRefresh={refreshFromPull} isActive={tab === 'schedule'} scrollTopKey={tabScrollKeys.schedule}/></div>
               <div style={{ display: tab === 'players' ? 'contents' : 'none' }}><PlayersScreen onPlayer={goPlayer} onAdd={goAddPlayer} onToggleFollow={toggleFollow} onTabBarScroll={onTabBarScroll} followed={followed} playerOrder={playerOrder} sportOrder={sportOrder} statsCache={playerStatsCache} isLoading={isInitialLoad && apiLoading} onRefresh={refreshFromPull} scrollTopKey={tabScrollKeys.players} liveApiMatches={filteredLiveMatches} sportFeeds={sportFeeds}/></div>
-              <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen active={tab === 'news'} sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news} followedNames={followedNames} onTabBarScroll={onTabBarScroll} agMatches={agMatches} onMatch={goMatch}/></div>
+              <div style={{ display: tab === 'news' ? 'contents' : 'none' }}><NewsScreen active={tab === 'news'} sportFeeds={sportFeeds} scrollTopKey={tabScrollKeys.news} followedNames={followedNames} onTabBarScroll={onTabBarScroll} agMatches={agMatches} onMatch={goMatch} sportOrder={sportOrder}/></div>
               <div style={{ display: tab === 'more' ? 'contents' : 'none' }}><MoreScreen sportFeeds={sportFeeds} onToggleSportFeed={toggleSportFeed} profile={profile} onUpdateProfile={updateProfile} sub={moreSub} setSub={setMoreSub} onShowGuide={() => setShowOnboarding(true)} deviceId={deviceId}/></div>
               {dragging && !dragTop && <div ref={scrimRef} style={{ position:'absolute', inset:0, zIndex:40, pointerEvents:'none', background:`rgba(0,0,0,${0.18 * (1 - dragP)})` }}/>}
           </div>
