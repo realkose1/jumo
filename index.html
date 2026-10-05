@@ -8729,6 +8729,13 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
     // 별칭이 같이 나올 때만 선수로 본다 — 별칭 표가 없는 선수는 이름만으로 본다.
     const playerHit = (name) => haystack.includes(name) &&
       (!domesticTag || !PLAYER_CONTEXT[name] || PLAYER_CONTEXT[name].some(kw => haystack.includes(kw)));
+    // 축구 대표팀 기사는 해외축구가 아니라 국내축구로(사용자 요청). 제목 기준으로만 판정한다 —
+    // 본문에 '대표팀'이 지나가듯 나오는 소속팀 기사까지 옮기지 않게.
+    const NATIONAL_TITLE_RE = /대표팀|국가대표|A매치|모레노호|홍명보호|이민성호|김은중호|올림픽팀|평가전|친선경기|월드컵 예선|대한민국 축구|한국 축구|태극전사|국대/;
+    const soccerish = SOCCER_PLAYERS.some(n => haystack.includes(n)) || /축구/.test(haystack);
+    if (soccerish && NATIONAL_TITLE_RE.test(article.title || '') && !/야구|WBC|MLB/.test(article.title || '')) {
+      return { category:'국내축구', sportType:'soccer', national:true };
+    }
     if (SOCCER_PLAYERS.some(playerHit)) return { category:'해외축구', sportType:'soccer' };
     if (MLB_PLAYERS.some(playerHit)) return { category:'MLB', sportType:'baseball' };
     if (domesticTag) return { category: DOMESTIC_CATEGORY[domesticTag], sportType: domesticTag };
