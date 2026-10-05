@@ -918,6 +918,17 @@ const KOREAN_PLAYERS_EXTRA = {
 // 소속팀이 아니라 대표팀으로 뛰는 경기. 아시안게임 축구는 API-Football 리그 803,
 // 팀 10177 'Korea Republic U23'. 이 여섯 명을 선수 개인으로 붙이지 않고(대표팀
 // 경기에선 누가 선발인지 불확실하므로) 팀 단위 카드 하나로만 보여준다.
+// 대표팀 경기 상대국 이름을 한글로(히어로·카드·알림). 'Japan U23' → '일본 U-23'.
+const COUNTRY_KO = {"Japan": "일본", "China": "중국", "China PR": "중국", "Saudi Arabia": "사우디아라비아", "Qatar": "카타르", "Iran": "이란", "Iraq": "이라크", "Uzbekistan": "우즈베키스탄", "Australia": "호주", "United Arab Emirates": "UAE", "UAE": "UAE", "Jordan": "요르단", "Oman": "오만", "Bahrain": "바레인", "Kuwait": "쿠웨이트", "Syria": "시리아", "Lebanon": "레바논", "Palestine": "팔레스타인", "Yemen": "예멘", "Vietnam": "베트남", "Thailand": "태국", "Indonesia": "인도네시아", "Malaysia": "말레이시아", "Philippines": "필리핀", "Singapore": "싱가포르", "Myanmar": "미얀마", "Cambodia": "캄보디아", "Laos": "라오스", "Hong Kong": "홍콩", "Chinese Taipei": "대만", "Taiwan": "대만", "Korea DPR": "북한", "North Korea": "북한", "Kyrgyzstan": "키르기스스탄", "Kyrgyz Republic": "키르기스스탄", "Tajikistan": "타지키스탄", "Turkmenistan": "투르크메니스탄", "Kazakhstan": "카자흐스탄", "India": "인도", "Bangladesh": "방글라데시", "Nepal": "네팔", "Mongolia": "몽골", "Brazil": "브라질", "Argentina": "아르헨티나", "Uruguay": "우루과이", "Paraguay": "파라과이", "Colombia": "콜롬비아", "Chile": "칠레", "Peru": "페루", "Ecuador": "에콰도르", "Venezuela": "베네수엘라", "Bolivia": "볼리비아", "Mexico": "멕시코", "USA": "미국", "United States": "미국", "Canada": "캐나다", "Costa Rica": "코스타리카", "Panama": "파나마", "Jamaica": "자메이카", "Honduras": "온두라스", "England": "잉글랜드", "France": "프랑스", "Germany": "독일", "Spain": "스페인", "Portugal": "포르투갈", "Italy": "이탈리아", "Netherlands": "네덜란드", "Belgium": "벨기에", "Croatia": "크로아티아", "Serbia": "세르비아", "Switzerland": "스위스", "Austria": "오스트리아", "Poland": "폴란드", "Denmark": "덴마크", "Sweden": "스웨덴", "Norway": "노르웨이", "Iceland": "아이슬란드", "Scotland": "스코틀랜드", "Wales": "웨일스", "Ireland": "아일랜드", "Republic of Ireland": "아일랜드", "Turkey": "튀르키예", "Türkiye": "튀르키예", "Greece": "그리스", "Czech Republic": "체코", "Czechia": "체코", "Ukraine": "우크라이나", "Hungary": "헝가리", "Romania": "루마니아", "Morocco": "모로코", "Egypt": "이집트", "Nigeria": "나이지리아", "Senegal": "세네갈", "Ghana": "가나", "Cameroon": "카메룬", "Tunisia": "튀니지", "Algeria": "알제리", "Ivory Coast": "코트디부아르", "Cote D'Ivoire": "코트디부아르", "South Africa": "남아공", "New Zealand": "뉴질랜드"};
+const countryKo = (name, olympic) => {
+  if (!name) return name;
+  const m = /^(.*?)\s+U-?(\d{2})$/.exec(name);
+  const base = m ? m[1] : name, age = m ? m[2] : null;
+  const ko = COUNTRY_KO[base];
+  if (!ko) return name;
+  if (!age) return ko;
+  return olympic ? `${ko} 올림픽팀` : `${ko} U-${age}`;
+};
 const NATIONAL_TEAMS = {
   'Korea Republic U23': { afTeamId: 10177, code: '대한민국 U-23', display: '대한민국 U-23',
                           players: ['양현준', '엄지성', '배준호', '김지수', '양민혁', '박승수'] },
@@ -8733,7 +8744,9 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
     // 본문에 '대표팀'이 지나가듯 나오는 소속팀 기사까지 옮기지 않게.
     const NATIONAL_TITLE_RE = /대표팀|국가대표|A매치|모레노호|홍명보호|이민성호|김은중호|올림픽팀|평가전|친선경기|월드컵 예선|대한민국 축구|한국 축구|태극전사|국대/;
     const soccerish = SOCCER_PLAYERS.some(n => haystack.includes(n)) || /축구/.test(haystack);
-    if (soccerish && NATIONAL_TITLE_RE.test(article.title || '') && !/야구|WBC|MLB/.test(article.title || '')) {
+    // '모레노호'(A대표팀 임시 감독 체제) 기사는 제목이든 본문이든 언급되면 전부 국내축구(사용자 요청).
+    const morenoHo = /모레노호|모레노 감독|모레노 임시 감독/.test(haystack);
+    if (morenoHo || (soccerish && NATIONAL_TITLE_RE.test(article.title || '') && !/야구|WBC|MLB/.test(article.title || ''))) {
       return { category:'국내축구', sportType:'soccer', national:true };
     }
     if (SOCCER_PLAYERS.some(playerHit)) return { category:'해외축구', sportType:'soccer' };
@@ -12042,6 +12055,10 @@ function App() {
     // (리그 803)이 아니면 '올림픽 대표팀'으로 부른다(제보: 결승 날 호주전 'U-23' 이 따로 떠 헷갈림).
     const natDisplay = (n) => (NATIONAL_TEAMS[n]?.afTeamId === 10177 && fx.league?.id !== 803)
       ? '올림픽 대표팀' : NATIONAL_TEAMS[n]?.display;
+    // 대표팀 경기면 상대국도 한글로(우리 쪽은 natDisplay).
+    const isNatMatch = !!(NATIONAL_TEAMS[homeTeamName] || NATIONAL_TEAMS[awayTeamName]);
+    const isOlyMatch = natDisplay(homeTeamName) === '올림픽 대표팀' || natDisplay(awayTeamName) === '올림픽 대표팀';
+    const sideName = (n) => natDisplay(n) || (isNatMatch ? countryKo(n, isOlyMatch) : n);
     const renameNat = (list, n) => list.map(k => k.isTeam ? { ...k, name: natDisplay(n) || k.name } : k);
     const homeKoreans = renameNat(koreansForTeam(homeTeamName, homeCode, '축구', matchState), homeTeamName);
     const awayKoreans = renameNat(koreansForTeam(awayTeamName, awayCode, '축구', matchState), awayTeamName);
@@ -12079,8 +12096,8 @@ function App() {
       // id/leagueId/leagueSeason 은 팀 상세 화면(TeamScreen)이 쓴다. API-Football
       // 경기에만 있고 야구(statsapi)·ESPN 경기에는 없다 — 없으면 팀 상세로 들어갈 수
       // 없게 막는 게 의도된 동작이다.
-      home: { name: natDisplay(homeTeamName) || homeTeamName, code: homeCode, score: (liveAfterTimeout || isFinished || isTimedOut) ? (fx.goals?.home ?? 0) : null, logo: fx.teams.home?.logo || null, id: fx.teams.home?.id || null },
-      away: { name: natDisplay(awayTeamName) || awayTeamName, code: awayCode, score: (liveAfterTimeout || isFinished || isTimedOut) ? (fx.goals?.away ?? 0) : null, logo: fx.teams.away?.logo || null, id: fx.teams.away?.id || null },
+      home: { name: sideName(homeTeamName), code: homeCode, score: (liveAfterTimeout || isFinished || isTimedOut) ? (fx.goals?.home ?? 0) : null, logo: fx.teams.home?.logo || null, id: fx.teams.home?.id || null },
+      away: { name: sideName(awayTeamName), code: awayCode, score: (liveAfterTimeout || isFinished || isTimedOut) ? (fx.goals?.away ?? 0) : null, logo: fx.teams.away?.logo || null, id: fx.teams.away?.id || null },
       leagueId: fx.league?.id || null,
       leagueSeason: fx.league?.season || null,
       // 종료 경기의 기본값은 '미출전'이 아니라 '확인 불가'다 — 라인업·이벤트를 아직

@@ -67,7 +67,14 @@ const NATIONAL_TEAMS = { 10177: { name: '대한민국 U-23' }, 17: { name: '대�
 // 대표팀 경기의 vs 문구는 소속팀명이 아니라 대표팀명을 쓴다(예: 'Qatar U23 vs 대한민국 U-23').
 // AF 는 올림픽(U-21) 대표팀 친선도 10177('Korea Republic U23')로 준다 — 아시안게임(803)이 아니면 '올림픽 대표팀'.
 const natNameFor = (id, leagueId) => (Number(id) === 10177 && leagueId != null && leagueId !== 803) ? '올림픽 대표팀' : NATIONAL_TEAMS[id]?.name;
-const teamLabel = (team, leagueId) => (NATIONAL_TEAMS[team?.id] && natNameFor(team.id, leagueId)) || team?.name || '';
+const COUNTRY_KO = {"Japan": "일본", "China": "중국", "China PR": "중국", "Saudi Arabia": "사우디아라비아", "Qatar": "카타르", "Iran": "이란", "Iraq": "이라크", "Uzbekistan": "우즈베키스탄", "Australia": "호주", "United Arab Emirates": "UAE", "UAE": "UAE", "Jordan": "요르단", "Oman": "오만", "Bahrain": "바레인", "Kuwait": "쿠웨이트", "Syria": "시리아", "Lebanon": "레바논", "Palestine": "팔레스타인", "Yemen": "예멘", "Vietnam": "베트남", "Thailand": "태국", "Indonesia": "인도네시아", "Malaysia": "말레이시아", "Philippines": "필리핀", "Singapore": "싱가포르", "Myanmar": "미얀마", "Cambodia": "캄보디아", "Laos": "라오스", "Hong Kong": "홍콩", "Chinese Taipei": "대만", "Taiwan": "대만", "Korea DPR": "북한", "North Korea": "북한", "Kyrgyzstan": "키르기스스탄", "Kyrgyz Republic": "키르기스스탄", "Tajikistan": "타지키스탄", "Turkmenistan": "투르크메니스탄", "Kazakhstan": "카자흐스탄", "India": "인도", "Bangladesh": "방글라데시", "Nepal": "네팔", "Mongolia": "몽골", "Brazil": "브라질", "Argentina": "아르헨티나", "Uruguay": "우루과이", "Paraguay": "파라과이", "Colombia": "콜롬비아", "Chile": "칠레", "Peru": "페루", "Ecuador": "에콰도르", "Venezuela": "베네수엘라", "Bolivia": "볼리비아", "Mexico": "멕시코", "USA": "미국", "United States": "미국", "Canada": "캐나다", "Costa Rica": "코스타리카", "Panama": "파나마", "Jamaica": "자메이카", "Honduras": "온두라스", "England": "잉글랜드", "France": "프랑스", "Germany": "독일", "Spain": "스페인", "Portugal": "포르투갈", "Italy": "이탈리아", "Netherlands": "네덜란드", "Belgium": "벨기에", "Croatia": "크로아티아", "Serbia": "세르비아", "Switzerland": "스위스", "Austria": "오스트리아", "Poland": "폴란드", "Denmark": "덴마크", "Sweden": "스웨덴", "Norway": "노르웨이", "Iceland": "아이슬란드", "Scotland": "스코틀랜드", "Wales": "웨일스", "Ireland": "아일랜드", "Republic of Ireland": "아일랜드", "Turkey": "튀르키예", "Türkiye": "튀르키예", "Greece": "그리스", "Czech Republic": "체코", "Czechia": "체코", "Ukraine": "우크라이나", "Hungary": "헝가리", "Romania": "루마니아", "Morocco": "모로코", "Egypt": "이집트", "Nigeria": "나이지리아", "Senegal": "세네갈", "Ghana": "가나", "Cameroon": "카메룬", "Tunisia": "튀니지", "Algeria": "알제리", "Ivory Coast": "코트디부아르", "Cote D'Ivoire": "코트디부아르", "South Africa": "남아공", "New Zealand": "뉴질랜드"};
+const countryKo = (name, olympic) => {
+  const m = /^(.*?)\s+U-?(\d{2})$/.exec(name || ''); const base = m ? m[1] : name; const ko = COUNTRY_KO[base];
+  if (!ko) return name; if (!m) return ko; return olympic ? `${ko} 올림픽팀` : `${ko} U-${m[2]}`;
+};
+// 대표팀 경기의 상대국은 한글로(앱 COUNTRY_KO 와 같은 표).
+const teamLabel = (team, leagueId) => (NATIONAL_TEAMS[team?.id] && natNameFor(team.id, leagueId))
+  || countryKo(team?.name || '', Number(leagueId) !== 803 && /U-?2\d$/.test(team?.name || '')) || team?.name || '';
 
 // 아시안게임 U23 대표팀 명단(KFA 등번호 발표 2026-09-14, id 는 API-Football 클럽
 // 스쿼드 기준 2026-09-15). 김민승은 K3 소속이라 AF 에 색인이 안 돼 afId 가 없다 —
