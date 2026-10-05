@@ -8745,7 +8745,8 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
     const NATIONAL_TITLE_RE = /대표팀|국가대표|A매치|모레노호|홍명보호|이민성호|김은중호|올림픽팀|평가전|친선경기|월드컵 예선|대한민국 축구|한국 축구|태극전사|국대/;
     const soccerish = SOCCER_PLAYERS.some(n => haystack.includes(n)) || /축구/.test(haystack);
     // '모레노호'(A대표팀 임시 감독 체제) 기사는 제목이든 본문이든 언급되면 전부 국내축구(사용자 요청).
-    const morenoHo = /모레노호|모레노 감독|모레노 임시 감독/.test(haystack);
+    // '모레노의 베스트 11'·'모레노…'처럼 '호' 없이도 쓰인다. 동명 선수(제라르·알베르토 모레노)만 뺀다.
+    const morenoHo = /모레노/.test(haystack) && !/제라르 모레노|알베르토 모레노|헤라르드 모레노/.test(haystack);
     if (morenoHo || (soccerish && NATIONAL_TITLE_RE.test(article.title || '') && !/야구|WBC|MLB/.test(article.title || ''))) {
       return { category:'국내축구', sportType:'soccer', national:true };
     }
