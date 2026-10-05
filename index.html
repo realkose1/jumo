@@ -8681,6 +8681,11 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
   const PLAYER_NEGATIVE = {
     '김혜성': ['충남아산','K리그2','아산 무궁화'],
   };
+  // 다른 종목 동명이인(배구 김민재 등) — 선수 소속팀·리그가 안 나오는 기사에서 이런
+  // 종목 표지가 보이면 버린다(제보: 김민재 배구 기사가 뜸).
+  const OTHER_SPORT_MARKERS = ['배구','V-리그','V리그','세터','리베로','아웃사이드 히터','미들 블로커','미들블로커','아포짓',
+    '농구','KBL','WKBL','리바운드','3점슛','핸드볼','아이스하키','e스포츠','LCK','롤드컵','골프','KLPGA','KPGA','테니스',
+    '당구','볼링','탁구','배드민턴','쇼트트랙','스피드스케이팅','태권도','유도','씨름'];
   const PLAYER_NAMES = NEWS_PLAYERS.map(p => p.label);
   const SOCCER_PLAYERS = ['손흥민','이강인','김민재','황희찬','황인범','조규성','양현준','오현규','백승호','배준호','엄지성'];
   const MLB_PLAYERS = ['김하성','이정후','김혜성','송성문'];
@@ -8795,6 +8800,8 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
       // 국내 리그(K리그·KBO) 뉴스: 팔로우 선수와 무관하므로 선수명 규칙 대신
       // 낚시·제외어·경기 맥락·국내 표지로만 판단한다. 해외 리그 기사는 뺀다.
       if (EXCLUDE_KEYWORDS.some(kw => haystack.includes(kw))) return false;
+      // 같은 모기업 구단이 있는 배구·농구 기사(대한항공·KB 등)가 섞이지 않게.
+      if (OTHER_SPORT_MARKERS.some(kw => haystack.includes(kw))) return false;
       if (!(MATCH_KEYWORDS.some(kw => haystack.includes(kw)) || SPORT_CONTEXT.some(kw => haystack.includes(kw)))) return false;
       const marked = (DOMESTIC_MARKER[item.domestic] || DOMESTIC_MARKER.soccer).test(haystack);
       if (DOMESTIC_OVERSEAS_RE.test(haystack) && !marked) return false;
@@ -8812,6 +8819,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
     // 같은 종목 동명이인은 스포츠 맥락 검사를 그대로 통과하므로,
     // 그쪽 선수의 표지가 보이면 여기서 끊는다.
     if (!hasTeam && named.some(n => (PLAYER_NEGATIVE[n] || []).some(kw => haystack.includes(kw)))) return false;
+    if (!hasTeam && OTHER_SPORT_MARKERS.some(kw => haystack.includes(kw))) return false;
     // 약한 연예 신호는 '소속팀·리그가 안 나올 때만' 배제 근거로 쓴다.
     // 이 말들은 스포츠 기사에도 정상적으로 나온다 — MLS 올스타전에 영화배우가
     // 나오거나('손흥민, 2대 팔콘과 축구 대결'), '승리의 주연' 같은 표현으로.
