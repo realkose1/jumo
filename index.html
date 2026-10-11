@@ -9320,7 +9320,17 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
       if (!(MATCH_KEYWORDS.some(kw => haystack.includes(kw)) || SPORT_CONTEXT.some(kw => haystack.includes(kw)))) return false;
       const marked = (DOMESTIC_MARKER[item.domestic] || DOMESTIC_MARKER.soccer).test(haystack);
       if (DOMESTIC_OVERSEAS_RE.test(haystack) && !marked) return false;
-      return marked;
+      if (!marked) return false;
+      // 국내축구는 '우리 선수'와 이어진 기사만(제보: K리그 일반 기사가 너무 많음) —
+      // 추적 선수가 제목에 나오거나(친정팀 복귀·임대 등), 대표팀(모레노호·A매치) 기사일 때만.
+      if (item.domestic === 'soccer') {
+        const t = item.title || '';
+        const TRACKED_SOCCER = ['손흥민','이강인','김민재','황희찬','황인범','조규성','이한범','오현규','양현준','백승호','배준호','엄지성','설영우','이재성','홍현석','정우영','카스트로프','박승수','김지수','양민혁','이태석','김민수','김예건'];
+        const ourPlayer = TRACKED_SOCCER.some(n => t.includes(n));
+        const national = /대표팀|A매치|모레노|태극전사|국가대표(?! 출신)|우즈벡전|에콰도르전|우루과이전|베네수엘라전/.test(t);
+        if (!ourPlayer && !national) return false;
+      }
+      return true;
     }
     if (EXCLUDE_KEYWORDS.some(kw => haystack.includes(kw))) return false;
     const named = PLAYER_NAMES.filter(name => haystack.includes(name));
