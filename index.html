@@ -9200,8 +9200,18 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
     const title = article.title || '';
     const NATIONAL_TITLE_RE = /대표팀|A매치|모레노호|홍명보호|이민성호|김은중호|올림픽팀|올림픽 대표|평가전|친선경기|월드컵 (아시아 )?예선|태극전사|국가대표(?! 출신)(?!급)/;
     const soccerish = SOCCER_PLAYERS.some(n => haystack.includes(n)) || /축구|K리그|코리아컵/.test(haystack);
-    const morenoHo = /모레노/.test(haystack) && !/제라르 모레노|알베르토 모레노|헤라르드 모레노/.test(haystack);
-    if (soccerish && (morenoHo || (NATIONAL_TITLE_RE.test(title) && !/야구|WBC|MLB/.test(title)))) {
+    // 모레노: 제목에 나오거나 본문에 '모레노호/모레노 감독'일 때만 — 소속팀 기사에 지나가듯
+    // 나오는 경우(이강인 아틀레티코 경기 기사 끝의 한 줄)는 해외축구에 둔다(제보).
+    const morenoHo = (/모레노/.test(title) || /모레노호|모레노 감독/.test(haystack))
+      && !/제라르 모레노|알베르토 모레노|헤라르드 모레노/.test(haystack);
+    // 대표팀 표지는 '우리' 대표팀일 때만 — 호날두·포르투갈 대표팀 기사가 국내축구로 가던 문제.
+    const KOREA_CTX_RE = /한국|대한민국|韓|태극|모레노|홍명보|이민성|김은중|국대/;
+    const koreaTitle = KOREA_CTX_RE.test(title) || SOCCER_PLAYERS.some(n => title.includes(n));
+    // '韓 축구 날벼락! 김민재 부상…우즈벡전' 처럼 대표팀 단어 없이도 대표팀 기사인 제목.
+    const KOREA_FOOTBALL_RE = /韓 축구|한국 축구|대한민국 축구|홍명보호|모레노호|우즈벡전|우즈베키스탄전|에콰도르전|우루과이전|베네수엘라전/;
+    const clubInTitle = /프리미어리그|EPL|분데스리가|라리가|세리에|리그앙|MLS|챔피언스리그|토트넘|바이에른|아틀레티코|포르투(?!갈)|셀틱|마인츠|샬케|LAFC|베식타스|브뤼헤|스완지|스토크|버밍엄|뉴캐슬/.test(title);
+    const nationalTitle = (NATIONAL_TITLE_RE.test(title) && koreaTitle) || (KOREA_FOOTBALL_RE.test(title) && !clubInTitle);
+    if (soccerish && (morenoHo || (nationalTitle && !/야구|WBC|MLB/.test(title)))) {
       return { category:'국내축구', sportType:'soccer', national:true };
     }
     // 2) 그 밖의 축구 기사는 해외·국내 표지를 점수로 비교한다(제목 3점, 본문 1점).
