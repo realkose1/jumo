@@ -9199,7 +9199,7 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
     //    '국가대표 출신'·'한국 축구의 미래' 같은 수식어는 대표팀 기사가 아니다.
     const title = article.title || '';
     const NATIONAL_TITLE_RE = /대표팀|A매치|모레노호|홍명보호|이민성호|김은중호|올림픽팀|올림픽 대표|평가전|친선경기|월드컵 (아시아 )?예선|태극전사|국가대표(?! 출신)(?!급)/;
-    const soccerish = SOCCER_PLAYERS.some(n => haystack.includes(n)) || /축구|K리그|코리아컵/.test(haystack);
+    const soccerish = SOCCER_PLAYERS.some(n => haystack.includes(n)) || /축구|K리그|코리아컵|A매치|대표팀|모레노/.test(haystack) || ['김민수','김지수','박승수','양민혁','이태석','이한범','설영우','이재성','홍현석','정우영','카스트로프','김예건'].some(n => haystack.includes(n));
     // 모레노: 제목에 나오거나 본문에 '모레노호/모레노 감독'일 때만 — 소속팀 기사에 지나가듯
     // 나오는 경우(이강인 아틀레티코 경기 기사 끝의 한 줄)는 해외축구에 둔다(제보).
     const morenoHo = (/모레노/.test(title) || /모레노호|모레노 감독/.test(haystack))
@@ -9210,7 +9210,8 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
     // '韓 축구 날벼락! 김민재 부상…우즈벡전' 처럼 대표팀 단어 없이도 대표팀 기사인 제목.
     const KOREA_FOOTBALL_RE = /韓 축구|한국 축구|대한민국 축구|홍명보호|모레노호|우즈벡전|우즈베키스탄전|에콰도르전|우루과이전|베네수엘라전/;
     const clubInTitle = /프리미어리그|EPL|분데스리가|라리가|세리에|리그앙|MLS|챔피언스리그|토트넘|바이에른|아틀레티코|포르투(?!갈)|셀틱|마인츠|샬케|LAFC|베식타스|브뤼헤|스완지|스토크|버밍엄|뉴캐슬/.test(title);
-    const nationalTitle = (NATIONAL_TITLE_RE.test(title) && koreaTitle) || (KOREA_FOOTBALL_RE.test(title) && !clubInTitle);
+    // 제목에 소속 구단·해외 리그가 나오면('대표팀 하차' 백승호, 버밍엄 감독…) 소속팀 기사로 본다.
+    const nationalTitle = !clubInTitle && ((NATIONAL_TITLE_RE.test(title) && koreaTitle) || KOREA_FOOTBALL_RE.test(title));
     if (soccerish && (morenoHo || (nationalTitle && !/야구|WBC|MLB/.test(title)))) {
       return { category:'국내축구', sportType:'soccer', national:true };
     }
