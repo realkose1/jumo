@@ -522,7 +522,11 @@ async function lineupSquad(fid, espnFallback = null, involved = []) {
 //   at: 실행 시각(크론 생존 판정) · fat/gat: 축구/야구 데이터를 실제로 확보한 시각
 //   fixtures[afFixtureId] = { s, el, h, a, ko, p: { [afPlayerId]: { g, a } }, fx }
 //     fx: 슬림 AF 원본(patchFx) — 앱 목록에 없는 경기를 앱이 바로 카드로 만든다
-//   games[gamePk]        = { s, h, a, inn, ko, hn, an }  (앱 MLB 는 ESPN id 라 팀명+시각으로 붙는다)
+//   games[gamePk]        = { s, h, a, inn, ko, hn, an, hid, aid, hc, ac, v, ph, pa }
+//     (앱 MLB 는 ESPN id 라 팀명+시각으로 붙는다. hid/aid·hc/ac·v·ph/pa(각 팀 우리 선수 id)는
+//      앱 목록에 없는 경기를 앱이 임시 카드(mlbpatch-<gamePk>)로 만들 때 쓴다)
+// 지연: 크론 2분 주기 + 실행 시간(수집 수 초, live=all 보강 포함) → 실제 변화가 앱에 닿기까지
+// 대략 2~3분(최악 ~4분: 직전 실행 직후의 변화 + AF 자체 지연). 앱은 실행·복귀 때마다 다시 받는다.
 function newLivePatch() {
   return { at: new Date().toISOString(), fat: null, gat: null, fixtures: {}, games: {} };
 }
@@ -1079,11 +1083,17 @@ async function collectBaseball(events, patch = null) {
         const til = gameMs - Date.now();
         if (st === 'Live' || st === 'Final' || (st === 'Preview' && gameMs && til > -3 * 3600e3 && til <= 24 * 3600e3)) {
           const ls = g.linescore || {};
+          const ht = g.teams?.home?.team || {}, at = g.teams?.away?.team || {};
+          const sideIds = (name) => involved.filter((p) => teamMatches(name, p.mlbTeam)).map((p) => p.id);
           patch.games[g.gamePk] = {
             s: st, h: g.teams?.home?.score ?? null, a: g.teams?.away?.score ?? null,
             // 'Top 5' · 'Middle 5' · 'Bottom 5' · 'End 5'
             inn: st === 'Live' && ls.currentInning ? `${ls.inningState || ls.inningHalf || ''} ${ls.currentInning}`.trim() : '',
             ko: g.gameDate || null, hn: home, an: away,
+            // 앱 목록에 없는 경기를 카드로 만들 재료(buildMlbMatchFromPatch) — 팀 id(로고 =
+            // mlbstatic team-logos/{id}.svg)·약칭, 구장, 각 팀의 우리 선수 id(PLAYERS.id = 앱 ALL_PLAYERS.id).
+            hid: ht.id ?? null, aid: at.id ?? null, hc: ht.abbreviation || '', ac: at.abbreviation || '',
+            v: g.venue?.name || '', ph: sideIds(home), pa: sideIds(away),
           };
         }
       }
