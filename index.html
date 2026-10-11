@@ -9194,15 +9194,30 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
     // 별칭이 같이 나올 때만 선수로 본다 — 별칭 표가 없는 선수는 이름만으로 본다.
     const playerHit = (name) => haystack.includes(name) &&
       (!domesticTag || !PLAYER_CONTEXT[name] || PLAYER_CONTEXT[name].some(kw => haystack.includes(kw)));
-    // 축구 대표팀 기사는 해외축구가 아니라 국내축구로(사용자 요청). 제목 기준으로만 판정한다 —
-    // 본문에 '대표팀'이 지나가듯 나오는 소속팀 기사까지 옮기지 않게.
-    const NATIONAL_TITLE_RE = /대표팀|국가대표|A매치|모레노호|홍명보호|이민성호|김은중호|올림픽팀|평가전|친선경기|월드컵 예선|대한민국 축구|한국 축구|태극전사|국대/;
-    const soccerish = SOCCER_PLAYERS.some(n => haystack.includes(n)) || /축구/.test(haystack);
-    // '모레노호'(A대표팀 임시 감독 체제) 기사는 제목이든 본문이든 언급되면 전부 국내축구(사용자 요청).
-    // '모레노의 베스트 11'·'모레노…'처럼 '호' 없이도 쓰인다. 동명 선수(제라르·알베르토 모레노)만 뺀다.
+    // ── 축구: 해외/국내 판정(제보: 해외 소식이 국내에, 국내 소식이 해외에 섞임) ──
+    // 1) 대표팀: 제목에 대표팀 표지가 있거나, 본문 어디든 '모레노'(A대표 임시 감독)면 국내축구.
+    //    '국가대표 출신'·'한국 축구의 미래' 같은 수식어는 대표팀 기사가 아니다.
+    const title = article.title || '';
+    const NATIONAL_TITLE_RE = /대표팀|A매치|모레노호|홍명보호|이민성호|김은중호|올림픽팀|올림픽 대표|평가전|친선경기|월드컵 (아시아 )?예선|태극전사|국가대표(?! 출신)(?!급)/;
+    const soccerish = SOCCER_PLAYERS.some(n => haystack.includes(n)) || /축구|K리그|코리아컵/.test(haystack);
     const morenoHo = /모레노/.test(haystack) && !/제라르 모레노|알베르토 모레노|헤라르드 모레노/.test(haystack);
-    if (morenoHo || (soccerish && NATIONAL_TITLE_RE.test(article.title || '') && !/야구|WBC|MLB/.test(article.title || ''))) {
+    if (soccerish && (morenoHo || (NATIONAL_TITLE_RE.test(title) && !/야구|WBC|MLB/.test(title)))) {
       return { category:'국내축구', sportType:'soccer', national:true };
+    }
+    // 2) 그 밖의 축구 기사는 해외·국내 표지를 점수로 비교한다(제목 3점, 본문 1점).
+    //    해외 표지: 해외 리그·대회 이름, 우리 선수 소속 구단, 추적 선수 이름(+2).
+    //    국내 표지: K리그·코리아컵·K리그 구단명.
+    if (soccerish) {
+      const OVERSEAS_RE = /프리미어리그|EPL|분데스리가|라리가|세리에|리그앙|MLS|챔피언스리그|UCL|유로파|컨퍼런스리그|에레디비시|챔피언십|스코틀랜드|토트넘|바이에른|뮌헨|아틀레티코|포르투|셀틱|레인저스|마인츠|샬케|브렌트포드|스완지|스토크|버밍엄|베식타스|브뤼헤|미트윌란|아우크스부르크|LAFC|뉴캐슬|베스테를로|오스트리아 빈|즈베즈다|글라트바흐|우니온/g;
+      const count = (re, text) => ((text || '').match(re) || []).length;
+      const desc = article.description || '';
+      const domRe = new RegExp(DOMESTIC_MARKER.soccer.source, 'g');
+      const players = SOCCER_PLAYERS.filter(playerHit).length;
+      const over = count(OVERSEAS_RE, title) * 3 + count(OVERSEAS_RE, desc) + players * 2;
+      const dom = count(domRe, title) * 3 + count(domRe, desc) + (domesticTag === 'soccer' ? 1 : 0);
+      if (over > 0 || dom > 0) {
+        return dom > over ? { category:'국내축구', sportType:'soccer' } : { category:'해외축구', sportType:'soccer' };
+      }
     }
     if (SOCCER_PLAYERS.some(playerHit)) return { category:'해외축구', sportType:'soccer' };
     if (MLB_PLAYERS.some(playerHit)) return { category:'MLB', sportType:'baseball' };
