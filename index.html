@@ -237,7 +237,10 @@ function fetchLivePatchEdge(timeoutMs = 5000) {
 }
 // undefined = 아직 응답 전, null = 없음/낡음, 객체 = 쓸 수 있는 패치
 window.__livePatch = undefined;
-window.__livePatchP = fetchLivePatch().then(p => (window.__livePatch = p));
+// 실기기 부팅 계측: 첫 화면이 뜬 시점에 패치가 있었는지·얼마나 신선했는지·스켈레톤이었는지를
+// 10초 뒤 sf_cache 'boot-metrics-<기기id>' 에 남긴다(실기기 검증용, 개인정보 없음).
+window.__bootM = { t0: Math.round(performance.now()), at: Date.now() };
+window.__livePatchP = fetchLivePatch().then(p => { window.__bootM.patchMs = Math.round(performance.now()); return (window.__livePatch = p); });
 // 첫 페인트용 원본 행 요청과 나란히 엣지 요청도 건다(첫 화면을 막지 않는다). 더 새것이
 // 오면 전역을 갈아 끼우고 'jumo:live-patch' 로 App 에 알린다(App 이 아직 안 떴으면 마운트 때
 // 전역을 읽어 얹는다).
@@ -576,6 +579,7 @@ function afFetch(query, { retries = 1, priority = 'high' } = {}) {
 let listReadyFired = false;
 const listReadyCbs = [];
 const markListReady = () => {
+  if (!window.__bootListReadyMs) window.__bootListReadyMs = Math.round(performance.now());
   if (listReadyFired) return;
   listReadyFired = true;
   listReadyCbs.splice(0).forEach(f => { try { f(); } catch (e) {} });
@@ -13761,6 +13765,24 @@ function App() {
 // capacitor.config 의 launchShowDuration 은 이제 상한(안전장치)일 뿐이다.
 function hideSplashWhenPainted() {
   requestAnimationFrame(() => requestAnimationFrame(() => {
+    try {
+      const M = window.__bootM || (window.__bootM = {});
+      M.paintMs = Math.round(performance.now());
+      const p = window.__livePatch;
+      M.patchAtPaint = !!p; M.patchAgeSec = p ? Math.round((Date.now() - p.atMs) / 1000) : null;
+      M.skeleton = !!document.querySelector('.shimmer');
+      M.liveText = (document.body.innerText.match(/LIVE NOW[^\n]*/) || [null])[0];
+      M.firstText = document.body.innerText.replace(/\s+/g, ' ').slice(0, 160);
+      M.native = !!window.Capacitor?.isNativePlatform?.();
+      setTimeout(() => {
+        try {
+          const id = localStorage.getItem('jumo_device_id') || 'anon';
+          M.listReadyMs = window.__bootListReadyMs || null;
+          M.ver = typeof appVersionLabel === 'function' ? appVersionLabel() : '';
+          SB.from('sf_cache').upsert({ date: `boot-metrics-${id}`, events: M, updated_at: new Date().toISOString() }).then(() => {}, () => {});
+        } catch (e) {}
+      }, 10000);
+    } catch (e) {}
     try { window.Capacitor?.Plugins?.SplashScreen?.hide({ fadeOutDuration: 180 }); } catch (e) {}
   }));
 }
