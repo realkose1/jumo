@@ -9312,6 +9312,16 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
     if (EXCLUDE_KEYWORDS.some(kw => haystack.includes(kw))) return false;
     const named = PLAYER_NAMES.filter(name => haystack.includes(name));
     if (!named.length) return false;
+    // 우리 선수가 기사의 주인공이어야 한다 — 제목에 이름(또는 별칭)이 있거나, 요약에서
+    // 두 번 이상 나와야 통과. 다른 선수 기사 본문에 '토트넘 시절 손흥민과…'처럼 한 번
+    // 지나가듯 나오는 경우를 거른다(제보: 마레즈 사생활 기사가 해외축구에 뜸).
+    const TITLE_ALIAS = { '손흥민': ['SON', '쏘니'], '황희찬': ['황소'], '이정후': ['바람의 손자'], '김하성': ['어썸킴'] };
+    const itemTitle = item.title || '';
+    const itemDesc = item.description || '';
+    const isSubject = named.some(n => itemTitle.includes(n)
+      || (TITLE_ALIAS[n] || []).some(al => itemTitle.includes(al))
+      || itemDesc.split(n).length - 1 >= 2);
+    if (!isSubject) return false;
     if (!MATCH_KEYWORDS.some(kw => haystack.includes(kw))) return false;
     // 동명이인 방어: 일반 스포츠 맥락이 있거나, 언급된 선수의 소속팀·리그가
     // 나와야 한다. 둘 다 없으면 이름만 같은 기사로 본다.
