@@ -200,6 +200,14 @@ const SB = supabase.createClient(SB_URL, SB_ANON);
 // live=all 보강으로 AF 날짜 목록 재사용 지연은 없앰) → 보통 2~3분, 최악 ~4분. 앱은
 // 실행·복귀 때마다 새로 받고, 그 사이엔 20~60초 폴링(전체 갱신)이 따라잡는다.
 const LIVE_PATCH_MAX_AGE_MS = 10 * 60 * 1000;   // 크론이 10분 넘게 멈췄으면 없는 셈 친다
+// 응답(행의 events)을 앱이 쓰는 패치로 정리한다 — 낡았거나 비었으면 null.
+function parseLivePatch(p, fallbackAt) {
+  if (!p || typeof p !== 'object') return null;
+  const atMs = Date.parse(p.at || fallbackAt) || 0;
+  if (!atMs || Date.now() - atMs > LIVE_PATCH_MAX_AGE_MS) return null;
+  if (!p.fat && !p.gat) return null;   // 이번 회차에 아무것도 못 받았다
+  return { ...p, atMs };
+}
 function fetchLivePatch(timeoutMs = 4000) {
   let ctl = null, timer = null;
   try { ctl = new AbortController(); timer = setTimeout(() => ctl.abort(), timeoutMs); } catch (e) {}
@@ -210,19 +218,37 @@ function fetchLivePatch(timeoutMs = 4000) {
     .then(r => r.ok ? r.json() : null)
     .then(rows => {
       const row = Array.isArray(rows) ? rows[0] : null;
-      const p = row?.events;
-      if (!p || typeof p !== 'object') return null;
-      const atMs = Date.parse(p.at || row.updated_at) || 0;
-      if (!atMs || Date.now() - atMs > LIVE_PATCH_MAX_AGE_MS) return null;
-      if (!p.fat && !p.gat) return null;   // 이번 회차에 아무것도 못 받았다
-      return { ...p, atMs };
+      return parseLivePatch(row?.events, row?.updated_at);
     })
+    .catch(() => null)
+    .finally(() => clearTimeout(timer));
+}
+// 같은 패치를 /api/live-patch(Vercel 엣지 캐시 15초)로 받는다. 크론(2분)보다 신선하다 —
+// 라이브 중이면 서버가 40초 넘게 낡은 패치를 AF live=all 로 보강해 돌려준다. 여러 기기가
+// 엣지 캐시를 공유하므로 30초마다 불러도 가볍다. 실패하면 null(호출부가 원본 행으로 폴백).
+function fetchLivePatchEdge(timeoutMs = 5000) {
+  let ctl = null, timer = null;
+  try { ctl = new AbortController(); timer = setTimeout(() => ctl.abort(), timeoutMs); } catch (e) {}
+  return fetch(`${API_BASE}/api/live-patch`, { signal: ctl ? ctl.signal : undefined })
+    .then(r => r.ok ? r.json() : null)
+    .then(p => parseLivePatch(p, null))
     .catch(() => null)
     .finally(() => clearTimeout(timer));
 }
 // undefined = 아직 응답 전, null = 없음/낡음, 객체 = 쓸 수 있는 패치
 window.__livePatch = undefined;
 window.__livePatchP = fetchLivePatch().then(p => (window.__livePatch = p));
+// 첫 페인트용 원본 행 요청과 나란히 엣지 요청도 건다(첫 화면을 막지 않는다). 더 새것이
+// 오면 전역을 갈아 끼우고 'jumo:live-patch' 로 App 에 알린다(App 이 아직 안 떴으면 마운트 때
+// 전역을 읽어 얹는다).
+window.__livePatchEdgeP = fetchLivePatchEdge().then(async p => {
+  try { await window.__livePatchP; } catch (e) {}
+  if (p && (!window.__livePatch || p.atMs > window.__livePatch.atMs)) {
+    window.__livePatch = p;
+    try { window.dispatchEvent(new Event('jumo:live-patch')); } catch (e) {}
+  }
+  return p;
+});
 
 // 공유 홈 목록(sf_cache 'home-list'): 아무 기기든 전체 갱신을 마치면 경기 목록(우리 선수
 // 전원 기준이라 사용자와 무관)을 올려 둔다. 처음 설치했거나 로컬 캐시가 더 낡았으면 이걸로
@@ -10687,6 +10713,29 @@ function App() {
     livePatchPRef.current.then(p => { if (alive) applyLivePatchNow(p); });
     return () => { alive = false; };
   }, [applyLivePatchNow]);
+  // 엣지 패치(/api/live-patch)가 원본 행보다 늦게 도착했을 때 — 모듈 상단이 전역을 갈아 끼우고
+  // 이벤트를 쏜다. 그 전역을 지금 목록에 얹는다.
+  React.useEffect(() => {
+    const onPatch = () => { if (window.__livePatch) applyLivePatchNow(window.__livePatch); };
+    window.addEventListener('jumo:live-patch', onPatch);
+    return () => window.removeEventListener('jumo:live-patch', onPatch);
+  }, [applyLivePatchNow]);
+  // 목록에 진행 중인 경기가 있고 앱이 보이는 동안 30초마다 엣지 패치를 받는다(엣지 캐시 15초라
+  // 가볍다). 진행 중인 경기가 없으면 멈춘다 — 서버도 움직이는 경기가 없으면 AF 를 안 부른다.
+  const anyLiveMatch = React.useMemo(() => (liveMatches || []).some(m => m && m.live), [liveMatches]);
+  React.useEffect(() => {
+    if (!anyLiveMatch) return;
+    let alive = true;
+    const pull = () => {
+      if (!alive || document.visibilityState !== 'visible') return;
+      fetchLivePatchEdge().then(p => {
+        if (!alive || !p) return;
+        if (p.atMs > ((window.__livePatch && window.__livePatch.atMs) || 0)) applyLivePatchNow(p);
+      });
+    };
+    const id = setInterval(pull, 30 * 1000);
+    return () => { alive = false; clearInterval(id); };
+  }, [anyLiveMatch, applyLivePatchNow]);
   // 패치만으로 빈 목록을 채웠으면 '첫 로드'가 끝난 것 — 스켈레톤을 내린다(첫 페인트 전에).
   // 패치도 못 받았으면 그대로 스켈레톤 → 전체 갱신(publishBase)이 내린다.
   React.useLayoutEffect(() => {
@@ -12313,7 +12362,8 @@ function App() {
       clearTimeout(timeoutId);   // 예약된 폴링과 중복 실행 방지
       // 서버 라이브 패치를 먼저(수 KB) 받아 곧바로 얹는다 — 전체 갱신(tick)은 그대로 이어 간다.
       livePatchFreshRef.current = false;
-      const pp = fetchLivePatch();
+      // 복귀 땐 엣지 패치(라이브 중 보강됨)를 먼저 — 실패하면 원본 행으로 폴백.
+      const pp = fetchLivePatchEdge().then(p => p || fetchLivePatch());
       livePatchPRef.current = pp;
       pp.then(p => { if (!cancelled) applyLivePatchNow(p); });
       // 오래 백그라운드에 있었다면 낡은 정보를 말없이 두지 않는다. 다만 이미
