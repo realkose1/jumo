@@ -123,6 +123,36 @@ async function afLive() {
 }
 
 // 행을 읽어 필요하면 보강하고, 최종 패치를 돌려준다. 오류는 호출부가 잡는다.
+// 골이 난 경기의 이벤트로 p(우리 선수 골·도움)를 다시 센다 — 크론 규칙과 같다(자책골·PK 실축 제외).
+async function refreshScorers(prev, next) {
+  const key = process.env.APIFOOTBALL_KEY;
+  if (!key) return;
+  const changed = Object.entries(next.fixtures || {}).filter(([id, f]) => {
+    const o = prev.fixtures?.[id];
+    return o && f.p && Object.keys(f.p).length && ((Number(f.h) || 0) + (Number(f.a) || 0)) > ((Number(o.h) || 0) + (Number(o.a) || 0));
+  }).slice(0, 3);
+  for (const [id, f] of changed) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), AF_TIMEOUT_MS);
+    try {
+      const r = await fetch(`https://v3.football.api-sports.io/fixtures/events?fixture=${id}`,
+        { headers: { 'x-apisports-key': key }, signal: ctl.signal });
+      const j = r.ok ? await r.json() : null;
+      if (!Array.isArray(j?.response)) continue;
+      const p = {};
+      for (const pid of Object.keys(f.p)) p[pid] = { g: 0, a: 0 };
+      for (const ev of j.response) {
+        if (ev.type !== 'Goal' || ev.detail === 'Missed Penalty') continue;
+        const sc = ev.player?.id != null ? String(ev.player.id) : null;
+        const as = ev.assist?.id != null ? String(ev.assist.id) : null;
+        if (sc && p[sc] && ev.detail !== 'Own Goal') p[sc].g++;
+        if (as && p[as]) p[as].a++;
+      }
+      next.fixtures[id] = { ...f, p };
+    } catch (e) { /* 다음 크론이 맞춘다 */ } finally { clearTimeout(timer); }
+  }
+}
+
 async function loadPatch() {
   const patch = await readRow();
   if (!patch) return null;
@@ -136,6 +166,9 @@ async function loadPatch() {
     const live = await afLive();
     if (!live) return null;
     const refreshed = overlayPatch(patch, live, Date.now());
+    // 점수가 오른 경기만(=방금 골) 이벤트를 1회 받아 우리 선수 골·도움(p)도 즉시 맞춘다.
+    // 골당 1콜이라 사용량은 미미하다. 대상 선수는 크론이 p 에 넣어 둔 id(소속팀 경기 참가자).
+    await refreshScorers(patch, refreshed).catch(() => {});
     // 쓰기 직전에 다시 읽는다 — 그 사이 크론이 새로 썼다면(at 이 달라짐) 그 값을 존중하고 덮어쓰지 않는다.
     const latest = await readRow().catch(() => null);
     if (latest && latest.at !== patch.at) return latest;
