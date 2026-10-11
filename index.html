@@ -186,10 +186,40 @@ const API_BASE = (location.protocol === 'capacitor:' || location.protocol === 'f
   ? 'https://jumo-git-main-realkose1s-projects.vercel.app'
   : '';
 
-const SB = supabase.createClient(
-  'https://pxchmolcruhxbmvomsyy.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4Y2htb2xjcnVoeGJtdm9tc3l5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3NTk0ODgsImV4cCI6MjA5MzMzNTQ4OH0.WvxjnCkWD_LCgJTPdH3jtMc-maz0dSgS-A9SDHuy58U'
-);
+const SB_URL = 'https://pxchmolcruhxbmvomsyy.supabase.co';
+const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4Y2htb2xjcnVoeGJtdm9tc3l5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3NTk0ODgsImV4cCI6MjA5MzMzNTQ4OH0.WvxjnCkWD_LCgJTPdH3jtMc-maz0dSgS-A9SDHuy58U';
+const SB = supabase.createClient(SB_URL, SB_ANON);
+
+// ─── 서버 라이브 패치 선요청 ────────────────────────────────────
+// push-cron 이 2분마다 sf_cache 'live-patch' 행에 '우리 경기 상태·점수·골' 요약을
+// 남긴다(수 KB). 앱은 지난 실행의 목록(로컬 캐시)으로 첫 화면을 그리는데, 몇 시간
+// 지난 캐시면 히어로·오늘 경기가 낡은 점수로 보인다 — 새 목록(1~3초)을 기다리지
+// 않고 이 행을 먼저 받아 캐시 위에 얹는다(applyLivePatch). React 가 뜨기 전에,
+// supabase 클라이언트를 거치지 않고 곧바로 요청을 건다.
+const LIVE_PATCH_MAX_AGE_MS = 10 * 60 * 1000;   // 크론이 10분 넘게 멈췄으면 없는 셈 친다
+function fetchLivePatch(timeoutMs = 4000) {
+  let ctl = null, timer = null;
+  try { ctl = new AbortController(); timer = setTimeout(() => ctl.abort(), timeoutMs); } catch (e) {}
+  return fetch(`${SB_URL}/rest/v1/sf_cache?select=events,updated_at&date=eq.live-patch`, {
+    headers: { apikey: SB_ANON, Authorization: 'Bearer ' + SB_ANON },
+    cache: 'no-store', signal: ctl ? ctl.signal : undefined,
+  })
+    .then(r => r.ok ? r.json() : null)
+    .then(rows => {
+      const row = Array.isArray(rows) ? rows[0] : null;
+      const p = row?.events;
+      if (!p || typeof p !== 'object') return null;
+      const atMs = Date.parse(p.at || row.updated_at) || 0;
+      if (!atMs || Date.now() - atMs > LIVE_PATCH_MAX_AGE_MS) return null;
+      if (!p.fat && !p.gat) return null;   // 이번 회차에 아무것도 못 받았다
+      return { ...p, atMs };
+    })
+    .catch(() => null)
+    .finally(() => clearTimeout(timer));
+}
+// undefined = 아직 응답 전, null = 없음/낡음, 객체 = 쓸 수 있는 패치
+window.__livePatch = undefined;
+window.__livePatchP = fetchLivePatch().then(p => (window.__livePatch = p));
 
 const ToastCtx = React.createContext(() => {});
 // '선발 예상 N%' 처럼 계산식이 있는 값은 사용자가 근거를 궁금해한다.
@@ -1639,6 +1669,151 @@ function saveCachedMatches(matches) {
     }
     localStorage.setItem(MATCH_CACHE_KEY, payload);
   } catch {}
+}
+
+// ─── 서버 라이브 패치 적용 ──────────────────────────────────────
+// 패치(push-cron writeLivePatch) 모양:
+//   { at, fat, gat, fixtures: {[afFixtureId]: {s, el, h, a, ko, p:{[afPlayerId]:{g,a}}}},
+//                   games: {[gamePk]: {s, h, a, inn, ko, hn, an}} }
+// 상태·점수·분(이닝)·킥오프 시각과 우리 선수 골·도움, 대표팀 엔트리 문구만 바꾼다.
+// 라인업·상세는 건드리지 않는다(뒤이은 전체 갱신이 채운다). 바뀐 경기만 새 객체로,
+// 아무것도 안 바뀌면 원래 배열을 그대로 돌려준다(불필요한 재렌더 방지).
+// opts.since: 지금 목록의 데이터 시각(ms) — 패치가 그보다 오래됐으면 그 부분은 무시한다
+//             (방금 받은 새 목록을 낡은 패치로 되돌리지 않게).
+const LP_LIVE = new Set(['1H','HT','2H','ET','BT','P','INT','LIVE']);
+const LP_FINAL = new Set(['FT','AET','PEN']);
+const lpNorm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+// statsapi 'Top 5'·'Bottom 5'·'Middle 5'·'End 5' → transformESPNEvent 와 같은 '5회초' 꼴
+const lpInning = (inn) => {
+  const m = /^([A-Za-z]+)\s+(\d+)$/.exec(inn || '');
+  if (!m) return '';
+  const half = { Top: '초', Bottom: '말', Middle: '중간', End: '종료' }[m[1]] || '';
+  return `${m[2]}회${half}`;
+};
+const lpSame = (a, b) => a.live === b.live && a.status === b.status && a.time === b.time &&
+  a.minute === b.minute && a.inning === b.inning && a.fullDate === b.fullDate &&
+  a.isTimedOut === b.isTimedOut && a.home?.score === b.home?.score && a.away?.score === b.away?.score;
+
+function lpSoccer(m, f, now) {
+  const koMs = Date.parse(f.ko || m.fullDate) || 0;
+  const rawLive = LP_LIVE.has(f.s), rawFin = LP_FINAL.has(f.s);
+  // transformApiFootballFixture 와 같은 규칙 — 킥오프 160분이 지나도 '진행 중'이면 끝난 것으로.
+  const timedOut = rawLive && !!koMs && now - koMs > 160 * 60 * 1000;
+  const live = rawLive && !timedOut, fin = rawFin || timedOut;
+  const wasFinal = isFinalStatus(m.status);
+  // 끝난 경기를 라이브·예정으로 되돌리지 않는다. AF 가 실제로 종료(FT 등)라고 할 때만
+  // 끝난 경기의 점수를 고친다(160분 초과로 추정한 종료는 이미 끝난 경기엔 얹지 않는다).
+  if (wasFinal && !rawFin) return m;
+  const n = { ...m };
+  if (live || fin) {
+    n.home = { ...m.home, score: f.h ?? m.home?.score ?? 0 };
+    n.away = { ...m.away, score: f.a ?? m.away?.score ?? 0 };
+  }
+  if (live) {
+    n.live = true; n.status = 'STATUS_IN_PROGRESS'; n.time = 'LIVE'; n.isTimedOut = false;
+    n.minute = f.el != null ? String(f.el) : (m.minute || '');
+  } else if (fin) {
+    n.live = false; n.status = 'STATUS_FINAL'; n.time = ''; n.minute = ''; n.isTimedOut = timedOut;
+  } else if ((f.s === 'NS' || f.s === 'TBD') && koMs && koMs !== Date.parse(m.fullDate)) {
+    // 킥오프 시각 변경
+    n.fullDate = new Date(koMs).toISOString();
+    n.krTime = formatKRTime(n.fullDate);
+    n.time = formatHHMM(n.fullDate);
+  }
+
+  // 우리 선수: 골·도움(p 가 있을 때만), 대표팀 엔트리 문구, 종료 시 '출전 중' 마감.
+  const goalsChanged = [];
+  const fixKp = (kp) => {
+    if (!kp) return kp;
+    if (kp.isTeam) {
+      const ev = live ? '진행 중' : fin ? '경기 종료' : kp.event;
+      return ev === kp.event ? kp : { ...kp, event: ev };
+    }
+    let out = kp;
+    const afId = kp.apiFootballId ?? ALL_PLAYERS.find(p => p.name === kp.name)?.apiFootballId;
+    const pp = (afId != null && f.p) ? f.p[afId] : null;
+    if (pp && ((kp.matchGoals || 0) !== (pp.g || 0) || (kp.matchAssists || 0) !== (pp.a || 0))) {
+      out = { ...out, matchGoals: pp.g || 0, matchAssists: pp.a || 0 };
+      goalsChanged.push(out);
+    }
+    // 방금 끝난 경기인데 아직 '출전 중'이면 — 교체 여부는 상세가 와야 아므로 '출전 완료'로만.
+    if (fin && !wasFinal && /^(선발 출전|출전 중|교체 출전 중)$/.test(out.event || '')) {
+      out = { ...out, event: '출전 완료' };
+    }
+    return out;
+  };
+  const kps = m.koreanPlayers ? m.koreanPlayers.map(fixKp) : m.koreanPlayers;
+  const kpChanged = !!kps && kps.some((k, i) => k !== m.koreanPlayers[i]);
+  if (kpChanged) n.koreanPlayers = kps;
+  const kp0 = m.koreanPlayer
+    ? ((kps || []).find((k, i) => m.koreanPlayers[i] === m.koreanPlayer) || fixKp(m.koreanPlayer))
+    : m.koreanPlayer;
+  if (kp0 !== m.koreanPlayer) n.koreanPlayer = kp0;
+  // AF 경기의 m.events 골·도움 항목은 matchGoals 로 만든 파생값이다(상세 보강 참고) —
+  // 카드 일부가 이 목록으로 세므로 바뀐 선수 몫만 다시 맞춘다.
+  if (goalsChanged.length && m.source === 'apifootball') {
+    const byName = new Map(goalsChanged.map(k => [k.name, k]));
+    const evs = (m.events || []).filter(e => !((e.type === 'goal' || e.type === 'assist') && byName.has(e.player)));
+    byName.forEach(k => {
+      for (let i = 0; i < k.matchGoals; i++) evs.push({ type: 'goal', player: k.name });
+      for (let i = 0; i < k.matchAssists; i++) evs.push({ type: 'assist', player: k.name });
+    });
+    n.events = evs;
+  }
+  return (lpSame(n, m) && !kpChanged && kp0 === m.koreanPlayer) ? m : n;
+}
+
+// 앱의 MLB 경기는 ESPN id 라 gamePk 로 못 붙는다 — 홈·원정 팀명 + 시작 시각(3시간 안,
+// 더블헤더면 가장 가까운 것)으로 찾는다. 마이너 경기(minor-<gamePk>)는 id 로.
+function lpFindGame(m, games, list) {
+  const id = String(m.id || '');
+  if (id.startsWith('minor-') && games[id.slice(6)]) return games[id.slice(6)];
+  const ms = Date.parse(m.fullDate) || 0;
+  const h = lpNorm(m.home?.name), a = lpNorm(m.away?.name);
+  if (!ms || !h || !a) return null;
+  let best = null, bestD = 3 * 3600e3;
+  for (const g of list) {
+    if (lpNorm(g.hn) !== h || lpNorm(g.an) !== a) continue;
+    const d = Math.abs((Date.parse(g.ko) || 0) - ms);
+    if (d < bestD) { best = g; bestD = d; }
+  }
+  return best;
+}
+
+function lpBaseball(m, g) {
+  if (g.s !== 'Live' && g.s !== 'Final') return m;
+  if (isFinalStatus(m.status) && g.s !== 'Final') return m;
+  const live = g.s === 'Live';
+  const n = {
+    ...m,
+    home: { ...m.home, score: g.h ?? m.home?.score ?? 0 },
+    away: { ...m.away, score: g.a ?? m.away?.score ?? 0 },
+    live, status: live ? 'STATUS_IN_PROGRESS' : 'STATUS_FINAL', time: live ? 'LIVE' : '',
+    inning: live ? (lpInning(g.inn) || m.inning || '') : '', isTimedOut: false,
+  };
+  if (!live) n.minute = '';
+  return lpSame(n, m) ? m : n;
+}
+
+function applyLivePatch(matches, patch, opts = {}) {
+  if (!Array.isArray(matches) || !matches.length || !patch) return matches;
+  const since = opts.since || 0, now = opts.now || Date.now();
+  const fixtures = (patch.fixtures && (Date.parse(patch.fat) || 0) > since) ? patch.fixtures : null;
+  const games = (patch.games && (Date.parse(patch.gat) || 0) > since) ? patch.games : null;
+  const gameList = games ? Object.values(games) : [];
+  if (!fixtures && !gameList.length) return matches;
+  let changed = false;
+  const out = matches.map(m => {
+    let n = m;
+    if (fixtures && m.source === 'apifootball' && fixtures[m.id]) n = lpSoccer(m, fixtures[m.id], now);
+    else if (gameList.length && (m.sport || '').includes('⚾')) {
+      const g = lpFindGame(m, games, gameList);
+      if (g) n = lpBaseball(m, g);
+    }
+    if (n !== m) changed = true;
+    return n;
+  });
+  return changed ? out : matches;
 }
 
 // 상단 갱신 표시. 화면에 이미(낡은) 내용이 있을 때만 뜬다 — 스켈레톤이 떠 있는
@@ -10183,29 +10358,40 @@ function App() {
       return next;
     });
   };
-  // 지난 실행의 목록이 있으면 그걸로 시작한다 — 첫 프레임부터 실제 내용이 뜬다.
+  // 지난 실행의 목록이 있으면(12시간 안) 그걸로 시작한다 — 첫 프레임부터 실제 내용이 뜬다.
+  // 예전엔 20분 넘은 캐시는 스켈레톤으로 대신했다(낡은 점수가 떴다 바뀌는 게 보여서).
+  // 이제는 서버 라이브 패치(≤2분 신선, 모듈 상단에서 선요청)를 캐시 위에 얹어 상태·
+  // 점수를 바로잡는다 — 이미 와 있으면 첫 커밋 전에, 아니면 도착하는 즉시.
   const bootCacheRef = React.useRef(loadCachedMatches());
-  // 캐시가 충분히 최근일 때만 첫 프레임에 그대로 쓴다. 몇 시간 지난 목록을 먼저
-  // 띄우면 히어로·오늘의 경기가 '지난 내용'으로 떴다가 갱신되며 바뀌는 게 눈에
-  // 띈다(제보). 지금은 최신 목록이 1~3초면 오므로 낡은 캐시는 스켈레톤이 낫다 —
-  // 단, 네트워크가 실패하면 그때 낡은 캐시라도 보여준다(아래 폴백).
   const MATCH_CACHE_FRESH_MS = 20 * 60 * 1000;
-  const bootFresh = !!bootCacheRef.current && (Date.now() - bootCacheRef.current.at) <= MATCH_CACHE_FRESH_MS;
-  const [liveMatches, setLiveMatches] = React.useState(() => bootFresh ? bootCacheRef.current.matches : []);
+  const bootHasCache = !!bootCacheRef.current;
+  const bootFresh = bootHasCache && (Date.now() - bootCacheRef.current.at) <= MATCH_CACHE_FRESH_MS;
+  // 마지막 패치 요청 결과가 쓸 만했는가(갱신 바 판단) · 마지막으로 얹은 패치의 at(ms).
+  const livePatchFreshRef = React.useRef(!!window.__livePatch);
+  const livePatchAppliedRef = React.useRef(0);
+  const [liveMatches, setLiveMatches] = React.useState(() => {
+    const boot = bootCacheRef.current;
+    if (!boot) return [];
+    const p = window.__livePatch;
+    if (!p) return boot.matches;
+    livePatchAppliedRef.current = p.atMs;
+    return applyLivePatch(boot.matches, p, { since: boot.at });
+  });
   const [apiLoading, setApiLoading] = React.useState(true); // Start with true for initial load
-  // 캐시로 이미 내용을 그렸다면 '첫 로드'가 아니다 → 스켈레톤 대신 갱신 바를 쓴다.
-  const [isInitialLoad, setIsInitialLoad] = React.useState(!bootFresh);
-  // 낡은 캐시 폴백: 최신 목록을 못 받은 채 로딩이 끝나면(안전장치·실패) 빈 화면
-  // 대신 지난 목록이라도 띄운다.
+  // 캐시로 이미 내용을 그렸다면 '첫 로드'가 아니다 → 스켈레톤은 캐시가 아예 없을 때만.
+  const [isInitialLoad, setIsInitialLoad] = React.useState(!bootHasCache);
+  // 캐시 폴백: 최신 목록을 못 받은 채 로딩이 끝나면(안전장치·실패) 빈 화면 대신
+  // 지난 목록이라도 띄운다. (캐시가 있으면 이미 그걸로 시작했으니 보통은 할 일이 없다.)
   const fallbackToStaleCache = React.useCallback(() => {
     const boot = bootCacheRef.current;
-    if (!boot || bootFresh) return;
+    if (!boot) return;
     setLiveMatches(prev => (prev && prev.length) ? prev : boot.matches);
-  }, [bootFresh]);
-  // 갱신 바는 '알릴 가치가 있는' 갱신에만 뜬다 — 부팅 직후와 오래 비웠다 돌아온
-  // 경우. 20~60초마다 도는 배경 폴링까지 표시하면 계속 깜빡여 성가시다.
+  }, []);
+  // 갱신 바는 '알릴 가치가 있는' 갱신에만 뜬다 — 신선한 서버 패치가 없고 화면 내용이
+  // 20분 넘게 낡았을 때(부팅)·오래 비웠다 돌아왔을 때(복귀). 20~60초마다 도는 배경
+  // 폴링까지 표시하면 계속 깜빡여 성가시다.
   const [refreshing, setRefreshing] = React.useState(false);
-  const announceRef = React.useRef(true);   // 첫 tick 은 알린다
+  const announceRef = React.useRef(!bootFresh);   // 첫 tick: 캐시가 20분 넘었을 때만 후보
   // 폴링이 겹쳐 돌지 않게 하는 빗장. 앱을 백그라운드↔포그라운드로 오갈 때마다
   // onVisible 이 tick 을 하나씩 더 띄워 루프가 누적됐고, 그만큼 API 호출도
   // 배로 늘어 429(Too Many Requests)를 맞았다.
@@ -10213,6 +10399,24 @@ function App() {
   // 마지막으로 경기 목록을 화면에 반영한 시각. 앱 복귀 시 데이터가 얼마나 낡았는지
   // 판단해 스켈레톤을 다시 띄울지 결정한다.
   const lastPublishAtRef = React.useRef(0);
+  // 서버 라이브 패치를 지금 목록에 얹는다. 목록이 패치보다 새것이면(방금 전체 갱신이
+  // 반영됨) applyLivePatch 가 그 부분을 건너뛴다. 신선한 패치를 얹었으면 갱신 바도 내린다.
+  const applyLivePatchNow = React.useCallback((p) => {
+    livePatchFreshRef.current = !!p;
+    if (!p) return;
+    setRefreshing(false);
+    if (p.atMs === livePatchAppliedRef.current) return;
+    livePatchAppliedRef.current = p.atMs;
+    const since = Math.max(bootCacheRef.current?.at || 0, lastPublishAtRef.current || 0);
+    setLiveMatches(prev => applyLivePatch(prev, p, { since }));
+  }, []);
+  // 진행 중인 패치 요청(부팅: 모듈 상단에서 건 것, 복귀: onVisible 이 새로 건 것).
+  const livePatchPRef = React.useRef(window.__livePatchP || Promise.resolve(null));
+  React.useEffect(() => {
+    let alive = true;
+    livePatchPRef.current.then(p => { if (alive) applyLivePatchNow(p); });
+    return () => { alive = false; };
+  }, [applyLivePatchNow]);
   // '목록이 화면에 반영됐다'는 신호. 갱신 표시('최신 정보 불러오는 중'·당겨서
   // 새로고침 스피너)는 이 시점에 내린다 — 경기 상세(라인업·이벤트·평점)까지 다
   // 받길 기다리면 10초 넘게 바가 남는데, 그동안 화면엔 이미 내용이 다 떠 있다.
@@ -11786,7 +11990,15 @@ function App() {
       pollInFlightRef.current = true;
       const announce = announceRef.current;
       announceRef.current = false;
-      if (announce) { setRefreshing(true); waitListReady().then(() => setRefreshing(false)); }
+      let settled = false;
+      if (announce) {
+        waitListReady().then(() => { settled = true; setRefreshing(false); });
+        // 신선한 서버 패치(≤2분)를 얹었으면 '불러오는 중'을 띄울 이유가 없다 — 패치
+        // 응답을 잠깐(최대 0.6초) 기다렸다 판단한다. 늦게 오면 도착 즉시 바를 내린다.
+        Promise.race([livePatchPRef.current, new Promise(r => setTimeout(r, 600))]).then(() => {
+          if (!settled && !cancelled && !livePatchFreshRef.current) setRefreshing(true);
+        });
+      }
       try {
         await withTimeout(fetchLiveMatches(firstRun));   // 첫 실행만 quick(어제~내일)
       } catch (e) {
@@ -11794,6 +12006,7 @@ function App() {
       } finally {
         pollInFlightRef.current = false;
         // cancelled 여부와 무관하게 내린다 — 정리 중이라고 건너뛰면 바가 남는다.
+        settled = true;
         if (announce) setRefreshing(false);
       }
       if (cancelled) return;
@@ -11812,6 +12025,11 @@ function App() {
     const onVisible = () => {
       if (cancelled || document.visibilityState !== 'visible') return;
       clearTimeout(timeoutId);   // 예약된 폴링과 중복 실행 방지
+      // 서버 라이브 패치를 먼저(수 KB) 받아 곧바로 얹는다 — 전체 갱신(tick)은 그대로 이어 간다.
+      livePatchFreshRef.current = false;
+      const pp = fetchLivePatch();
+      livePatchPRef.current = pp;
+      pp.then(p => { if (!cancelled) applyLivePatchNow(p); });
       // 오래 백그라운드에 있었다면 낡은 정보를 말없이 두지 않는다. 다만 이미
       // 보여줄 내용이 있으면 스켈레톤으로 되돌리지 않고(내용이 사라지는 게 더
       // 나쁘다) 상단 갱신 바로 '지금 새로 받는 중'임을 알린다.
@@ -13250,14 +13468,26 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-try {
-  ReactDOM.createRoot(document.getElementById('root')).render(
-    <ErrorBoundary><App/></ErrorBoundary>
-  );
-  hideSplashWhenPainted();
-} catch(e) {
-  document.getElementById('root').innerHTML = '<div style="color:red;padding:20px;font-family:monospace;font-size:12px;white-space:pre-wrap">렌더링 에러:\n' + e.message + '\n\n' + e.stack + '</div>';
+function mountApp() {
+  try {
+    ReactDOM.createRoot(document.getElementById('root')).render(
+      <ErrorBoundary><App/></ErrorBoundary>
+    );
+    hideSplashWhenPainted();
+  } catch(e) {
+    document.getElementById('root').innerHTML = '<div style="color:red;padding:20px;font-family:monospace;font-size:12px;white-space:pre-wrap">렌더링 에러:\n' + e.message + '\n\n' + e.stack + '</div>';
+  }
 }
+// 로컬 캐시가 있으면 첫 프레임을 서버 라이브 패치와 함께 그린다 — 스플래시가 떠 있는
+// 동안 최대 0.3초만 기다린다(늦으면 캐시로 먼저 그리고 패치는 도착 즉시 얹는다).
+// 캐시가 없으면 어차피 스켈레톤이라 기다리지 않는다.
+let hasMatchCache = false;
+try { hasMatchCache = !!localStorage.getItem(MATCH_CACHE_KEY); } catch (e) {}
+if (hasMatchCache) {
+  let mounted = false;
+  const mountOnce = () => { if (!mounted) { mounted = true; mountApp(); } };
+  Promise.race([window.__livePatchP, new Promise(r => setTimeout(r, 300))]).then(mountOnce, mountOnce);
+} else mountApp();
 </script>
 <div id="root"></div>
 </body>

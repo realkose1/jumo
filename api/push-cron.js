@@ -431,7 +431,8 @@ async function fixturesForDate(date) {
     // 없는 날). length 를 요구하면 그런 날엔 2분마다 AF 를 다시 부른다.
     if (row && Array.isArray(row.events) &&
         Date.now() - new Date(row.updated_at).getTime() < FRESH_MS) {
-      return { response: row.events };
+      // at: 이 목록(상태·점수)이 실제로 확보된 시각 — 라이브 패치의 신선도 판단용.
+      return { response: row.events, at: row.updated_at };
     }
   } catch (e) { /* 캐시 불가 → 그냥 AF 로 */ }
   const data = await afGet(`/fixtures?date=${date}`);
@@ -446,7 +447,7 @@ async function fixturesForDate(date) {
         body: JSON.stringify({ date, events: slim, updated_at: new Date().toISOString() }),
       });
     } catch (e) { /* 저장 실패는 무시 */ }
-    return { ...data, response: slim };
+    return { ...data, response: slim, at: new Date().toISOString() };
   }
   return data;
 }
@@ -512,7 +513,33 @@ async function lineupSquad(fid, espnFallback = null, involved = []) {
   return out;
 }
 
-async function collectSoccer(events, liveStates) {
+// ─── 라이브 패치(앱 첫 화면용) ───────────────────────────────────────
+// 앱은 실행 직후 지난 실행의 목록(로컬 캐시)을 먼저 그리고 1~3초 뒤 새 목록으로
+// 바꾼다. 그 사이 히어로·오늘 경기가 낡은 점수로 보이지 않도록, 크론이 이미 받아
+// 둔 데이터(추가 AF 호출 없음)로 '우리 경기의 상태·점수·골' 요약을 매 실행 남긴다.
+// 앱은 이 행 하나만 받아(수 KB) 캐시 위에 얹는다 — index.html applyLivePatch.
+//   at: 실행 시각(크론 생존 판정) · fat/gat: 축구/야구 데이터를 실제로 확보한 시각
+//   fixtures[afFixtureId] = { s, el, h, a, ko, p: { [afPlayerId]: { g, a } } }
+//   games[gamePk]        = { s, h, a, inn, ko, hn, an }  (앱 MLB 는 ESPN id 라 팀명+시각으로 붙는다)
+function newLivePatch() {
+  return { at: new Date().toISOString(), fat: null, gat: null, fixtures: {}, games: {} };
+}
+const SOCCER_AF_IDS = new Set(PLAYERS.filter((p) => p.sport === 'soccer' && p.afPlayerId).map((p) => p.afPlayerId));
+// 한 번의 요청으로 덮어쓴다. 아무것도 확보하지 못한 실행(AF·statsapi 모두 실패)은
+// 쓰지 않는다 — 직전 패치가 남아 있다가 10분 뒤 앱에서 자연히 무효가 된다.
+async function writeLivePatch(patch) {
+  if (!patch || (!patch.fat && !patch.gat)) return;
+  patch.at = new Date().toISOString();   // 쓰는 시각 = 앱의 '크론 생존' 판단 기준
+  try {
+    await fetch(`${process.env.SUPABASE_URL}/rest/v1/sf_cache`, {
+      method: 'POST',
+      headers: { ...sbHeaders(), 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify({ date: 'live-patch', events: patch, updated_at: patch.at }),
+    });
+  } catch (e) { console.warn('live-patch', e?.message); }
+}
+
+async function collectSoccer(events, liveStates, patch = null) {
   if (!process.env.APIFOOTBALL_KEY) { console.warn('soccer: APIFOOTBALL_KEY missing'); return; }
   // ── ESPN 라인업 폴백 ────────────────────────────────────────────────
   // AF 는 라인업을 킥오프 직전(실측 8~22분 전)에야 낸다. ESPN 은 같은 경기를
@@ -574,6 +601,11 @@ async function collectSoccer(events, liveStates) {
     // 날짜별 경기 목록은 앱도 sf_cache 에 채운다 — 같은 캐시를 읽어 중복 조회를
     // 없앤다. 오늘 목록은 3분이면 충분히 신선하다(상태 변화는 경기별 조회로 본다).
     const data = await fixturesForDate(date);
+    // 패치의 축구 데이터 시각 = 사용한 날짜 목록 중 가장 오래된 것.
+    if (patch && data?.at) {
+      const t = new Date(data.at).toISOString();   // Supabase(+00:00)·JS(Z) 표기를 맞춘 뒤 비교
+      if (!patch.fat || t < patch.fat) patch.fat = t;
+    }
     for (const fx of data?.response || []) {
       const fid = fx.fixture?.id;
       if (!fid || seenFixtures.has(fid)) continue;
@@ -601,6 +633,19 @@ async function collectSoccer(events, liveStates) {
       // 건너뛴다.
       const staleResult = isFinal && kickoffMs && Date.now() - kickoffMs > 3.5 * 60 * 60 * 1000; // 경기는 보통 2시간, 킥오프 3.5시간 후 종료 알림은 낡은 소식
       const staleStart = isLive && ((elapsedNow != null && elapsedNow > 30) || (kickoffMs && Date.now() - kickoffMs > 45 * 60 * 1000));
+
+      // 라이브 패치: 진행 중·종료, 그리고 24시간 안에 시작할(또는 시작이 늦어진) 경기.
+      // 아래의 continue(라인업 대기·이미 마감)보다 먼저 남겨야 빠지지 않는다.
+      if (patch) {
+        const til = kickoffMs - Date.now();
+        if (isLive || isFinal || (kickoffMs && til > -3 * 3600e3 && til <= 24 * 3600e3)) {
+          patch.fixtures[fid] = {
+            s: st || null, el: elapsedNow ?? null,
+            h: fx.goals?.home ?? null, a: fx.goals?.away ?? null,
+            ko: fx.fixture?.date || null,
+          };
+        }
+      }
 
       const home = teamLabel(fx.teams.home, fx.league?.id), away = teamLabel(fx.teams.away, fx.league?.id);
       const vs = `${home} vs ${away}`;
@@ -714,6 +759,21 @@ async function collectSoccer(events, liveStates) {
 
       // Per-play events — matched by API-Football player id (exact, no name fuzz).
       const evd = await afGet(`/fixtures/events?fixture=${fid}`);
+
+      // 라이브 패치: 우리 선수 골·도움(앱 상세 계산과 같은 규칙 — 자책골·실축 PK 제외).
+      // 이벤트를 받은 회차에만 싣는다(p 가 없으면 앱은 기존 값을 그대로 둔다).
+      // 소속팀 경기 선수는 0 도 싣고, 대표팀 경기는 기록이 있는 선수만.
+      if (patch && patch.fixtures[fid] && Array.isArray(evd?.response)) {
+        const pm = {};
+        for (const p of involved) if (p.afPlayerId) pm[p.afPlayerId] = { g: 0, a: 0 };
+        const bump = (id, k) => { if (!SOCCER_AF_IDS.has(id)) return; (pm[id] = pm[id] || { g: 0, a: 0 })[k]++; };
+        for (const ev of evd.response) {
+          if (ev.type !== 'Goal' || ev.detail === 'Missed Penalty') continue;
+          if (ev.detail !== 'Own Goal') bump(ev.player?.id, 'g');
+          if (ev.assist?.id) bump(ev.assist.id, 'a');
+        }
+        if (Object.keys(pm).length) patch.fixtures[fid].p = pm;
+      }
 
       if (isNationalMatch) {
         const natEvents = nationalMatchEvents({ fx, fid, evd, home, away, isLive, isFinal, elapsedNow, staleResult, kickoffMs });
@@ -915,13 +975,14 @@ async function collectNationalSchedule(events) {
   }
 }
 
-async function collectBaseball(events) {
+async function collectBaseball(events, patch = null) {
   // MLB 경기는 미국 현지(주로 저녁) 기준 날짜로 등록돼 UTC 날짜와 어긋난다. UTC '오늘'만
   // 조회하면 미국 저녁(=UTC 다음날)에 진행 중인 경기를 통째로 놓친다(soccer는 ESPN
   // scoreboard를 날짜 없이 받아 무관). 어제~오늘(UTC) 범위로 조회해 진행/종료 경기를 모두
   // 포착한다. 같은 경기가 여러 번 잡혀도 gamePk 기반 push_log 중복 제거로 한 번만 발송된다.
   const ymd = (off) => new Date(Date.now() + off * 86400000).toISOString().slice(0, 10);
   const sched = await J(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate=${ymd(-1)}&endDate=${ymd(0)}&hydrate=team,linescore`);
+  if (patch && sched) patch.gat = new Date().toISOString();
   for (const day of sched?.dates || []) {
     for (const g of day.games || []) {
       const home = g.teams?.home?.team?.name || '', away = g.teams?.away?.team?.name || '';
@@ -930,6 +991,20 @@ async function collectBaseball(events) {
       const vs = `${away} vs ${home}`;
       const st = g.status?.abstractGameState; // Preview | Live | Final
       const gameMs = new Date(g.gameDate || 0).getTime();
+      // 라이브 패치: 진행 중·종료·24시간 안 예정. 연기·취소(abstract 는 Final)는 뺀다 —
+      // 점수 없는 '종료'로 잘못 덮이지 않게.
+      if (patch && !/Postponed|Cancel|Suspended/i.test(g.status?.detailedState || '')) {
+        const til = gameMs - Date.now();
+        if (st === 'Live' || st === 'Final' || (st === 'Preview' && gameMs && til > -3 * 3600e3 && til <= 24 * 3600e3)) {
+          const ls = g.linescore || {};
+          patch.games[g.gamePk] = {
+            s: st, h: g.teams?.home?.score ?? null, a: g.teams?.away?.score ?? null,
+            // 'Top 5' · 'Middle 5' · 'Bottom 5' · 'End 5'
+            inn: st === 'Live' && ls.currentInning ? `${ls.inningState || ls.inningHalf || ''} ${ls.currentInning}`.trim() : '',
+            ko: g.gameDate || null, hn: home, an: away,
+          };
+        }
+      }
       if (st !== 'Live' && st !== 'Final') continue;
 
       // 팀이 경기한다고 선수가 뛰는 건 아니다 — 박스스코어로 실제 출전을 확인한 뒤
@@ -1018,8 +1093,12 @@ module.exports = async (req, res) => {
 
   const events = [];
   const liveStates = [];
-  try { await collectSoccer(events, liveStates); } catch (e) { console.warn('soccer', e?.message); }
-  try { await collectBaseball(events); } catch (e) { console.warn('mlb', e?.message); }
+  const livePatch = newLivePatch();
+  try { await collectSoccer(events, liveStates, livePatch); } catch (e) { console.warn('soccer', e?.message); }
+  try { await collectBaseball(events, livePatch); } catch (e) { console.warn('mlb', e?.message); }
+  // 수집이 중간에 실패해도 그때까지 모은 것은 남긴다(각 수집기가 위에서 개별 catch).
+  // 알림 발송(아래, 느릴 수 있음)보다 먼저 써서 앱이 최대한 빨리 받게 한다.
+  await writeLivePatch(livePatch);
   try { await collectNationalSchedule(events); } catch (e) { console.warn('nat-sched', e?.message); }
 
   // ── 라이브 액티비티 갱신 ────────────────────────────────────────────────
