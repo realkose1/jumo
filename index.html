@@ -1710,10 +1710,11 @@ function saveCachedMatches(matches) {
 
 // ─── 서버 라이브 패치 적용 ──────────────────────────────────────
 // 패치(push-cron writeLivePatch) 모양:
-//   { at, fat, gat, fixtures: {[afFixtureId]: {s, el, h, a, ko, p:{[afPlayerId]:{g,a}}}},
+//   { at, fat, gat, fixtures: {[afFixtureId]: {s, el, h, a, ko, p:{[afPlayerId]:{g,a}}, fx}},
 //                   games: {[gamePk]: {s, h, a, inn, ko, hn, an}} }
 // 상태·점수·분(이닝)·킥오프 시각과 우리 선수 골·도움, 대표팀 엔트리 문구만 바꾼다.
-// 라인업·상세는 건드리지 않는다(뒤이은 전체 갱신이 채운다). 바뀐 경기만 새 객체로,
+// 라인업·상세는 건드리지 않는다(뒤이은 전체 갱신이 채운다). fx(슬림 AF 원본)는 목록에
+// 없는 경기를 끼울 때만 쓴다(lpAddMissing). 바뀐 경기만 새 객체로,
 // 아무것도 안 바뀌면 원래 배열을 그대로 돌려준다(불필요한 재렌더 방지).
 // opts.since: 지금 목록의 데이터 시각(ms) — 패치가 그보다 오래됐으면 그 부분은 무시한다
 //             (방금 받은 새 목록을 낡은 패치로 되돌리지 않게).
@@ -1851,6 +1852,38 @@ function applyLivePatch(matches, patch, opts = {}) {
     return n;
   });
   return changed ? out : matches;
+}
+
+// 패치에는 있는데 목록엔 없는 축구 경기를 끼워 넣는다 — 목록 저장 뒤에 잡힌 경기, 밤새
+// 낡은 공유 홈 목록, 캐시가 아예 없는 첫 실행(빈 목록 → 패치만으로 목록을 만든다).
+// push-cron 이 경기마다 슬림 AF 원본(f.fx)을 싣고, 카드는 앱의 transformApiFootballFixture
+// 로 만든다(App 안에 있어 인자로 받는다 — 우리 팀 경기가 아니면 null 이라 그대로 걸러진다).
+// 만든 뒤 lpSoccer 로 패치를 얹어 우리 선수 골·도움까지 맞춘다.
+// 야구는 끼워 넣지 않는다 — 앱 MLB 경기는 ESPN 모양(id·팀·이닝)이라 statsapi 요약으로는
+// 카드를 못 만든다. 없는 야구 경기는 전체 갱신을 기다린다.
+// opts.since 는 applyLivePatch 와 같다 — 목록이 패치보다 새것이면(방금 전체 갱신) 거기
+// 없는 경기는 앱이 일부러 뺀 것일 수 있으니 넣지 않는다.
+function lpAddMissing(matches, patch, transform, opts = {}) {
+  if (!patch || !patch.fixtures || typeof transform !== 'function') return matches;
+  const since = opts.since || 0, now = opts.now || Date.now();
+  if ((Date.parse(patch.fat) || 0) <= since) return matches;
+  const list = Array.isArray(matches) ? matches : [];
+  const have = new Set(list.map(m => String(m.id)));
+  // 한도 소진 때 목록에 ESPN 폴백 경기(같은 선수·같은 날)가 들어와 있을 수 있다 — 겹치면 넣지 않는다.
+  const dayKey = (m) => m.koreanPlayer ? `${m.koreanPlayer.name}|${m.fullDate ? new Date(m.fullDate).toDateString() : ''}` : '';
+  const otherKeys = new Set(list.filter(m => m.source !== 'apifootball').map(dayKey).filter(Boolean));
+  const added = [];
+  for (const id of Object.keys(patch.fixtures)) {
+    const f = patch.fixtures[id];
+    if (!f || !f.fx || have.has(String(id))) continue;
+    let m = null;
+    try { m = transform(f.fx); } catch (e) { m = null; }
+    if (!m || !m.koreanPlayer || have.has(String(m.id))) continue;
+    if (otherKeys.has(dayKey(m))) continue;
+    have.add(String(m.id));
+    added.push(lpSoccer(m, f, now));
+  }
+  return added.length ? [...list, ...added] : matches;
 }
 
 // 상단 갱신 표시. 화면에 이미(낡은) 내용이 있을 때만 뜬다 — 스켈레톤이 떠 있는
@@ -10438,22 +10471,47 @@ function App() {
   const lastPublishAtRef = React.useRef(0);
   // 서버 라이브 패치를 지금 목록에 얹는다. 목록이 패치보다 새것이면(방금 전체 갱신이
   // 반영됨) applyLivePatch 가 그 부분을 건너뛴다. 신선한 패치를 얹었으면 갱신 바도 내린다.
+  // 목록에 없는 패치 경기는 transformApiFootballFixture 로 카드를 만들어 끼운다(lpAddMissing).
+  // 그 함수는 App 아래쪽에서 정의되므로 ref 로 넘겨받는다(정의 직후 채운다).
+  const transformAfRef = React.useRef(null);
+  // 빈 목록을 패치만으로 채웠다 → 스켈레톤을 내린다(아래 레이아웃 효과).
+  const seededFromPatchRef = React.useRef(false);
   const applyLivePatchNow = React.useCallback((p) => {
     livePatchFreshRef.current = !!p;
     if (!p) return;
     setRefreshing(false);
-    if (p.atMs === livePatchAppliedRef.current) return;
-    livePatchAppliedRef.current = p.atMs;
     const since = Math.max(bootCacheRef.current?.at || 0, lastPublishAtRef.current || 0);
-    setLiveMatches(prev => applyLivePatch(prev, p, { since }));
+    // 같은 패치를 두 번 얹지는 않지만(부팅 땐 useState 초기값이 이미 얹었다), 빠진 경기
+    // 끼워 넣기는 id 가 없을 때만 하므로 매번 돌려도 된다 — 부팅 패치도 여기서 처음 탄다.
+    const fresh = p.atMs !== livePatchAppliedRef.current;
+    livePatchAppliedRef.current = p.atMs;
+    const tf = transformAfRef.current;
+    setLiveMatches(prev => {
+      const patched = fresh ? applyLivePatch(prev, p, { since }) : prev;
+      const next = lpAddMissing(patched, p, tf, { since });
+      if (!(prev && prev.length) && next && next.length) seededFromPatchRef.current = true;
+      return next;
+    });
   }, []);
   // 진행 중인 패치 요청(부팅: 모듈 상단에서 건 것, 복귀: onVisible 이 새로 건 것).
   const livePatchPRef = React.useRef(window.__livePatchP || Promise.resolve(null));
+  // 마운트 때 패치가 이미 와 있으면(마운트 게이트가 기다렸다) 첫 페인트 전에 끼워 넣는다 —
+  // 캐시가 없는 첫 실행에서도 스켈레톤 없이 패치로 만든 목록이 바로 뜬다.
+  React.useLayoutEffect(() => {
+    if (window.__livePatch) applyLivePatchNow(window.__livePatch);
+  }, [applyLivePatchNow]);
   React.useEffect(() => {
     let alive = true;
     livePatchPRef.current.then(p => { if (alive) applyLivePatchNow(p); });
     return () => { alive = false; };
   }, [applyLivePatchNow]);
+  // 패치만으로 빈 목록을 채웠으면 '첫 로드'가 끝난 것 — 스켈레톤을 내린다(첫 페인트 전에).
+  // 패치도 못 받았으면 그대로 스켈레톤 → 전체 갱신(publishBase)이 내린다.
+  React.useLayoutEffect(() => {
+    if (!seededFromPatchRef.current) return;
+    seededFromPatchRef.current = false;
+    setIsInitialLoad(false);
+  }, [liveMatches]);
   // '목록이 화면에 반영됐다'는 신호. 갱신 표시('최신 정보 불러오는 중'·당겨서
   // 새로고침 스피너)는 이 시점에 내린다 — 경기 상세(라인업·이벤트·평점)까지 다
   // 받길 기다리면 10초 넘게 바가 남는데, 그동안 화면엔 이미 내용이 다 떠 있다.
@@ -12381,6 +12439,7 @@ function App() {
       sfPeriod: 1,
     };
   };
+  transformAfRef.current = transformApiFootballFixture;   // 라이브 패치의 빠진 경기 끼워 넣기용
 
   const transformESPNEvent = (event, sport, league = '') => {
     const comp = event.competitions[0];

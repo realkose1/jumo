@@ -516,10 +516,12 @@ async function lineupSquad(fid, espnFallback = null, involved = []) {
 // ─── 라이브 패치(앱 첫 화면용) ───────────────────────────────────────
 // 앱은 실행 직후 지난 실행의 목록(로컬 캐시)을 먼저 그리고 1~3초 뒤 새 목록으로
 // 바꾼다. 그 사이 히어로·오늘 경기가 낡은 점수로 보이지 않도록, 크론이 이미 받아
-// 둔 데이터(추가 AF 호출 없음)로 '우리 경기의 상태·점수·골' 요약을 매 실행 남긴다.
+// 둔 데이터로 '우리 경기의 상태·점수·골' 요약을 매 실행 남긴다(추가 AF 호출은 우리
+// 경기가 라이브일 때의 live=all 1콜뿐 — overlayLiveFixtures).
 // 앱은 이 행 하나만 받아(수 KB) 캐시 위에 얹는다 — index.html applyLivePatch.
 //   at: 실행 시각(크론 생존 판정) · fat/gat: 축구/야구 데이터를 실제로 확보한 시각
-//   fixtures[afFixtureId] = { s, el, h, a, ko, p: { [afPlayerId]: { g, a } } }
+//   fixtures[afFixtureId] = { s, el, h, a, ko, p: { [afPlayerId]: { g, a } }, fx }
+//     fx: 슬림 AF 원본(patchFx) — 앱 목록에 없는 경기를 앱이 바로 카드로 만든다
 //   games[gamePk]        = { s, h, a, inn, ko, hn, an }  (앱 MLB 는 ESPN id 라 팀명+시각으로 붙는다)
 function newLivePatch() {
   return { at: new Date().toISOString(), fat: null, gat: null, fixtures: {}, games: {} };
@@ -537,6 +539,74 @@ async function writeLivePatch(patch) {
       body: JSON.stringify({ date: 'live-patch', events: patch, updated_at: patch.at }),
     });
   } catch (e) { console.warn('live-patch', e?.message); }
+}
+
+// 패치에 싣는 경기 원본(슬림 AF 모양의 부분집합). 앱 목록(로컬 캐시·공유 홈 목록)에
+// 없는 경기 — 목록 저장 뒤에 잡힌 경기, 밤새 낡은 홈 목록, 캐시가 아예 없는 첫 실행 —
+// 를 앱이 전체 갱신(1~3초)을 기다리지 않고 transformApiFootballFixture 로 바로 카드로
+// 만들 수 있게 한다. 그 함수가 읽는 필드만 남긴다(경기당 ~0.7KB, 추적 경기만이라 수~수십 KB).
+function patchFx(f) {
+  const fx = f.fixture || {}, lg = f.league || {};
+  const team = (t) => (t ? { id: t.id, name: t.name, logo: t.logo } : null);
+  const out = {
+    fixture: { id: fx.id, date: fx.date, status: fx.status,
+               venue: fx.venue ? { name: fx.venue.name, city: fx.venue.city } : null },
+    league: { id: lg.id, name: lg.name, country: lg.country, round: lg.round, season: lg.season },
+    teams: { home: team(f.teams?.home), away: team(f.teams?.away) },
+    goals: f.goals || null,
+    score: f.score || null,
+  };
+  if (lg.logo) out.league.logo = lg.logo;
+  return out;
+}
+
+// ─── 라이브 보강(/fixtures?live=all) ──────────────────────────────
+// 날짜 목록은 최대 3분 재사용된다(fixturesForDate) — 그 상태·점수로 만든 패치와 알림은
+// 크론 주기(2분)까지 더해 2~4분 늦는다. 우리 경기가 '움직이는' 동안(진행 중, 또는 킥오프
+// 직전·직후인데 아직 NS)만 실행당 한 번 live=all 을 불러 그 경기들의 상태·점수·분을
+// 바로잡는다. lists 의 경기 객체를 그 자리에서 고치므로 아래 알림 로직도 같은 값을 본다
+// (시작 알림·라이브 액티비티가 조금 빨라질 뿐, 종료 판정은 여전히 날짜 목록의 FT 로).
+// 비용: 라이브 창이 있는 실행마다 1콜 — 하루 라이브 2~6시간이면 60~180콜, 최대 720콜.
+// 반환: null(부르지 않음·실패) | { at, complete } — complete 는 움직이는 경기를 전부 덮었는가.
+async function overlayLiveFixtures(lists, teamIds, nowMs = Date.now()) {
+  const tracked = (f) => teamIds.has(f?.teams?.home?.id) || teamIds.has(f?.teams?.away?.id);
+  const moving = [];
+  for (const data of lists) {
+    for (const f of data?.response || []) {
+      if (!tracked(f)) continue;
+      const st = f.fixture?.status?.short;
+      const ko = new Date(f.fixture?.date || 0).getTime();
+      if (!ko) continue;
+      const since = nowMs - ko;
+      // 킥오프 4시간이 지나도 '진행 중'인 건 AF 가 갱신을 멈춘 경기 — 그걸로 매번 부르지 않는다.
+      // NS 는 킥오프 3분 전~30분 후만(지연·미갱신 하부 리그로 몇 시간씩 부르지 않게).
+      if ((AF_LIVE.has(st) && since < 4 * 3600e3) || (st === 'NS' && since > -3 * 60e3 && since < 30 * 60e3)) {
+        moving.push(f);
+      }
+    }
+  }
+  if (!moving.length) return null;
+  const data = await afGet('/fixtures?live=all');
+  const errs = data?.errors;
+  const errN = Array.isArray(errs) ? errs.length : Object.keys(errs || {}).length;
+  if (!Array.isArray(data?.response) || errN) return null;
+  const at = new Date().toISOString();
+  const byId = new Map();
+  for (const f of data.response) if (tracked(f) && f.fixture?.id) byId.set(f.fixture.id, f);
+  let complete = true;
+  for (const f of moving) {
+    const l = byId.get(f.fixture.id);
+    if (!l) {
+      // live=all 에 없는데 목록상 진행 중 = 방금 끝났을 공산이 크다(최종 점수·FT 는 모른다).
+      // NS 인 경기는 live=all 에 없는 게 곧 '아직 시작 전'이라는 최신 정보다.
+      if (AF_LIVE.has(f.fixture?.status?.short)) complete = false;
+      continue;
+    }
+    if (l.fixture?.status) f.fixture.status = l.fixture.status;
+    if (l.goals) f.goals = l.goals;
+    if (l.score) f.score = l.score;
+  }
+  return { at, complete };
 }
 
 async function collectSoccer(events, liveStates, patch = null) {
@@ -597,13 +667,24 @@ async function collectSoccer(events, liveStates, patch = null) {
   const utcHour = new Date().getUTCHours();
   const dates = utcHour < 8 ? [ymd(-1), ymd(0)] : [ymd(0)];
 
-  for (const date of dates) {
-    // 날짜별 경기 목록은 앱도 sf_cache 에 채운다 — 같은 캐시를 읽어 중복 조회를
-    // 없앤다. 오늘 목록은 3분이면 충분히 신선하다(상태 변화는 경기별 조회로 본다).
-    const data = await fixturesForDate(date);
-    // 패치의 축구 데이터 시각 = 사용한 날짜 목록 중 가장 오래된 것.
-    if (patch && data?.at) {
-      const t = new Date(data.at).toISOString();   // Supabase(+00:00)·JS(Z) 표기를 맞춘 뒤 비교
+  // 날짜별 경기 목록은 앱도 sf_cache 에 채운다 — 같은 캐시를 읽어 중복 조회를
+  // 없앤다. 오늘 목록은 3분이면 충분히 신선하다(상태 변화는 경기별 조회로 본다).
+  // 목록을 먼저 다 받아 두는 건 라이브 보강(/fixtures?live=all)을 실행당 한 번만 하기 위해서다.
+  const lists = [];
+  for (const date of dates) lists.push(await fixturesForDate(date));
+  const trackedTeamIds = new Set([
+    ...soccer.map((p) => p.afTeamId).filter(Boolean),
+    ...Object.keys(NATIONAL_TEAMS).map(Number),
+  ]);
+  const liveOverlay = await overlayLiveFixtures(lists, trackedTeamIds);
+
+  for (const data of lists) {
+    // 패치의 축구 데이터 시각 = 사용한 날짜 목록 중 가장 오래된 것. 라이브 보강이
+    // '움직이는 경기'를 전부 덮었으면 나머지(종료·먼 예정)는 그 사이 바뀔 게 없으니
+    // 보강 시각을 쓴다. 하나라도 못 덮었으면(방금 끝나 live=all 에서 빠진 경기) 목록 시각 그대로.
+    const dataAt = (liveOverlay && liveOverlay.complete) ? liveOverlay.at : data?.at;
+    if (patch && dataAt) {
+      const t = new Date(dataAt).toISOString();   // Supabase(+00:00)·JS(Z) 표기를 맞춘 뒤 비교
       if (!patch.fat || t < patch.fat) patch.fat = t;
     }
     for (const fx of data?.response || []) {
@@ -643,6 +724,7 @@ async function collectSoccer(events, liveStates, patch = null) {
             s: st || null, el: elapsedNow ?? null,
             h: fx.goals?.home ?? null, a: fx.goals?.away ?? null,
             ko: fx.fixture?.date || null,
+            fx: patchFx(fx),
           };
         }
       }
@@ -1183,3 +1265,5 @@ module.exports.isStaleEvent = isStaleEvent;
 module.exports.minuteKey = minuteKey;
 module.exports.stableKey = stableKey;
 module.exports.isVarGoalCancelled = isVarGoalCancelled;
+module.exports.patchFx = patchFx;
+module.exports.overlayLiveFixtures = overlayLiveFixtures;
