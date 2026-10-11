@@ -2139,6 +2139,12 @@ function formatExpectedEvent(kp, allMatches, matchAt) {
     // 대표팀 차출 등 수동 결장 중이면 '선발 예상 N%' 는 거짓말이다 — 사유를 적는다.
     const man = manualAvailabilityFor(kp.name, matchAt ? Date.parse(matchAt) : Date.now());
     if (man) return man.label;
+    // 결장급 부상 중이면 '선발 예상 N%' 대신 부상 사유(배지 툴팁도 '선발 예상을 계산하지
+    // 않아요'라고 말한다). 부상 정보는 '지금' 기준이라 열흘 이내 경기에만 적용한다.
+    if (injuredOut(kp)) {
+      const at = matchAt ? Date.parse(matchAt) : Date.now();
+      if (at - Date.now() < 10 * 86400000) return ALL_PLAYERS.find(p => p.name === kp.name)?.injury?.label || '부상';
+    }
     const p = computeStartProbability(kp.name, allMatches);
     // 계산하는 값은 '선발' 확률이다. 벤치에서 늘 출전하는 선수를 '출전 예상 20%'로
     // 적으면 사실과 어긋나므로 라벨을 실제 지표에 맞춘다.
@@ -2267,7 +2273,14 @@ const setHideUnavailable = (v) => {
   try { localStorage.setItem(HIDE_UNAVAILABLE_KEY, v ? '1' : '0'); } catch {}
   try { window.dispatchEvent(new Event('jumo:hide-unavailable')); } catch {}
 };
-const heroAvailable = (kp) => !!kp && (kp.isTeam || !manualAvailabilityFor(kp.name));
+// 결장급 부상(데이터 제공처 부상 명단, 수동 차출 제외) 중이고 이 경기에서 아직 뛴 기록이
+// 없으면 '출격 대기' 등 히어로 주인공이 될 수 없다(제보: 어깨 부상 카스트로프가 출격 대기).
+const injuredOut = (kp) => {
+  if (!kp || kp.isTeam || (kp.minutesPlayed || 0) > 0) return false;
+  const inj = ALL_PLAYERS.find(p => p.name === kp.name)?.injury;
+  return !!inj && !inj.manual && inj.severity === 'high';
+};
+const heroAvailable = (kp) => !!kp && (kp.isTeam || (!manualAvailabilityFor(kp.name) && !injuredOut(kp)));
 // 매치에서 히어로가 내세울 대표 선수: 팔로우(또는 전체) 목록 중 가용한 첫 번째,
 // 없으면 기존 m.koreanPlayer로 그대로 폴백(아무도 못 찾는 것보다 낫다).
 const heroRepOf = (m) => {
