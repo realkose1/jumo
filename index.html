@@ -9318,9 +9318,12 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
     const TITLE_ALIAS = { '손흥민': ['SON', '쏘니'], '황희찬': ['황소'], '이정후': ['바람의 손자'], '김하성': ['어썸킴'] };
     const itemTitle = item.title || '';
     const itemDesc = item.description || '';
+    // 제목 기준으로만 본다(요약 2회 기준은 '바르셀로나 8연승' 같은 남의 기사를 통과시켰다).
+    // 제목이 이름(성 빼고 '강인 앞세워')으로만 부르는 경우가 많아, 본문에 전체 이름이 있는
+    // 선수에 한해 이름 두 글자도 인정한다.
     const isSubject = named.some(n => itemTitle.includes(n)
       || (TITLE_ALIAS[n] || []).some(al => itemTitle.includes(al))
-      || itemDesc.split(n).length - 1 >= 2);
+      || (n.length === 3 && itemTitle.includes(n.slice(1))));
     if (!isSubject) return false;
     if (!MATCH_KEYWORDS.some(kw => haystack.includes(kw))) return false;
     // 동명이인 방어: 일반 스포츠 맥락이 있거나, 언급된 선수의 소속팀·리그가
