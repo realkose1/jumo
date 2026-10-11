@@ -1843,6 +1843,13 @@ function lpFloor(matches, patch, opts = {}) {
       const statusBehind = (!m.live && !wasFinal) || (rawFin && !wasFinal);
       if (!ahead && (behind || statusBehind)) n = lpSoccer(m, { ...f, p: null }, now);
     }
+    // 진행 분도 뒤로 가지 않게 — 패치(83')를 먼저 보여준 뒤 조금 낡은 목록(82')이 덮어
+    // 숫자가 거꾸로 가는 일이 있었다. 둘 다 진행 중이고 점수가 같을 때만 큰 쪽을 쓴다.
+    if (n === m && rawLive && m.live && f.el != null) {
+      const cur = parseInt(String(m.minute ?? ''), 10);
+      const sameScore = (Number(m.home?.score) || 0) === (Number(f.h) || 0) && (Number(m.away?.score) || 0) === (Number(f.a) || 0);
+      if (sameScore && (!Number.isFinite(cur) || f.el > cur)) n = { ...m, minute: String(f.el) };
+    }
     // 골·도움 바닥값
     const raised = [];
     const floorKp = (kp) => {
