@@ -89,14 +89,14 @@ private struct LockScreenView: View {
                 StatusPill(status: ctx.state.status, minute: ctx.state.minute)
             }
 
-            // 가운뎃줄: [배지] 팀명   점수 : 점수   팀명 [배지] — 좌우 대칭으로 가운데 정렬
+            // 가운뎃줄: 팀명 [배지]   점수 : 점수   [배지] 팀명 — 엠블럼을 점수 옆에 붙여 좌우 대칭으로 가운데 정렬
             HStack(spacing: 10) {
                 HStack(spacing: 8) {
                     Spacer(minLength: 0)
-                    TeamBadge(abbr: ctx.attributes.homeAbbr, logoFile: ctx.attributes.homeLogoFile)
                     Text(ctx.attributes.homeName)
                         .font(.system(size: 14, weight: .semibold))
                         .lineLimit(1).minimumScaleFactor(0.8)
+                    TeamBadge(abbr: ctx.attributes.homeAbbr, logoFile: ctx.attributes.homeLogoFile)
                 }
                 .frame(maxWidth: .infinity, alignment: .trailing)
 
@@ -114,10 +114,10 @@ private struct LockScreenView: View {
                 .fixedSize()
 
                 HStack(spacing: 8) {
+                    TeamBadge(abbr: ctx.attributes.awayAbbr, logoFile: ctx.attributes.awayLogoFile)
                     Text(ctx.attributes.awayName)
                         .font(.system(size: 14, weight: .semibold))
                         .lineLimit(1).minimumScaleFactor(0.8)
-                    TeamBadge(abbr: ctx.attributes.awayAbbr, logoFile: ctx.attributes.awayLogoFile)
                     Spacer(minLength: 0)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

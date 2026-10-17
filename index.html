@@ -7806,7 +7806,7 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
                 {isNewDate && (
                   <div ref={el => { headerRefs.current[rowDate] = el; }}
                        style={{ position:'sticky', top:0, zIndex:3, margin:'0 -16px', padding:'9px 16px 7px',
-                                background:'var(--bg)', fontSize:12, fontWeight:800, letterSpacing:-0.2,
+                                background:'var(--bg)', fontSize:12, fontWeight:800, letterSpacing:-0.2, textAlign:'center',
                                 color: rowDate === now.toDateString() ? 'var(--acc)' : 'var(--text3)' }}>
                     {sectionLabel(rowDate)}
                   </div>
