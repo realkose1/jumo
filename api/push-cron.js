@@ -520,7 +520,9 @@ async function lineupSquad(fid, espnFallback = null, involved = []) {
 // 경기가 라이브일 때의 live=all 1콜뿐 — overlayLiveFixtures).
 // 앱은 이 행 하나만 받아(수 KB) 캐시 위에 얹는다 — index.html applyLivePatch.
 //   at: 실행 시각(크론 생존 판정) · fat/gat: 축구/야구 데이터를 실제로 확보한 시각
-//   fixtures[afFixtureId] = { s, el, h, a, ko, p: { [afPlayerId]: { g, a } }, fx }
+//   fixtures[afFixtureId] = { s, el, h, a, ko, p: { [afPlayerId]: { g, a } }, u, fx }
+//     u: { [afPlayerId]: { r: 's'|'b'|'x', i?, o? } } — 진행 중·종료 경기의 우리 선수 출전 정보
+//        (선발·벤치·명단 제외, 교체 투입·아웃 분). 라인업을 알 때만.
 //     fx: 슬림 AF 원본(patchFx) — 앱 목록에 없는 경기를 앱이 바로 카드로 만든다
 //   games[gamePk]        = { s, h, a, inn, ko, hn, an, hid, aid, hc, ac, v, ph, pa }
 //     (앱 MLB 는 ESPN id 라 팀명+시각으로 붙는다. hid/aid·hc/ac·v·ph/pa(각 팀 우리 선수 id)는
@@ -859,6 +861,26 @@ async function collectSoccer(events, liveStates, patch = null) {
           if (ev.assist?.id) bump(ev.assist.id, 'a');
         }
         if (Object.keys(pm).length) patch.fixtures[fid].p = pm;
+        // 우리 선수 출전 정보(u) — 위 라인업(lineupSquad, 캐시라 추가 AF 호출 없음)과 교체
+        // 이벤트로 판정한다. 앱은 실행 직후 캐시 목록의 경기 전 값('출전 예상')을 전체 갱신이
+        // 끝날 때까지 들고 있어, 45분째 뛰는 선수에게 '선발 예상 90%'가 떴다(제보). 앱
+        // lpLineupKp 가 그 경기 전 값만 이걸로 바꾼다(상세가 판정한 값은 건드리지 않는다).
+        //   r: 's' 선발 · 'b' 벤치 · 'x' 명단 제외, i/o: 교체 투입·아웃 분(AF: player=OUT, assist=IN)
+        // 라인업을 아직 모르면(squad null) 싣지 않는다 — 앱은 '출전 여부 확인 중'으로 둔다.
+        if (squad) {
+          const um = {};
+          for (const p of involved) {
+            if (!p.afPlayerId) continue;
+            const u = { r: starters.some((q) => q.id === p.id) ? 's' : squad.some((q) => q.id === p.id) ? 'b' : 'x' };
+            for (const ev of evd.response) {
+              if (ev.type !== 'subst') continue;
+              if (ev.assist?.id === p.afPlayerId) u.i = ev.time?.elapsed ?? null;
+              if (ev.player?.id === p.afPlayerId) u.o = ev.time?.elapsed ?? null;
+            }
+            um[p.afPlayerId] = u;
+          }
+          if (Object.keys(um).length) patch.fixtures[fid].u = um;
+        }
       }
 
       if (isNationalMatch) {
