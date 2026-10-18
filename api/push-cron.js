@@ -921,24 +921,40 @@ async function collectSoccer(events, liveStates, patch = null) {
       // 하므로 매 실행 만들어 두고, 아래에서 토큰이 있는 경기만 실제로 보낸다.
       // 대표팀 경기는 개인 출전을 모르니(squad 없음) 라이브 액티비티 자체를 건너뛴다.
       if (liveStates && (isLive || isFinal) && !isNationalMatch) {
-        // squad 는 선발+벤치다. 라인업을 받아왔는데 그 안에 없으면 이 경기에
-        // 나설 수 없는 선수라 잠금화면에 띄우지 않는다(=me 가 undefined).
-        // squad 가 null 이면 라인업을 아직 모르는 것이라 단정하지 않는다.
-        const me = squad ? squad[0] : involved[0];
-        let g = 0, a = 0;
-        for (const ev of (evd?.response || [])) {
-          if (ev.type !== 'Goal' || ev.detail === 'Missed Penalty') continue;
-          if (ev.player?.id === me?.afPlayerId && ev.detail !== 'Own Goal') g++;
-          if (ev.assist?.id === me?.afPlayerId) a++;
-        }
+        // 우리 선수마다 골·도움·교체·상태 문구를 따로 센다(코리안 더비면 여럿).
+        // 골·도움은 위 패치 p·앱 상세 계산과 같은 규칙 — 자책골·실축 PK 제외.
         // 교체 이벤트: player = 나가는 선수, assist = 들어오는 선수(AF 규칙, 앱과 동일).
-        let meSubIn = false, meSubOff = false;
-        for (const ev of (evd?.response || [])) {
-          if (ev.type !== 'subst') continue;
-          if (ev.assist?.id === me?.afPlayerId) meSubIn = true;
-          if (ev.player?.id === me?.afPlayerId) meSubOff = true;
-        }
-        const meStarter = !!starters && starters.some((p) => p.id === me?.id);
+        const statOf = (p) => {
+          let g = 0, a = 0, subIn = false, subOff = false;
+          const id = p.afPlayerId;
+          for (const ev of (id ? (evd?.response || []) : [])) {
+            if (ev.type === 'subst') {
+              if (ev.assist?.id === id) subIn = true;
+              if (ev.player?.id === id) subOff = true;
+            } else if (ev.type === 'Goal' && ev.detail !== 'Missed Penalty') {
+              if (ev.player?.id === id && ev.detail !== 'Own Goal') g++;
+              if (ev.assist?.id === id) a++;
+            }
+          }
+          const starter = !!starters && starters.some((q) => q.id === p.id);
+          const inSquad = !!squad && squad.some((q) => q.id === p.id);
+          // 상태 문구 — 앱 liveActivityLine(index.html 라이브 액티비티 effect)과 같은 어휘.
+          // 바꾸면 양쪽을 같이. 라인업을 모르면(squad 없음) 단정하지 않고 비운다.
+          // '교체 아웃'을 먼저 본다 — 선발이든 교체 투입이든 나갔으면 교체 아웃(벤치 아님).
+          const line = !squad ? '' : !inSquad ? '미출전'
+            : subOff ? '교체 아웃' : starter ? '선발 출전' : subIn ? '교체 출전' : '벤치';
+          const onPitch = inSquad && !subOff && (starter || subIn);
+          return { p, g, a, line, inSquad, onPitch };
+        };
+        const stats = involved.map(statOf);
+        // 단일 선수 필드(playerLine 등 — players 를 모르는 옛 빌드가 쓴다)의 주인공.
+        // 앱과 같은 순서로 고른다: 기록(골·도움) 있는 선수 → 지금 뛰는 선수 → 뛰었던 선수 → 첫 선수.
+        // squad 는 선발+벤치다. 라인업을 받아왔는데 그 안에 없으면 이 경기에
+        // 나설 수 없는 선수라 고르지 않는다(전원 없으면 아래 '미출전' 종료).
+        // squad 가 null 이면 라인업을 아직 모르는 것이라 단정하지 않는다(involved 에서).
+        const pool = squad ? stats.filter((s) => s.inSquad) : stats;
+        const meS = pool.find((s) => s.g || s.a) || pool.find((s) => s.onPitch)
+          || pool.find((s) => s.line === '교체 아웃') || pool[0];
         const el = fx.fixture.status?.elapsed;
         if (squad && !squad.length) {
           // 라인업이 나왔는데 우리 선수가 없다 = 미출전. 앱이 '출전 예상' 단계에서
@@ -952,7 +968,7 @@ async function collectSoccer(events, liveStates, patch = null) {
               playerLine: '미출전', playerGoals: 0, playerAssists: 0,
             },
           });
-        } else if (me) liveStates.push({
+        } else if (meS) liveStates.push({
           matchId: String(fid),
           ended: isFinal,
           state: {
@@ -963,17 +979,19 @@ async function collectSoccer(events, liveStates, patch = null) {
             // 골·도움이 있으면 그게 핵심이라 위젯이 배지로 띄운다.
             // 경기가 끝났으면 상태 문구를 비운다 — '종료'인데 '출전 중'이라고
             // 적혀 나가는 문제가 있었다(제보). 배지는 이미 '종료'를 보여준다.
-            // 문구는 앱 liveActivityLine(index.html)과 같은 어휘 — 바꾸면 양쪽을 같이.
-            // 라인업을 모르면(squad 없음) 단정하지 않고 비운다.
-            playerLine: (g || a) ? ''
-              : isFinal ? ''
-              : !squad ? ''
-              : meSubOff ? '교체 아웃'
-              : meStarter ? '선발 출전'
-              : meSubIn ? '교체 출전'
-              : '벤치',
-            playerGoals: g,
-            playerAssists: a,
+            // 문구 어휘는 위 statOf 참고(앱 liveActivityLine 과 같다).
+            playerLine: (meS.g || meS.a) ? '' : isFinal ? '' : meS.line,
+            playerGoals: meS.g,
+            playerAssists: meS.a,
+            // 이 경기의 우리 선수 전원(코리안 더비). 서버는 기기마다 어느 선수로 띄웠는지
+            // 모르므로(live_activity_tokens 엔 token·match_id 뿐) 전원을 싣고, 위젯이
+            // 액티비티 주인공(attributes.playerName)을 이름으로 찾아 그린 뒤 나머지 중 실제로
+            // 뛴 선수를 곁들인다. 앱 sync 의 players(index.html 라이브 액티비티 effect)와 같은
+            // 모양 {name,line,goals,assists}·같은 어휘 — 바꾸면 양쪽(+위젯 PlayerState)을 같이.
+            // name 은 앱 kp.name 과 같은 한글 이름이어야 한다(PLAYERS 는 앱 ALL_PLAYERS 의 거울).
+            // 종료 뒤에도 문구를 그대로 싣는다 — 누가 뛰었는지 위젯이 알아야 해서다. 종료 시
+            // 문구를 숨기는 건 위젯(status == final)이 한다. 옛 빌드는 이 키를 무시한다.
+            players: stats.map((s) => ({ name: s.p.name, line: s.line, goals: s.g, assists: s.a })),
           },
         });
       }

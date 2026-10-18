@@ -205,14 +205,25 @@ final class LiveActivityBridge {
     }
 
     private static func state(from d: [String: Any]) -> JumoMatchAttributes.ContentState {
-        JumoMatchAttributes.ContentState(
+        // 이 경기의 우리 선수 전원(코리안 더비). 옛 웹 번들은 안 보내므로 없으면 nil —
+        // 위젯이 아래 단일 선수 필드로 그린다.
+        let players = (d["players"] as? [[String: Any]])?.map { p in
+            JumoMatchAttributes.PlayerState(
+                name: p["name"] as? String ?? "",
+                line: p["line"] as? String ?? "",
+                goals: p["goals"] as? Int ?? 0,
+                assists: p["assists"] as? Int ?? 0
+            )
+        }
+        return JumoMatchAttributes.ContentState(
             homeScore: d["homeScore"] as? Int ?? 0,
             awayScore: d["awayScore"] as? Int ?? 0,
             minute: d["minute"] as? String ?? "",
             status: d["status"] as? String ?? "live",
             playerLine: d["playerLine"] as? String ?? "",
             playerGoals: d["playerGoals"] as? Int ?? 0,
-            playerAssists: d["playerAssists"] as? Int ?? 0
+            playerAssists: d["playerAssists"] as? Int ?? 0,
+            players: players
         )
     }
 }

@@ -6,13 +6,46 @@ import ActivityKit
 // 브랜드 옐로 — 앱의 --acc 와 같은 값.
 private let acc = Color(red: 0.961, green: 0.769, blue: 0.0)
 
+// 이 카드의 주인공과 같은 경기의 다른 우리 선수(코리안 더비).
+// 주인공 = 앱이 액티비티를 시작할 때 고른 선수(attributes.playerName, 시작 후 못 바꾼다).
+// 상태는 players(앱 sync · 서버 푸시가 경기의 우리 선수 전원을 싣는다)에서 이름으로 찾고,
+// 없으면(옛 앱 번들·옛 서버라 players 가 없음) 예전 단일 선수 필드로 그린다.
+private struct MatchPlayers {
+    let main: JumoMatchAttributes.PlayerState
+    let others: [JumoMatchAttributes.PlayerState]
+
+    init(_ ctx: ActivityViewContext<JumoMatchAttributes>) {
+        let name = ctx.attributes.playerName
+        let list = ctx.state.players ?? []
+        main = list.first { $0.name == name }
+            ?? JumoMatchAttributes.PlayerState(name: name,
+                                               line: ctx.state.playerLine,
+                                               goals: ctx.state.playerGoals,
+                                               assists: ctx.state.playerAssists)
+        others = list.filter { $0.name != name && Self.played($0) }
+    }
+
+    // 실제로 그라운드를 밟은 선수만 곁들인다 — 벤치·미출전·모름('')은 뺀다.
+    // (선발 출전 / 교체 출전 / 교체 아웃, 야구 스탯 라인, 또는 골·도움이 있으면 출전)
+    static func played(_ p: JumoMatchAttributes.PlayerState) -> Bool {
+        if p.goals > 0 || p.assists > 0 { return true }
+        let l = p.line.trimmingCharacters(in: .whitespaces)
+        return !l.isEmpty && !l.contains("벤치") && !l.contains("미출전")
+    }
+}
+
 // 우리 선수 기록 한 줄. 골·도움이 있으면 강조하고, 없으면 출전 상태만 담담히.
+// 더비면 주인공 뒤에 '· 이름 상태'로 다른 선수를 잇는다.
 private struct PlayerLine: View {
     let name: String
     let number: Int
     let line: String
     let goals: Int
     let assists: Int
+    var others: [JumoMatchAttributes.PlayerState] = []
+    // 경기가 끝나면 상태 문구는 숨긴다('종료'인데 '선발 출전'이 남지 않게 — 서버가 예전부터
+    // 종료 시 playerLine 을 비우던 것과 같은 뜻). 골·도움 배지와 다른 선수 이름은 그대로.
+    var showLine = true
     var compact = false
 
     var body: some View {
@@ -29,12 +62,40 @@ private struct PlayerLine: View {
                     if assists > 0 { Text("🅰️\(assists)").font(.system(size: compact ? 10 : 12, weight: .heavy)) }
                 }
                 .foregroundStyle(acc)
-            } else if !line.isEmpty {
+            } else if showLine && !line.isEmpty {
                 Text(line)
                     .font(.system(size: compact ? 10 : 12))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            if !others.isEmpty {
+                // 다른 선수들은 한 Text 로 이어 붙여, 좁으면 통째로 줄이고(최대 70%)
+                // 그래도 넘치면 끝을 자른다. 우선순위를 낮춰 주인공보다 먼저 양보한다.
+                othersText
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .truncationMode(.tail)
+                    .layoutPriority(-1)
             }
         }
+    }
+
+    // '· 이재성 교체 출전 · 홍현석 ⚽1' — 이름은 주인공처럼 옐로 볼드, 골·도움은 배지 글자로.
+    private var othersText: Text {
+        let small = Font.system(size: compact ? 10 : 12)
+        let badge = Font.system(size: compact ? 10 : 12, weight: .heavy)
+        var t = Text("")
+        for (i, p) in others.enumerated() {
+            t = t + Text(i == 0 ? "· " : "  · ").font(small).foregroundColor(.secondary)
+            t = t + Text(p.name).font(.system(size: compact ? 11 : 13, weight: .bold)).foregroundColor(acc)
+            if p.goals > 0 || p.assists > 0 {
+                if p.goals > 0 { t = t + Text(" ⚽\(p.goals)").font(badge).foregroundColor(acc) }
+                if p.assists > 0 { t = t + Text(" 🅰️\(p.assists)").font(badge).foregroundColor(acc) }
+            } else if showLine && !p.line.isEmpty {
+                t = t + Text(" \(p.line)").font(small).foregroundColor(.secondary)
+            }
+        }
+        return t
     }
 }
 
@@ -70,23 +131,31 @@ private struct LockScreenView: View {
     let ctx: ActivityViewContext<JumoMatchAttributes>
 
     var body: some View {
+        let mp = MatchPlayers(ctx)
         VStack(spacing: 12) {
             // 윗줄: 대회 · 우리 선수 기록 ······ 진행 시간
             HStack(spacing: 8) {
-                Text(ctx.attributes.competition)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1).truncationMode(.tail)
-                    .layoutPriority(0)   // 대회명이 길면 이쪽이 먼저 줄어든다
+                // 더비라 선수가 둘 이상 서면 이름이 잘리지 않게 대회명을 뺀다(한 줄 유지).
+                if mp.others.isEmpty {
+                    Text(ctx.attributes.competition)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1).truncationMode(.tail)
+                        .layoutPriority(0)   // 대회명이 길면 이쪽이 먼저 줄어든다
+                }
                 PlayerLine(name: ctx.attributes.playerName,
                            number: ctx.attributes.playerNumber,
-                           line: ctx.state.playerLine,
-                           goals: ctx.state.playerGoals,
-                           assists: ctx.state.playerAssists,
+                           line: mp.main.line,
+                           goals: mp.main.goals,
+                           assists: mp.main.assists,
+                           others: mp.others,
+                           showLine: ctx.state.status != "final",
                            compact: true)
                     .layoutPriority(2)
                 Spacer(minLength: 4)
+                // 진행 시간은 절대 줄이지 않는다 — 선수 줄이 길면 그쪽이 줄어든다.
                 StatusPill(status: ctx.state.status, minute: ctx.state.minute)
+                    .fixedSize()
             }
 
             // 가운뎃줄: 팀명 [배지]   점수 : 점수   [배지] 팀명 — 엠블럼을 점수 옆에 붙여 좌우 대칭으로 가운데 정렬
@@ -183,11 +252,14 @@ struct JumoMatchActivity: Widget {
                     StatusPill(status: ctx.state.status, minute: ctx.state.minute)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
+                    let mp = MatchPlayers(ctx)
                     PlayerLine(name: ctx.attributes.playerName,
                                number: ctx.attributes.playerNumber,
-                               line: ctx.state.playerLine,
-                               goals: ctx.state.playerGoals,
-                               assists: ctx.state.playerAssists)
+                               line: mp.main.line,
+                               goals: mp.main.goals,
+                               assists: mp.main.assists,
+                               others: mp.others,
+                               showLine: ctx.state.status != "final")
                 }
             } compactLeading: {
                 // 점수만 있으면 어느 경기인지 알 수가 없다 — 엠블럼을 양쪽에 붙여
@@ -208,10 +280,11 @@ struct JumoMatchActivity: Widget {
                               logoFile: ctx.attributes.awayLogoFile, size: 17)
                 }
             } minimal: {
-                // 최소 표시는 원 하나 크기다. 우리 선수가 득점했으면 그게 최우선,
-                // 아니면 점수를 붙여 쓴다.
-                if ctx.state.playerGoals > 0 {
-                    Text("⚽\(ctx.state.playerGoals)")
+                // 최소 표시는 원 하나 크기다. 우리 선수(이 카드의 주인공)가 득점했으면
+                // 그게 최우선, 아니면 점수를 붙여 쓴다.
+                let mainGoals = MatchPlayers(ctx).main.goals
+                if mainGoals > 0 {
+                    Text("⚽\(mainGoals)")
                         .font(.system(size: 11, weight: .heavy))
                 } else {
                     Text("\(ctx.state.homeScore):\(ctx.state.awayScore)")
