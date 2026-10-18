@@ -909,6 +909,14 @@ async function collectSoccer(events, liveStates, patch = null) {
           if (ev.player?.id === me?.afPlayerId && ev.detail !== 'Own Goal') g++;
           if (ev.assist?.id === me?.afPlayerId) a++;
         }
+        // 교체 이벤트: player = 나가는 선수, assist = 들어오는 선수(AF 규칙, 앱과 동일).
+        let meSubIn = false, meSubOff = false;
+        for (const ev of (evd?.response || [])) {
+          if (ev.type !== 'subst') continue;
+          if (ev.assist?.id === me?.afPlayerId) meSubIn = true;
+          if (ev.player?.id === me?.afPlayerId) meSubOff = true;
+        }
+        const meStarter = !!starters && starters.some((p) => p.id === me?.id);
         const el = fx.fixture.status?.elapsed;
         if (squad && !squad.length) {
           // 라인업이 나왔는데 우리 선수가 없다 = 미출전. 앱이 '출전 예상' 단계에서
@@ -933,10 +941,15 @@ async function collectSoccer(events, liveStates, patch = null) {
             // 골·도움이 있으면 그게 핵심이라 위젯이 배지로 띄운다.
             // 경기가 끝났으면 상태 문구를 비운다 — '종료'인데 '출전 중'이라고
             // 적혀 나가는 문제가 있었다(제보). 배지는 이미 '종료'를 보여준다.
+            // 문구는 앱 liveActivityLine(index.html)과 같은 어휘 — 바꾸면 양쪽을 같이.
+            // 라인업을 모르면(squad 없음) 단정하지 않고 비운다.
             playerLine: (g || a) ? ''
               : isFinal ? ''
-              : (starters && starters.some((p) => p.id === me.id)) ? '선발 출전'
-              : '출전 중',
+              : !squad ? ''
+              : meSubOff ? '교체 아웃'
+              : meStarter ? '선발 출전'
+              : meSubIn ? '교체 출전'
+              : '벤치',
             playerGoals: g,
             playerAssists: a,
           },
