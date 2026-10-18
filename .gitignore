@@ -16,3 +16,28 @@ ios/App/App.xcworkspace/xcuserdata/
 ios/App/App.xcodeproj/xcuserdata/
 ios/App/App.xcodeproj/project.xcworkspace/xcuserdata/
 ota/
+
+# --- deps / build ---
+dist/
+DerivedData/
+Pods/
+.expo/
+*.ipa
+*.xcarchive/
+xcuserdata/
+# --- secrets ---
+.env
+.env.*
+!.env.example
+*.p8
+*.p12
+*.pem
+*.key
+*.mobileprovision
+*.jks
+*.keystore
+Secrets.xcconfig
+credentials/
+credentials.json
+# --- local tool state ---
+.vercel/
