@@ -8974,7 +8974,21 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
   const touchStartY = React.useRef(0);
   const scrollRef = React.useRef(null);
   const PULL_THRESHOLD = 64;
-  React.useEffect(() => { if (scrollTopKey > 0) { SCROLL_MEM.news = 0; scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } }, [scrollTopKey]);
+  // 하단 탭바 '뉴스'를 다시 누르면 맨 위로. 이미 맨 위면 다음 하위 탭(해외축구→국내축구→…)으로
+  // 넘기고, 마지막 탭에선 '전체'로 돌아간다(제보). goCategory 는 아래에 정의되지만 effect 는
+  // 렌더가 끝난 뒤 돌므로 그때는 이미 있다.
+  React.useEffect(() => {
+    if (scrollTopKey <= 0) return;
+    const sc = scrollRef.current;
+    if (sc && sc.scrollTop <= 4) {
+      const cats = visibleCats();
+      const next = cats.length > 1 ? cats[(cats.indexOf(category) + 1) % cats.length] : null;
+      if (next && next !== category) goCategory(next);
+      return;
+    }
+    SCROLL_MEM.news = 0;
+    sc?.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [scrollTopKey]);
   useScrollMemory('news', scrollRef);
 
   // ── 카테고리 페이저(좌우 스와이프) ──────────────────────────────────
