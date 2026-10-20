@@ -7666,6 +7666,18 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
   const progUntilRef = React.useRef(0);
   const highlightRowRef = React.useRef(null);
   const centeredRef = React.useRef(false);
+  // 강조 경기 행으로 보낼 스크롤 위치. 그 날의 첫 경기면 날짜 머리글을 정확히 맨 위(0)에
+  // 맞춘다 — 머리글 높이를 STICKY_H(34)로 잡고 여백 8 까지 빼면 실제 머리글(줄높이에
+  // 따라 31px 남짓)이 몇 px 아래에 멈춰, 그 위에 붙어 있던 이전 날짜 머리글('오늘')
+  // 글자 윗부분이 비쳤다(제보). 높이도 상수 대신 실제 머리글에서 잰다.
+  const highlightScrollTop = (cont, row) => {
+    const rowY = cont.scrollTop + row.getBoundingClientRect().top - cont.getBoundingClientRect().top;
+    const prev = row.previousElementSibling;
+    const ownHeader = prev && Object.values(headerRefs.current).includes(prev) ? prev : null;
+    const anyHeader = ownHeader || Object.values(headerRefs.current).find(Boolean);
+    const h = anyHeader ? anyHeader.getBoundingClientRect().height : STICKY_H;
+    return Math.max(0, ownHeader ? rowY - h : rowY - h - 8);
+  };
   React.useEffect(() => { if (!isActive) centeredRef.current = false; }, [isActive]);
   React.useEffect(() => {
     if (!isActive || centeredRef.current) return;
@@ -7676,9 +7688,8 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
     const t = setTimeout(() => {
       const e2 = highlightRowRef.current, c2 = scrollRef.current;
       if (!e2 || !c2) return;
-      const y = c2.scrollTop + e2.getBoundingClientRect().top - c2.getBoundingClientRect().top - STICKY_H - 8;
       progUntilRef.current = Date.now() + 800;
-      c2.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+      c2.scrollTo({ top: highlightScrollTop(c2, e2), behavior: 'smooth' });
       if (highlightMatch?.fullDate) setSelDate(new Date(highlightMatch.fullDate).toDateString());
       setTimeout(() => { const c3 = scrollRef.current; if (c3) onTabBarScroll?.(c3.scrollTop, { reset: true }); }, 850);
     }, 120);
@@ -7696,9 +7707,8 @@ function ScheduleScreen({ onMatch, liveApiMatches = [], isLoading = false, onRef
     const cont = scrollRef.current, el = highlightRowRef.current;
     if (!cont) return;
     if (!el) { cont.scrollTo({ top: 0, behavior: 'smooth' }); return; }
-    const y = cont.scrollTop + el.getBoundingClientRect().top - cont.getBoundingClientRect().top - STICKY_H - 8;
     progUntilRef.current = Date.now() + 800;
-    cont.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+    cont.scrollTo({ top: highlightScrollTop(cont, el), behavior: 'smooth' });
     if (highlightMatch?.fullDate) setSelDate(new Date(highlightMatch.fullDate).toDateString());
     setTimeout(() => { const c3 = scrollRef.current; if (c3) onTabBarScroll?.(c3.scrollTop, { reset: true }); }, 850);
   }, [scrollTopKey]);
