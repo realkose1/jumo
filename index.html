@@ -9340,32 +9340,52 @@ function NewsScreen({ sportFeeds, scrollTopKey = 0, followedNames, onTabBarScrol
       (!domesticTag || !PLAYER_CONTEXT[name] || PLAYER_CONTEXT[name].some(kw => haystack.includes(kw)));
     // ── 축구: 해외/국내 판정(제보: 해외 소식이 국내에, 국내 소식이 해외에 섞임) ──
     // 1) 대표팀: 제목에 대표팀 표지가 있거나, 본문 어디든 '모레노'(A대표 임시 감독)면 국내축구.
-    //    '국가대표 출신'·'한국 축구의 미래' 같은 수식어는 대표팀 기사가 아니다.
+    //    '국가대표 출신'·'한국 축구의 미래' 같은 수식어는 대표팀 기사가 아니다. 선수 이름 앞에 붙는
+    //    '韓 국가대표'·'韓 축구 에이스'도 수식어라 지우고 본다('韓 국가대표' 황희찬, 쾰른전… — 제보).
     const title = article.title || '';
+    const titleN = title.replace(/(韓|한국|대한민국) ?국가대표(?!팀)|(韓|한국|대한민국) 축구 ?(에이스|간판|보물)/g, '');
     const NATIONAL_TITLE_RE = /대표팀|A매(치)?|모레노호|홍명보호|이민성호|김은중호|올림픽팀|올림픽 대표|평가전|친선경기|월드컵 (아시아 )?예선|태극전사|국가대표(?! 출신)(?!급)/;
-    const soccerish = SOCCER_PLAYERS.some(n => haystack.includes(n)) || /축구|K리그|코리아컵|A매치|대표팀|모레노/.test(haystack) || ['김민수','김지수','박승수','양민혁','이태석','이한범','설영우','이재성','홍현석','정우영','카스트로프','김예건'].some(n => haystack.includes(n));
+    // 추적 축구 선수 전원 — 선수 목록(ALL_PLAYERS)에서 뽑는다(선수를 더하면 저절로 따라온다).
+    const SOCCER_ALL = ALL_PLAYERS.filter(p => p.sport === '축구').map(p => p.name);
+    const soccerish = SOCCER_ALL.some(n => haystack.includes(n)) || /축구|K리그|코리아컵|A매치|대표팀|모레노/.test(haystack);
     // 모레노: 제목에 나오거나 본문에 '모레노호/모레노 감독'일 때만 — 소속팀 기사에 지나가듯
     // 나오는 경우(이강인 아틀레티코 경기 기사 끝의 한 줄)는 해외축구에 둔다(제보).
     const morenoHo = (/모레노/.test(title) || /모레노호|모레노 감독/.test(haystack))
       && !/제라르 모레노|알베르토 모레노|헤라르드 모레노/.test(haystack);
     // 대표팀 표지는 '우리' 대표팀일 때만 — 호날두·포르투갈 대표팀 기사가 국내축구로 가던 문제.
     const KOREA_CTX_RE = /한국|대한민국|韓|태극|모레노|홍명보|이민성|김은중|국대/;
-    const SOCCER_ALL = [...SOCCER_PLAYERS, '김민수','김지수','박승수','양민혁','이태석','이한범','설영우','이재성','홍현석','정우영','카스트로프','김예건'];
     const koreaTitle = KOREA_CTX_RE.test(title) || SOCCER_ALL.some(n => title.includes(n));
     // '韓 축구 날벼락! 김민재 부상…우즈벡전' 처럼 대표팀 단어 없이도 대표팀 기사인 제목.
     const KOREA_FOOTBALL_RE = /韓 축구|한국 축구|대한민국 축구|홍명보호|모레노호|우즈벡전|우즈베키스탄전|에콰도르전|우루과이전|베네수엘라전/;
-    const clubInTitle = /프리미어리그|EPL|분데스리가|라리가|세리에|리그앙|MLS|챔피언스리그|토트넘|바이에른|아틀레티코|포르투(?!갈)|셀틱|마인츠|샬케|LAFC|베식타스|브뤼헤|스완지|스토크|버밍엄|뉴캐슬/.test(title);
-    // 제목에 소속 구단·해외 리그가 나오면('대표팀 하차' 백승호, 버밍엄 감독…) 소속팀 기사로 본다.
-    const nationalTitle = !clubInTitle && ((NATIONAL_TITLE_RE.test(title) && koreaTitle) || KOREA_FOOTBALL_RE.test(title));
-    if (soccerish && (morenoHo || (nationalTitle && !/야구|WBC|MLB/.test(title)))) {
+    // 해외 리그·대회·구단(우리 선수 소속 포함) — 아래 소속팀 기사 판정과 2) 점수 비교가 같이 쓴다.
+    const CLUB_SRC = '프리미어리그|EPL|분데스리가|라리가|세리에|리그앙|MLS|챔피언스리그|UCL|유로파|UEL|컨퍼런스리그|콘퍼런스리그|UECL|에레디비시|토트넘|바이에른|뮌헨|아틀레티코|포르투(?!갈)|셀틱|레인저스|마인츠|샬케|살케|브렌트포드|스완지|스토크|버밍엄|베식타스|베식타시|브뤼헤|미트윌란|아우크스부르크|LAFC|뉴캐슬|베스테를로|오스트리아 빈|즈베즈다|글라트바흐|우니온';
+    const count = (re, text) => ((text || '').match(re) || []).length;
+    // 소속팀 기사면 대표팀 말이 있어도 대표팀 기사가 아니다 — '대표팀 조기 하차' 조규성, '모레노호 조기 이탈'
+    // 처럼 대표팀 얘기가 수식어로 붙은 소속팀 경기 기사가 국내축구로 가던 문제(제보, 실측 국내축구 30건 중 24건).
+    //  · 제목에 해외 구단·리그가 나오면('대표팀 하차' 백승호, 버밍엄 감독…) 소속팀 기사.
+    //  · 요약에서 해외 구단·리그(없으면 제목 속 우리 선수의 소속팀 별칭 PLAYER_CONTEXT)가 대표팀 말
+    //    (대표팀·모레노호·A매치·소집 …)보다 적지 않게 나오면 소속팀 기사 — '아틀레티코에선 펄펄,
+    //    모레노호에선…' 처럼 소속팀을 견주기만 하는 대표팀 기사는 대표팀 말이 더 많다.
+    //    괄호 속 소속 표기('엄지성(스완지시티)')는 대표팀 기사에도 붙으므로 빼고 센다.
+    //  · 단 제목에 대표팀 일정(소집·발탁·훈련·평가전·○○전)이 있으면 대표팀 기사로 둔다.
+    const descNoAff = (article.description || '').replace(/\([^)]*(\)|$)/g, '');
+    const ownClub = SOCCER_ALL.filter(n => title.includes(n))
+      .flatMap(n => (PLAYER_CONTEXT[n] || []).filter(kw => !DOMESTIC_MARKER.soccer.test(kw)));
+    const COUNTRY_SRC = [...new Set(Object.values(COUNTRY_KO)), '우즈벡'].join('|');
+    const NATIONAL_EVENT_RE = new RegExp(`소집(?! ?해제)|발탁|훈련|평가전|친선경기|월드컵 (아시아 )?예선|(${COUNTRY_SRC})전`);
+    const NATIONAL_DESC_RE = new RegExp(`대표팀|모레노호|모레노 감독|A매치(?! ?휴식기)|소집(?! ?해제)|평가전|태극전사|(${COUNTRY_SRC})전`, 'g');
+    const clubN = count(new RegExp(CLUB_SRC, 'g'), descNoAff) || (ownClub.some(kw => descNoAff.includes(kw)) ? 1 : 0);
+    const clubStory = new RegExp(CLUB_SRC).test(title)
+      || (clubN > 0 && clubN >= count(NATIONAL_DESC_RE, descNoAff) && !NATIONAL_EVENT_RE.test(title));
+    const nationalTitle = (NATIONAL_TITLE_RE.test(titleN) && koreaTitle) || KOREA_FOOTBALL_RE.test(titleN);
+    if (soccerish && !clubStory && (morenoHo || (nationalTitle && !/야구|WBC|MLB/.test(title)))) {
       return { category:'국내축구', sportType:'soccer', national:true };
     }
     // 2) 그 밖의 축구 기사는 해외·국내 표지를 점수로 비교한다(제목 3점, 본문 1점).
     //    해외 표지: 해외 리그·대회 이름, 우리 선수 소속 구단, 추적 선수 이름(+2).
     //    국내 표지: K리그·코리아컵·K리그 구단명.
     if (soccerish) {
-      const OVERSEAS_RE = /프리미어리그|EPL|분데스리가|라리가|세리에|리그앙|MLS|챔피언스리그|UCL|유로파|컨퍼런스리그|에레디비시|챔피언십|스코틀랜드|토트넘|바이에른|뮌헨|아틀레티코|포르투|셀틱|레인저스|마인츠|샬케|브렌트포드|스완지|스토크|버밍엄|베식타스|브뤼헤|미트윌란|아우크스부르크|LAFC|뉴캐슬|베스테를로|오스트리아 빈|즈베즈다|글라트바흐|우니온/g;
-      const count = (re, text) => ((text || '').match(re) || []).length;
+      const OVERSEAS_RE = new RegExp(`${CLUB_SRC}|포르투갈|챔피언십|스코틀랜드`, 'g');
       const desc = article.description || '';
       const domRe = new RegExp(DOMESTIC_MARKER.soccer.source, 'g');
       const players = SOCCER_PLAYERS.filter(playerHit).length;
