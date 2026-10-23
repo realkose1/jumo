@@ -10893,7 +10893,7 @@ function App() {
   // 마지막 패치 요청 결과가 쓸 만했는가(갱신 바 판단) · 마지막으로 얹은 패치의 at(ms).
   const livePatchFreshRef = React.useRef(!!window.__livePatch);
   const livePatchAppliedRef = React.useRef(0);
-  const [liveMatches, setLiveMatches] = React.useState(() => {
+  const [liveMatches, setLiveMatchesRaw] = React.useState(() => {
     const boot = bootCacheRef.current;
     if (!boot) return [];
     const p = window.__livePatch;
@@ -10901,6 +10901,17 @@ function App() {
     livePatchAppliedRef.current = p.atMs;
     return applyLivePatch(boot.matches, p, { since: boot.at });
   });
+  // 실행 직후 한 번만 바뀌게(제보: "로딩 후 정보가 한 번 바뀌고 또 바뀐다").
+  // 첫 화면이 뜬 뒤 실행 직후의 갱신들(엣지 패치 → 빠른 갱신 기본 목록 → 완성본 →
+  // 전체 범위 기본 목록 → 완성본 → 시즌 스탯·부상 보강)이 도착할 때마다 그리면 화면이
+  // 여러 번 튄다. 그 사이의 변경은 화면에 내보내지 않고 모아 두었다가, 첫 전체 범위
+  // 갱신이 끝나면(또는 상한 15초·당겨서 새로고침) 한 번에 반영한다. 이후 폴링은 그대로.
+  const bootHoldRef = React.useRef({ active: false, done: false, value: null, timer: null, syncPending: false });
+  const setLiveMatches = React.useCallback((u) => {
+    const h = bootHoldRef.current;
+    if (h.active) { h.value = typeof u === 'function' ? u(h.value) : u; return; }
+    setLiveMatchesRaw(u);
+  }, []);
   const [apiLoading, setApiLoading] = React.useState(true); // Start with true for initial load
   // 캐시로 이미 내용을 그렸다면 '첫 로드'가 아니다 → 스켈레톤은 캐시가 아예 없을 때만.
   const [isInitialLoad, setIsInitialLoad] = React.useState(!bootHasCache);
@@ -10935,6 +10946,29 @@ function App() {
   // 마지막으로 경기 목록을 화면에 반영한 시각. 앱 복귀 시 데이터가 얼마나 낡았는지
   // 판단해 스켈레톤을 다시 띄울지 결정한다.
   const lastPublishAtRef = React.useRef(0);
+  // 모아 둔 변경을 한 번에 반영하고 보류를 끝낸다(한 번만 돈다).
+  const releaseBootHold = React.useCallback(() => {
+    const h = bootHoldRef.current;
+    if (h.done) return;
+    h.done = true;
+    clearTimeout(h.timer);
+    if (!h.active) return;
+    h.active = false;
+    const v = h.value; h.value = null;
+    setLiveMatchesRaw(prev => (v && v !== prev) ? v : prev);
+    if (h.syncPending && !syncWantedRef.current) setSyncing(false);
+  }, []);
+  // 첫 화면에 실제 내용(지난 목록 캐시, 또는 콜드 스타트의 첫 갱신 결과)이 뜨면 보류를 켠다.
+  // 패치만으로 채운 일부 목록일 때는 켜지 않는다(라이브 경기 몇 개만 오래 남지 않게).
+  React.useEffect(() => {
+    const h = bootHoldRef.current;
+    if (h.done || h.active) return;
+    if (!(liveMatches && liveMatches.length)) return;
+    if (!bootHasCache && !lastPublishAtRef.current) return;
+    h.active = true;
+    h.value = liveMatches;
+    h.timer = setTimeout(releaseBootHold, 15000);
+  }, [liveMatches, releaseBootHold]);
   // 서버 라이브 패치를 지금 목록에 얹는다. 목록이 패치보다 새것이면(방금 전체 갱신이
   // 반영됨) applyLivePatch 가 그 부분을 건너뛴다. 신선한 패치를 얹었으면 갱신 바도 내린다.
   // 목록에 없는 패치 경기는 transformApiFootballFixture(축구)·buildMlbMatchFromPatch(MLB)로
@@ -12150,13 +12184,17 @@ function App() {
         setApiLoading(false);
         setIsInitialLoad(false);
         lastPublishAtRef.current = Date.now();   // 복귀 시 낡음 판단 기준
+        // 첫 전체 범위 갱신이 끝났다 → 실행 직후 모아 둔 변경을 한 번에 반영한다.
+        if (!quick) releaseBootHold();
         notifyListReady();   // 실패로 끝나도 갱신 표시는 내린다
       }
-  }, [fallbackToStaleCache]);
+  }, [fallbackToStaleCache, releaseBootHold]);
 
   // 당겨서 새로고침용 — 목록이 반영되는 즉시 스피너를 내린다(상세는 뒤에서 계속).
+  // 직접 새로고침했으면 실행 직후 보류를 풀어 바로 반영한다.
   const refreshFromPull = React.useCallback(
-    () => Promise.race([waitListReady(), fetchLiveMatches()]), [fetchLiveMatches]);
+    () => { releaseBootHold(); return Promise.race([waitListReady(), fetchLiveMatches()]); },
+    [fetchLiveMatches, releaseBootHold]);
 
   // Fetch each Korean soccer player's 2025-26 season totals from API-Football
   // once at app load. Updates ALL_PLAYERS baseline + per-competition breakdown
@@ -12610,7 +12648,11 @@ function App() {
         settled = true;
         if (announce) setRefreshing(false);
         // 실패·시간 초과(20초)로 끝나도 내린다. 도는 사이 또 복귀했으면 다음 회차가 내린다.
-        if (sync && !syncWantedRef.current) setSyncing(false);
+        // 실행 직후 보류 중이면 화면이 실제로 바뀌는 순간(보류 해제)까지 스피너를 둔다.
+        if (sync && !syncWantedRef.current) {
+          if (bootHoldRef.current.active) bootHoldRef.current.syncPending = true;
+          else setSyncing(false);
+        }
       }
       if (cancelled) return;
       const wasFirst = firstRun;
