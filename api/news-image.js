@@ -45,11 +45,17 @@ module.exports = async (req, res) => {
   const target = req.query.url;
   if (!target) { res.status(400).json({ image: null }); return; }
 
+  // 기사 사진 주소는 거의 안 바뀌고 사용자마다 같은 기사를 본다 — 엣지에 캐시해 두 번째부터는
+  // 원문을 다시 열지 않는다(원문 조회에 1초 안팎). 못 찾은 결과는 짧게만 둔다.
   try {
     const body = await fetchFollowRedirects(target);
     const image = extractOgImage(body);
+    res.setHeader('Cache-Control', image
+      ? 'public, s-maxage=604800, stale-while-revalidate=86400'
+      : 'public, s-maxage=3600');
     res.status(200).json({ image: image || null });
   } catch (e) {
+    res.setHeader('Cache-Control', 'public, s-maxage=300');
     res.status(200).json({ image: null });
   }
 };

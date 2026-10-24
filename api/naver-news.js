@@ -43,5 +43,8 @@ module.exports = async (req, res) => {
     r.end();
   });
 
+  // 같은 검색어를 여러 사용자가 연달아 부른다 — 성공한 응답만 엣지에 1분 캐시(뉴스 탭 첫 조회가
+  // 검색어 25개라 캐시가 맞으면 목록이 훨씬 빨리 뜬다). 429 등 실패는 캐시하지 않는다.
+  if (data.status === 200) res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
   res.status(data.status).setHeader('Content-Type', 'application/json').end(data.body);
 };
