@@ -1808,10 +1808,11 @@ function lpLineupEvent(u, live, fin) {
 // 상세가 이미 판정한 값(선발 출전·벤치·확인 불가…)은 절대 건드리지 않는다 — 패치는 그보다
 // 늘 거칠다(교체 직후 2~4분 늦음). 바뀐 게 없으면 같은 객체를 돌려준다.
 function lpLineupKp(kp, f, live, fin) {
-  if (!kp || kp.isTeam || !f || !f.u || (kp.event !== '출전 예상' && kp.event !== CHECKING_EVENT)) return kp;
+  // 확인 전 '확인 불가'(상세 전 기본값·지난 실행 값)도 경기 전 값과 같이 취급한다.
+  if (!kp || kp.isTeam || !f || !f.u || (kp.event !== '출전 예상' && kp.event !== CHECKING_EVENT && !isUnverifiedUnknown(kp))) return kp;
   const afId = kp.apiFootballId ?? ALL_PLAYERS.find(p => p.name === kp.name)?.apiFootballId;
   const lu = afId != null ? lpLineupEvent(f.u[afId], live, fin) : null;
-  return lu ? { ...kp, ...lu } : kp;
+  return lu ? { ...kp, ...lu, unverified: false } : kp;
 }
 
 function lpSoccer(m, f, now) {
@@ -1989,7 +1990,7 @@ function buildMlbMatchFromPatch(gamePk, g) {
   };
   const homeK = side(g.hn, hc, g.ph), awayK = side(g.an, ac, g.pa);
   const event = live ? '출전 중' : fin ? '확인 불가' : '출전 예상';
-  const kps = [...homeK, ...awayK].map(kp => ({ ...kp, event }));
+  const kps = [...homeK, ...awayK].map(kp => ({ ...kp, event, unverified: fin || undefined }));
   if (!kps.length) return null;
   const ko = new Date(Date.parse(g.ko)).toISOString();
   return {
@@ -2219,6 +2220,60 @@ function compactBadgeEvent(ev) {
 const matchHasStarted = (m) => !!m && (m.live || m.time === 'LIVE' || isFinalStatus(m.status) || !!m.isTimedOut);
 // 시작한 경기의 '출전 예상'을 대신하는 정직한 문구 — 출전 여부를 아직 모른다.
 const CHECKING_EVENT = '출전 여부 확인 중';
+// '확인 불가'에도 두 종류가 있다. 상세(라인업·이벤트)를 받아 보고도 명단이 없어 모르는 것은
+// 진짜 '확인 불가'. 아직 상세를 못 받은 기본값이나 지난 실행에서 들고 온 값은 kp.unverified 로
+// 표시해 두고 '출전 여부 확인 중'으로 보여 준다(제보: 실행 직후 '확인 불가'로 떴다가 바뀐다).
+const isUnverifiedUnknown = (kp) => !!kp && kp.event === '확인 불가' && !!kp.unverified;
+// 화면에 적을 출전 문구 — 시작한 경기의 '출전 예상'·확인 전 '확인 불가'는 '출전 여부 확인 중'.
+const shownEvent = (kp, m) => {
+  if (!kp) return '';
+  if (isUnverifiedUnknown(kp)) return CHECKING_EVENT;
+  if (kp.event === '출전 예상' && matchHasStarted(m)) return CHECKING_EVENT;
+  return kp.event || '';
+};
+// 실행 직후 들고 온 목록(로컬 캐시·공유 홈 목록)의 '확인 불가'는 지금 기준으로 확인한 값이
+// 아니다 — 전체 갱신이 다시 판정할 때까지 확인 전으로 표시한다.
+function markCachedUnknowns(matches) {
+  if (!Array.isArray(matches)) return matches;
+  const mark = (kp) => (kp && !kp.isTeam && kp.event === '확인 불가' && !kp.unverified) ? { ...kp, unverified: true } : kp;
+  return matches.map(m => {
+    if (!m) return m;
+    const kps = m.koreanPlayers ? m.koreanPlayers.map(mark) : m.koreanPlayers;
+    const kp0 = mark(m.koreanPlayer);
+    if (kp0 === m.koreanPlayer && (!kps || kps.every((k, i) => k === m.koreanPlayers[i]))) return m;
+    return { ...m, koreanPlayer: kp0, koreanPlayers: kps };
+  });
+}
+// 이번 갱신에서 상세를 못 받아 확인 전('확인 불가' 기본값)인 선수는, 직전 목록이 이미 판정해 둔
+// 값(풀타임·N분 출전·미출전…)이 있으면 그걸 지킨다 — 끝난 경기의 판정은 바뀌지 않는다.
+// 예전엔 상세 예산(회차당 8경기)에 밀린 경기가 멀쩡한 기록을 '확인 불가'로 덮었다.
+const VERDICT_PENDING = new Set(['출전 예상', CHECKING_EVENT, '확인 불가']);
+function keepVerified(prevList, list) {
+  if (!Array.isArray(prevList) || !prevList.length || !Array.isArray(list)) return list;
+  const prevById = new Map(prevList.map(m => [m && m.id, m]));
+  let changed = false;
+  const out = list.map(m => {
+    if (!m) return m;
+    const kps = (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean);
+    if (!kps.some(isUnverifiedUnknown)) return m;
+    const old = prevById.get(m.id);
+    if (!old || !isFinalStatus(old.status) || !isFinalStatus(m.status)) return m;
+    const oldKps = (old.koreanPlayers || [old.koreanPlayer]).filter(Boolean);
+    const pick = (kp) => {
+      if (!isUnverifiedUnknown(kp)) return kp;
+      const o = oldKps.find(x => x.name === kp.name);
+      return (o && o.event && !VERDICT_PENDING.has(o.event)) ? o : kp;
+    };
+    const newKps = m.koreanPlayers ? m.koreanPlayers.map(pick) : m.koreanPlayers;
+    const kp0 = pick(m.koreanPlayer);
+    if (kp0 === m.koreanPlayer && (!newKps || newKps.every((k, i) => k === m.koreanPlayers[i]))) return m;
+    changed = true;
+    const n = { ...m, koreanPlayer: kp0, koreanPlayers: newKps };
+    if ((!n.events || !n.events.length) && old.events && old.events.length) n.events = old.events;
+    return n;
+  });
+  return changed ? out : list;
+}
 // matchAt: 그 경기 킥오프(ISO). 차출 기간은 '오늘'이 아니라 경기 날짜로 판정한다 —
 // 소집이 10/7 에 끝나는데 10/10 경기에 'A대표팀 소집'이 뜨던 문제(제보 확인 중 발견).
 // match: 그 경기 객체(선택). 이미 시작한 경기면 '선발 예상 N%'(경기 전 예측)를 쓰지 않고
@@ -2228,6 +2283,7 @@ function formatExpectedEvent(kp, allMatches, matchAt, match = null) {
   // 대표팀 엔트리는 팀 전체를 가리키는 합성 항목이다 — 선발 확률·차출 라벨 같은
   // 개인 판정을 붙이지 않고 경기 상태 라벨(경기 예정/진행 중/경기 종료)을 그대로 쓴다.
   if (kp.isTeam) return kp.event || '';
+  if (isUnverifiedUnknown(kp)) return CHECKING_EVENT;
   if (kp.event === '출전 예상') {
     // 대표팀 차출 등 수동 결장 중이면 '선발 예상 N%' 는 거짓말이다 — 사유를 적는다.
     const man = manualAvailabilityFor(kp.name, matchAt ? Date.parse(matchAt) : Date.now());
@@ -3520,6 +3576,11 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
                     ) : (
                       <span style={{ fontSize:13, color:'var(--text3)', fontWeight:600 }}>출전 완료</span>
                     )
+                  ) : isUnverifiedUnknown(kp) ? (
+                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                      <span style={{ fontSize:13, fontWeight:700, color:'var(--text4)' }}>{CHECKING_EVENT}</span>
+                      <SyncSpinner size={10} delay={0}/>
+                    </div>
                   ) : isUnknown ? (
                     <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                       <span style={{ fontSize:13, fontWeight:700, color:'var(--text4)' }}>확인 불가</span>
@@ -3670,7 +3731,7 @@ function LiveCarouselCard({ m, onMatch, tweaks }) {
         {/* Korean player (대표팀 엔트리는 등번호 없이 이름만) */}
         <div style={{ background:'rgba(230,48,48,0.13)', borderRadius:8, padding:'7px 10px', display:'flex', flexDirection:'column', gap:2 }}>
           <span style={{ fontSize:12, fontWeight:700, color:'var(--acc)' }}>🇰🇷 {m.koreanPlayer.name} {!m.koreanPlayer.isTeam && <span style={{ ...NUM, color:'var(--text4)', fontWeight:400 }}>#{m.koreanPlayer.number}</span>}</span>
-          <span style={{ fontSize:11, color:'var(--text2)' }}>{(m.koreanPlayer.event === '출전 예상' && matchHasStarted(m)) ? CHECKING_EVENT : m.koreanPlayer.event}</span>
+          <span style={{ fontSize:11, color:'var(--text2)' }}>{shownEvent(m.koreanPlayer, m)}</span>
         </div>
         {/* last event */}
         {lastEvent && (
@@ -4213,7 +4274,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
       if (matchAssists > 0) parts.push(`${matchAssists}도움`);
       main = parts.length > 0 ? `${name} ${parts.join(' ')}`
         : `${name} ${mins >= 90 ? '풀타임 활약' : mins > 0 ? `${mins}분 출전`
-          : (kp.event === '미출전' || kp.event === '확인 불가' || kp.event === '벤치') ? kp.event : '출전'}`;
+          : (kp.event === '미출전' || kp.event === '확인 불가' || kp.event === '벤치') ? shownEvent(kp, m) : '출전'}`;
     }
 
     const homeWin = m.home.score > m.away.score;
@@ -4392,7 +4453,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
           if (rbi > 0) statParts.push(`${rbi}타점`);
           if (sb > 0) statParts.push(`${sb}도루`);
           if (r > 0) statParts.push(`${r}득점`);
-          if (statParts.length === 0) statParts.push(kp.event || '출전');
+          if (statParts.length === 0) statParts.push(shownEvent(kp, highlightMatch) || '출전');
         } else {
           if (goals > 0) statParts.push(`${goals}골`);
           if (assists > 0) statParts.push(`${assists}도움`);
@@ -4400,7 +4461,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
           const mins = kp.minutesPlayed;
           const minText = (ev === '풀타임' || mins >= 90) ? '풀타임 출전'
             : ev.includes('분') ? ev : mins > 0 ? `${mins}분 출전` : ev === '출전 완료' ? '출전 완료'
-            : (ev === '미출전' || ev === '확인 불가' || ev === '벤치') ? ev : '출전';
+            : (ev === '미출전' || ev === '확인 불가' || ev === '벤치') ? shownEvent(kp, highlightMatch) : '출전';
           statParts.push(minText);
         }
         // 코리안 더비·같은 팀 복수 선수: 팔로우한 전원을 '이름 핵심스탯'으로 압축 나열.
@@ -4417,7 +4478,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
             // (실측: 더비에서 명단 제외된 선수가 '양현준 출전'으로 나갔다).
             const ev0 = k.event || '';
             parts.push(mm >= 90 ? '풀타임' : mm > 0 ? `${mm}분`
-              : (ev0 === '미출전' || ev0 === '확인 불가' || ev0 === '벤치' || ev0 === '벤치 대기') ? ev0 : '출전');
+              : (ev0 === '미출전' || ev0 === '확인 불가' || ev0 === '벤치' || ev0 === '벤치 대기') ? shownEvent(k, highlightMatch) : '출전');
           }
           return `${k.name} ${parts.join(' ')}`;
         };
@@ -10886,7 +10947,10 @@ function App() {
   // 예전엔 20분 넘은 캐시는 스켈레톤으로 대신했다(낡은 점수가 떴다 바뀌는 게 보여서).
   // 이제는 서버 라이브 패치(≤2분 신선, 모듈 상단에서 선요청)를 캐시 위에 얹어 상태·
   // 점수를 바로잡는다 — 이미 와 있으면 첫 커밋 전에, 아니면 도착하는 즉시.
-  const bootCacheRef = React.useRef(loadCachedMatches());
+  const bootCacheRef = React.useRef((() => {
+    const c = loadCachedMatches();
+    return c ? { ...c, matches: markCachedUnknowns(c.matches) } : c;
+  })());
   const MATCH_CACHE_FRESH_MS = 20 * 60 * 1000;
   const bootHasCache = !!bootCacheRef.current;
   const bootFresh = bootHasCache && (Date.now() - bootCacheRef.current.at) <= MATCH_CACHE_FRESH_MS;
@@ -11881,7 +11945,7 @@ function App() {
                   : minutesPlayed > 0 ? `${minutesPlayed}분 출전`
                   : '출전 완료';
               }
-              return { ...kp, number: rosterNumber ?? kp.number, event: newEvent, minutesPlayed, matchGoals, matchAssists, sfRating, lineupConfirmed };
+              return { ...kp, number: rosterNumber ?? kp.number, event: newEvent, unverified: false, minutesPlayed, matchGoals, matchAssists, sfRating, lineupConfirmed };
             };
 
             const updatedKoreans = allKoreans.map(computeFor);
@@ -12048,8 +12112,8 @@ function App() {
 
             koreanMatches[idx] = {
               ...cur,
-              koreanPlayer: { ...kp, event: newEvent, atBats, hits, homeRuns, rbi, runs, stolenBases, baseOnBalls },
-              koreanPlayers: (cur.koreanPlayers || [kp]).map(p => p.name === kp.name ? { ...p, event: newEvent, atBats, hits, homeRuns, rbi, runs, stolenBases, baseOnBalls } : p),
+              koreanPlayer: { ...kp, event: newEvent, unverified: false, atBats, hits, homeRuns, rbi, runs, stolenBases, baseOnBalls },
+              koreanPlayers: (cur.koreanPlayers || [kp]).map(p => p.name === kp.name ? { ...p, event: newEvent, unverified: false, atBats, hits, homeRuns, rbi, runs, stolenBases, baseOnBalls } : p),
             };
           });
         }
@@ -12057,6 +12121,14 @@ function App() {
         // 보강까지 끝난 완성본을 반영한다. 폴백(기본 목록)이 아직 안 나갔으면
         // 취소해서 '떴다가 다시 갱신되는' 두 번 그리기를 피한다.
         if (baseFallbackTimer) clearTimeout(baseFallbackTimer);
+        // 상세를 못 받은 경기는 직전 목록이 판정해 둔 값을 지킨다(keepVerified). 아래 저장·
+        // 시즌 합계 계산도 같은 값을 쓰도록 koreanMatches 자체를 고쳐 둔다.
+        {
+          const h = bootHoldRef.current;
+          const shown = (h.active && h.value) || liveMatchesRef.current;
+          const kept = keepVerified(shown, koreanMatches);
+          if (kept !== koreanMatches) kept.forEach((m, i) => { koreanMatches[i] = m; });
+        }
         setLiveMatches(prev => finishList(mergeUncovered(prev, [...koreanMatches])));
         setIsInitialLoad(false);
         lastPublishAtRef.current = Date.now();
@@ -12980,8 +13052,8 @@ function App() {
       // 상세를 받으면 거기서 선발/교체/미출전을 정확히 판정해 덮어쓴다.
       // 대표팀 엔트리(kp.isTeam)는 '출전 예상/확인 불가' 같은 개인 출전 판정이 의미가
       // 없다 — nationalTeamEntry 가 이미 매긴 상태 기반 라벨(경기 예정/진행 중/경기 종료)을 그대로 둔다.
-      koreanPlayer: koreanPlayer?.isTeam ? koreanPlayer : { ...koreanPlayer, event: (isFinished || isTimedOut) ? '확인 불가' : '출전 예상', minutesPlayed: 0, matchGoals: 0, matchAssists: 0 },
-      koreanPlayers: koreanPlayers.map(kp => kp.isTeam ? kp : ({ ...kp, event: (isFinished || isTimedOut) ? '확인 불가' : '출전 예상', minutesPlayed: 0, matchGoals: 0, matchAssists: 0 })),
+      koreanPlayer: koreanPlayer?.isTeam ? koreanPlayer : { ...koreanPlayer, event: (isFinished || isTimedOut) ? '확인 불가' : '출전 예상', unverified: (isFinished || isTimedOut) || undefined, minutesPlayed: 0, matchGoals: 0, matchAssists: 0 },
+      koreanPlayers: koreanPlayers.map(kp => kp.isTeam ? kp : ({ ...kp, event: (isFinished || isTimedOut) ? '확인 불가' : '출전 예상', unverified: (isFinished || isTimedOut) || undefined, minutesPlayed: 0, matchGoals: 0, matchAssists: 0 })),
       isKoreanDerby,
       // 카드·일정의 대회 줄에 그대로 찍히므로 아시안게임은 한글로.
       competition: tournamentName === 'Asian Games' ? '아시안게임' : tournamentName === 'Friendlies' ? '국가대표 친선' : tournamentName,
@@ -14220,7 +14292,9 @@ try { const c = JSON.parse(localStorage.getItem(MATCH_CACHE_KEY) || 'null'); has
     }
     mountApp();
   };
-  const wait = hasMatchCache ? 300 : 800;
+  // 캐시가 있어도 0.6초까지는 패치를 기다린다 — 패치에 실린 출전 정보(u)로 첫 화면부터
+  // 끝난 경기의 출전 기록을 맞춰 그린다(제보: '열었을 때 아예 갱신된 정보로').
+  const wait = hasMatchCache ? 600 : 800;
   Promise.race([Promise.all([window.__livePatchP, window.__homeListP]), new Promise(r => setTimeout(r, wait))]).then(mountOnce, mountOnce);
 }
 </script>
