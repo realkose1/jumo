@@ -3992,9 +3992,10 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
     .filter(m => {
       if (!m.koreanPlayer) return false;
       if (!m.fullDate) return false;
-      // 더보기 설정 '출전 불가 경기 숨기기'가 켜져 있으면 히어로·캐러셀에서도 뺀다(제보).
-      // 이 풀을 히어로 후보와 캐러셀이 함께 쓰므로 여기서 한 번만 거르면 둘 다 적용된다.
-      if (hideUnavailable && matchNoChance(m)) return false;
+      // 우리 선수가 못 뛰는 경기(차출·결장급 부상)는 설정과 상관없이 캐러셀 카드를 만들지 않는다(제보).
+      // 볼 게 없는 경기다 — 아래 날짜별 목록엔 흐리게 남고, 설정을 켜면 거기서도 숨는다.
+      // 이 풀을 히어로 후보도 같이 쓰지만 히어로는 원래 결장 선수를 뺀다(heroAvailable).
+      if (matchNoChance(m)) return false;
       // 프리시즌 친선경기(국가대표/클럽)에서 실제 명단이 확인됐는데(lineupConfirmed)
       // 한국 선수가 아예 빠져 있으면(휴가/로테이션) — 볼 게 없는 경기이니 제외한다.
       // 정규 시즌 경기(리그·MLB)의 '미출전'은 계속 보여준다(왜 안 뛰었는지가 정보임).
@@ -4063,7 +4064,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
       if (!isFinalStatus(m.status) || !m.koreanPlayer || !m.fullDate) return false;
       if (koreanIsMinorLeaguer(m)) return false;
       // 오늘 풀에서 뺀 출전 불가 경기가 이 48시간 후보로 되살아나지 않게 같이 거른다.
-      if (hideUnavailable && matchNoChance(m)) return false;
+      if (matchNoChance(m)) return false;
       const hoursAgo = (now - new Date(m.fullDate)) / 3600000;
       // 24시간이 지난 결과는 아예 후보에서 뺀다 — 하루 지난 소식을 히어로로
       // 계속 물고 있으면 앱이 멈춘 것처럼 보인다. 오늘 경기가 없으면 히어로는
@@ -4321,13 +4322,13 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
       if (!m.koreanPlayer || !m.fullDate) return false;
       if (koreanIsMinorLeaguer(m)) return false;
       if (isFinalStatus(m.status)) return false;
-      // 출전 불가 경기 숨기기가 켜져 있으면 3경기를 자르기 전에 먼저 뺀다(제보) —
+      // 출전 불가 경기는 캐러셀에 안 올리므로 3경기를 자르기 전에 먼저 뺀다 —
       // 그래야 가용한 다음 경기들로 3개가 채워진다.
-      if (hideUnavailable && matchNoChance(m)) return false;
+      if (matchNoChance(m)) return false;
       return new Date(m.fullDate) > now;
     })
     .sort((a, b) => new Date(a.fullDate) - new Date(b.fullDate))
-    .slice(0, 3), [allMatches, now, hideUnavailable]);
+    .slice(0, 3), [allMatches, now]);
 
   // 이적 스포트라이트 히어로 — 로딩 중에도(스켈레톤 화면에서도) 그대로 쓰기 위해
   // 별도로 만들어 둔다.
