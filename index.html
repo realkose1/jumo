@@ -3577,9 +3577,9 @@ function TodayMatchCard({ m, onMatch, tweaks, allMatches = [] }) {
                       <span style={{ fontSize:13, color:'var(--text3)', fontWeight:600 }}>출전 완료</span>
                     )
                   ) : isUnverifiedUnknown(kp) ? (
+                    // 스피너는 이름 옆 배지에만 — 여기까지 돌면 한 카드에서 둘이 같이 돈다(제보).
                     <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                       <span style={{ fontSize:13, fontWeight:700, color:'var(--text4)' }}>{CHECKING_EVENT}</span>
-                      <SyncSpinner size={10} delay={0}/>
                     </div>
                   ) : isUnknown ? (
                     <div style={{ display:'flex', alignItems:'center', gap:6 }}>
