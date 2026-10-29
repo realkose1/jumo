@@ -532,11 +532,31 @@ async function lineupSquad(fid, espnFallback = null, involved = []) {
 function newLivePatch() {
   return { at: new Date().toISOString(), fat: null, gat: null, fixtures: {}, games: {} };
 }
+// 끝난 경기는 af-done 마감 뒤로 이벤트를 다시 받지 않아(호출 절약) 이번 회차 패치에 u·p 가
+// 빠진다. 그러면 밤사이 끝난 경기를 아침에 열 때 앱 캐시의 경기 전 값('출전 예상')을 고칠
+// 재료가 없어 전체 갱신까지 '출전 여부 확인 중'이 돌았다(제보). 직전 패치에 있던 값을
+// 이어 붙인다 — Supabase 읽기 1번, AF 호출 없음. 실패하면 이어 붙이지 않고 그냥 쓴다.
+async function carryFinalPlayerInfo(patch) {
+  try {
+    const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/sf_cache?select=events&date=eq.live-patch`,
+      { headers: sbHeaders() });
+    const rows = r.ok ? await r.json() : null;
+    const prev = Array.isArray(rows) ? rows[0]?.events?.fixtures : null;
+    if (!prev) return;
+    for (const [id, f] of Object.entries(patch.fixtures)) {
+      const o = prev[id];
+      if (!o || !AF_FINAL.has(f.s)) continue;
+      if (!f.u && o.u) f.u = o.u;
+      if (!f.p && o.p) f.p = o.p;
+    }
+  } catch (e) { /* 다음 실행이 다시 시도한다 */ }
+}
 const SOCCER_AF_IDS = new Set(PLAYERS.filter((p) => p.sport === 'soccer' && p.afPlayerId).map((p) => p.afPlayerId));
 // 한 번의 요청으로 덮어쓴다. 아무것도 확보하지 못한 실행(AF·statsapi 모두 실패)은
 // 쓰지 않는다 — 직전 패치가 남아 있다가 10분 뒤 앱에서 자연히 무효가 된다.
 async function writeLivePatch(patch) {
   if (!patch || (!patch.fat && !patch.gat)) return;
+  await carryFinalPlayerInfo(patch);
   patch.at = new Date().toISOString();   // 쓰는 시각 = 앱의 '크론 생존' 판단 기준
   try {
     await fetch(`${process.env.SUPABASE_URL}/rest/v1/sf_cache`, {

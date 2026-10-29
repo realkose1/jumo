@@ -2233,11 +2233,16 @@ const shownEvent = (kp, m) => {
 };
 // 실행 직후 들고 온 목록(로컬 캐시·공유 홈 목록)의 '확인 불가'는 지금 기준으로 확인한 값이
 // 아니다 — 전체 갱신이 다시 판정할 때까지 확인 전으로 표시한다.
+// 단, 끝난 경기에서 상세를 받아 보고 내린 '확인 불가'(unverified:false)는 그대로 믿는다 —
+// 라인업이 끝내 안 나오는 컵 경기는 실행할 때마다 '확인 중'이 돌다가 같은 '확인 불가'로
+// 돌아왔다(제보: FotMob 처럼 켜자마자 결과가 보여야). 늦게 라인업이 붙으면 전체 갱신이 고친다.
 function markCachedUnknowns(matches) {
   if (!Array.isArray(matches)) return matches;
-  const mark = (kp) => (kp && !kp.isTeam && kp.event === '확인 불가' && !kp.unverified) ? { ...kp, unverified: true } : kp;
   return matches.map(m => {
     if (!m) return m;
+    const settled = isFinalStatus(m.status);
+    const mark = (kp) => (kp && !kp.isTeam && kp.event === '확인 불가' && !kp.unverified &&
+      !(settled && kp.unverified === false)) ? { ...kp, unverified: true } : kp;
     const kps = m.koreanPlayers ? m.koreanPlayers.map(mark) : m.koreanPlayers;
     const kp0 = mark(m.koreanPlayer);
     if (kp0 === m.koreanPlayer && (!kps || kps.every((k, i) => k === m.koreanPlayers[i]))) return m;
