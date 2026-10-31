@@ -217,43 +217,22 @@ export function createJumakScene(ctx: SceneContext): SceneHandle {
   starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
   const starMat = own(new THREE.PointsMaterial({ size: 1.8, sizeAttenuation: false, color: 0xdfe6ff, transparent: true, opacity: 0.75, depthWrite: false, fog: false }));
   add(new THREE.Points(starGeo, starMat));
-  // 보름달: 지붕이 없어 마당 어디서든 TV 위 하늘 가운데에 크게 보인다. 표면 무늬는 캔버스로 그린다
-  const MOON_POS = new THREE.Vector3(-1, 20, -64); // 하늘 돔의 밝은 곳과 구름의 기준. 달 자체는 매 프레임 TV 위로 옮긴다
+  // 보름달: 표면 무늬는 캔버스로 그린다
+  // 하늘 한 곳에 박혀 있다(보는 사람을 따라오지 않는다). TV 정가운데 위 하늘이라 시점을 조금 들면 보인다.
+  // 휴대폰 세로 화면은 좌우가 좁아서 양옆 자리에서는 시점을 돌려야 보인다
+  const MOON_POS = new THREE.Vector3(0, 21.5, -66);
   const moonTex = own(makeMoonTexture());
   // 달과 달무리는 늘 화면을 정면으로 보는 스프라이트다. 기울어진 원판에 달무리를 같은 깊이로 겹치면
   // 원판 절반이 달무리 뒤로 가서 대각선으로 밝기가 갈라져 보였다(깨진 달). 달무리는 달보다 조금 뒤에 둔다
   const moonMat = own(new THREE.SpriteMaterial({ map: moonTex, fog: false, toneMapped: false, transparent: true, depthWrite: false }));
   const moon = add(new THREE.Sprite(moonMat));
   moon.position.copy(MOON_POS);
-  moon.scale.set(4.6, 4.6, 1);
+  moon.scale.set(5.4, 5.4, 1);
   moon.renderOrder = 2;
   const moonHaloMat = own(new THREE.SpriteMaterial({ map: dot, color: 0xb9c8f2, transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, fog: false }));
   const halo = add(new THREE.Sprite(moonHaloMat));
   halo.position.copy(MOON_POS).multiplyScalar(1.03); // 달 바로 뒤
-  // 달은 아주 멀리 있으니 보는 자리를 따라온다. 휴대폰 세로 화면은 좌우로 좁아서 하늘의 한 점에 박아 두면
-  // 자리에 따라 화면 밖으로 나간다. 그래서 늘 '보는 사람에서 TV 쪽, TV 판벽 바로 위 하늘'에 둔다
-  const MOON_ELEVATION = 0.2; // 라디안(약 11도). 판벽 윗선이 더 높으면 그 바로 위
-  const MOON_DIST = 60;
-  let moonAz: number | null = null;
-  const moonDir = new THREE.Vector3();
-  const placeMoon = (dt: number): void => {
-    const cam = ctx.camera.position;
-    const target = Math.atan2(TV.x - cam.x, TV.z - cam.z);
-    if (moonAz === null) moonAz = target;
-    else {
-      let d = target - moonAz;
-      d = Math.atan2(Math.sin(d), Math.cos(d));
-      moonAz += d * (1 - Math.exp(-2.5 * dt));
-    }
-    // 카메라 높이보다 판벽 윗선이 얼마나 높은지에 맞춰 조금 올린다
-    const toBoard = Math.hypot(TV.x - cam.x, TV.z - cam.z);
-    const boardEl = Math.atan2(4.9 - cam.y, Math.max(1, toBoard));
-    const el = Math.max(MOON_ELEVATION, boardEl + 0.042);
-    moonDir.set(Math.sin(moonAz) * Math.cos(el), Math.sin(el), Math.cos(moonAz) * Math.cos(el));
-    moon.position.copy(cam).addScaledVector(moonDir, MOON_DIST);
-    halo.position.copy(cam).addScaledVector(moonDir, MOON_DIST + 2);
-  };
-  halo.scale.set(19, 19, 1);
+  halo.scale.set(22, 22, 1);
   halo.renderOrder = 1;
   // 달빛: 마당을 푸르스름하게 비춘다
   const moonLight = add(new THREE.DirectionalLight(0xaebfff, 0.35));
@@ -302,7 +281,6 @@ export function createJumakScene(ctx: SceneContext): SceneHandle {
     tv.update(now);
     bursts.update(dt);
     scenery.update(dt, reduced);
-    placeMoon(dt);
     confetti.update(dt);
     service.setReducedMotion(reduced);
     service.update(dt);
