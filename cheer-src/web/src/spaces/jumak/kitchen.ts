@@ -78,9 +78,9 @@ export function fireCrackles(rand: () => number): { hits: Crackle[]; next: numbe
   return { hits, next: at + 0.35 + Math.min(4.5, expGap(rand, 1.1)) };
 }
 
-/** 새 전을 올릴 때 지글거림이 솟는 정도(늘 나는 크기에 몇 배를 더하나). 뒤집을 때는 그보다 작게 */
-export const LAY_BURST = 2.6;
-export const FLIP_BURST = 1.1;
+/** 새 전을 올릴 때 촘촘한 치익 소리가 솟는 크기(0~1). 뒤집을 때는 그보다 작게 */
+export const LAY_BURST = 1;
+export const FLIP_BURST = 0.45;
 /** 치익 한 뒤 가라앉는 빠르기(초, 지수 시상수) */
 export const FRY_SETTLE = 2.6;
 
@@ -192,19 +192,25 @@ export function ladleTaps(rand: () => number): Tap[] {
   return taps;
 }
 
-/** 지글 알갱이 곡선의 문턱: 흰 잡음 값 가운데 이것을 넘는 1.5%만 알갱이로 남는다(초당 수백 개) */
-export const CRACKLE_THRESHOLD = 0.985;
+/** 늘 나는 지글거림: 흰 잡음 값 가운데 문턱을 넘는 2%만 알갱이로 남긴다(초당 900개쯤) */
+export const SIZZLE_CURVE = { threshold: 0.98, ceiling: 1, power: 3 } as const;
+/**
+ * 새 전을 올릴 때 치익: 그 아래 5%를 남겨 훨씬 촘촘하다. 늘 나는 지글거림과 겹치지 않는 값만 쓰므로
+ * 두 갈래의 큰 알갱이가 같은 순간에 겹쳐 튀어나오지 않는다
+ */
+export const FIZZ_CURVE = { threshold: 0.93, ceiling: 0.98, power: 1.5 } as const;
 
 /**
- * 흰 잡음을 드문드문 튀는 알갱이로 바꾸는 곡선(WaveShaper용). 문턱보다 작은 값은 지우고, 넘는 것만 거듭제곱으로 눌러
- * 남긴다: 아주 작은 알갱이가 많고(지이이) 큰 것은 드물다(톡). 양쪽은 대칭이다.
+ * 흰 잡음을 드문드문 튀는 알갱이로 바꾸는 곡선(WaveShaper용). threshold~ceiling 사이 값만 남기고 거듭제곱으로 눌러
+ * 남긴다: 아주 작은 알갱이가 많고(지이이) 큰 것은 드물다(톡). 양쪽은 대칭이고, 남는 값은 -1~1이다.
  */
-export function crackleCurve(size = 4096, threshold = CRACKLE_THRESHOLD, power = 4) {
+export function crackleCurve(size: number, threshold: number, ceiling: number, power: number) {
   const curve = new Float32Array(size);
+  const span = Math.max(1e-6, ceiling - threshold);
   for (let i = 0; i < size; i++) {
     const x = (i / (size - 1)) * 2 - 1;
     const a = Math.abs(x);
-    curve[i] = a <= threshold ? 0 : Math.sign(x) * Math.pow(Math.min(1, (a - threshold) / (1 - threshold)), power);
+    curve[i] = a <= threshold || a > ceiling + 1e-9 ? 0 : Math.sign(x) * Math.pow(Math.min(1, (a - threshold) / span), power);
   }
   return curve;
 }
@@ -281,7 +287,11 @@ export function knifeChop(ctx: Ctx, out: AudioNode, t: number, vel: number, gain
 
 // ---- 앞을 내다보는 예약 ----
 
-/** 부엌 소리 전체 크기(환경음 층 안에서). 배경 음악보다 한참 작게 깔린다 */
+/**
+ * 부엌 소리 전체 크기(환경음 층 안에서). 배경 음악보다 한참 작게 깔린다.
+ * OfflineAudioContext로 2분씩 그려 재 보면: 한산할 때 RMS -44 dB쯤(가야금 가락 -34 dB), 경기 중 -42 dB쯤(장구 응원가 -28 dB),
+ * 가장 큰 알갱이도 -20 dB 안팎이다(음악은 -15 dB, 경기 중 -8 dB).
+ */
 export const KITCHEN_LEVEL = 0.5;
 /** 한꺼번에 울리는 짧은 소리 수 상한 (휴대폰에서 가볍게) */
 export const MAX_KITCHEN_VOICES = 10;
@@ -289,9 +299,11 @@ export const MAX_KITCHEN_VOICES = 10;
 export const KITCHEN_LOOKAHEAD = 1.2;
 const TICK_MS = 250;
 /** 늘 깔리는 소리 크기: 아궁이 불(낮은 웅웅), 번철 지글거림. 경기 중엔 번철에 전이 많아 지글거림이 조금 크다 */
-const RUMBLE_LEVEL = 0.16;
-const SIZZLE_LEVEL = 0.6;
+const RUMBLE_LEVEL = 0.09;
+const SIZZLE_LEVEL = 0.2;
 const SIZZLE_LIVE_BOOST = 0.35;
+/** 새 전을 올릴 때 치익 갈래가 솟는 크기(LAY_BURST, FLIP_BURST를 곱한다) */
+export const FIZZ_LEVEL = 0.22;
 
 export interface Kitchen {
   /** 0(한산함)~1(경기 중이라 전을 더 부친다) */
@@ -349,19 +361,23 @@ export function startKitchen(ctx: Ctx, out: AudioNode, seed = Math.floor(Math.ra
   rumbleGain.gain.value = RUMBLE_LEVEL;
   bedIn.connect(rumbleLp).connect(rumbleGain).connect(bus);
   // 번철: 잡음에서 문턱을 넘는 알갱이만 남겨 높은 대역으로 보내면 지글지글
-  const shaper = ctx.createWaveShaper();
-  shaper.curve = crackleCurve();
   const sizzleHp = ctx.createBiquadFilter();
   sizzleHp.type = 'highpass';
   sizzleHp.frequency.value = 2300;
   sizzleHp.Q.value = 0.6;
+  sizzleHp.connect(bus);
+  const shaper = ctx.createWaveShaper();
+  shaper.curve = crackleCurve(4096, SIZZLE_CURVE.threshold, SIZZLE_CURVE.ceiling, SIZZLE_CURVE.power);
   const sizzleBase = ctx.createGain();
   sizzleBase.gain.value = SIZZLE_LEVEL;
-  // 새 전을 올릴 때 치익 솟는 몫은 따로 둔다(경기 중 바탕 크기 바꾸기와 서로 부딪히지 않게)
-  const sizzleBurst = ctx.createGain();
-  sizzleBurst.gain.value = 1;
-  bedIn.connect(shaper).connect(sizzleHp).connect(sizzleBase).connect(sizzleBurst).connect(bus);
-  const persistent: AudioNode[] = [bus, soft, bedIn, rumbleLp, rumbleGain, shaper, sizzleHp, sizzleBase, sizzleBurst];
+  bedIn.connect(shaper).connect(sizzleBase).connect(sizzleHp);
+  // 새 전을 올릴 때만 열리는 촘촘한 치익 갈래. 큰 알갱이를 키우지 않고 알갱이 수를 늘려서 튀지 않게 솟는다
+  const fizzShaper = ctx.createWaveShaper();
+  fizzShaper.curve = crackleCurve(4096, FIZZ_CURVE.threshold, FIZZ_CURVE.ceiling, FIZZ_CURVE.power);
+  const fizzGain = ctx.createGain();
+  fizzGain.gain.value = 0;
+  bedIn.connect(fizzShaper).connect(fizzGain).connect(sizzleHp);
+  const persistent: AudioNode[] = [bus, soft, bedIn, rumbleLp, rumbleGain, sizzleHp, shaper, sizzleBase, fizzShaper, fizzGain];
 
   const bed: Array<{ src: AudioBufferSourceNode; end: number }> = [];
   let bedAt = onFrame(start);
@@ -385,9 +401,9 @@ export function startKitchen(ctx: Ctx, out: AudioNode, seed = Math.floor(Math.ra
     if (f.kind === 'lay') batterDown(ctx, bus, t, 1, rand);
     else spatulaFlip(ctx, bus, t, 1, rand);
     const at = t + (f.kind === 'lay' ? 0.02 : 0.17);
-    const p = sizzleBurst.gain;
-    p.setTargetAtTime(1 + f.burst, at, 0.05);
-    p.setTargetAtTime(1, at + 0.45, FRY_SETTLE);
+    const p = fizzGain.gain;
+    p.setTargetAtTime(FIZZ_LEVEL * f.burst, at, 0.05);
+    p.setTargetAtTime(0, at + 0.45, FRY_SETTLE);
   };
 
   const pot: Stream = {
