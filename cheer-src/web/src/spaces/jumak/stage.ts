@@ -8,7 +8,7 @@ import type { SceneContext, SceneHandle } from '../../engine/types';
 import { buildRoom } from './build';
 import { Confetti, EmojiBursts } from './effects';
 import { JUMO, ACTION_EMOJI, ACTION_PICTURE, ROOM, SPAWN, TV, WALK_BLOCKERS, WALK_BOUNDS, groundHeight, type DishSpot } from './layout';
-import { JumoMotion, buildJumoGeometry } from './jumo';
+import { JumoRig } from './jumo';
 import { Service } from './service';
 import { JumakSound } from './sound';
 import { createDot } from './stage-dot';
@@ -252,13 +252,10 @@ export function createJumakScene(ctx: SceneContext): SceneHandle {
   const sound = new JumakSound(ctx.sound);
 
   // ---- 주모와 서빙 ----
-  const jumoGeo = own(buildJumoGeometry());
-  const jumoMat = own(new THREE.MeshLambertMaterial({ vertexColors: true }));
-  const jumoMesh = add(new THREE.Mesh(jumoGeo, jumoMat));
-  jumoMesh.castShadow = true;
-  jumoMesh.position.set(JUMO.x, 0, JUMO.z);
-  jumoMesh.rotation.y = JUMO.yaw;
-  const jumoMotion = new JumoMotion();
+  // 주모는 쉬지 않고 부엌일을 한다(국 젓기, 전 뒤집기, 국 뜨기, TV 보기). 주문이 오면 손님 쪽을 보며 대답한다
+  const jumo = own(new JumoRig());
+  add(jumo.group);
+  add(jumo.jeonMesh);
   const service = new Service({
     scene,
     cauldron: { x: JUMO.stoveX - 0.3, y: 1.0, z: JUMO.stoveZ },
@@ -284,10 +281,7 @@ export function createJumakScene(ctx: SceneContext): SceneHandle {
     confetti.update(dt);
     service.setReducedMotion(reduced);
     service.update(dt);
-    const jm = jumoMotion.update(dt, reduced);
-    jumoMesh.position.y = jm.y;
-    jumoMesh.rotation.set(0, JUMO.yaw + jm.yaw, jm.roll);
-    jumoMesh.scale.y = jm.scaleY;
+    jumo.update(dt, reduced);
     for (const fn of tickers) fn(dt);
 
     glowLevel *= Math.exp(-dt / 1.1);
@@ -329,8 +323,8 @@ export function createJumakScene(ctx: SceneContext): SceneHandle {
     get activeDishCount() {
       return service.activeCount;
     },
-    jumoReply: () => jumoMotion.react(),
-    jumoAnchor: (out) => out.set(JUMO.x, 1.62, JUMO.z),
+    jumoReply: () => jumo.react(),
+    jumoAnchor: (out) => out.set(jumo.position.x, 1.62, jumo.position.z),
     addTicker(fn) {
       tickers.add(fn);
       return () => tickers.delete(fn);
