@@ -3,12 +3,18 @@
 // 평상 넷(a~d)에 방석 여섯씩. 자리 id는 shared/spaces/jumak.ts가 원본이다.
 import { jumak as shared } from '@shared/spaces/jumak';
 import type { SeatDef, WalkRect } from '../../engine/types';
+import { MAKGEOLLI_ICON } from './makgeolli';
 
 /** 동작 id와 이모지. 버튼 그림과 머리 위로 뜨는 이모지가 같은 것이다 */
 export const ACTION_EMOJI: Readonly<Record<string, string>> = {
   clap: '👏',
-  toast: '🍻',
+  toast: '🍶', // 글자로만 보일 때의 대신. 화면에는 막걸리 사발 그림(ACTION_PICTURE)을 쓴다
   order: '🍲',
+};
+
+/** 이모지 대신 쓰는 직접 그린 그림 (건배는 막걸리 사발) */
+export const ACTION_PICTURE: Readonly<Record<string, string>> = {
+  toast: MAKGEOLLI_ICON,
 };
 
 export const ACTION_LABEL: Readonly<Record<string, string>> = {

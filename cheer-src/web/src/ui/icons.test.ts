@@ -11,6 +11,7 @@ describe('resolveActionIcon', () => {
 
   it('짧은 이모지는 글자로', () => {
     expect(resolveActionIcon(def({ icon: '🍊' }), 'g')).toEqual({ kind: 'text', text: '🍊' });
+    expect(resolveActionIcon(def({ icon: 'data:image/svg+xml,abc' }), 'g')).toEqual({ kind: 'img', src: 'data:image/svg+xml,abc' });
   });
 
   it('모르는 이름은 몸짓으로 고른다', () => {

@@ -3,7 +3,8 @@
 import * as THREE from 'three';
 import type { TvMatchView, TvPlayerLine, TvView } from '../../cheer/feed';
 import type { TallySnapshot } from '../../cheer/tally';
-import { ACTION_EMOJI } from './layout';
+import { ACTION_EMOJI, ACTION_PICTURE } from './layout';
+import { MAKGEOLLI_ICON, makgeolliImage } from './makgeolli';
 
 export const TV_W = 1024;
 export const TV_H = 576;
@@ -277,7 +278,9 @@ function drawTally(ctx: CanvasRenderingContext2D, t: TallySnapshot, actionIds: r
   drawText(ctx, t.phase === 'live' ? '지금 방의 응원' : '이번 응원 합계', 80, top + h / 2, { size: 30, weight: 700, color: COLOR.soft, align: 'left', maxWidth: 340, minSize: 22 });
   actionIds.forEach((id, i) => {
     const x = 520 + i * 156;
-    drawText(ctx, ACTION_EMOJI[id] ?? '', x, top + h / 2 + 2, { size: 40, align: 'left' });
+    const pic = ACTION_PICTURE[id] === MAKGEOLLI_ICON ? makgeolliImage() : null;
+    if (pic) ctx.drawImage(pic, x - 2, top + h / 2 - 24, 48, 48);
+    else drawText(ctx, ACTION_EMOJI[id] ?? '', x, top + h / 2 + 2, { size: 40, align: 'left' });
     drawText(ctx, String(t.counts[id] ?? 0), x + 56, top + h / 2 + 2, { size: 46, weight: 800, color: COLOR.ink, align: 'left' });
   });
 }

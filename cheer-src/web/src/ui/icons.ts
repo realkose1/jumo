@@ -24,17 +24,19 @@ export function icon(name: IconName, size = 24): SVGElement {
   return host.firstElementChild as SVGElement;
 }
 
-export type ActionIcon = { kind: 'svg'; name: ActionIconName } | { kind: 'text'; text: string };
+export type ActionIcon = { kind: 'svg'; name: ActionIconName } | { kind: 'text'; text: string } | { kind: 'img'; src: string };
 
 /**
  * 동작 버튼의 그림을 고른다.
- * 1) def.icon이 우리 그림 이름이면 그것, 2) 짧은 이모지 같은 글자면 그대로,
+ * 1) def.icon이 우리 그림 이름이면 그것, data:image/ 주소면 그 그림, 2) 짧은 이모지 같은 글자면 그대로,
  * 3) 없으면 인사는 하트, 나머지는 몸짓(motion)에 맞는 그림.
  */
 export function resolveActionIcon(def: ActionDef, greetingActionId: string): ActionIcon {
   const given = def.icon?.trim();
   if (given) {
     if (ACTION_ICONS.includes(given)) return { kind: 'svg', name: given as ActionIconName };
+    // 직접 그린 그림 (data: 주소만. 바깥 주소는 쓰지 않는다)
+    if (given.startsWith('data:image/')) return { kind: 'img', src: given };
     if (!/^[a-z][a-z0-9-]*$/i.test(given) && [...given].length <= 4) return { kind: 'text', text: given };
   }
   if (def.id === greetingActionId) return { kind: 'svg', name: 'greet' };
