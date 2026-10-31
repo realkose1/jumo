@@ -41,3 +41,7 @@ credentials/
 credentials.json
 # --- local tool state ---
 .vercel/
+
+# --- cheer-src (주모 응원 하위 프로젝트) ---
+cheer-src/**/node_modules/
+cheer-src/server/.wrangler/

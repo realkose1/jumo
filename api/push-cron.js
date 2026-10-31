@@ -64,6 +64,17 @@ const PLAYERS = [
 // 'national' 로만 끔) — 그래서 더 이상 소집 선수 명단(playerIds)을 들고 있지
 // 않는다. 방송 이벤트 생성은 아래 nationalMatchEvents() 참고.
 const NATIONAL_TEAMS = { 10177: { name: '대한민국 U-23' }, 17: { name: '대한민국' } }; // 17 = A대표팀 'South Korea'
+
+// 대표팀 차출 등으로 소속팀 명단에서 빠져 있는 선수(ids = PLAYERS.id, 날짜는 KST). 이 기간엔
+// 소속팀 경기의 개인 알림(라인업 '명단 제외'·출전·결과·골)을 아예 만들지 않는다 — 앱의
+// MANUAL_AVAILABILITY(index.html)와 같은 명단·기간을 유지할 것. 응원방 피드(cheer-feed)도
+// 이 표로 소속팀 경기에서 그 선수를 뺀다.
+// (2026-09-20 제보: 아시안게임 차출 선수에게 소속팀 '명단 포함되지 않았다' 알림이 갔다.)
+const MANUAL_OUT = [
+  { ids: [20, 23, 22, 31, 32, 30], from: '2026-09-07', to: '2026-10-04', reason: '아시안게임 차출' },
+  { ids: [1, 2, 3, 6, 7, 8, 25, 19, 21, 24, 26, 33, 35], from: '2026-09-21', to: '2026-10-07', reason: 'A대표팀 소집' },
+  { ids: [36], from: '2026-09-21', to: '2026-10-07', reason: '올림픽 대표팀 소집' },
+];
 // 대표팀 경기의 vs 문구는 소속팀명이 아니라 대표팀명을 쓴다(예: 'Qatar U23 vs 대한민국 U-23').
 // AF 는 올림픽(U-21) 대표팀 친선도 10177('Korea Republic U23')로 준다 — 아시안게임(803)이 아니면 '올림픽 대표팀'.
 const natNameFor = (id, leagueId) => (Number(id) === 10177 && leagueId != null && leagueId !== 803) ? '올림픽 대표팀' : NATIONAL_TEAMS[id]?.name;
@@ -673,15 +684,7 @@ async function collectSoccer(events, liveStates, patch = null) {
     return rosters;
   };
 
-  // 대표팀 차출 등으로 소속팀 명단에서 빠져 있는 선수. 이 기간엔 소속팀 경기의
-  // 개인 알림(라인업 '명단 제외'·출전·결과·골)을 아예 만들지 않는다 — 앱의
-  // MANUAL_AVAILABILITY(index.html)와 같은 명단·기간을 유지할 것.
-  // (2026-09-20 제보: 아시안게임 차출 선수에게 소속팀 '명단 포함되지 않았다' 알림이 갔다.)
-  const MANUAL_OUT = [
-    { ids: [20, 23, 22, 31, 32, 30], from: '2026-09-07', to: '2026-10-04', reason: '아시안게임 차출' },
-    { ids: [1, 2, 3, 6, 7, 8, 25, 19, 21, 24, 26, 33, 35], from: '2026-09-21', to: '2026-10-07', reason: 'A대표팀 소집' },
-    { ids: [36], from: '2026-09-21', to: '2026-10-07', reason: '올림픽 대표팀 소집' },
-  ];
+  // 차출 명단은 모듈 위쪽 MANUAL_OUT(응원방 피드 api/cheer-feed.js 도 같은 표를 쓴다).
   const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);   // KST 날짜
   const manualOut = new Set(MANUAL_OUT.filter((m) => today >= m.from && today <= m.to).flatMap((m) => m.ids));
   const soccer = PLAYERS.filter((p) => p.sport === 'soccer' && !manualOut.has(p.id));
@@ -1350,3 +1353,10 @@ module.exports.stableKey = stableKey;
 module.exports.isVarGoalCancelled = isVarGoalCancelled;
 module.exports.patchFx = patchFx;
 module.exports.overlayLiveFixtures = overlayLiveFixtures;
+// 응원방 피드(api/cheer-feed.js)가 같은 선수 표·대표팀·차출 명단·팀명 규칙을 쓴다(복제 금지).
+module.exports.PLAYERS = PLAYERS;
+module.exports.NATIONAL_TEAMS = NATIONAL_TEAMS;
+module.exports.MANUAL_OUT = MANUAL_OUT;
+module.exports.natNameFor = natNameFor;
+module.exports.countryKo = countryKo;
+module.exports.teamMatches = teamMatches;

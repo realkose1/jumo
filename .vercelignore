@@ -22,3 +22,6 @@ screenshots
 scraps
 uploads
 server.py
+
+# 주모 응원 하위 프로젝트 원본(빌드 결과는 cheer/ 로 올라간다)
+cheer-src

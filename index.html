@@ -4613,6 +4613,10 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
         </div>
       )}
 
+      {/* 주막 응원방 입구 — 원격 스위치가 열려 있고, 위 캐러셀과 같은 풀(todayMatches)에
+           라이브이거나 60분 안에 킥오프하는 경기가 있을 때만 나타난다. */}
+      <JumakHomeBanner matches={todayMatches} now={now}/>
+
       {/* 오늘 — 진행 중·예정 경기. 남은 게 없으면 오늘 끝난 경기 결과로 대체 */}
       {(() => {
         // 끝난 경기는 기본적으로 넣지 않는다. 예전엔 오늘 00시부터 담아서, 이른
@@ -4976,6 +4980,344 @@ function extractLogoHSL(url) {
   return p;
 }
 const cardFromHSL = (hsl, l = 30) => hsl ? `hsl(${Math.round(hsl.h)}, ${Math.round(Math.max(hsl.s, 0.4) * 100)}%, ${l}%)` : null;
+// ─── 응원 주막 ("<선수> 응원 주막" — 모두 함께 드나드는 3D 응원방) ─────────────────
+// 실시간 서버가 아직 없어도 앱을 먼저 낼 수 있게 원격 스위치로 잠가 둔다.
+//   ${API_BASE}/cheer-status.json  →  { "open": boolean, "rooms": "<인원 조회 주소 또는 빈 문자열>" }
+// 파일이 없거나, open 이 true 가 아니면 앱 어디에도 새 화면·버튼이 뜨지 않는다(처음 상태도 닫힘).
+// 앱을 켤 때 한 번, 앞에 떠 있는 동안 5분마다 다시 확인한다. 네트워크 오류는 직전 상태를 유지한다.
+// 응원 주막 화면은 Vercel 에 올라간 /cheer/ 페이지를 iframe 으로 연다(앱 빌드와 따로 배포된다).
+const JUMAK_WEB_BASE = 'https://jumo-git-main-realkose1s-projects.vercel.app';
+const JUMAK_STATUS_URL = `${API_BASE}/cheer-status.json`;
+// 뒤로가기 제스처(네이티브 엣지 스와이프)로 응원방을 닫을지. 3D 화면은 화면 전체를 손가락으로
+// 끌어 돌려 보므로 왼쪽 가장자리에서 시작한 드래그가 방을 닫아 버리지 않게, 페이지가
+// 'ready' 를 알린 뒤에는 기본으로 무시한다(닫기는 페이지 안의 닫기 버튼이 맡는다).
+// 'ready' 전(불러오는 중·오류)에는 엣지 뒤로가기와 앱 쪽 닫기 버튼이 늘 닫아 준다.
+const JUMAK_EDGE_BACK_CLOSES = false;
+// 페이지가 { type:'jumo-cheer', action:'ready' } 를 보내야 정상으로 본다. 12초 안에 안 오거나
+// action:'error' 가 오면 앱이 "3D 화면을 열 수 없어요" 를 띄운다. 페이지가 아직 ready 를
+// 안 보내는 빌드라면 false 로 두면 iframe onLoad 를 ready 로 친다(옛 동작).
+const JUMAK_NEED_READY = true;
+const JUMAK_READY_TIMEOUT_MS = 12000;
+// 응원방 화면이 'ready' 상태인가(App 의 __back 이 읽는다).
+let jumakRoomReady = false;
+
+// iframe 주소의 기준. 개발용으로, 데스크톱 브라우저의 localhost 에서만
+// localStorage['jumo_cheer_base'](예: http://localhost:5180)로 바꿀 수 있다.
+// (Capacitor 앱의 호스트명도 localhost 라서 프로토콜이 http(s) 인지 함께 본다.)
+function jumakFrameBase() {
+  try {
+    if (/^https?:$/.test(location.protocol) && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) {
+      const o = (localStorage.getItem('jumo_cheer_base') || '').trim().replace(/\/+$/, '');
+      if (/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(o)) return o;
+    }
+  } catch {}
+  return JUMAK_WEB_BASE;
+}
+// iOS WebKit 은 iframe 안에서 env(safe-area-inset-*) 를 0 으로 주는 일이 많다. 앱(부모) 쪽 값을
+// 재서 주소에 실어 보낸다: sat = 위쪽, sab = 아래쪽 (CSS px, 정수). 둘 다 0 이면 붙이지 않는다.
+function jumakSafeInsets() {
+  try {
+    const p = document.createElement('div');
+    p.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;'
+      + 'padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)';
+    document.body.appendChild(p);
+    const cs = getComputedStyle(p);
+    const top = Math.round(parseFloat(cs.paddingTop)) || 0, bottom = Math.round(parseFloat(cs.paddingBottom)) || 0;
+    p.remove();
+    return { top: Math.max(0, top), bottom: Math.max(0, bottom) };
+  } catch { return { top: 0, bottom: 0 }; }
+}
+function jumakRoomUrl(matchId) {
+  const si = jumakSafeInsets();
+  return `${jumakFrameBase()}/cheer/?from=app`
+    + (matchId != null && matchId !== '' ? `&m=${encodeURIComponent(String(matchId))}` : '')
+    + (si.top > 0 ? `&sat=${si.top}` : '') + (si.bottom > 0 ? `&sab=${si.bottom}` : '');
+}
+
+// 원격 스위치 — 모듈 하나가 들고 있고, 화면은 useSyncExternalStore 로 구독한다.
+const jumakSwitch = (() => {
+  const CLOSED = { open: false, rooms: '' };
+  const EVERY = 5 * 60 * 1000;
+  let state = CLOSED, lastAt = 0, inflight = null, timer = null;
+  const subs = new Set();
+  const apply = (next) => {
+    if (next.open === state.open && next.rooms === state.rooms) return;
+    state = next;
+    subs.forEach((f) => { try { f(); } catch {} });
+  };
+  const refresh = () => {
+    if (inflight) return inflight;
+    lastAt = Date.now();
+    const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+    const t = setTimeout(() => { try { ctl && ctl.abort(); } catch {} }, 8000);
+    // 닫는 건 '서버가 답을 줬는데 열려 있지 않다'일 때만이다: open 이 true 가 아닌 JSON, 404 같은
+    // 4xx(파일 없음), 200 인데 JSON 이 아님(파일이 없어 index.html 로 떨어짐).
+    // 네트워크 오류·8초 타임아웃·5xx 는 직전 상태를 그대로 둔다 — 지하철·엘리베이터에서 한 번
+    // 끊겼다고 경기 중에 입구가 사라지면 안 된다. (앱을 막 켠 직후라면 직전 상태 = 닫힘.)
+    inflight = fetch(JUMAK_STATUS_URL, { cache: 'no-store', signal: ctl ? ctl.signal : undefined })
+      .then((r) => {
+        if (r.status >= 500) return;
+        if (!r.ok) { apply(CLOSED); return; }
+        return r.json().then((j) => {
+          // open 이 정확히 true 일 때만 연다. 인원 조회 주소는 http(s) 문자열만 받는다.
+          if (j && j.open === true) apply({ open: true, rooms: (typeof j.rooms === 'string' && /^https?:\/\//.test(j.rooms)) ? j.rooms : '' });
+          else apply(CLOSED);
+        }, (e) => { if (e instanceof SyntaxError) apply(CLOSED); });   // 본문 읽다 끊긴 건 유지
+      })
+      .catch(() => {})
+      .finally(() => { clearTimeout(t); inflight = null; });
+    return inflight;
+  };
+  const onVisible = () => { if (!document.hidden && Date.now() - lastAt >= EVERY) refresh(); };
+  return {
+    get: () => state,
+    subscribe: (f) => { subs.add(f); return () => { subs.delete(f); }; },
+    start() {
+      refresh();
+      timer = setInterval(() => { if (!document.hidden) refresh(); }, EVERY);
+      document.addEventListener('visibilitychange', onVisible);
+      return () => { clearInterval(timer); timer = null; document.removeEventListener('visibilitychange', onVisible); };
+    },
+  };
+})();
+const useJumakSwitch = () => React.useSyncExternalStore(jumakSwitch.subscribe, jumakSwitch.get);
+
+// 지금 응원방에 있는 사람 수 — Cloudflare Worker 의 GET /rooms?space=jumak 를 부른다
+// ({ rooms: [{ room, n }], ... } → n 을 모두 더한다). Cloudflare 무료 한도(하루 10만 건)를 아끼려고:
+// 인원이 '실제로 눈에 보이는 동안'(홈 탭의 배너, 열려 있는 그 경기 상세의 버튼)에만 5분에 한 번.
+// 다른 탭·다른 화면·응원방 안·앱이 뒤로 가 있을 땐 부르지 않는다. 배너·버튼이 같이 떠도 한 번만 나간다.
+const jumakHeadcount = (() => {
+  const EVERY = 5 * 60 * 1000, MIN_GAP = EVERY - 2000, MAX_AGE = 10 * 60 * 1000;
+  let snap = { n: 0, at: 0 }, lastAt = 0, inflight = false, refs = 0, timer = null;
+  const subs = new Set();
+  const poll = () => {
+    const url = jumakSwitch.get().rooms;
+    if (!url || inflight || document.hidden) return;
+    if (Date.now() - lastAt < MIN_GAP) return;
+    lastAt = Date.now();
+    inflight = true;
+    const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+    const t = setTimeout(() => { try { ctl && ctl.abort(); } catch {} }, 6000);
+    fetch(url, { cache: 'no-store', signal: ctl ? ctl.signal : undefined })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!j || !Array.isArray(j.rooms)) return;
+        const n = j.rooms.reduce((s, r) => s + (Number(r && r.n) > 0 ? Number(r.n) : 0), 0);
+        snap = { n, at: Date.now() };
+        subs.forEach((f) => { try { f(); } catch {} });
+      })
+      .catch(() => {})   // 실패하면 인원을 숨길 뿐이다(낡은 값은 MAX_AGE 가 지나면 안 보임)
+      .finally(() => { clearTimeout(t); inflight = false; });
+  };
+  return {
+    get: () => snap,
+    subscribe: (f) => { subs.add(f); return () => { subs.delete(f); }; },
+    maxAge: MAX_AGE,
+    retain() {
+      refs += 1;
+      if (refs === 1) {
+        poll();
+        timer = setInterval(poll, EVERY);
+        document.addEventListener('visibilitychange', poll);
+      }
+      return () => {
+        refs -= 1;
+        if (refs === 0) { clearInterval(timer); timer = null; document.removeEventListener('visibilitychange', poll); }
+      };
+    },
+  };
+})();
+// active: 인원을 보여줄 자리가 지금 사용자 눈에 보이는가(마운트만으로는 부족하다 — HomeV2 는 다른
+// 탭·상세 뒤에서도 계속 마운트돼 있다). 0 이면 '모름/없음' — 숨긴다.
+function useJumakHeadcount(active) {
+  const sw = useJumakSwitch();
+  const snap = React.useSyncExternalStore(jumakHeadcount.subscribe, jumakHeadcount.get);
+  const on = !!active && sw.open && !!sw.rooms;
+  React.useEffect(() => (on ? jumakHeadcount.retain() : undefined), [on]);
+  return (on && snap.n > 0 && Date.now() - snap.at < jumakHeadcount.maxAge) ? snap.n : 0;
+}
+
+// 응원방으로 들어가는 문(App 이 채운다). 값이 없으면(스위치 닫힘 포함) 아무것도 그리지 않는다.
+const JumakCtx = React.createContext(null);
+
+// 라이브 중이거나 킥오프 60분 전부터면 입장을 열어 준다.
+const JUMAK_SOON_MS = 60 * 60 * 1000;
+function jumakPhase(m, nowMs) {
+  if (!m || isFinalStatus(m.status) || /POSTPONED|CANCEL/i.test(m.status || '')) return null;
+  if (m.live || m.time === 'LIVE') return 'live';
+  const t = m.fullDate ? new Date(m.fullDate).getTime() : NaN;
+  if (!Number.isFinite(t)) return null;
+  const d = t - nowMs;
+  if (d > 0 && d <= JUMAK_SOON_MS) return 'soon';
+  // 킥오프가 막 지났는데 라이브 표시가 아직 안 붙은 경우(데이터 지연)도 입장은 열어 둔다.
+  if (d <= 0 && d > -15 * 60 * 1000 && (!m.status || m.status === 'notstarted' || /SCHEDULED/i.test(m.status))) return 'soon';
+  return null;
+}
+// 홈 배너가 가리킬 경기: 라이브가 먼저, 없으면 가장 빨리 시작하는 경기.
+function jumakPickMatch(list, nowMs) {
+  let live = null, soon = null, soonT = Infinity;
+  for (const m of list || []) {
+    const ph = jumakPhase(m, nowMs);
+    if (ph === 'live') { if (!live) live = m; }
+    else if (ph === 'soon') {
+      const t = new Date(m.fullDate).getTime();
+      if (t < soonT) { soon = m; soonT = t; }
+    }
+  }
+  return live ? { m: live, phase: 'live' } : soon ? { m: soon, phase: 'soon' } : null;
+}
+// 응원 주막 이름에 붙는 선수 표기: 1명 "이강인", 2명 "백승호·이강인", 3명 이상 "이강인 외 2명".
+function jumakWho(m) {
+  const ks = ((m && (m.followedKoreans && m.followedKoreans.length ? m.followedKoreans : (m.koreanPlayers || [m.koreanPlayer]))) || []).filter(Boolean);
+  const names = [...new Set(ks.map((k) => k.name).filter(Boolean))];
+  return names.length > 2 ? `${names[0]} 외 ${names.length - 1}명` : names.join('·');
+}
+// "Levante전 22:00" / 라이브면 시각 대신 "진행 중".
+function jumakMatchLine(m, phase) {
+  const kp = heroRepOf(m) || m.koreanPlayer;
+  const isHome = !!kp && m.home && m.home.code === kp.team;
+  const opp = ((isHome ? m.away : m.home) || {}).name || '';
+  const when = phase === 'live' ? '진행 중' : (m.fullDate ? formatHHMM(m.fullDate) : '');
+  return [opp ? `${opp}전` : '', when].filter(Boolean).join(' ');
+}
+function JumakMugIcon({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M5 9h10v8a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V9z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+      <path d="M15 11h1.5a2.5 2.5 0 0 1 0 5H15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+      <path d="M8 4.5c0 1.2 1.2 1.2 1.2 2.4M12 4.5c0 1.2 1.2 1.2 1.2 2.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+    </svg>
+  );
+}
+function JumakChevron() {
+  return <svg width="8" height="14" viewBox="0 0 8 14" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}><path d="M1.5 1.5l5 5.5-5 5.5" stroke="var(--text4)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>;
+}
+// 홈 '오늘의 경기' 캐러셀 바로 아래 배너. matches 는 캐러셀과 같은 풀(todayMatches).
+// 이름: "<선수> 응원 주막", 둘째 줄: "같이 응원해요 · 상대전 22:00 · 지금 N명".
+function JumakHomeBanner({ matches, now }) {
+  const sw = useJumakSwitch();
+  const ctx = React.useContext(JumakCtx);
+  const pick = sw.open && ctx ? jumakPickMatch(matches, now.getTime()) : null;
+  // 인원은 홈 탭의 메인 화면에서 배너가 실제로 보일 때만 부른다.
+  const count = useJumakHeadcount(!!pick && ctx.homeVisible);
+  if (!pick) return null;
+  const who = jumakWho(pick.m);
+  const title = `${who ? who + ' ' : ''}응원 주막`;
+  const line = jumakMatchLine(pick.m, pick.phase);
+  return (
+    <div style={{ padding: '0 16px 14px' }}>
+      <button onClick={() => ctx.open(pick.m.id, who)} aria-label={`${title} 들어가기`}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 16, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}>
+        <span style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--btn-bg)', color: 'var(--acc)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><JumakMugIcon size={22}/></span>
+        <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: -0.3 }}>
+            <span style={{ minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</span>
+            {pick.phase === 'live' && <LiveDot/>}
+          </span>
+          <span style={{ display: 'flex', alignItems: 'baseline', gap: 4, fontSize: 12, color: 'var(--text3)' }}>
+            <span style={{ minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>같이 응원해요{line ? ` · ${line}` : ''}</span>
+            {count > 0 && <span style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>· <b style={{ fontWeight: 700, color: 'var(--acc)', fontVariantNumeric: 'tabular-nums' }}>지금 {count.toLocaleString()}명</b></span>}
+          </span>
+        </span>
+        <JumakChevron/>
+      </button>
+    </div>
+  );
+}
+// 경기 상세 — 팀 응원 미터 아래 버튼. 이 경기가 라이브이거나 킥오프 60분 전부터 보인다.
+function JumakJoinButton({ match }) {
+  const sw = useJumakSwitch();
+  const ctx = React.useContext(JumakCtx);
+  const [, tick] = React.useReducer((x) => x + 1, 0);
+  // 화면을 열어 둔 채 킥오프 60분 전에 들어서는 순간 버튼이 나타나도록 가끔 다시 본다.
+  React.useEffect(() => {
+    if (!sw.open) return;
+    const iv = setInterval(tick, 30000);
+    return () => clearInterval(iv);
+  }, [sw.open]);
+  const phase = sw.open && ctx ? jumakPhase(match, Date.now()) : null;
+  // 인원은 이 경기 상세가 맨 위에 보일 때(팀·선수 2단이나 응원방이 덮지 않았을 때)만 부른다.
+  const count = useJumakHeadcount(!!phase && ctx.detailVisible);
+  if (!phase) return null;
+  const who = jumakWho(match);
+  return (
+    <button onClick={() => ctx.open(match.id, who)}
+      style={{ width: '100%', marginTop: 12, display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px', height: 46, boxSizing: 'border-box', background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 14, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}>
+      <span style={{ color: 'var(--acc)', display: 'flex', flexShrink: 0 }}><JumakMugIcon size={20}/></span>
+      <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: -0.3 }}>{who ? `${who} 응원 주막 들어가기` : '응원 주막 들어가기'}</span>
+      {count > 0 && <span style={{ flexShrink: 0, fontSize: 12, fontWeight: 700, color: 'var(--acc)', fontVariantNumeric: 'tabular-nums' }}>지금 {count.toLocaleString()}명</span>}
+      <JumakChevron/>
+    </button>
+  );
+}
+// 전체 화면 응원 주막. iframe 을 화면 끝까지 채운다. 페이지가 보내는 메시지(출처 확인):
+//   { type:'jumo-cheer', action:'ready' }  화면이 떴다 → 앱 쪽 로딩·닫기 버튼을 걷는다
+//   { type:'jumo-cheer', action:'error' }  3D 를 못 띄웠다 → 앱이 "열 수 없어요" 를 보여준다
+//   { type:'jumo-cheer', action:'close' }  닫아 달라 → onClose
+// iframe onLoad 는 오류 페이지·번들 실패에도 뜨므로 정상 판정에 쓰지 않는다(JUMAK_NEED_READY).
+// ready 가 오기 전까지는 앱 쪽 닫기 버튼(좌상단, 안전영역 반영)이 늘 떠 있어 갇히지 않는다.
+function JumakRoomFrame({ matchId, label, onClose, animate }) {
+  const src = React.useMemo(() => jumakRoomUrl(matchId), [matchId]);
+  const [phase, setPhase] = React.useState('loading');   // loading → ready | error
+  const closeRef = React.useRef(onClose);
+  closeRef.current = onClose;
+  const failedRef = React.useRef(false);   // 페이지가 직접 error 를 알렸다(늦은 ready 로 되살리지 않는다)
+  const title = label ? `${label} 응원 주막` : '응원 주막';
+  React.useEffect(() => {
+    let origin = '';
+    try { origin = new URL(src).origin; } catch {}
+    jumakRoomReady = false;
+    const onMsg = (e) => {
+      const d = e.data;
+      if (!origin || e.origin !== origin || !d || d.type !== 'jumo-cheer') return;
+      if (d.action === 'close') { closeRef.current && closeRef.current(); }
+      else if (d.action === 'ready') {
+        if (failedRef.current) return;
+        jumakRoomReady = true; setPhase('ready');
+      } else if (d.action === 'error') {
+        failedRef.current = true; jumakRoomReady = false; setPhase('error');
+      }
+    };
+    window.addEventListener('message', onMsg);
+    return () => { window.removeEventListener('message', onMsg); jumakRoomReady = false; };
+  }, [src]);
+  // ready 가 끝내 안 오면(번들 실패·빈 화면) 앱이 직접 안내한다. 느린 기기에서 뒤늦게 ready 가 오면 되살아난다.
+  React.useEffect(() => {
+    if (phase !== 'loading') return;
+    const t = setTimeout(() => setPhase((p) => (p === 'loading' ? 'error' : p)), JUMAK_READY_TIMEOUT_MS);
+    return () => clearTimeout(t);
+  }, [phase]);
+  const onFrameLoad = () => {
+    if (!JUMAK_NEED_READY) { jumakRoomReady = true; setPhase((p) => (p === 'loading' ? 'ready' : p)); }
+  };
+  return (
+    <div className={animate ? 'screen-slide-in' : ''} style={{ flex: 1, position: 'relative', background: '#000', overflow: 'hidden', animation: animate ? undefined : 'fadeIn 0.2s ease' }}>
+      <iframe title={title} src={src} allow="autoplay; fullscreen" allowFullScreen onLoad={onFrameLoad}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0, display: 'block', background: '#000' }}/>
+      {phase === 'loading' && (
+        <div style={{ position: 'absolute', inset: 0, background: '#000', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, color: 'rgba(255,255,255,0.7)', fontSize: 14, fontWeight: 600 }}>
+          <div style={{ width: 22, height: 22, borderRadius: '50%', border: '2.5px solid rgba(255,255,255,0.18)', borderTopColor: 'var(--acc)', animation: 'spin 0.8s linear infinite' }}/>
+          {title}으로 들어가는 중이에요
+        </div>
+      )}
+      {phase === 'error' && (
+        <div style={{ position: 'absolute', inset: 0, background: '#000', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '0 32px', textAlign: 'center' }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', letterSpacing: -0.3 }}>3D 화면을 열 수 없어요</div>
+          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)' }}>잠시 뒤에 다시 들어와 주세요</div>
+          <button onClick={() => closeRef.current && closeRef.current()}
+            style={{ marginTop: 14, height: 44, padding: '0 28px', borderRadius: 22, border: 'none', background: 'rgba(255,255,255,0.14)', color: '#fff', fontSize: 15, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' }}>닫기</button>
+        </div>
+      )}
+      {phase !== 'ready' && (
+        <button onClick={() => closeRef.current && closeRef.current()} aria-label="닫기"
+          style={{ position: 'absolute', zIndex: 2, left: 12, top: 'calc(env(safe-area-inset-top, 0px) + 10px)', width: 40, height: 40, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.16)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', WebkitTapHighlightColor: 'transparent' }}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+        </button>
+      )}
+    </div>
+  );
+}
+
 function TeamCheerMeter({ match, isLive, isFinished }) {
   const mid = String(match.id);
   const LSK = `jumo_cheer_${mid}`;
@@ -5091,6 +5433,7 @@ function TeamCheerMeter({ match, isLive, isFinished }) {
           {statusText}
         </div>
       </div>
+      <JumakJoinButton match={match}/>
     </div>
   );
 }
@@ -13463,7 +13806,14 @@ function App() {
   // 상세 위에 상세를 하나 더 얹는다(경기 → 팀). 3단 이상은 지금 필요 없어
   // 배열 대신 단일 슬롯으로 둔다 — 스택 자료구조를 만들면 렌더·제스처 양쪽이
   // 복잡해지는데, 실제 동선은 '상세에서 팀 하나 들여다보기'뿐이다.
-  const [overScreen, setOverScreen] = React.useState(null);   // 'team' | 'player' | null
+  const [overScreen, setOverScreen] = React.useState(null);   // 'team' | 'player' | 'cheer' | null
+  // 주막 응원방(전체 화면 iframe)이 열려 있는가. 홈에서는 screen='cheer', 경기 상세에서는
+  // 그 위에 얹어(overScreen='cheer') 닫으면 보던 경기 상세로 그대로 돌아온다.
+  const cheerOpen = screen === 'cheer' || overScreen === 'cheer';
+  const [cheerMatchId, setCheerMatchId] = React.useState(null);
+  const [cheerLabel, setCheerLabel] = React.useState('');   // "<선수> 응원 주막" 의 선수 표기
+  // 원격 스위치(cheer-status.json) 확인: 시작할 때 한 번, 앞에 떠 있는 동안 5분마다.
+  React.useEffect(() => jumakSwitch.start(), []);
 
   const goMatch = (m) => { setOverScreen(null); setSelectedMatch(m); setScreen('match'); };
   const goPlayer = (p) => {
@@ -13567,6 +13917,25 @@ function App() {
     setClosing(true); // slide the detail out to the right, revealing main behind
     setTimeout(() => { setScreen('main'); setClosing(false); }, 330);
   };
+  // 주막 응원방 열기. 입구 버튼(홈 배너·경기 상세)이 Context 로 이 함수를 받는다 — 스위치가
+  // 닫혀 있으면 버튼 자체가 안 그려진다. ref 로 감싸 identity 를 고정해 둔다(리렌더 폭주 방지).
+  const openCheerRef = React.useRef(null);
+  openCheerRef.current = (matchId, label) => {
+    if (closing || cheerOpen) return;
+    setCheerMatchId(matchId == null ? null : String(matchId));
+    setCheerLabel(label || '');
+    if (screen === 'main') setScreen('cheer');
+    else setOverScreen('cheer');
+  };
+  const openCheer = React.useCallback((matchId, label) => { openCheerRef.current && openCheerRef.current(matchId, label); }, []);
+  // 입구(홈 배너·경기 상세 버튼)에 주는 값. homeVisible/detailVisible 은 '지금 사용자 눈에 보이는가' —
+  // 인원 조회(Cloudflare 무료 한도)는 눈에 보일 때만 나가야 한다. HomeV2 는 다른 탭·상세 뒤에서도
+  // 마운트돼 있으므로 마운트 여부로는 알 수 없다.
+  const jumakCtxValue = React.useMemo(() => ({
+    open: openCheer,
+    homeVisible: tab === 'home' && screen === 'main',
+    detailVisible: screen === 'match' && !overScreen,
+  }), [openCheer, tab, screen, overScreen]);
 
   // ─── 왼쪽 엣지 스와이프 뒤로가기 — 손가락을 실시간으로 따라간다 ───────
   // 네이티브 인식기(MainViewController.handleEdgeBack)는 cancelsTouchesInView
@@ -13613,6 +13982,8 @@ function App() {
     // 리스너는 언제나 '맨 위' 레이어에 붙는다 — 그게 손가락이 미는 화면이다.
     const el = overlayTopRef.current || overlayRef.current;
     if (!el || (screen === 'main' && !overScreen)) return;
+    // 응원방(iframe)은 터치를 자기 안에서 받는다 — 웹 엣지 스와이프를 붙이지 않는다.
+    if (cheerOpen) return;
     // 모션 최소화: 추적·패럴랙스 없이 기존 동작(손 뗀 뒤 전환)을 그대로 둔다.
     if (typeof window !== 'undefined' && window.matchMedia
         && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -13722,7 +14093,7 @@ function App() {
       el.removeEventListener('touchend', onEnd);
       el.removeEventListener('touchcancel', onEnd);
     };
-  }, [screen, overScreen, applyDrag, edgeWidth]);
+  }, [screen, overScreen, applyDrag, edgeWidth, cheerOpen]);
 
   const [tabScrollKeys, setTabScrollKeys] = React.useState({ home:0, schedule:0, players:0, news:0, more:0 });
   const handleTab = React.useCallback((t) => {
@@ -13820,12 +14191,16 @@ function App() {
       // 웹에서 엣지 스와이프를 직접 처리했으면, 뒤따라 오는 네이티브의 .ended
       // 호출은 같은 제스처의 중복이다(옛 네이티브 바이너리 호환용 경로).
       if (Date.now() - edgeHandledAtRef.current < 700) return true;
+      // 응원방: 네이티브 엣지 인식기는 화면별로 끌 수 없어(Swift 변경 필요) 여기서 받는다.
+      // 페이지가 ready 를 알린 뒤에는 3D 드래그와 겹치지 않게 무시(닫기는 페이지의 버튼).
+      // ready 전(불러오는 중·오류)에는 그대로 닫는다 — 빈 화면에 갇히지 않게.
+      if (cheerOpen && jumakRoomReady && !JUMAK_EDGE_BACK_CLOSES) return true;
       if (overScreen || screen !== 'main') { goBack(); return true; }
       if (tab === 'more' && moreSub) { setMoreSub(null); return true; }
       return false;
     };
     return () => { try { delete window.__back; } catch {} };
-  }, [screen, overScreen, tab, moreSub]);
+  }, [screen, overScreen, tab, moreSub, cheerOpen]);
 
   // Native Liquid Glass notification bell (top-right): show only on home/main,
   // mirror the unread count, and expose the tap target.
@@ -13861,7 +14236,8 @@ function App() {
       // 뒤로가기는 화면이 0.34s 동안 슬라이드 아웃되는데, screen 은 그 뒤에야 'main'
       // 이 된다. closing 을 함께 보고 슬라이드 시작과 동시에 크롬을 접어야 상단
       // 버튼이 사라지는 화면과 겹쳐 보이지 않는다.
-      const hiding = closing || dragging;
+      // 응원방은 페이지가 자기 닫기 버튼을 갖고 있어 네이티브 유리 뒤로가기를 얹지 않는다.
+      const hiding = closing || dragging || cheerOpen;
       // 2단(팀/선수 상세)이 얹혀 있으면 1단 전용 크롬 — 팔로우·알림 벨·우상단 액션은
       // 접는다. 2단 화면 위에 남아 겹쳐 보이면 안 된다. 뒤로가기만 살려 둔다:
       // 그게 2단을 걷어내는 버튼이다(웹 BackBtn 은 네이티브 크롬에선 숨는다).
@@ -13883,7 +14259,7 @@ function App() {
               : { show: false, label: '', icon: '', accent: false },
       });
     } catch {}
-  }, [screen, overScreen, selectedPlayer, followed, nativeTabBar, tab, moreSub, mutedPlayers, closing, dragging]);
+  }, [screen, overScreen, selectedPlayer, followed, nativeTabBar, tab, moreSub, mutedPlayers, closing, dragging, cheerOpen]);
   React.useEffect(() => {
     window.__jumoFollow = () => {
       if (!selectedPlayer) return;
@@ -14134,6 +14510,13 @@ function App() {
     lastTabScrollY.current = 0;
     try { window.webkit?.messageHandlers?.tabbar?.postMessage({ hide: false }); } catch {}
   }, [tab, screen, overScreen]);
+  // 응원방이 열려 있는 동안은 탭바를 접는다. 위 효과가 화면이 바뀔 때마다 hide:false 를
+  // 보내므로 반드시 그 '뒤'에 선언해 마지막에 덮어쓴다. 닫기 시작(closing)과 동시에 도로 편다.
+  React.useEffect(() => {
+    if (!cheerOpen || closing) return;
+    try { window.webkit?.messageHandlers?.tabbar?.postMessage({ hide: true }); } catch {}
+    return () => { try { window.webkit?.messageHandlers?.tabbar?.postMessage({ hide: false }); } catch {} };
+  }, [cheerOpen, closing]);
 
   const filteredLiveMatches = React.useMemo(
     () => liveMatches
@@ -14192,6 +14575,7 @@ function App() {
   return (
     <ToastCtx.Provider value={showToast}>
     <ExplainCtx.Provider value={setExplain}>
+    <JumakCtx.Provider value={jumakCtxValue}>
     <SyncCtx.Provider value={syncing}>
     <div style={{ '--acc': tweaks.accentColor, fontFamily:"-apple-system, 'Apple SD Gothic Neo', system-ui, sans-serif", WebkitFontSmoothing:'antialiased' }}>
       {/* 캐시로 낡은 내용을 먼저 보여주는 동안 '갱신 중'임을 분명히 알린다.
@@ -14227,6 +14611,9 @@ function App() {
           </div>
           {screen !== 'main' && (
           <div ref={overlayRef} className={(closing && !dragging) ? 'screen-slide-out' : ''} style={{ position:'absolute', inset:0, zIndex:50, background:'var(--bg)', display:'flex', flexDirection:'column', transform: dragging ? (dragTop ? `translateX(${parallaxX}px)` : `translateX(${dragXRef.current}px)`) : undefined, transition:'none', willChange: dragging ? 'transform' : undefined, boxShadow: (dragging && !dragTop) ? '-8px 0 24px rgba(0,0,0,0.45)' : undefined }}>
+          {screen === 'cheer' && (
+            <JumakRoomFrame matchId={cheerMatchId} label={cheerLabel} onClose={goBack} animate/>
+          )}
           {screen === 'match' && selectedMatch && (
             <LiveDetailScreen match={liveSelectedMatch} onBack={goBack} liveApiMatches={liveMatches} onPlayer={goPlayer} onTeam={goTeam}/>
           )}
@@ -14269,7 +14656,14 @@ function App() {
             <PlayerScreen player={selectedPlayer} onBack={goBack} onMatch={goMatch} liveApiMatches={liveMatches} statsCache={playerStatsCache} followedSet={followed} onToggleFollow={toggleFollow} muted={mutedPlayers.has(selectedPlayer.id)} onToggleMute={() => togglePlayerMute(selectedPlayer.id)}/>
           </div>
           )}
-          {!nativeTabBar && <TabBar active={tab} onTab={handleTab} elevated={showOnboarding} hidden={tabBarHidden}/>}
+          {overScreen === 'cheer' && (
+          <div style={{ position:'absolute', inset:0, zIndex:60, background:'#000', display:'flex', flexDirection:'column' }}>
+            <JumakRoomFrame matchId={cheerMatchId} label={cheerLabel} onClose={goBack}/>
+          </div>
+          )}
+          {/* 응원방이 열려 있으면 웹 탭바(iOS 26 미만·웹)는 아예 내린다 — TabBar 의 hidden 은 translateY 가
+              뒤쪽 중복 transform 키에 덮여 pointer-events 만 꺼지고 화면엔 남는다. */}
+          {!nativeTabBar && !(cheerOpen && !closing) && <TabBar active={tab} onTab={handleTab} elevated={showOnboarding} hidden={tabBarHidden}/>}
           {showOnboarding && <OnboardingTour onDone={finishOnboarding} onTab={setTab} followed={followed} onToggleFollow={toggleFollow}/>}
         </div>
       </IOSDevice>
@@ -14310,6 +14704,7 @@ function App() {
     </div>
     <ExplainTip data={explain} onClose={() => setExplain(null)}/>
     </SyncCtx.Provider>
+    </JumakCtx.Provider>
     </ExplainCtx.Provider>
     </ToastCtx.Provider>
   );
