@@ -15,7 +15,7 @@ import { PresenceClient, type PresenceStatus } from './PresenceClient';
 export interface NetEventMap {
   'net-status': { status: PresenceStatus; room: number | null };
   /** 서버가 붙여 준 내 이름 (연결될 때마다 새로 받는다) */
-  'self-name': { name: LocalizedName };
+  'self-name': { name: LocalizedName; id?: PeerId };
   /** 들어간 방 번호가 정해졌다 (주소에 반영한다) */
   'room-change': { room: number };
   /** 정원이 차서 들어가지 못했다. rec은 추천 방(없으면 null) */
@@ -296,7 +296,7 @@ export class NetSession {
       c.on('welcome', (m) => {
         this.mover.setMaxHz(m.limits.moveHz);
         this.peers.reset(m.peers, m.seats);
-        this.host.emit('self-name', { name: m.name });
+        this.host.emit('self-name', { name: m.name, id: m.id });
         this.host.emit('room-change', { room: m.room });
         // 끊긴 사이에 로컬로 앉아 있던 자리는 다시 앉아 본다. 그새 다른 사람이 앉았으면 일어난다
         const seatId = this.host.getSelf().seatId;

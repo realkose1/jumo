@@ -385,8 +385,9 @@ describe('PoseState 걷기', () => {
     s.snapSeated(true);
     const frames = run(s, 1, 1);
     for (const f of frames) {
-      expect(Math.abs(stepL(f))).toBeLessThan(1e-9);
-      expect(Math.abs(stepR(f))).toBeLessThan(1e-9);
+      // 앉으면 발은 양반다리처럼 앞 양옆(0.15, 0.17)에 가만히 있다
+      expect(f.footLZ).toBeCloseTo(0.17 * f.bodyScaleXZ, 9);
+      expect(f.footRZ).toBeCloseTo(0.17 * f.bodyScaleXZ, 9);
       expect(f.footLY - FOOT_Y * f.bodyScaleY).toBeCloseTo(0, 9);
       expect(f.roll).toBeCloseTo(0, 9);
     }
@@ -398,7 +399,8 @@ describe('PoseState 걷기', () => {
     s.seated = true;
     s.speedTarget = 0;
     const frames = run(s, 1);
-    const amp = (fs: typeof frames) => Math.max(...fs.map((f) => Math.abs(stepL(f))));
+    // 두 발이 엇갈린 폭의 반 (앉으면 발 기본 자리가 옮겨 가므로 두 발의 차이로 잰다)
+    const amp = (fs: typeof frames) => Math.max(...fs.map((f) => Math.abs(f.footLZ - f.footRZ) / 2));
     expect(amp(frames.slice(0, 5))).toBeGreaterThan(amp(frames.slice(-10)));
     expect(amp(frames.slice(-10))).toBeLessThan(1e-6);
   });
@@ -463,11 +465,25 @@ describe('PoseState 걷기', () => {
     expect(Math.max(...frames.map((f) => f.footLY + f.poseY))).toBeGreaterThan(0.2);
   });
 
+  it('앉는 동안 앞으로 숙이며 폴짝 올랐다가, 다 앉으면 꾹 눌리고 살짝 뒤로 기댄다', () => {
+    const s = new PoseState(false);
+    s.seated = true;
+    const frames = run(s, 1.2);
+    const mid = frames.slice(0, 30);
+    expect(Math.max(...mid.map((f) => f.pitch))).toBeGreaterThan(0.2);
+    expect(Math.max(...mid.map((f) => f.poseY))).toBeGreaterThan(0.05);
+    // 다 앉은 직후 한 번 아래로 눌린다
+    expect(Math.min(...frames.map((f) => f.poseY))).toBeLessThan(-0.02);
+    const last = frames.at(-1)!;
+    expect(last.pitch).toBeLessThan(0);
+    expect(last.poseY).toBeCloseTo(0, 6);
+  });
+
   it('몸통이 눌리면(앉기) 발도 같은 비율로 눌린다', () => {
     const s = new PoseState(true);
     s.snapSeated(true);
     const f = s.compute();
-    expect(f.footX).toBeCloseTo(0.09 * f.bodyScaleXZ, 9);
+    expect(f.footX).toBeCloseTo(0.15 * f.bodyScaleXZ, 9);
     expect(f.footLY).toBeCloseTo(FOOT_Y * f.bodyScaleY, 9);
   });
 });

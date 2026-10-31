@@ -10,6 +10,8 @@ import {
   DETAIL_PRESETS,
   PoseState,
   WALK_SPEED,
+  accessoryShown,
+  lookFor,
   getAccessoryGeometry,
   getAvatarGeometries,
   getAvatarMaterial,
@@ -32,7 +34,9 @@ const SPEED_FOLLOW = 7;
 const SPEED_CAP = 1.25;
 const PICK_RADIUS = 0.5;
 const PICK_CENTER_HEIGHT = 0.5;
-const LABEL_RISE = 0.14;
+const LABEL_RISE = 0.2; // 갓 위로 띄운다
+/** 감춘 소품 인스턴스에 쓰는 크기 0 행렬 */
+const ZERO_MATRIX = new THREE.Matrix4().makeScale(0, 0, 0);
 
 function lerpAngle(from: number, to: number, t: number): number {
   const delta = Math.atan2(Math.sin(to - from), Math.cos(to - from));
@@ -463,7 +467,13 @@ export class RemotePeers {
 
       this.bodyMesh.setMatrixAt(i, this.mBody);
       this.headMesh.setMatrixAt(i, this.mHead);
+      const look = lookFor(this.outfit, p.id);
       for (const layer of this.layers) {
+        // 이 사람의 차림에 없는 소품은 크기 0으로 감춘다 (인스턴스 순서는 모두 같아야 해서 빼지 않는다)
+        if (!accessoryShown(layer.spec, look)) {
+          layer.mesh.setMatrixAt(i, ZERO_MATRIX);
+          continue;
+        }
         const parent = layer.spec.attach === 'head' ? this.mHead : this.mBody;
         this.mTmp.multiplyMatrices(parent, layer.local);
         layer.mesh.setMatrixAt(i, this.mTmp);

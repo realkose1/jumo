@@ -91,7 +91,7 @@ export interface EngineOptions {
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 const DEFAULT_FOCUS_HEIGHT = 0.6;
 /** 머리 위 효과가 뜨는 곳: 머리 꼭대기에서 이만큼 위 */
-const HEAD_ANCHOR_RISE = 0.14;
+const HEAD_ANCHOR_RISE = 0.2; // 갓 위로 띄운다
 const WATCHDOG_MS = 500;
 
 export class Engine {
@@ -264,6 +264,8 @@ export class Engine {
         outfit: this.space.avatarOutfit,
         reducedMotion: this.getReducedMotion(),
       });
+      // 서버가 붙여 준 내 번호로 차림(갓, 상투 등)을 고른다. 남들 화면에서도 같은 차림이다
+      this.cleanups.push(this.on('self-name', ({ id }) => { if (id !== undefined) avatar.setLookFromId(id); }));
       this.player = new Player(avatar, this.seats, this.net?.arbiter ?? this.arbiter, this.scene, {
         onSeatChange: (seatId) => {
           if (seatId) this.aimCameraFromSeat(seatId);

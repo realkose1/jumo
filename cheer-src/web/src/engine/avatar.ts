@@ -41,6 +41,8 @@ export interface AccessorySpec {
   position: [number, number, number];
   rotation?: [number, number, number];
   scale?: [number, number, number];
+  /** 이 소품을 쓰는 차림 번호들(OutfitSpec.looks 중). 없으면 모든 차림이 쓴다 */
+  looks?: number[];
 }
 
 export interface OutfitSpec {
@@ -48,6 +50,19 @@ export interface OutfitSpec {
   bodyColor: number;
   skinColor: number;
   accessories?: AccessorySpec[];
+  /** 차림 가짓수. 사람 번호로 하나를 고른다(번호 % looks). 없으면 1 */
+  looks?: number;
+}
+
+/** 사람 번호 -> 차림 번호. 같은 번호면 누구 화면에서나 같은 차림이다 */
+export function lookFor(outfit: OutfitSpec, id: number): number {
+  const n = Math.max(1, Math.floor(outfit.looks ?? 1));
+  return ((Math.floor(id) % n) + n) % n;
+}
+
+/** 그 차림에서 이 소품이 보이는가 */
+export function accessoryShown(acc: AccessorySpec, look: number): boolean {
+  return !acc.looks || acc.looks.includes(look);
 }
 
 /** 1단계 기본형: 회색 */
@@ -313,7 +328,18 @@ export function walkGait(phase: number, amount: number, reduced: boolean, out: G
 }
 
 const SIT_SQUASH = 0.86;
-const SIT_BLEND_SECONDS = 0.3;
+/** 앉고 일어나는 데 걸리는 시간 */
+const SIT_BLEND_SECONDS = 0.55;
+/** 앉고 일어나는 동안 앞으로 숙이는 각(라디안), 앉는 면으로 폴짝 오르는 높이(m) */
+const SIT_LEAN = 0.32;
+const SIT_HOP = 0.09;
+/** 다 앉은 뒤 엉덩이를 붙이며 한 번 꾹 눌리는 깊이(m)와 시간(초), 앉아서 살짝 뒤로 기대는 각 */
+const SIT_SETTLE_DEPTH = 0.035;
+const SIT_SETTLE_SECONDS = 0.32;
+const SIT_RECLINE = -0.05;
+/** 앉으면 발은 양반다리처럼 앞 양옆으로 나온다 (몸통 바닥 기준) */
+const SEATED_FOOT_X = 0.15;
+const SEATED_FOOT_Z = 0.17;
 /** 평상에 오르내릴 때 높이가 따라가는 빠르기 (클수록 빨리) */
 const GROUND_FOLLOW = 18;
 
@@ -330,6 +356,8 @@ export class PoseState {
   private readonly gait = createGait();
   private breathePhase = Math.random() * Math.PI * 2;
   private seatBlend = 0;
+  /** 다 앉은 뒤 지난 시간(초). 엉덩이를 붙이는 꾹 눌림에 쓴다. 서 있으면 Infinity */
+  private settleT = Infinity;
   /** 서 있는 바닥의 높이(목표)와 지금 높이 */
   groundY = 0;
   private ground = 0;
@@ -359,9 +387,12 @@ export class PoseState {
     this.breathePhase += dt * 1.8;
     this.ground += (this.groundY - this.ground) * (1 - Math.exp(-GROUND_FOLLOW * dt));
     const blendStep = dt / SIT_BLEND_SECONDS;
+    const wasSeated = this.seatBlend >= 1;
     this.seatBlend = this.seated
       ? Math.min(1, this.seatBlend + blendStep)
       : Math.max(0, this.seatBlend - blendStep);
+    if (this.seatBlend >= 1) this.settleT = wasSeated ? this.settleT + dt : 0;
+    else this.settleT = Infinity;
     if (this.motion) {
       this.motion.t += dt;
       if (this.motion.t >= MOTIONS[this.motion.name].duration) this.motion = null;
@@ -372,35 +403,44 @@ export class PoseState {
   snapSeated(on: boolean): void {
     this.seated = on;
     this.seatBlend = on ? 1 : 0;
+    this.settleT = Infinity;
   }
 
   compute(): PoseOutput {
     const m = this.motion && this.motion.t >= 0 ? motionOffset(this.motion.name, this.motion.t, this.reduced) : null;
     const breathe = this.reduced ? 0 : Math.sin(this.breathePhase) * 0.012;
     const seat = this.seatBlend * this.seatBlend * (3 - 2 * this.seatBlend);
+    // 앉고 일어나는 중: 앞으로 숙이며 앉는 면으로 폴짝 올랐다가 내려앉는다(일어날 때는 거꾸로)
+    const moving = this.seatBlend > 0 && this.seatBlend < 1 ? Math.sin(Math.PI * this.seatBlend) : 0;
+    const tm = this.reduced ? REDUCED_TILT : 1;
+    const sitLean = SIT_LEAN * tm * moving + SIT_RECLINE * tm * seat;
+    const sitHop = SIT_HOP * (this.reduced ? 0.35 : 1) * moving;
+    // 다 앉은 직후: 엉덩이를 붙이며 한 번 꾹 눌렸다 돌아온다
+    const settle =
+      !this.reduced && this.settleT < SIT_SETTLE_SECONDS ? Math.sin((Math.PI * this.settleT) / SIT_SETTLE_SECONDS) : 0;
     // 앉아 있으면 발은 가만히 있는다 (앉는 정도만큼 걸음이 사그라든다)
     const g = walkGait(this.walkPhase, this.speed * (1 - seat), this.reduced, this.gait);
     // 앉으면 몸통이 살짝 눌리고, 뛸 때는 늘고 줄어든다
-    const sy = (1 - (1 - SIT_SQUASH) * seat) * (1 + (m?.squash ?? 0) + breathe);
+    const sy = (1 - (1 - SIT_SQUASH) * seat - 0.06 * settle) * (1 + (m?.squash ?? 0) + breathe);
     const sxz = 1 + (1 - sy) * 0.4;
-    const footX = FOOT_X * sxz;
-    const footLZ = FOOT_Z * sxz + g.stepL;
-    const footRZ = FOOT_Z * sxz + g.stepR;
+    const footX = (FOOT_X + (SEATED_FOOT_X - FOOT_X) * seat) * sxz;
+    const footLZ = (FOOT_Z + (SEATED_FOOT_Z - FOOT_Z) * seat) * sxz + g.stepL;
+    const footRZ = (FOOT_Z + (SEATED_FOOT_Z - FOOT_Z) * seat) * sxz + g.stepR;
     return {
       // 앉으면 앉는 면 높이로, 서 있으면 서 있는 바닥 높이로 (그 사이는 앉는 정도로 섞는다)
       rootY: this.ground * (1 - seat) + this.seatY * seat,
-      poseY: g.bob + (m?.y ?? 0),
+      poseY: g.bob + (m?.y ?? 0) + sitHop - SIT_SETTLE_DEPTH * settle,
       roll: g.sway + (m?.roll ?? 0),
-      pitch: g.lean + (m?.pitch ?? 0),
+      pitch: g.lean + (m?.pitch ?? 0) + sitLean,
       spin: m?.spin ?? 0,
       bodyScaleXZ: sxz,
       bodyScaleY: sy,
       headY: BODY_HEIGHT * sy + HEAD_RISE,
       // 발은 땅을 딛고 있으니, 걸을 때 몸이 튀고(bob) 숙고(lean) 기우는(sway) 만큼은 덜어 낸다 (뛰기 몸짓은 그대로 함께 뜬다)
       footX,
-      footLY: FOOT_Y * sy + g.liftL - g.bob + footLZ * g.lean + footX * g.sway,
+      footLY: FOOT_Y * sy + SIT_SETTLE_DEPTH * settle + g.liftL - g.bob + footLZ * g.lean + footX * g.sway,
       footLZ,
-      footRY: FOOT_Y * sy + g.liftR - g.bob + footRZ * g.lean - footX * g.sway,
+      footRY: FOOT_Y * sy + SIT_SETTLE_DEPTH * settle + g.liftR - g.bob + footRZ * g.lean - footX * g.sway,
       footRZ,
     };
   }
@@ -423,6 +463,9 @@ export class Avatar {
   private readonly footL: THREE.Mesh;
   private readonly footR: THREE.Mesh;
   private readonly accessories: THREE.Mesh[] = [];
+  private accessorySpecs: AccessorySpec[] = [];
+  private outfitSpec: OutfitSpec = PLAIN_OUTFIT;
+  private look = 0;
   private readonly detail: AvatarDetailOptions;
 
   private readonly state: PoseState;
@@ -473,7 +516,9 @@ export class Avatar {
     this.head.material = getAvatarMaterial(spec.skinColor, true);
     for (const m of this.accessories) m.parent?.remove(m);
     this.accessories.length = 0;
-    for (const acc of spec.accessories ?? []) {
+    this.outfitSpec = spec;
+    this.accessorySpecs = spec.accessories ?? [];
+    for (const acc of this.accessorySpecs) {
       const mesh = new THREE.Mesh(getAccessoryGeometry(acc, this.detail), getAvatarMaterial(acc.color, false));
       mesh.position.set(...acc.position);
       if (acc.rotation) mesh.rotation.set(...acc.rotation);
@@ -482,6 +527,19 @@ export class Avatar {
       (acc.attach === 'head' ? this.head : this.body).add(mesh);
       this.accessories.push(mesh);
     }
+    this.applyLook();
+  }
+
+  /** 내 사람 번호로 차림(갓, 상투 등)을 고른다. 남들 화면에서도 같은 번호로 같은 차림이 된다 */
+  setLookFromId(id: number): void {
+    this.look = lookFor(this.outfitSpec, id);
+    this.applyLook();
+  }
+
+  private applyLook(): void {
+    this.accessories.forEach((m, i) => {
+      m.visible = accessoryShown(this.accessorySpecs[i]!, this.look);
+    });
   }
 
   setReducedMotion(on: boolean): void {
