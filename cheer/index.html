@@ -26,23 +26,82 @@
   <body>
     <script>
       /* 번들(자바스크립트)을 불러오지 못했을 때: 앱(부모 창)에 'error'를 알리고 한 줄 안내를 띄운다.
-         정상이면 main.ts가 화면이 뜬 뒤 __jumoCheerReady를 켜서 이 안내는 나오지 않는다. */
-      window.addEventListener(
-        'error',
-        function (e) {
-          if (window.__jumoCheerReady || window.__jumoCheerFailed) return;
-          var t = e && e.target;
-          var isScript = t && t.tagName === 'SCRIPT';
-          if (!isScript && !(e && e.message && /module|import|fetch/i.test(e.message))) return;
-          window.__jumoCheerFailed = true;
+         정상이면 main.ts가 화면이 뜬 뒤 __jumoCheerReady를 켜서 이 안내는 나오지 않는다.
+         단, 처음 한 번은 스스로 고친다. 배포가 바뀌는 몇 초 사이에 옛 배포가 새 파일 이름에 웹페이지(HTML)를
+         돌려주고, 브라우저가 그걸 1년짜리 캐시(immutable)로 붙잡아 다시 열어도 계속 실패했다(제보, 2026-10-31).
+         그래서 /cheer/assets/ 파일을 캐시를 건너뛰고 다시 받아(캐시를 갈아 끼움) 새로 고친다. 1분 안에 또
+         실패하면 그때 안내를 띄운다. */
+      (function () {
+        var HEAL_KEY = 'jumo-cheer-heal';
+        var HEAL_GAP_MS = 60000;
+        function healedRecently() {
+          try {
+            return Date.now() - Number(sessionStorage.getItem(HEAL_KEY) || 0) < HEAL_GAP_MS;
+          } catch (_) {}
+          var m = /[?&]heal=(\d+)/.exec(location.search);
+          return !!m && Date.now() - Number(m[1]) < HEAL_GAP_MS;
+        }
+        // 저장소를 못 쓰는 창(사생활 보호 등)에서는 주소에 표시해 두고 다시 연다
+        function reloadMarked() {
+          try {
+            sessionStorage.setItem(HEAL_KEY, String(Date.now()));
+            location.reload();
+            return;
+          } catch (_) {}
+          var q = location.search.replace(/([?&])heal=\d+&?/, '$1').replace(/[?&]$/, '');
+          location.replace(location.pathname + q + (q ? '&' : '?') + 'heal=' + Date.now() + location.hash);
+        }
+        function heal() {
+          var seen = {};
+          var urls = [];
+          function add(u) {
+            if (!u || u.indexOf('/cheer/assets/') < 0 || seen[u]) return;
+            seen[u] = 1;
+            urls.push(u);
+          }
+          try {
+            performance.getEntriesByType('resource').forEach(function (r) { add(r.name); });
+          } catch (_) {}
+          var els = document.querySelectorAll('script[src], link[href]');
+          for (var i = 0; i < els.length; i++) add(els[i].src || els[i].href);
+          var done = false;
+          function go() {
+            if (done) return;
+            done = true;
+            reloadMarked();
+          }
+          setTimeout(go, 5000);
+          // cache: 'reload' 는 네트워크에서 새로 받아 브라우저 캐시를 그 응답으로 바꿔 둔다
+          Promise.all(urls.map(function (u) {
+            return fetch(u, { cache: 'reload', credentials: 'same-origin' }).catch(function () {});
+          })).then(go, go);
+        }
+        function fail() {
           try { window.parent.postMessage({ type: 'jumo-cheer', action: 'error' }, '*'); } catch (_) {}
           var d = document.createElement('div');
           d.style.cssText = 'position:fixed;inset:0;z-index:99;display:flex;align-items:center;justify-content:center;padding:24px;background:#0b0b0d;color:#fff;font:17px/1.5 -apple-system,sans-serif;text-align:center';
           d.textContent = '화면을 열 수 없어요. 잠시 후 다시 시도해 주세요';
           document.body.appendChild(d);
-        },
-        true
-      );
+        }
+        function broken() {
+          if (window.__jumoCheerReady || window.__jumoCheerFailed) return;
+          window.__jumoCheerFailed = true;
+          if (healedRecently()) fail();
+          else heal();
+        }
+        window.addEventListener(
+          'error',
+          function (e) {
+            var t = e && e.target;
+            var isScript = t && t.tagName === 'SCRIPT';
+            if (!isScript && !(e && e.message && /module|import|fetch/i.test(e.message))) return;
+            broken();
+          },
+          true
+        );
+        // 공간 조각(jumak-*.js)을 못 불러온 경우 — Vite 가 알려 준다
+        window.addEventListener('vite:preloadError', broken);
+      })();
     </script>
     <!-- 3D 캔버스는 엔진이 #stage 안에 만든다 -->
     <div id="stage"></div>

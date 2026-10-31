@@ -32,7 +32,7 @@
       "destination": "/cheer/:path*"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!cheer/assets/).*)",
       "destination": "/index.html"
     }
   ],
