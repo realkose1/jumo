@@ -22,7 +22,9 @@ export function mountActionBar(engine: Engine, parent: HTMLElement): () => void 
     const pictureEl =
       picture.kind === 'svg'
         ? icon(picture.name, 24)
-        : h('span', { class: 'qs-action__emoji', 'aria-hidden': true }, picture.text);
+        : picture.kind === 'img'
+          ? h('img', { class: 'qs-action__img', src: picture.src, alt: '', draggable: 'false' })
+          : h('span', { class: 'qs-action__emoji', 'aria-hidden': true }, picture.text);
     const name = def.label.ko;
     const button = h(
       'button',

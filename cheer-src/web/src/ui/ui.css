@@ -175,6 +175,13 @@
   line-height: 28px;
 }
 
+.qs-action__img {
+  display: block;
+  width: 30px;
+  height: 30px;
+  pointer-events: none;
+}
+
 .qs-action__label {
   font-size: 13px;
   line-height: 1.25;
@@ -1315,6 +1322,11 @@
   .qs-ui--touch .qs-action__emoji {
     font-size: 22px;
     line-height: 24px;
+  }
+
+  .qs-ui--touch .qs-action__img {
+    width: 26px;
+    height: 26px;
   }
 
   .qs-joystick {

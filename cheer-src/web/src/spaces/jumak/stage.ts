@@ -7,7 +7,7 @@ import type { TallySnapshot } from '../../cheer/tally';
 import type { SceneContext, SceneHandle } from '../../engine/types';
 import { buildRoom } from './build';
 import { Confetti, EmojiBursts } from './effects';
-import { JUMO, ACTION_EMOJI, ROOM, SPAWN, TV, WALK_BLOCKERS, WALK_BOUNDS, groundHeight, type DishSpot } from './layout';
+import { JUMO, ACTION_EMOJI, ACTION_PICTURE, ROOM, SPAWN, TV, WALK_BLOCKERS, WALK_BOUNDS, groundHeight, type DishSpot } from './layout';
 import { JumoMotion, buildJumoGeometry } from './jumo';
 import { Service } from './service';
 import { JumakSound } from './sound';
@@ -227,7 +227,7 @@ export function createJumakScene(ctx: SceneContext): SceneHandle {
   ctx.reportProgress(0.8);
 
   // ---- 효과와 소리 ----
-  const bursts = new EmojiBursts(scene, ACTION_EMOJI);
+  const bursts = new EmojiBursts(scene, ACTION_EMOJI, undefined, ACTION_PICTURE);
   bursts.setReducedMotion(ctx.isReducedMotion());
   disposables.push(bursts);
   const confetti = new Confetti(scene, confettiBudget(ctx.quality.tier), { ground: groundHeight, cannonZ: ROOM.frontZ + 1.4, camera: ctx.camera });

@@ -6,7 +6,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { jumak as shared } from '@shared/spaces/jumak';
 import { registerOutfit } from '../../engine/avatar';
 import type { ActionDef, SpaceDefinition } from '../../engine/types';
-import { ACTION_EMOJI, buildSeats } from './layout';
+import { ACTION_EMOJI, ACTION_PICTURE, buildSeats } from './layout';
 import { createJumakScene } from './stage';
 
 // 옷: 흰 한복에 붉은 옷고름. 머리는 사람 번호로 네 가지 차림 중 하나다(누구 화면에서나 같다).
@@ -150,7 +150,7 @@ registerOutfit({
 // 동작 id와 인사 여부는 shared가 원본이다. 이름표, 몸짓, 그림만 여기에 둔다.
 const ACTION_VISUALS: Record<string, Omit<ActionDef, 'id'>> = {
   clap: { label: { ko: '박수' }, motion: 'clap', icon: ACTION_EMOJI.clap },
-  toast: { label: { ko: '건배' }, notice: { ko: '건배했어요' }, motion: 'toast', icon: ACTION_EMOJI.toast },
+  toast: { label: { ko: '건배' }, notice: { ko: '건배했어요' }, motion: 'toast', icon: ACTION_PICTURE.toast },
   // 주문: "주모! 여기 국밥 한 그릇 주쇼!" 하고 외치는 몸짓(뒤로 젖히며 늘어난다)을 쓴다. 메뉴는 누를 때마다 정해져 방 모두가 같은 것을 본다
   order: { label: { ko: '주문' }, motion: 'roar', icon: ACTION_EMOJI.order, variants: 8, cooldownMs: 5000 },
 };

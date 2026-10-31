@@ -1,5 +1,6 @@
 // 장면에 얹는 반짝이는 것들: 머리 위로 떠오르는 이모지, 골 순간의 색종이.
 import * as THREE from 'three';
+import { MAKGEOLLI_ICON, makgeolliImage } from './makgeolli';
 
 const EMOJI_FONT = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
 
@@ -13,20 +14,36 @@ function easeOutBack(t: number): number {
   return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
 }
 
-function makeEmojiTexture(emoji: string): THREE.CanvasTexture {
+function makeEmojiTexture(emoji: string, picture?: () => HTMLImageElement | null, onPicture?: (draw: () => void) => void): THREE.CanvasTexture {
   const size = 128;
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext('2d');
-  if (ctx) {
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  if (!ctx) return tex;
+  const drawEmoji = (): void => {
     ctx.font = `92px ${EMOJI_FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(emoji, size / 2, size / 2 + 6);
+  };
+  const drawPicture = (img: HTMLImageElement): void => {
+    ctx.clearRect(0, 0, size, size);
+    ctx.drawImage(img, 8, 8, size - 16, size - 16);
+    tex.needsUpdate = true;
+  };
+  const img = picture?.();
+  if (img) drawPicture(img);
+  else {
+    // 그림이 아직 안 왔으면 이모지로 그려 두고, 오면 바꿔 그린다
+    drawEmoji();
+    onPicture?.(() => {
+      const ready = picture?.();
+      if (ready) drawPicture(ready);
+    });
   }
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
 
@@ -52,8 +69,16 @@ export class EmojiBursts {
     private readonly scene: THREE.Scene,
     emojiById: Readonly<Record<string, string>>,
     max = 28,
+    /** 이모지 대신 쓰는 그림 (예: 건배는 막걸리 사발) */
+    pictureById: Readonly<Record<string, string>> = {},
   ) {
-    for (const [id, emoji] of Object.entries(emojiById)) this.textures.set(id, makeEmojiTexture(emoji));
+    for (const [id, emoji] of Object.entries(emojiById)) {
+      const usesMakgeolli = pictureById[id] === MAKGEOLLI_ICON;
+      this.textures.set(
+        id,
+        usesMakgeolli ? makeEmojiTexture(emoji, () => makgeolliImage(), (draw) => void makgeolliImage(draw)) : makeEmojiTexture(emoji),
+      );
+    }
     const first = this.textures.values().next().value as THREE.Texture | undefined;
     for (let i = 0; i < max; i++) {
       // 투명도를 따로 줘야 해서 재질은 하나씩
