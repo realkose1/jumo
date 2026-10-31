@@ -1,6 +1,7 @@
 // 주막의 소리를 WebAudio로 직접 만드는 법(파일 없음). 모두 BaseAudioContext만 받아서
 // 브라우저에서 OfflineAudioContext로 미리 그려 크기를 재 볼 수도 있다.
-// 소리 이름: 박수(clap), 건배(toast), 주문 방울(bell)과 그릇 내려놓기(clunk), 골(goal), 킥오프 북소리(kickoff), 실점(concede), 호루라기(final), 웅성거림(murmur)
+// 소리 이름: 박수(clap), 건배(toast), 주문 방울(bell)과 그릇 내려놓기(clunk), 골(goal), 킥오프 북소리(kickoff), 실점(concede), 호루라기(final)
+// 늘 깔리는 부엌 소리(가마솥, 전 부치기)는 kitchen.ts에 있다.
 
 export interface Cue {
   /** 소리가 시작하는 시각(ctx.currentTime 기준) */
@@ -21,31 +22,6 @@ export function noiseBuffer(ctx: BaseAudioContext): AudioBuffer {
     const d = buf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     noiseCache.set(ctx, buf);
-  }
-  return buf;
-}
-
-/** 분홍 잡음(낮은 소리가 더 센 잡음) 루프용 */
-export function pinkNoiseBuffer(ctx: BaseAudioContext, seconds = 8): AudioBuffer {
-  const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * seconds), ctx.sampleRate);
-  const d = buf.getChannelData(0);
-  let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
-  for (let i = 0; i < d.length; i++) {
-    const white = Math.random() * 2 - 1;
-    b0 = 0.99886 * b0 + white * 0.0555179;
-    b1 = 0.99332 * b1 + white * 0.0750759;
-    b2 = 0.969 * b2 + white * 0.153852;
-    b3 = 0.8665 * b3 + white * 0.3104856;
-    b4 = 0.55 * b4 + white * 0.5329522;
-    b5 = -0.7616 * b5 - white * 0.016898;
-    d[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11;
-    b6 = white * 0.115926;
-  }
-  // 루프 이음매가 딱 소리 나지 않게 양 끝을 서로 섞는다
-  const fade = Math.floor(ctx.sampleRate * 0.25);
-  for (let i = 0; i < fade; i++) {
-    const k = i / fade;
-    d[i] = d[i]! * k + d[d.length - fade + i]! * (1 - k);
   }
   return buf;
 }
@@ -335,109 +311,3 @@ export function finalWhistle(ctx: BaseAudioContext, out: AudioNode, c: Cue, win:
     crowd(ctx, out, { ...c, t: c.t + 0.8, gain: c.gain * 0.6 }, { dur: 2.2, attack: 0.35, noise: 0.5, voiced: 0.04 });
   }
 }
-
-// ---- 웅성거림 ----
-
-export interface Murmur {
-  /** 0(한산함)~1(경기 중이라 신남) */
-  setIntensity(v: number): void;
-  stop(): void;
-}
-
-/** 낮게 깔리는 사람들 말소리. 켜져 있는 동안 계속 돌고, 경기 중에는 더 활기차다 */
-export function startMurmur(ctx: AudioContext, out: AudioNode): Murmur {
-  const src = ctx.createBufferSource();
-  src.buffer = pinkNoiseBuffer(ctx);
-  src.loop = true;
-
-  const master = ctx.createGain();
-  master.gain.value = 0.0001;
-  master.connect(out);
-
-  const hp = ctx.createBiquadFilter();
-  hp.type = 'highpass';
-  hp.frequency.value = 110;
-  src.connect(hp);
-
-  // 말소리 높이의 포먼트 둘과 낮은 웅웅거림. 각각 천천히 커졌다 작아진다
-  const branches: Array<{ freq: number; q: number; base: number; lfo: number }> = [
-    { freq: 520, q: 1.4, base: 0.55, lfo: 0.17 },
-    { freq: 980, q: 1.8, base: 0.4, lfo: 0.29 },
-    { freq: 1650, q: 2.0, base: 0.16, lfo: 0.41 },
-    { freq: 230, q: 0.8, base: 0.5, lfo: 0.11 },
-  ];
-  const filters: BiquadFilterNode[] = [];
-  const gains: GainNode[] = [];
-  const lfos: OscillatorNode[] = [];
-  for (const b of branches) {
-    const f = ctx.createBiquadFilter();
-    f.type = 'bandpass';
-    f.frequency.value = b.freq;
-    f.Q.value = b.q;
-    const g = ctx.createGain();
-    g.gain.value = b.base;
-    const lfo = ctx.createOscillator();
-    lfo.frequency.value = b.lfo;
-    const depth = ctx.createGain();
-    depth.gain.value = b.base * 0.55;
-    lfo.connect(depth).connect(g.gain);
-    lfo.start();
-    hp.connect(f).connect(g).connect(master);
-    filters.push(f);
-    gains.push(g);
-    lfos.push(lfo);
-  }
-  src.start(0, Math.random() * 6);
-
-  let intensity = 0;
-  let stopped = false;
-  let swellTimer: ReturnType<typeof setTimeout> | undefined;
-
-  const levelFor = (v: number): number => 0.5 + 0.55 * v;
-  const apply = (swell = 1): void => {
-    const now = ctx.currentTime;
-    master.gain.setTargetAtTime(levelFor(intensity) * swell, now, swell > 1 ? 0.35 : 0.8);
-    // 경기 중에는 말소리가 살짝 높고 밝아진다
-    filters.forEach((f, i) => f.frequency.setTargetAtTime(branches[i]!.freq * (1 + 0.22 * intensity), now, 0.8));
-  };
-  // 처음엔 서서히 켜진다 (같은 방식의 자동화만 써서 이어지는 변화가 서로 부딪히지 않게 한다)
-  master.gain.setValueAtTime(0.0001, ctx.currentTime);
-  apply();
-
-  // 가끔 웃음이 터지듯 소리가 한 번 부풀었다 가라앉는다
-  const scheduleSwell = (): void => {
-    const wait = (intensity > 0.5 ? 2500 + Math.random() * 3500 : 6500 + Math.random() * 7000);
-    swellTimer = setTimeout(() => {
-      if (stopped) return;
-      apply(1.45 + Math.random() * 0.5 + intensity * 0.4);
-      setTimeout(() => {
-        if (!stopped) apply(1);
-      }, 900 + Math.random() * 700);
-      scheduleSwell();
-    }, wait);
-  };
-  scheduleSwell();
-
-  return {
-    setIntensity(v: number) {
-      intensity = Math.min(1, Math.max(0, v));
-      if (!stopped) apply();
-    },
-    stop() {
-      if (stopped) return;
-      stopped = true;
-      if (swellTimer) clearTimeout(swellTimer);
-      const now = ctx.currentTime;
-      master.gain.cancelScheduledValues(now);
-      master.gain.setTargetAtTime(0.0001, now, 0.12);
-      const end = now + 0.6;
-      try {
-        src.stop(end);
-        for (const l of lfos) l.stop(end);
-      } catch {
-        /* 이미 멈춤 */
-      }
-    },
-  };
-}
-
