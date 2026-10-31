@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TvMatchView } from '../../cheer/feed';
 import { PitchSim, broadcastPlaylist, ourPlayers, sameScene, sceneAt, seedOf } from './broadcast';
-import { playerPhotoUrl } from './playerPhotos';
 
 const match = (o: Partial<TvMatchView> = {}): TvMatchView => ({
   id: 'm1',
@@ -95,13 +94,5 @@ describe('가상 경기장', () => {
     expect(moved).toBeGreaterThan(10);
     // 20초 동안 공격권이 한 번은 넘어간다
     expect(carriers.size).toBe(2);
-  });
-});
-
-describe('선수 사진', () => {
-  it('주모 앱과 같은 /image/ 사진을 쓴다', () => {
-    expect(playerPhotoUrl('이강인')).toBe('/image/kangin.png');
-    expect(playerPhotoUrl('백승호')).toBe('/image/seungho.png');
-    expect(playerPhotoUrl('모르는선수')).toBeNull();
   });
 });

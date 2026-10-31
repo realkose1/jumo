@@ -108,9 +108,9 @@ describe('buildTvView', () => {
     expect(idle).toEqual({
       kind: 'idle',
       next: { comp: '프리미어리그', home: '울버햄튼', away: '토트넘', when: '오늘 20:00' },
-      name: '주모 응원 주막',
+      name: '해외 축구 응원 주막',
     });
-    expect(buildTvView(feed([]), null)).toEqual({ kind: 'idle', next: null, name: '주모 응원 주막' });
+    expect(buildTvView(feed([]), null)).toEqual({ kind: 'idle', next: null, name: '해외 축구 응원 주막' });
   });
 });
 
