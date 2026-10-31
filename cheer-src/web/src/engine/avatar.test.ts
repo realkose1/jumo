@@ -2,15 +2,19 @@ import { afterAll, describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import {
   Avatar,
+  DETAIL_PRESETS,
+  PLAIN_OUTFIT,
   PoseState,
   WALK_SPEED,
   createGait,
   disposeAvatarResources,
+  getAvatarGeometries,
   getOutfit,
   motionArms,
   motionOffset,
   registerOutfit,
   walkGait,
+  type OutfitSpec,
 } from './avatar';
 import type { ActionMotion } from './types';
 
@@ -78,6 +82,72 @@ describe('Avatar', () => {
     expect((a.getMeshes()[2]!.material as THREE.MeshLambertMaterial).color.getHex()).toBe(0x336699);
     a.setOutfit('plain');
     expect(a.getMeshes()).toHaveLength(8);
+  });
+
+  it('옷이 몸통·팔·발을 직접 만들면 캡슐 대신 그것을 쓰고, 다른 옷으로 바꾸면 기본 캡슐로 돌아온다', () => {
+    let built = 0;
+    const outfit: OutfitSpec = {
+      id: 'test-robe',
+      bodyColor: 0xffffff,
+      skinColor: 0xffddcc,
+      body: () => {
+        built += 1;
+        return new THREE.CylinderGeometry(0.2, 0.25, 0.6, 8).translate(0, 0.3, 0);
+      },
+      arm: () => new THREE.BoxGeometry(0.1, 0.2, 0.1).translate(0, -0.1, 0),
+      foot: () => new THREE.BoxGeometry(0.1, 0.05, 0.15),
+    };
+    const plain = getAvatarGeometries(DETAIL_PRESETS.peer);
+    const a = new Avatar({ detail: 'peer', outfit });
+    const b = new Avatar({ detail: 'peer', outfit });
+    // getMeshes: 몸통, 머리, 발 두 짝, (소품), 팔 두 짝, 손 두 짝
+    const [body, head, footL, footR, armL, armR, handL] = a.getMeshes();
+    expect(body!.geometry).toBeInstanceOf(THREE.CylinderGeometry);
+    expect(body!.geometry).toBe(getAvatarGeometries(DETAIL_PRESETS.peer, outfit).body);
+    // 같은 분할 수끼리 나눠 쓰고, 한 번만 만든다
+    expect(b.getMeshes()[0]!.geometry).toBe(body!.geometry);
+    expect(built).toBe(1);
+    // 정점 색이 없으면 흰색으로 칠해 둔다 (정점 색 재질에서 검게 나오지 않게)
+    expect(body!.geometry.getAttribute('color')).toBeDefined();
+    expect(footL!.geometry).toBeInstanceOf(THREE.BoxGeometry);
+    expect(footL!.geometry).toBe(footR!.geometry);
+    expect(armL!.geometry).toBe(armR!.geometry);
+    expect(armL!.geometry).not.toBe(plain.arm);
+    // 머리와 손은 그대로
+    expect(head!.geometry).toBe(plain.head);
+    expect(handL!.geometry).toBe(plain.hand);
+
+    a.setOutfit('plain');
+    const [body2, , foot2, , arm2] = a.getMeshes();
+    expect(body2!.geometry).toBe(plain.body);
+    expect(body2!.geometry).toBeInstanceOf(THREE.CapsuleGeometry);
+    expect(foot2!.geometry).toBe(plain.foot);
+    expect(arm2!.geometry).toBe(plain.arm);
+  });
+
+  it('몸 부위를 만들지 않는 옷은 기본 캡슐 몸을 그대로 나눠 쓴다', () => {
+    const d = DETAIL_PRESETS.peer;
+    expect(getAvatarGeometries(d, PLAIN_OUTFIT)).toBe(getAvatarGeometries(d));
+    expect(new Avatar({ detail: 'peer' }).getMeshes()[0]!.geometry).toBe(getAvatarGeometries(d).body);
+  });
+
+  it('정점 색 소품은 정점 색 재질로 그린다 (여러 색 조각을 한 소품으로)', () => {
+    const a = new Avatar({
+      detail: 'peer',
+      outfit: {
+        id: 'test-vertex-color',
+        bodyColor: 0xffffff,
+        skinColor: 0xffddcc,
+        accessories: [
+          { key: 'vc-box', attach: 'body', create: () => new THREE.BoxGeometry(0.1, 0.1, 0.1), color: 0xffffff, position: [0, 0.3, 0.2], vertexColors: true },
+          { key: 'plain-box', attach: 'body', create: () => new THREE.BoxGeometry(0.1, 0.1, 0.1), color: 0x123456, position: [0, 0.2, 0.2] },
+        ],
+      },
+    });
+    const [colored, single] = a.getMeshes().slice(4, 6);
+    expect((colored!.material as THREE.MeshLambertMaterial).vertexColors).toBe(true);
+    expect(colored!.geometry.getAttribute('color')).toBeDefined();
+    expect((single!.material as THREE.MeshLambertMaterial).vertexColors).toBe(false);
   });
 
   it('모르는 옷 id는 기본형으로', () => {

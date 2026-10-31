@@ -1,5 +1,6 @@
 // 같은 방의 다른 사람들. 저해상도 캐릭터를 InstancedMesh로 한꺼번에 그린다.
 //   - 머리 1번, 몸통 1번, 발 1번(한 사람에 인스턴스 2개), 옷 소품마다 1번. 사람이 몇 명이든 그리기 호출은 늘지 않는다(최대 정원만큼 자리를 미리 잡아 둔다)
+//   - 차림마다 다른 소품(갓, 도포 등)은 그 차림인 사람만 앞에서부터 채워 그린다. 아무도 안 쓴 소품은 그리지 않는다
 //   - 위치는 받은 점들 사이를 조금 늦춰서 이어 그린다(interpolation.ts)
 //   - 자세(걷기, 앉기, 동작)는 내 캐릭터와 같은 PoseState를 쓴다
 //   - 들어오고 나갈 때는 발끝에서 작게 커지고 작아진다(움직임 줄이기면 바로)
@@ -13,6 +14,7 @@ import {
   accessoryShown,
   lookFor,
   getAccessoryGeometry,
+  getAccessoryMaterial,
   getAvatarGeometries,
   getAvatarMaterial,
   getOutfit,
@@ -35,8 +37,6 @@ const SPEED_CAP = 1.25;
 const PICK_RADIUS = 0.5;
 const PICK_CENTER_HEIGHT = 0.5;
 const LABEL_RISE = 0.2; // 갓 위로 띄운다
-/** 감춘 소품 인스턴스에 쓰는 크기 0 행렬 */
-const ZERO_MATRIX = new THREE.Matrix4().makeScale(0, 0, 0);
 
 function lerpAngle(from: number, to: number, t: number): number {
   const delta = Math.atan2(Math.sin(to - from), Math.cos(to - from));
@@ -65,6 +65,8 @@ interface AccessoryLayer {
   spec: AccessorySpec;
   mesh: THREE.InstancedMesh;
   local: THREE.Matrix4;
+  /** 이 소품을 쓴 사람 수 (그 사람들만 인스턴스 앞에서부터 채운다) */
+  used: number;
 }
 
 export interface RemotePeersOptions {
@@ -433,6 +435,7 @@ export class RemotePeers {
   private writeMatrices(): void {
     const list = this.order;
     const n = Math.min(list.length, this.capacity);
+    for (const layer of this.layers) layer.used = 0;
     for (let i = 0; i < n; i++) {
       const p = list[i]!;
       const pose = p.pose.compute();
@@ -487,24 +490,32 @@ export class RemotePeers {
       this.headMesh.setMatrixAt(i, this.mHead);
       const look = lookFor(this.outfit, p.id);
       for (const layer of this.layers) {
-        // 이 사람의 차림에 없는 소품은 크기 0으로 감춘다 (인스턴스 순서는 모두 같아야 해서 빼지 않는다)
-        if (!accessoryShown(layer.spec, look)) {
-          layer.mesh.setMatrixAt(i, ZERO_MATRIX);
-          continue;
-        }
+        // 이 사람의 차림에 없는 소품은 건너뛴다 (안 쓴 사람 몫까지 그리지 않게, 쓴 사람만 앞에서부터 채운다)
+        if (!accessoryShown(layer.spec, look)) continue;
         const parent = layer.spec.attach === 'head' ? this.mHead : this.mBody;
         this.mTmp.multiplyMatrices(parent, layer.local);
-        layer.mesh.setMatrixAt(i, this.mTmp);
+        layer.mesh.setMatrixAt(layer.used++, this.mTmp);
       }
     }
+    for (const layer of this.layers) this.syncLayerCount(layer);
     for (const mesh of this.getMeshes()) mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  private syncLayerCount(layer: AccessoryLayer): void {
+    layer.mesh.count = layer.used;
+    layer.mesh.visible = layer.used > 0; // 아무도 안 쓴 소품은 그리기 호출도 없다
   }
 
   private syncCounts(): void {
     const n = Math.min(this.order.length, this.capacity);
-    for (const mesh of this.getMeshes()) {
+    for (const mesh of [this.headMesh, this.bodyMesh, this.feetMesh, this.armsMesh, this.handsMesh]) {
       mesh.count = mesh === this.feetMesh || mesh === this.armsMesh || mesh === this.handsMesh ? n * 2 : n;
       mesh.visible = n > 0; // 아무도 없으면 그리기 호출도 없다
+    }
+    // 소품은 쓴 사람 수만큼 (그리기 전에 writeMatrices가 다시 센다)
+    for (const layer of this.layers) {
+      layer.used = Math.min(layer.used, n);
+      this.syncLayerCount(layer);
     }
   }
 
@@ -516,21 +527,22 @@ export class RemotePeers {
   }
 
   private buildMeshes(): void {
-    const geo = getAvatarGeometries(this.detail);
+    // 옷이 몸통, 팔, 발을 직접 만들면(OutfitSpec.body/arm/foot) 그것을 쓴다. 없으면 기본 캡슐 몸통
+    const geo = getAvatarGeometries(this.detail, this.outfit);
     this.bodyMesh = this.makeMesh(geo.body, getAvatarMaterial(this.outfit.bodyColor, true));
     this.feetMesh = this.makeMesh(geo.foot, getAvatarMaterial(this.outfit.bodyColor, true), this.capacity * 2);
     this.armsMesh = this.makeMesh(geo.arm, getAvatarMaterial(this.outfit.bodyColor, true), this.capacity * 2);
     this.handsMesh = this.makeMesh(geo.hand, getAvatarMaterial(this.outfit.skinColor, true), this.capacity * 2);
     this.headMesh = this.makeMesh(geo.head, getAvatarMaterial(this.outfit.skinColor, true));
     this.layers = (this.outfit.accessories ?? []).map((spec) => {
-      const mesh = this.makeMesh(getAccessoryGeometry(spec, this.detail), getAvatarMaterial(spec.color, false));
+      const mesh = this.makeMesh(getAccessoryGeometry(spec, this.detail), getAccessoryMaterial(spec));
       const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(...(spec.rotation ?? [0, 0, 0]), 'XYZ'));
       const local = new THREE.Matrix4().compose(
         new THREE.Vector3(...spec.position),
         q,
         new THREE.Vector3(...(spec.scale ?? [1, 1, 1])),
       );
-      return { spec, mesh, local };
+      return { spec, mesh, local, used: 0 };
     });
     this.syncCounts();
   }
