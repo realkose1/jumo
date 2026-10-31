@@ -1,0 +1,19 @@
+{
+  "name": "jumo-cheer-server",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --local --port 8797",
+    "dev:sim": "wrangler dev --local --port 8797 --var FEED_SIM:1",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.23.0",
+    "@cloudflare/workers-types": "5.20261031.1",
+    "typescript": "7.0.2",
+    "vitest": "4.1.12",
+    "wrangler": "4.156.0"
+  }
+}

@@ -1,0 +1,38 @@
+// 주막 응원방 실시간 서버. 계정 정보(account_id)와 배포 설정(routes 등)은 일부러 넣지 않았다.
+// 배포는 사용자 계정이 필요한 일이라 사용자와 정한다.
+// 로컬 가짜 경기(FEED_SIM)는 여기 넣지 않는다: `npm run dev:sim`(--var FEED_SIM:1)으로만 켠다.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "jumo-cheer",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-22",
+
+  "durable_objects": {
+    "bindings": [
+      { "name": "ROOM", "class_name": "Room" },
+      { "name": "LOBBY", "class_name": "Lobby" }
+    ]
+  },
+  // 두 클래스 모두 SQLite 기반 Durable Object
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room", "Lobby"] }],
+
+  // 운영 중에 바꾸는 값들. 모두 문자열이다.
+  "vars": {
+    // 같은 IP(와이파이, 통신사 NAT)에서 한 방에 들어올 수 있는 사람 수(join한 연결만 센다)
+    "MAX_CONN_PER_IP": "30",
+    // 공간별로 정원과 방 개수를 덮어쓴다. 예: {"jumak":{"capacity":30,"rooms":5,"maxRooms":20}}
+    // rooms는 늘 여는 방, maxRooms는 다 차면 더 여는 상한. 없는 항목은 shared/spaces의 값을 쓴다.
+    "SPACE_OVERRIDES": "{}",
+    // 웹소켓 접속을 허용할 Origin(쉼표로 구분). 비워 두면 모두 허용.
+    // 주모 웹(iOS 앱 안의 iframe도 같은 Origin)과 로컬 vite 개발 서버(5180)
+    "ALLOWED_ORIGINS": "https://jumo-git-main-realkose1s-projects.vercel.app,http://localhost:5180,http://127.0.0.1:5180",
+    // GET /rooms 결과를 메모리에 두는 시간(ms)
+    "ROOMS_CACHE_MS": "3000",
+    // 주막 TV 경기 피드. 피드를 쓰는 공간(jumak)의 방이 사람이 있는 동안 받아 온다
+    "FEED_URL": "https://jumo-git-main-realkose1s-projects.vercel.app/api/cheer-feed",
+    // 피드를 받는 간격(ms)
+    "FEED_POLL_MS": "15000"
+  },
+
+  "dev": { "port": 8797 }
+}
