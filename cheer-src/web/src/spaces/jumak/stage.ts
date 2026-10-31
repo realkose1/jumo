@@ -13,6 +13,7 @@ import { Service } from './service';
 import { JumakSound } from './sound';
 import { createDot } from './stage-dot';
 import { TvScreen } from './tv';
+import { buildScenery } from './scenery';
 
 const ACTION_IDS = Object.keys(ACTION_EMOJI);
 
@@ -113,7 +114,7 @@ export function createJumakScene(ctx: SceneContext): SceneHandle {
   };
 
   const previousBackground = scene.background;
-  scene.background = new THREE.Color(0x06080f);
+  scene.background = new THREE.Color(0x0a1122); // 달 밝은 밤하늘
 
   // ---- 방 ----
   const room = buildRoom();
@@ -216,14 +217,30 @@ export function createJumakScene(ctx: SceneContext): SceneHandle {
   starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
   const starMat = own(new THREE.PointsMaterial({ size: 1.8, sizeAttenuation: false, color: 0xdfe6ff, transparent: true, opacity: 0.75, depthWrite: false, fog: false }));
   add(new THREE.Points(starGeo, starMat));
-  const moonGeo = own(new THREE.SphereGeometry(3.4, 20, 14));
-  const moonMat = own(new THREE.MeshBasicMaterial({ color: 0xf3ecd0, fog: false, toneMapped: false }));
-  const moon = add(new THREE.Mesh(moonGeo, moonMat));
-  moon.position.set(-30, 26, -56);
-  const moonHaloGeo = own(new THREE.BufferGeometry());
-  moonHaloGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-30, 26, -56]), 3));
-  const moonHaloMat = own(new THREE.PointsMaterial({ size: 30, map: dot, color: 0x9fb2e8, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, fog: false }));
-  add(new THREE.Points(moonHaloGeo, moonHaloMat));
+  // 보름달: 표면 무늬는 캔버스로 그린다
+  // 하늘 한 곳에 박혀 있다(보는 사람을 따라오지 않는다). TV 정가운데 위 하늘이라 시점을 조금 들면 보인다.
+  // 휴대폰 세로 화면은 좌우가 좁아서 양옆 자리에서는 시점을 돌려야 보인다
+  const MOON_POS = new THREE.Vector3(0, 21.5, -66);
+  const moonTex = own(makeMoonTexture());
+  // 달과 달무리는 늘 화면을 정면으로 보는 스프라이트다. 기울어진 원판에 달무리를 같은 깊이로 겹치면
+  // 원판 절반이 달무리 뒤로 가서 대각선으로 밝기가 갈라져 보였다(깨진 달). 달무리는 달보다 조금 뒤에 둔다
+  const moonMat = own(new THREE.SpriteMaterial({ map: moonTex, fog: false, toneMapped: false, transparent: true, depthWrite: false }));
+  const moon = add(new THREE.Sprite(moonMat));
+  moon.position.copy(MOON_POS);
+  moon.scale.set(5.4, 5.4, 1);
+  moon.renderOrder = 2;
+  const moonHaloMat = own(new THREE.SpriteMaterial({ map: dot, color: 0xb9c8f2, transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, fog: false }));
+  const halo = add(new THREE.Sprite(moonHaloMat));
+  halo.position.copy(MOON_POS).multiplyScalar(1.03); // 달 바로 뒤
+  halo.scale.set(22, 22, 1);
+  halo.renderOrder = 1;
+  // 달빛: 마당을 푸르스름하게 비춘다
+  const moonLight = add(new THREE.DirectionalLight(0xaebfff, 0.35));
+  moonLight.position.copy(MOON_POS);
+  // 마당 밖 풍경: 하늘 돔, 산 능선 세 겹, 불 켜진 마을과 소나무, 흐르는 구름
+  const scenery = buildScenery(MOON_POS);
+  disposables.push(scenery);
+  for (const o of scenery.objects) add(o);
   ctx.reportProgress(0.8);
 
   // ---- 효과와 소리 ----
@@ -263,6 +280,7 @@ export function createJumakScene(ctx: SceneContext): SceneHandle {
     bursts.setReducedMotion(reduced);
     tv.update(now);
     bursts.update(dt);
+    scenery.update(dt, reduced);
     confetti.update(dt);
     service.setReducedMotion(reduced);
     service.update(dt);
@@ -361,4 +379,49 @@ export function createJumakScene(ctx: SceneContext): SceneHandle {
       scene.background = previousBackground;
     },
   };
+}
+
+/** 보름달 그림: 밝은 원판에 옅은 바다(어두운 무늬)와 가장자리 어둡게 */
+function makeMoonTexture(): THREE.CanvasTexture {
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const g = canvas.getContext('2d');
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  if (!g) return tex;
+  const c = size / 2;
+  const r = size / 2 - 2;
+  const base = g.createRadialGradient(c * 0.92, c * 0.9, r * 0.1, c, c, r);
+  base.addColorStop(0, '#fffbea');
+  base.addColorStop(0.8, '#f2e9c8');
+  base.addColorStop(1, '#d9cfa8');
+  g.fillStyle = base;
+  g.beginPath();
+  g.arc(c, c, r, 0, Math.PI * 2);
+  g.fill();
+  // 달의 바다 (토끼 무늬처럼 보이는 어두운 곳)
+  g.save();
+  g.beginPath();
+  g.arc(c, c, r, 0, Math.PI * 2);
+  g.clip();
+  const maria: Array<[number, number, number, number]> = [
+    [0.38, 0.36, 0.17, 0.22],
+    [0.6, 0.3, 0.12, 0.2],
+    [0.52, 0.52, 0.15, 0.18],
+    [0.34, 0.62, 0.1, 0.16],
+    [0.66, 0.6, 0.09, 0.14],
+    [0.46, 0.76, 0.08, 0.1],
+  ];
+  for (const [x, y, rad, a] of maria) {
+    const m = g.createRadialGradient(x * size, y * size, 0, x * size, y * size, rad * size);
+    m.addColorStop(0, `rgba(150,140,115,${a + 0.12})`);
+    m.addColorStop(1, 'rgba(150,140,115,0)');
+    g.fillStyle = m;
+    g.fillRect(0, 0, size, size);
+  }
+  g.restore();
+  tex.needsUpdate = true;
+  return tex;
 }

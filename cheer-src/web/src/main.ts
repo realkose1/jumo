@@ -78,7 +78,8 @@ async function boot(): Promise<void> {
   ui = mountUI(engine, uiRoot, { embedded, onClose: () => postCloseToApp() });
   // 경기 피드, 같이 모이는 순간, 남의 동작을 장면과 화면에 이어 준다 (engine.start() 전에 구독한다)
   // 간판 이름("이강인 응원 주막")이 바뀌면 문서 제목도 같이 바꾼다
-  cheer = new CheerController({ engine, ui, focusMatchId: params.get('m'), onRoomName: (name) => (document.title = name) });
+  // 경기가 겹쳐도 주막은 하나다: 앱이 어느 경기에서 열었든(?m=) 모두 같은 간판과 같은 TV를 본다
+  cheer = new CheerController({ engine, ui, focusMatchId: null, onRoomName: (name) => (document.title = name) });
   cheer.start();
   engine.on('error', (e) => {
     console.error('[engine]', e.message, e.cause);

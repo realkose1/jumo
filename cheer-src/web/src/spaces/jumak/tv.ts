@@ -5,24 +5,26 @@ import type { TvMatchView, TvPlayerLine, TvView } from '../../cheer/feed';
 import type { TallySnapshot } from '../../cheer/tally';
 import { ACTION_EMOJI, ACTION_PICTURE } from './layout';
 import { MAKGEOLLI_ICON, makgeolliImage } from './makgeolli';
-import { PitchSim, drawPitch, drawPlayerCard, drawScoreBug, ourPlayers, sceneAt, type BroadcastScene } from './broadcast';
+import { SERIF, drawPaper, drawSeal, oldClock } from './joseon';
+import { PitchSim, drawPitch, drawPlayerCard, drawScoreBug, ourPlayers, sameScene, sceneAt, seedOf, type BroadcastScene } from './broadcast';
 import { playerPhoto } from './playerPhotos';
 
 export const TV_W = 1024;
 export const TV_H = 576;
 
-const FONT = '-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif';
+// 조선풍 방(榜): 누런 한지 바탕에 먹 글씨(명조), 주홍 낙관과 테두리(광곽). 글자는 쉽게 읽히게 한글로 쓰고 한자는 곁들이기만 한다
+const FONT = SERIF;
 const COLOR = {
-  bg0: '#0a0d13',
-  bg1: '#161d2b',
-  ink: '#ffffff',
-  soft: '#b4bccb',
-  dim: '#7a8496',
-  accent: '#f5c400',
-  accentInk: '#1a1400',
-  live: '#ff4b4b',
-  card: 'rgba(255,255,255,0.055)',
-  line: 'rgba(255,255,255,0.12)',
+  bg0: '#c9ad79',
+  bg1: '#e4d0a4',
+  ink: '#21170e',
+  soft: '#4f3f2c',
+  dim: '#7d6748',
+  accent: '#a8251c',
+  accentInk: '#f7ead0',
+  live: '#a8251c',
+  card: 'rgba(90,60,25,0.08)',
+  line: 'rgba(60,38,16,0.45)',
 } as const;
 
 /** 다시 그리는 사이의 최소 간격(ms) */
@@ -34,7 +36,8 @@ const PITCH_REDRAW_REDUCED_MS = 400;
 /** 중계 화면에 필요한 것 (TvScreen이 채운다) */
 export interface BroadcastState {
   scene: BroadcastScene;
-  sim: PitchSim;
+  /** 경기장 화면에 쓸 그 경기의 움직임 */
+  sim: (matchId: string) => PitchSim;
   photo: (name: string) => HTMLImageElement | null;
 }
 
@@ -126,14 +129,14 @@ function teamColor(m: TvMatchView, side: 'home' | 'away'): string {
 }
 
 function clockPill(ctx: CanvasRenderingContext2D, m: TvMatchView, cx: number, cy: number, size: number): void {
-  if (m.state === 'live') pill(ctx, cx, cy, m.clock || '진행 중', { size, bg: 'rgba(255,75,75,0.2)', fg: COLOR.ink, dot: COLOR.live });
-  else if (m.state === 'pre') pill(ctx, cx, cy, m.clock || '곧 시작', { size, bg: 'rgba(255,255,255,0.1)', fg: COLOR.soft });
-  else pill(ctx, cx, cy, m.clock || '종료', { size, bg: 'rgba(255,255,255,0.1)', fg: COLOR.soft });
+  const label = oldClock(m.state, m.clock);
+  if (m.state === 'live') pill(ctx, cx, cy, label, { size, bg: COLOR.accent, fg: COLOR.accentInk, dot: '#f7ead0' });
+  else pill(ctx, cx, cy, label, { size, bg: 'rgba(60,38,16,0.12)', fg: COLOR.soft });
 }
 
 function drawScore(ctx: CanvasRenderingContext2D, m: TvMatchView, cx: number, cy: number, size: number): void {
   if (m.state === 'pre') {
-    drawText(ctx, 'vs', cx, cy, { size: size * 0.55, weight: 800, color: COLOR.soft });
+    drawText(ctx, '對', cx, cy, { size: size * 0.6, weight: 800, color: COLOR.accent });
     return;
   }
   drawText(ctx, m.homeScore, cx - size * 0.42, cy, { size, weight: 800, align: 'right' });
@@ -159,11 +162,11 @@ function drawHero(ctx: CanvasRenderingContext2D, m: TvMatchView, top: number, bo
   let rowY: number;
   if (compact) {
     // 대회와 시계를 한 줄에
-    drawText(ctx, m.comp, 512 - 120, top + 40, { size: 32, weight: 600, color: COLOR.soft, align: 'right', maxWidth: 420 });
+    drawText(ctx, `〔${m.comp}〕`, 512 - 120, top + 40, { size: 32, weight: 700, color: COLOR.soft, align: 'right', maxWidth: 420 });
     clockPill(ctx, m, 512 + 40 + 78, top + 40, 30);
     rowY = top + h * 0.52;
   } else {
-    drawText(ctx, m.comp, 512, top + 46, { size: 36, weight: 600, color: COLOR.soft, maxWidth: 860 });
+    drawText(ctx, `〔${m.comp}〕`, 512, top + 46, { size: 36, weight: 700, color: COLOR.soft, maxWidth: 860 });
     clockPill(ctx, m, 512, top + 112, 38);
     rowY = top + h * 0.5 + 22;
   }
@@ -202,7 +205,7 @@ function drawRow(ctx: CanvasRenderingContext2D, m: TvMatchView, top: number, h: 
   const cy = top + h * 0.5;
   drawText(ctx, m.homeName, 400, cy, { size: 42, weight: 800, color: teamColor(m, 'home'), align: 'right', maxWidth: 300, minSize: 24 });
   drawText(ctx, m.awayName, 624, cy, { size: 42, weight: 800, color: teamColor(m, 'away'), align: 'left', maxWidth: 300, minSize: 24 });
-  if (m.state === 'pre') drawText(ctx, 'vs', 512, cy, { size: 38, weight: 800, color: COLOR.soft });
+  if (m.state === 'pre') drawText(ctx, '對', 512, cy, { size: 42, weight: 800, color: COLOR.accent });
   else {
     drawText(ctx, m.homeScore, 484, cy, { size: 64, weight: 800, align: 'right' });
     drawText(ctx, ':', 512, cy - 3, { size: 52, weight: 700, color: COLOR.dim });
@@ -218,76 +221,91 @@ function drawRow(ctx: CanvasRenderingContext2D, m: TvMatchView, top: number, h: 
 function drawQuiet(ctx: CanvasRenderingContext2D, view: Extract<TvView, { kind: 'quiet' }>): void {
   drawText(ctx, '🏮', 512, 170, { size: 110 });
   drawText(ctx, view.name, 512, 312, { size: 72, weight: 800, maxWidth: 900, minSize: 36 });
-  drawText(ctx, '경기가 시작되면 여기 점수가 떠요', 512, 410, { size: 40, weight: 600, color: COLOR.soft, maxWidth: 900 });
+  drawText(ctx, '판이 열리면 이 방(榜)에 점수를 붙이겠소', 512, 410, { size: 40, weight: 700, color: COLOR.soft, maxWidth: 900 });
+  drawSeal(ctx, 880, 470, '酒幕', 74);
 }
 
 function drawIdle(ctx: CanvasRenderingContext2D, view: Extract<TvView, { kind: 'idle' }>): void {
   const next = view.next;
   if (!next) {
     drawText(ctx, '🍶', 512, 170, { size: 110 });
-    drawText(ctx, '오늘은 쉬는 날이에요', 512, 310, { size: 70, weight: 800, maxWidth: 900 });
-    drawText(ctx, '다음 경기가 정해지면 여기에 나와요', 512, 392, { size: 38, weight: 600, color: COLOR.soft, maxWidth: 900 });
+    drawText(ctx, '오늘은 쉬는 날이오', 512, 310, { size: 70, weight: 800, maxWidth: 900 });
+    drawText(ctx, '다음 겨룸이 정해지면 여기 붙이겠소', 512, 392, { size: 38, weight: 700, color: COLOR.soft, maxWidth: 900 });
     drawText(ctx, view.name, 512, 480, { size: 36, weight: 700, color: COLOR.dim, maxWidth: 860, minSize: 24 });
     return;
   }
   drawText(ctx, view.name, 512, 44, { size: 30, weight: 700, color: COLOR.dim, maxWidth: 860, minSize: 22 });
-  pill(ctx, 512, 130, '다음 경기', { size: 36, bg: COLOR.accent, fg: COLOR.accentInk });
+  pill(ctx, 512, 130, '다음 겨룸', { size: 36, bg: COLOR.accent, fg: COLOR.accentInk });
   drawText(ctx, next.comp, 512, 208, { size: 38, weight: 600, color: COLOR.soft, maxWidth: 880 });
   drawText(ctx, next.home, 512, 292, { size: 66, weight: 800, maxWidth: 900, minSize: 34 });
-  drawText(ctx, 'vs', 512, 360, { size: 40, weight: 700, color: COLOR.dim });
+  drawText(ctx, '對', 512, 360, { size: 44, weight: 800, color: COLOR.accent });
   drawText(ctx, next.away, 512, 428, { size: 66, weight: 800, maxWidth: 900, minSize: 34 });
-  drawText(ctx, `${next.when} 킥오프`, 512, 506, { size: 48, weight: 800, color: COLOR.accent, maxWidth: 900 });
+  drawText(ctx, `${next.when} 개전`, 512, 506, { size: 48, weight: 800, color: COLOR.accent, maxWidth: 900 });
 }
 
 function drawBanner(ctx: CanvasRenderingContext2D, b: TvBannerState, pulse: number): void {
-  ctx.fillStyle = 'rgba(0,0,0,0.42)';
+  ctx.fillStyle = 'rgba(30,18,6,0.45)';
   ctx.fillRect(0, 0, TV_W, TV_H);
-  const top = 168;
-  const h = 240;
+  const top = 156;
+  const h = 264;
   const goal = b.tone === 'goal';
-  const g = ctx.createLinearGradient(0, top, TV_W, top);
+  // 두루마리: 골은 주홍 비단에 금빛 글씨(급보), 그 밖의 알림은 한지에 먹 글씨(고시)
+  const g = ctx.createLinearGradient(0, top, 0, top + h);
   if (goal) {
-    g.addColorStop(0, '#ffd83a');
-    g.addColorStop(0.5, '#f5c400');
-    g.addColorStop(1, '#ffd83a');
+    g.addColorStop(0, '#b8301f');
+    g.addColorStop(0.5, '#9c2016');
+    g.addColorStop(1, '#b8301f');
   } else {
-    g.addColorStop(0, '#e9eef8');
-    g.addColorStop(1, '#c8d2e6');
+    g.addColorStop(0, '#f1e3c3');
+    g.addColorStop(1, '#dcc597');
   }
   ctx.fillStyle = g;
-  ctx.fillRect(0, top, TV_W, h);
-  ctx.fillStyle = goal ? 'rgba(26,20,0,0.5)' : 'rgba(16,19,26,0.4)';
-  ctx.fillRect(0, top, TV_W, 8);
-  ctx.fillRect(0, top + h - 8, TV_W, 8);
-  const ink = goal ? COLOR.accentInk : '#10131a';
-  const bounce = 1 + 0.04 * Math.sin(pulse * Math.PI * 2);
-  if (goal) {
-    drawText(ctx, '⚽', 74, top + h / 2 + 4, { size: 84 * bounce });
-    drawText(ctx, '⚽', TV_W - 74, top + h / 2 + 4, { size: 84 * bounce });
+  ctx.fillRect(40, top, TV_W - 80, h);
+  // 두루마리 양 끝의 축(나무 막대)
+  for (const x of [28, TV_W - 52]) {
+    ctx.fillStyle = '#3b2412';
+    ctx.fillRect(x, top - 14, 24, h + 28);
+    ctx.fillStyle = '#c9a25a';
+    ctx.fillRect(x, top - 20, 24, 8);
+    ctx.fillRect(x, top + h + 12, 24, 8);
   }
-  const maxW = goal ? 770 : 900;
+  // 안쪽 테두리
+  ctx.strokeStyle = goal ? 'rgba(243,210,122,0.85)' : 'rgba(60,38,16,0.6)';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(62, top + 14, TV_W - 124, h - 28);
+  const ink = goal ? '#f6d983' : COLOR.ink;
+  const bounce = 1 + 0.04 * Math.sin(pulse * Math.PI * 2);
+  // 머리말: 급보(急報) / 고시(告示)
+  drawText(ctx, goal ? '急報 · 급보' : '告示 · 알림', 512, top + 44, { size: 30, weight: 800, color: goal ? 'rgba(246,217,131,0.85)' : COLOR.soft });
+  if (goal) {
+    drawSeal(ctx, 122, top + h / 2 + 18, '慶', 82 * bounce);
+    drawSeal(ctx, TV_W - 122, top + h / 2 + 18, '賀', 82 * bounce);
+  }
+  const maxW = goal ? 640 : 860;
   // 한 줄에 못 들어가면 두 줄로
   ctx.font = `900 76px ${FONT}`;
   if (ctx.measureText(b.text).width > maxW && b.text.includes(' ')) {
     const words = b.text.split(' ');
     const mid = Math.ceil(words.length / 2);
-    drawText(ctx, words.slice(0, mid).join(' '), 512, top + h / 2 - 40, { size: 84, weight: 900, color: ink, maxWidth: maxW, minSize: 40 });
-    drawText(ctx, words.slice(mid).join(' '), 512, top + h / 2 + 52, { size: 84, weight: 900, color: ink, maxWidth: maxW, minSize: 40 });
+    drawText(ctx, words.slice(0, mid).join(' '), 512, top + h / 2 - 18, { size: 76, weight: 900, color: ink, maxWidth: maxW, minSize: 40 });
+    drawText(ctx, words.slice(mid).join(' '), 512, top + h / 2 + 66, { size: 76, weight: 900, color: ink, maxWidth: maxW, minSize: 40 });
   } else {
-    drawText(ctx, b.text, 512, top + h / 2 + 4, { size: 124, weight: 900, color: ink, maxWidth: maxW, minSize: 44 });
+    drawText(ctx, b.text, 512, top + h / 2 + 22, { size: 112, weight: 900, color: ink, maxWidth: maxW, minSize: 44 });
   }
 }
 
 function drawTally(ctx: CanvasRenderingContext2D, t: TallySnapshot, actionIds: readonly string[]): void {
   const top = 486;
   const h = 72;
-  roundRect(ctx, 40, top, TV_W - 80, h, h / 2);
-  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  // 장부(帳簿): 먹선 두른 종이 띠
+  roundRect(ctx, 40, top, TV_W - 80, h, 10);
+  ctx.fillStyle = 'rgba(247,236,210,0.92)';
   ctx.fill();
   ctx.strokeStyle = t.phase === 'live' ? COLOR.accent : COLOR.line;
   ctx.lineWidth = 3;
   ctx.stroke();
-  drawText(ctx, t.phase === 'live' ? '지금 방의 응원' : '이번 응원 합계', 80, top + h / 2, { size: 30, weight: 700, color: COLOR.soft, align: 'left', maxWidth: 340, minSize: 22 });
+  drawSeal(ctx, 84, top + h / 2, '帳', 44);
+  drawText(ctx, t.phase === 'live' ? '주막 응원 장부' : '오늘 응원 장부', 118, top + h / 2, { size: 30, weight: 800, color: COLOR.soft, align: 'left', maxWidth: 330, minSize: 22 });
   actionIds.forEach((id, i) => {
     const x = 520 + i * 156;
     const pic = ACTION_PICTURE[id] === MAKGEOLLI_ICON ? makgeolliImage() : null;
@@ -307,29 +325,25 @@ export function drawTv(
   pulse = 0,
   broadcast: BroadcastState | null = null,
 ): void {
-  // 바탕
-  const bg = ctx.createLinearGradient(0, 0, 0, TV_H);
-  bg.addColorStop(0, COLOR.bg1);
-  bg.addColorStop(1, COLOR.bg0);
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, TV_W, TV_H);
+  // 바탕: 누런 한지와 광곽
+  drawPaper(ctx);
 
   const tallyOn = tally !== null && tally.phase !== 'off';
   const bottom = tallyOn ? 470 : 560;
 
   if (view.kind === 'waiting') {
-    drawText(ctx, '경기 소식을 불러오는 중이에요', 512, 290, { size: 52, weight: 700, color: COLOR.soft, maxWidth: 900 });
+    drawText(ctx, '파발이 경기 소식을 가져오는 중이오', 512, 290, { size: 52, weight: 700, color: COLOR.soft, maxWidth: 900 });
   } else if (view.kind === 'quiet') {
     drawQuiet(ctx, view);
   } else if (view.kind === 'idle') {
     drawIdle(ctx, view);
-  } else if (broadcast && broadcast.scene.kind === 'pitch' && view.matches[0]) {
-    // 중계: 첫 경기를 경기장 화면으로
-    const m = view.matches[0];
+  } else if (broadcast && broadcast.scene.kind === 'pitch' && view.matches[broadcast.scene.match]) {
+    // 중계: 지금 차례인 경기를 경기장 화면으로
+    const m = view.matches[broadcast.scene.match]!;
     const ours = ourPlayers(m)[0] ?? null;
-    drawPitch(ctx, broadcast.sim, { match: m, ourName: ours?.name ?? null, ourSide: ours?.side ?? null, bottom });
-  } else if (broadcast && broadcast.scene.kind === 'player' && view.matches[0]) {
-    const m = view.matches[0];
+    drawPitch(ctx, broadcast.sim(m.id), { match: m, ourName: ours?.name ?? null, ourSide: ours?.side ?? null, bottom });
+  } else if (broadcast && broadcast.scene.kind === 'player' && view.matches[broadcast.scene.match]) {
+    const m = view.matches[broadcast.scene.match]!;
     const list = ourPlayers(m);
     const p = list[broadcast.scene.index % Math.max(1, list.length)];
     if (p) {
@@ -352,9 +366,6 @@ export function drawTv(
 
   if (tallyOn && tally) drawTally(ctx, tally, actionIds);
 
-  // 아주 옅은 주사선: TV 같은 느낌
-  ctx.fillStyle = 'rgba(0,0,0,0.05)';
-  for (let y = 0; y < TV_H; y += 4) ctx.fillRect(0, y, TV_W, 1);
 
   if (banner) drawBanner(ctx, banner, pulse);
 }
@@ -369,9 +380,8 @@ export class TvScreen {
   private dirty = true;
   private lastDraw = -Infinity;
   private reduced = false;
-  /** 중계 장면 순서의 기준 시각과 경기장 움직임 */
-  private readonly startedAt = performance.now();
-  private readonly sim = new PitchSim(Math.floor(Math.random() * 1e9));
+  /** 경기마다 경기장 움직임 (경기 id -> 움직임) */
+  private readonly sims = new Map<string, PitchSim>();
   private scene: BroadcastScene = { kind: 'scores' };
   private lastStep = performance.now();
 
@@ -425,18 +435,21 @@ export class TvScreen {
       this.banner = null;
       this.dirty = true;
     }
-    // 중계 장면: 첫 경기가 있으면 시간에 따라 경기장 -> 선수 카드 -> 점수판으로 바뀐다
-    const first = this.view.kind === 'matches' ? this.view.matches[0] : undefined;
-    const scene: BroadcastScene = first ? sceneAt(first, now - this.startedAt) : { kind: 'scores' };
-    if (scene.kind !== this.scene.kind || (scene.kind === 'player' && this.scene.kind === 'player' && scene.index !== this.scene.index)) {
+    // 중계 장면: 경기가 겹치면 한 TV가 경기마다 경기장 -> 선수 카드를 돌고 점수판으로 (벽시계 기준이라 방 모두가 같은 장면)
+    const matches = this.view.kind === 'matches' ? this.view.matches : [];
+    const scene: BroadcastScene = matches.length > 0 ? sceneAt(matches, Date.now()) : { kind: 'scores' };
+    if (!sameScene(scene, this.scene)) {
       this.scene = scene;
       this.dirty = true;
     }
     const pitch = scene.kind === 'pitch';
-    // 경기장은 계속 움직인다(그리지 않는 동안에도 시간은 흐르게 여기서 진행)
+    // 경기장은 보이는 동안 움직인다
     const dt = Math.min(0.25, (now - this.lastStep) / 1000);
     this.lastStep = now;
-    if (pitch) this.sim.step(dt);
+    if (scene.kind === 'pitch') {
+      const m = matches[scene.match];
+      if (m) this.simFor(m.id).step(dt);
+    }
     // 선수 카드는 사진이 늦게 와도 곧 다시 그려지게 가끔 다시 그린다
     const card = scene.kind === 'player';
     // 띄우는 글이 있는 동안은 글자가 살짝 뛰도록 조금 더 자주 그린다
@@ -449,11 +462,20 @@ export class TvScreen {
     const pulse = this.banner && !this.reduced ? (now % 900) / 900 : 0;
     drawTv(this.ctx, this.view, this.banner, this.tally, this.actionIds, pulse, {
       scene,
-      sim: this.sim,
+      sim: (id) => this.simFor(id),
       photo: (name) => playerPhoto(name),
     });
     this.texture.needsUpdate = true;
     return true;
+  }
+
+  private simFor(matchId: string): PitchSim {
+    let sim = this.sims.get(matchId);
+    if (!sim) {
+      sim = new PitchSim(seedOf(matchId));
+      this.sims.set(matchId, sim);
+    }
+    return sim;
   }
 
   dispose(): void {

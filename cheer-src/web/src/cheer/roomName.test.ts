@@ -35,9 +35,11 @@ describe('formatRoomName', () => {
 });
 
 describe('roomPlayerNames', () => {
-  it('진행 중인 경기의 선수들을 킥오프 순으로', () => {
+  it('진행 중인 경기의 선수들(킥오프 순) 다음에 곧 시작하는 경기의 선수들: 경기가 겹쳐도 주막은 하나', () => {
     const f = feed([match('live', 300, ['황희찬']), match('live', 100, ['이강인']), match('pre', 50, ['김민재'])]);
-    expect(roomPlayerNames(f)).toEqual(['이강인', '황희찬']);
+    expect(roomPlayerNames(f)).toEqual(['이강인', '황희찬', '김민재']);
+    // 오늘 밤: 백승호 경기가 진행 중이고 이강인 경기가 곧 시작
+    expect(roomName(feed([match('live', 100, ['백승호']), match('pre', 200, ['이강인'])]))).toBe('백승호·이강인 응원 주막');
   });
 
   it('진행 중인 경기가 없으면 곧 시작하는 경기의 선수들', () => {
