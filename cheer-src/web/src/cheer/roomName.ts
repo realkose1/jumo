@@ -36,16 +36,15 @@ function namesOf(matches: readonly CheerMatch[]): string[] {
 const byKickoff = (a: CheerMatch, b: CheerMatch): number => a.ko - b.ko || a.id.localeCompare(b.id);
 
 /**
- * 간판에 올릴 선수 이름들.
- * 1) 진행 중인 경기의 선수들(킥오프 순)  2) 없으면 곧 시작하는(pre) 경기의 선수들  3) 없으면 피드의 다음 경기 선수.
+ * 간판에 올릴 선수 이름들. 경기가 겹쳐도 주막은 하나라서 지금 함께 보는 경기의 선수를 모두 올린다.
+ * 1) 진행 중인 경기의 선수들(킥오프 순) 다음에 곧 시작하는(pre, 60분 안) 경기의 선수들  2) 둘 다 없으면 피드의 다음 경기 선수.
  * focusId(?m=)가 그 경기라면 그 경기의 선수를 맨 앞으로 옮긴다(같은 이름들, 순서만 바뀐다).
  */
 export function roomPlayerNames(feed: CheerFeed | null, focusId: string | null = null): string[] {
   if (!feed) return [];
   const live = feed.matches.filter((m) => m.state === 'live').sort(byKickoff);
   const pre = feed.matches.filter((m) => m.state === 'pre').sort(byKickoff);
-  let chosen: CheerMatch[] = live;
-  if (chosen.length === 0) chosen = pre;
+  let chosen: CheerMatch[] = [...live, ...pre];
   if (chosen.length === 0 && feed.next) chosen = [feed.next];
   const names = namesOf(chosen);
   if (focusId && names.length > 1) {

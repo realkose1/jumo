@@ -9,15 +9,18 @@ import type { TvMatchView, TvPlayerLine } from '../../cheer/feed';
 // 장면 순서
 // ---------------------------------------------------------------------------
 
-export type BroadcastScene = { kind: 'pitch' } | { kind: 'player'; index: number } | { kind: 'scores' };
+/** match는 TV에 올린 경기 목록(view.matches)의 몇 번째 경기인가 */
+export type BroadcastScene =
+  | { kind: 'pitch'; match: number }
+  | { kind: 'player'; match: number; index: number }
+  | { kind: 'scores' };
 
-/** 진행 중 축구: 경기장 26초 -> 선수 카드 7초 -> 점수판 7초 (40초 한 바퀴) */
-const LIVE_PITCH_MS = 26_000;
+/** 진행 중 축구 경기의 경기장 화면, 선수 카드 한 장, 점수판 */
+const PITCH_MS = 20_000;
 const CARD_MS = 7_000;
 const SCORES_MS = 7_000;
-/** 시작 전·야구·끝: 점수판 12초 -> 선수 카드 8초 */
+/** 경기장 화면이 하나도 없으면(시작 전·야구·끝) 점수판을 더 길게 */
 const CALM_SCORES_MS = 12_000;
-const CALM_CARD_MS = 8_000;
 
 /** 우리 선수 목록 (골 많은 순) */
 export function ourPlayers(m: TvMatchView): Array<TvPlayerLine & { side: 'home' | 'away' }> {
@@ -27,23 +30,56 @@ export function ourPlayers(m: TvMatchView): Array<TvPlayerLine & { side: 'home' 
   ].sort((a, b) => b.goals - a.goals);
 }
 
-/** 지금(t ms, 아무 기준) 보여줄 장면 */
-export function sceneAt(m: TvMatchView, t: number): BroadcastScene {
-  const players = ourPlayers(m).length;
-  const live = m.state === 'live' && m.sport === 'soccer';
-  if (live) {
-    const cycle = LIVE_PITCH_MS + (players > 0 ? CARD_MS : 0) + SCORES_MS;
-    const lap = Math.floor(t / cycle);
-    const p = t - lap * cycle;
-    if (p < LIVE_PITCH_MS) return { kind: 'pitch' };
-    if (players > 0 && p < LIVE_PITCH_MS + CARD_MS) return { kind: 'player', index: lap % players };
-    return { kind: 'scores' };
+/**
+ * 한 바퀴의 장면 순서. 경기가 겹치면 주막을 나누지 않고 한 TV가 경기마다 돌아가며 보여 준다:
+ *   경기마다 (진행 중 축구면 경기장 화면) -> 그 경기 우리 선수 카드들, 마지막에 모든 경기 점수판.
+ */
+export function broadcastPlaylist(matches: readonly TvMatchView[]): Array<{ scene: BroadcastScene; ms: number }> {
+  const list: Array<{ scene: BroadcastScene; ms: number }> = [];
+  let pitches = 0;
+  matches.forEach((m, i) => {
+    if (m.state === 'live' && m.sport === 'soccer') {
+      list.push({ scene: { kind: 'pitch', match: i }, ms: PITCH_MS });
+      pitches++;
+    }
+    ourPlayers(m).forEach((_, j) => list.push({ scene: { kind: 'player', match: i, index: j }, ms: CARD_MS }));
+  });
+  list.push({ scene: { kind: 'scores' }, ms: pitches > 0 ? SCORES_MS : CALM_SCORES_MS });
+  return list;
+}
+
+/**
+ * 지금 보여줄 장면. t는 벽시계(Date.now()) 기준이라 같은 방 사람들은 거의 같은 순간에 같은 장면을 본다.
+ * 점수판부터 시작하지 않도록 한 바퀴의 처음은 첫 경기다.
+ */
+export function sceneAt(matches: readonly TvMatchView[], t: number): BroadcastScene {
+  const list = broadcastPlaylist(matches);
+  const cycle = list.reduce((n, s) => n + s.ms, 0);
+  let p = ((t % cycle) + cycle) % cycle;
+  for (const s of list) {
+    if (p < s.ms) return s.scene;
+    p -= s.ms;
   }
-  if (players === 0) return { kind: 'scores' };
-  const cycle = CALM_SCORES_MS + CALM_CARD_MS;
-  const lap = Math.floor(t / cycle);
-  const p = t - lap * cycle;
-  return p < CALM_SCORES_MS ? { kind: 'scores' } : { kind: 'player', index: lap % players };
+  return { kind: 'scores' };
+}
+
+/** 같은 장면인가 (바뀌었으면 다시 그린다) */
+export function sameScene(a: BroadcastScene, b: BroadcastScene): boolean {
+  if (a.kind !== b.kind) return false;
+  if (a.kind === 'scores') return true;
+  if (a.kind === 'pitch') return a.match === (b as { match: number }).match;
+  const bb = b as { match: number; index: number };
+  return a.match === bb.match && a.index === bb.index;
+}
+
+/** 경기 id에서 경기장 움직임의 씨앗 (같은 경기는 누구 화면에서나 같은 출발) */
+export function seedOf(id: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0 || 1;
 }
 
 // ---------------------------------------------------------------------------

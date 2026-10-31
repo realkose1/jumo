@@ -5,7 +5,7 @@ import type { TvMatchView, TvPlayerLine, TvView } from '../../cheer/feed';
 import type { TallySnapshot } from '../../cheer/tally';
 import { ACTION_EMOJI, ACTION_PICTURE } from './layout';
 import { MAKGEOLLI_ICON, makgeolliImage } from './makgeolli';
-import { PitchSim, drawPitch, drawPlayerCard, drawScoreBug, ourPlayers, sceneAt, type BroadcastScene } from './broadcast';
+import { PitchSim, drawPitch, drawPlayerCard, drawScoreBug, ourPlayers, sameScene, sceneAt, seedOf, type BroadcastScene } from './broadcast';
 import { playerPhoto } from './playerPhotos';
 
 export const TV_W = 1024;
@@ -34,7 +34,8 @@ const PITCH_REDRAW_REDUCED_MS = 400;
 /** 중계 화면에 필요한 것 (TvScreen이 채운다) */
 export interface BroadcastState {
   scene: BroadcastScene;
-  sim: PitchSim;
+  /** 경기장 화면에 쓸 그 경기의 움직임 */
+  sim: (matchId: string) => PitchSim;
   photo: (name: string) => HTMLImageElement | null;
 }
 
@@ -323,13 +324,13 @@ export function drawTv(
     drawQuiet(ctx, view);
   } else if (view.kind === 'idle') {
     drawIdle(ctx, view);
-  } else if (broadcast && broadcast.scene.kind === 'pitch' && view.matches[0]) {
-    // 중계: 첫 경기를 경기장 화면으로
-    const m = view.matches[0];
+  } else if (broadcast && broadcast.scene.kind === 'pitch' && view.matches[broadcast.scene.match]) {
+    // 중계: 지금 차례인 경기를 경기장 화면으로
+    const m = view.matches[broadcast.scene.match]!;
     const ours = ourPlayers(m)[0] ?? null;
-    drawPitch(ctx, broadcast.sim, { match: m, ourName: ours?.name ?? null, ourSide: ours?.side ?? null, bottom });
-  } else if (broadcast && broadcast.scene.kind === 'player' && view.matches[0]) {
-    const m = view.matches[0];
+    drawPitch(ctx, broadcast.sim(m.id), { match: m, ourName: ours?.name ?? null, ourSide: ours?.side ?? null, bottom });
+  } else if (broadcast && broadcast.scene.kind === 'player' && view.matches[broadcast.scene.match]) {
+    const m = view.matches[broadcast.scene.match]!;
     const list = ourPlayers(m);
     const p = list[broadcast.scene.index % Math.max(1, list.length)];
     if (p) {
@@ -369,9 +370,8 @@ export class TvScreen {
   private dirty = true;
   private lastDraw = -Infinity;
   private reduced = false;
-  /** 중계 장면 순서의 기준 시각과 경기장 움직임 */
-  private readonly startedAt = performance.now();
-  private readonly sim = new PitchSim(Math.floor(Math.random() * 1e9));
+  /** 경기마다 경기장 움직임 (경기 id -> 움직임) */
+  private readonly sims = new Map<string, PitchSim>();
   private scene: BroadcastScene = { kind: 'scores' };
   private lastStep = performance.now();
 
@@ -425,18 +425,21 @@ export class TvScreen {
       this.banner = null;
       this.dirty = true;
     }
-    // 중계 장면: 첫 경기가 있으면 시간에 따라 경기장 -> 선수 카드 -> 점수판으로 바뀐다
-    const first = this.view.kind === 'matches' ? this.view.matches[0] : undefined;
-    const scene: BroadcastScene = first ? sceneAt(first, now - this.startedAt) : { kind: 'scores' };
-    if (scene.kind !== this.scene.kind || (scene.kind === 'player' && this.scene.kind === 'player' && scene.index !== this.scene.index)) {
+    // 중계 장면: 경기가 겹치면 한 TV가 경기마다 경기장 -> 선수 카드를 돌고 점수판으로 (벽시계 기준이라 방 모두가 같은 장면)
+    const matches = this.view.kind === 'matches' ? this.view.matches : [];
+    const scene: BroadcastScene = matches.length > 0 ? sceneAt(matches, Date.now()) : { kind: 'scores' };
+    if (!sameScene(scene, this.scene)) {
       this.scene = scene;
       this.dirty = true;
     }
     const pitch = scene.kind === 'pitch';
-    // 경기장은 계속 움직인다(그리지 않는 동안에도 시간은 흐르게 여기서 진행)
+    // 경기장은 보이는 동안 움직인다
     const dt = Math.min(0.25, (now - this.lastStep) / 1000);
     this.lastStep = now;
-    if (pitch) this.sim.step(dt);
+    if (scene.kind === 'pitch') {
+      const m = matches[scene.match];
+      if (m) this.simFor(m.id).step(dt);
+    }
     // 선수 카드는 사진이 늦게 와도 곧 다시 그려지게 가끔 다시 그린다
     const card = scene.kind === 'player';
     // 띄우는 글이 있는 동안은 글자가 살짝 뛰도록 조금 더 자주 그린다
@@ -449,11 +452,20 @@ export class TvScreen {
     const pulse = this.banner && !this.reduced ? (now % 900) / 900 : 0;
     drawTv(this.ctx, this.view, this.banner, this.tally, this.actionIds, pulse, {
       scene,
-      sim: this.sim,
+      sim: (id) => this.simFor(id),
       photo: (name) => playerPhoto(name),
     });
     this.texture.needsUpdate = true;
     return true;
+  }
+
+  private simFor(matchId: string): PitchSim {
+    let sim = this.sims.get(matchId);
+    if (!sim) {
+      sim = new PitchSim(seedOf(matchId));
+      this.sims.set(matchId, sim);
+    }
+    return sim;
   }
 
   dispose(): void {
