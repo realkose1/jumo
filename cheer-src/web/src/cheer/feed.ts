@@ -1,6 +1,6 @@
 // 경기 피드(서버가 주는 CheerFeed)를 TV에 그릴 모양으로 바꾼다. 그림은 spaces/jumak/tv.ts가 그린다.
 // 여기는 three.js도 DOM도 모르는 순수한 계산이라 시험하기 쉽다.
-import type { CheerFeed, CheerMatch, CheerPlayer } from '@shared/cheer';
+import type { CheerFeed, CheerMatch, CheerPlayer, CheerRole } from '@shared/cheer';
 import { toSeoulTime } from '../engine/time';
 import { roomName } from './roomName';
 
@@ -12,6 +12,8 @@ export interface TvPlayerLine {
   /** 골 표시: "⚽⚽", 야구는 "홈런 2". 아직 없으면 빈 글자 */
   badge: string;
   goals: number;
+  /** 축구 출전 정보(선발·벤치·교체 투입·아웃). 모르면 없다 */
+  role?: CheerRole;
 }
 
 export interface TvMatchView {
@@ -75,10 +77,13 @@ function badgeFor(sport: CheerMatch['sport'], goals: number): string {
   return goals <= 3 ? '⚽'.repeat(goals) : `⚽×${goals}`;
 }
 
+const ROLES: readonly CheerRole[] = ['start', 'bench', 'in', 'off'];
+const isRole = (v: unknown): v is CheerRole => ROLES.includes(v as CheerRole);
+
 function playerLines(match: CheerMatch, side: 'home' | 'away'): TvPlayerLine[] {
   return match.players
     .filter((p: CheerPlayer) => p.side === side)
-    .map((p) => ({ name: p.name, badge: badgeFor(match.sport, p.g), goals: p.g }));
+    .map((p) => ({ name: p.name, badge: badgeFor(match.sport, p.g), goals: p.g, ...(isRole(p.role) ? { role: p.role } : {}) }));
 }
 
 function scoreText(match: CheerMatch, team: 'home' | 'away'): string {

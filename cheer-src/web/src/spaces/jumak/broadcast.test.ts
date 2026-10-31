@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TvMatchView } from '../../cheer/feed';
-import { PitchSim, broadcastPlaylist, ourPlayers, sameScene, sceneAt, seedOf } from './broadcast';
+import { PitchSim, broadcastPlaylist, onPitch, ourPlayers, playerCardText, sameScene, sceneAt, seedOf } from './broadcast';
 
 const match = (o: Partial<TvMatchView> = {}): TvMatchView => ({
   id: 'm1',
@@ -70,6 +70,33 @@ describe('중계 장면 순서', () => {
     expect(seedOf('m1')).not.toBe(seedOf('m2'));
     expect(sameScene({ kind: 'pitch', match: 0 }, { kind: 'pitch', match: 1 })).toBe(false);
     expect(sameScene({ kind: 'scores' }, { kind: 'scores' })).toBe(true);
+  });
+});
+
+describe('선수 카드 글자', () => {
+  it('벤치 선수는 출전 중이 아니라 벤치 대기 (경기 전에도, 진행 중에도)', () => {
+    expect(playerCardText('live', 'bench', '득점')).toEqual({ head: '待機 · 벤치 대기', idle: '교체 투입 대기' });
+    expect(playerCardText('pre', 'bench', '득점').head).toBe('待機 · 벤치 대기');
+  });
+
+  it('선발·교체 투입·교체 아웃을 가려 적는다', () => {
+    expect(playerCardText('live', 'start', '득점').head).toBe('出戰 · 출전 중');
+    expect(playerCardText('live', 'in', '득점').head).toBe('出戰 · 교체 출전 중');
+    expect(playerCardText('live', 'off', '득점')).toEqual({ head: '交替 · 교체 아웃', idle: '교체되어 쉬는 중' });
+    expect(playerCardText('pre', 'start', '득점').head).toBe('先發 · 선발 출전');
+  });
+
+  it('출전 정보를 모르면 예전처럼 (야구 포함)', () => {
+    expect(playerCardText('live', undefined, '득점')).toEqual({ head: '出戰 · 출전 중', idle: '득점을 기다리는 중' });
+    expect(playerCardText('pre', undefined, '홈런')).toEqual({ head: '오늘의 출전', idle: '출전 대기' });
+    expect(playerCardText('final', 'bench', '득점').head).toBe('오늘의 겨룸');
+  });
+
+  it('경기장 이름표는 그라운드에 있는 선수에게만', () => {
+    expect(onPitch({ name: 'a', badge: '', goals: 0 })).toBe(true);
+    expect(onPitch({ name: 'a', badge: '', goals: 0, role: 'in' })).toBe(true);
+    expect(onPitch({ name: 'a', badge: '', goals: 0, role: 'bench' })).toBe(false);
+    expect(onPitch({ name: 'a', badge: '', goals: 0, role: 'off' })).toBe(false);
   });
 });
 
