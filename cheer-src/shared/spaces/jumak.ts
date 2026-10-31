@@ -1,6 +1,6 @@
 // 주막 응원방. 모두가 한 공간(jumak)에 들어오고, 방이 차면 로비가 다음 방으로 나눈다.
 // 평상 넷(a~d)에 방석 여섯씩. 자리의 3D 위치는 화면(web/src/spaces/jumak)이 정한다.
-// 동작은 박수·건배·함성 셋뿐이고, 글자 대화는 없다. 건배가 인사 동작이다.
+// 동작은 박수·건배·주문 셋뿐이고, 글자 대화는 없다. 건배가 인사 동작이다.
 import { seatRange, type SharedSpace } from './types';
 import { JUMAK_NAME_ADJECTIVES, JUMAK_NAMES } from './jumak-names';
 
