@@ -50,9 +50,15 @@ export type TvView =
 
 const STATE_RANK: Record<CheerMatch['state'], number> = { live: 0, pre: 1, final: 2 };
 
+/** 우리 선수가 모두 벤치에 있거나 교체돼 나간 경기인가. 선수가 없거나 출전 정보를 모르는 선수가 있으면 아니다 */
+export function benchedOnly(players: ReadonlyArray<{ role?: CheerRole }>): boolean {
+  return players.length > 0 && players.every((p) => p.role === 'bench' || p.role === 'off');
+}
+
 /**
  * TV에 올릴 경기를 고른다. 주소의 ?m=<경기 id>가 있으면 그 경기가 맨 앞(크게),
  * 나머지는 진행 중 -> 곧 시작 -> 방금 끝난 순이고 최대 MAX_TV_MATCHES개.
+ * 진행 중인 경기끼리는 우리 선수가 그라운드에 있는 경기가 먼저다(제보: 벤치 대기인 배준호 경기가 선발 이강인 경기보다 앞섰다).
  */
 export function selectMatches(feed: CheerFeed, focusId: string | null): CheerMatch[] {
   const pool = [...feed.matches];
@@ -60,6 +66,10 @@ export function selectMatches(feed: CheerFeed, focusId: string | null): CheerMat
   pool.sort((a, b) => {
     const byState = STATE_RANK[a.state] - STATE_RANK[b.state];
     if (byState !== 0) return byState;
+    if (a.state === 'live') {
+      const byField = Number(benchedOnly(a.players)) - Number(benchedOnly(b.players));
+      if (byField !== 0) return byField;
+    }
     // 끝난 경기는 최근 것이 먼저, 나머지는 먼저 시작하는 것이 먼저
     const byTime = a.state === 'final' ? b.ko - a.ko : a.ko - b.ko;
     return byTime !== 0 ? byTime : a.id.localeCompare(b.id);

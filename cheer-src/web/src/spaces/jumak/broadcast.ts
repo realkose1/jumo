@@ -3,7 +3,7 @@
 //   2) 선수 카드: 족자에 우리 선수 이름(세로 붓글씨)과 오늘 기록. 사진은 쓰지 않는다
 //   3) 점수판: 여러 경기 점수(tv.ts의 기존 화면)
 // 장면 순서와 경기장 움직임은 three.js를 모르는 계산이라 시험하기 쉽다. 그리기는 캔버스 2D.
-import type { TvMatchView, TvPlayerLine } from '../../cheer/feed';
+import { benchedOnly, type TvMatchView, type TvPlayerLine } from '../../cheer/feed';
 import { PAPER, SERIF, drawPaper, drawSeal, oldClock } from './joseon';
 
 // ---------------------------------------------------------------------------
@@ -53,12 +53,13 @@ export function playerCardText(state: TvMatchView['state'], role: TvPlayerLine['
 /**
  * 한 바퀴의 장면 순서. 경기가 겹치면 주막을 나누지 않고 한 TV가 경기마다 돌아가며 보여 준다:
  *   경기마다 (진행 중 축구면 경기장 화면) -> 그 경기 우리 선수 카드들, 마지막에 모든 경기 점수판.
+ * 우리 선수가 모두 벤치에 있거나 교체돼 나간 경기는 경기장 화면을 건너뛰어, 우리 선수가 뛰는 경기에 TV를 몰아준다.
  */
 export function broadcastPlaylist(matches: readonly TvMatchView[]): Array<{ scene: BroadcastScene; ms: number }> {
   const list: Array<{ scene: BroadcastScene; ms: number }> = [];
   let pitches = 0;
   matches.forEach((m, i) => {
-    if (m.state === 'live' && m.sport === 'soccer') {
+    if (m.state === 'live' && m.sport === 'soccer' && !benchedOnly(ourPlayers(m))) {
       list.push({ scene: { kind: 'pitch', match: i }, ms: PITCH_MS });
       pitches++;
     }

@@ -28,6 +28,16 @@ describe('중계 장면 순서', () => {
     expect(sceneAt(m, 35_000).kind).toBe('pitch');
   });
 
+  it('우리 선수가 모두 벤치인 경기는 경기장 화면 없이 선수 카드만 (뛰는 경기에 TV를 몰아준다)', () => {
+    const playing = match({ id: 'lev', awayPlayers: [{ name: '이강인', badge: '', goals: 0, role: 'start' }] });
+    const bench = match({ id: 'stk', ours: 'home', homePlayers: [{ name: '배준호', badge: '', goals: 0, role: 'bench' }], awayPlayers: [] });
+    expect(broadcastPlaylist([playing, bench]).map((s) => s.scene.kind)).toEqual(['pitch', 'player', 'player', 'scores']);
+    expect(broadcastPlaylist([playing, bench])[0]!.scene).toEqual({ kind: 'pitch', match: 0 });
+    // 교체로 들어오면 그 경기 경기장 화면도 돌아온다
+    const subIn = match({ id: 'stk', ours: 'home', homePlayers: [{ name: '배준호', badge: '', goals: 0, role: 'in' }], awayPlayers: [] });
+    expect(broadcastPlaylist([playing, subIn]).filter((s) => s.scene.kind === 'pitch')).toHaveLength(2);
+  });
+
   it('경기가 겹치면 한 TV가 경기마다 돌아가며 보여 주고 마지막에 점수판', () => {
     const a = match({ id: 'a', homeName: '버밍엄', awayName: '레딩', ours: 'home', homePlayers: [{ name: '백승호', badge: '', goals: 0 }], awayPlayers: [] });
     const b = match({ id: 'b' });

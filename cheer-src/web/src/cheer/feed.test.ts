@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CheerFeed, CheerMatch } from '@shared/cheer';
-import { buildTvView, formatWhen, hasLiveMatch, selectMatches, toMatchView } from './feed';
+import { benchedOnly, buildTvView, formatWhen, hasLiveMatch, selectMatches, toMatchView } from './feed';
 
 const NOW = Date.UTC(2026, 9, 31, 10, 0, 0); // 한국 시간 19:00 (토)
 
@@ -30,6 +30,25 @@ describe('selectMatches', () => {
       match('live', { state: 'live' }),
     ]);
     expect(selectMatches(f, null).map((m) => m.id)).toEqual(['live', 'pre', 'fin']);
+  });
+
+  it('진행 중 경기끼리는 우리 선수가 뛰는 경기가 먼저 (벤치 대기 경기는 일찍 시작했어도 뒤로)', () => {
+    const f = feed([
+      match('stoke', { ko: NOW - 3_600_000, players: [{ name: '배준호', side: 'home', g: 0, role: 'bench' }] }),
+      match('levante', { ko: NOW - 600_000, players: [{ name: '이강인', side: 'away', g: 0, role: 'start' }] }),
+      match('pre', { state: 'pre', ko: NOW + 1_000_000, players: [{ name: '설영우', side: 'home', g: 0 }] }),
+    ]);
+    expect(selectMatches(f, null).map((m) => m.id)).toEqual(['levante', 'stoke', 'pre']);
+    // 출전 정보를 모르면 예전처럼 시작 순
+    const unknown = feed([
+      match('a', { ko: NOW - 3_600_000, players: [{ name: '배준호', side: 'home', g: 0 }] }),
+      match('b', { ko: NOW - 600_000, players: [{ name: '이강인', side: 'away', g: 0, role: 'start' }] }),
+    ]);
+    expect(selectMatches(unknown, null).map((m) => m.id)).toEqual(['a', 'b']);
+    // 교체 투입되면 다시 뛰는 경기다
+    expect(benchedOnly([{ role: 'in' }])).toBe(false);
+    expect(benchedOnly([{ role: 'bench' }, { role: 'off' }])).toBe(true);
+    expect(benchedOnly([])).toBe(false);
   });
 
   it('최대 세 경기', () => {
