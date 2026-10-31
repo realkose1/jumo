@@ -1,34 +1,282 @@
-// 주모(주막 주인) NPC: 쪽 찐 머리에 흰 두건, 앞치마를 두른 다정한 얼굴.
+// 주모(주막 주인) NPC: 쪽 찐 머리에 흰 머릿수건, 노랑 저고리에 남치마, 흰 행주치마를 두른 다정한 얼굴.
 // 그냥 서 있지 않고 쉬지 않고 부엌일을 한다: 가마솥 국을 휘휘 젓고, 번철에 전을 뒤집고, 국을 뜨고, 잠깐 TV를 본다.
 // 주문이 들어오면 하던 일을 멈추고 손님 쪽을 보며 손을 들어 대답한다.
-// 몸통 한 덩어리 + 두 팔(어깨를 축으로 돈다) + 뒤집히는 전 하나. 모두 기본 도형이다. 원점은 발 밑 가운데, 앞은 +z.
+// 몸통 한 덩어리 + 두 팔(어깨를 축으로 돈다) + 뒤집히는 전 하나. 원점은 발 밑 가운데, 앞은 +z, 입은 사람의 오른쪽이 -x.
+// 옷은 손님 한복(outfit.ts)처럼 덧붙인 도형이 아니라 몸을 감싼다: 치마와 저고리는 선반으로 돌린 한 덩어리(정점 색)이고,
+// 깃, 동정, 고름, 행주치마, 허리끈, 머릿수건은 그 겉면을 따라 붙인다. 얼굴은 기본 도형이다.
 import * as THREE from 'three';
+import { DETAIL_PRESETS } from '../../engine/avatar';
 import { Batch } from './batch';
 import { JUMO } from './layout';
+import { Surface, band, hanbokFoot, mergeParts, paint, revolve, shell, smoothstep, surfaceFrame, surfacePath, type Ring } from './outfit';
 
 const SKIN = 0xf6d7b8;
 const HAIR = 0x1b1511;
-const SLEEVE = 0xf2dc8f;
+/** 저고리(연노랑)와 소맷부리 안쪽 그늘 */
+const JACKET = 0xf2dc8f;
+const JACKET_SHADE = 0xc4a964;
+/** 깃, 끝동, 고름은 자주 (노랑 저고리에 자주 회장, 남치마) */
+const JAJU = 0x9e2f58;
+const DONGJEONG = 0xffffff;
+const SKIRT = 0x2d4a86;
+/** 행주치마(흰 무명)와 감친 가장자리, 허리끈 */
+const APRON = 0xf3efe4;
+const APRON_HEM = 0xe0d8c4;
+const APRON_TIE = 0xdcd2ba;
+const SCARF = 0xf6f2e8;
+const BINYEO = 0xd8b25a;
 
 /** 어깨 자리 (몸 기준) */
 const SHOULDER_Y = 0.92;
 const SHOULDER_X = 0.19;
 
-function buildBody(): THREE.BufferGeometry {
+// ---- 몸통: 치마 + 저고리 (한 덩어리) ----
+/** 치마 말기(가슴), 여기서부터 저고리 */
+const CHIMA_TOP = 0.735;
+// 치마 옆모습 [반지름, 높이]. 아래에서 위로. 바닥에 닿는 단은 살짝 말려 있고 가슴으로 갈수록 좁아지는 종 모양
+const CHIMA_PROFILE: ReadonlyArray<readonly [number, number]> = [
+  [0.0, 0.0],
+  [0.3, 0.004],
+  [0.336, 0.012],
+  [0.345, 0.028],
+  [0.342, 0.05],
+  [0.333, 0.1],
+  [0.318, 0.18],
+  [0.299, 0.27],
+  [0.278, 0.36],
+  [0.256, 0.45],
+  [0.236, 0.54],
+  [0.219, 0.62],
+  [0.207, 0.69],
+  [0.2, CHIMA_TOP],
+];
+const CHIMA_SURFACE = new Surface(CHIMA_PROFILE);
+// 짧은 저고리: 도련(밑단)이 살짝 퍼져 치마 말기를 덮고, 둥근 어깨를 지나 목에서 닫힌다
+const JEOGORI_PROFILE: ReadonlyArray<readonly [number, number]> = [
+  [0.2002, CHIMA_TOP + 0.0002],
+  [0.222, 0.74],
+  [0.228, 0.752],
+  [0.221, 0.772],
+  [0.212, 0.8],
+  [0.209, 0.835],
+  [0.205, 0.865],
+  [0.196, 0.89],
+  [0.182, 0.912],
+  [0.162, 0.932],
+  [0.136, 0.95],
+  [0.104, 0.965],
+  [0.066, 0.978],
+  [0.0, 0.99],
+];
+const BODY_SURFACE = new Surface([...CHIMA_PROFILE, ...JEOGORI_PROFILE]);
+
+/** 치마 주름: 한 바퀴에 18개. 말기에서는 없고 아래로 갈수록 깊어진다 (반지름에 곱하는 비율) */
+const PLEATS = 18;
+function pleatDepth(y: number): number {
+  return 0.032 * (1 - smoothstep(0.03, CHIMA_TOP - 0.01, y));
+}
+function pleat(phi: number, y: number): number {
+  return y > CHIMA_TOP ? 1 : 1 + pleatDepth(y) * Math.cos(PLEATS * phi);
+}
+
+function chimaJeogori(): THREE.BufferGeometry {
+  const rings: Ring[] = [
+    ...CHIMA_PROFILE.map(([r, y]) => ({ y, rx: r, color: SKIRT })),
+    ...JEOGORI_PROFILE.map(([r, y]) => ({ y, rx: r, color: JACKET })),
+  ];
+  const g = revolve(rings, PLEATS * 4, pleat);
+  // 주름 골은 빛이 덜 들어 조금 어둡다
+  const pos = g.getAttribute('position');
+  const col = g.getAttribute('color');
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    if (y > CHIMA_TOP) continue;
+    const valley = 0.5 - 0.5 * Math.cos(PLEATS * Math.atan2(pos.getX(i), pos.getZ(i)));
+    const k = 1 - 0.16 * (pleatDepth(y) / pleatDepth(0)) * valley;
+    col.setXYZ(i, col.getX(i) * k, col.getY(i) * k, col.getZ(i) * k);
+  }
+  return g;
+}
+
+/** 치마 겉면(주름 마루)에서 lift만큼 띄운 옆모습 [반지름, 높이]. from에서 to까지 steps칸 */
+function overSkirt(lift: number, from: number, to: number, steps: number): Array<[number, number]> {
+  return Array.from({ length: steps + 1 }, (_, i) => {
+    const y = from + ((to - from) * i) / steps;
+    return [CHIMA_SURFACE.radius(y) * (1 + pleatDepth(y)) + lift, y];
+  });
+}
+
+// 깃: 손님 저고리와 같은 우임. 오른쪽 가슴의 안깃 끝에서 오른쪽 목으로 올라가 목 뒤를 돌고,
+// 왼쪽 목에서 오른쪽 가슴으로 비스듬히 내려와 고름에서 끝난다. [각, 높이]. 각은 앞이 0, 입은 사람의 왼쪽(+x)이 +
+const COLLAR_PATH: ReadonlyArray<readonly [number, number]> = [
+  [0.12, 0.853],
+  [-0.22, 0.878],
+  [-0.52, 0.902],
+  [-0.9, 0.916],
+  [-1.6, 0.924],
+  [-2.4, 0.927],
+  [-Math.PI, 0.928],
+  [-3.9, 0.927],
+  [-4.7, 0.924],
+  [-5.38, 0.916],
+  [-5.76, 0.893],
+  [-6.06, 0.867],
+  [-6.33, 0.84],
+  [-6.58, 0.818],
+];
+const COLLAR_WIDTH = 0.038;
+const COLLAR_THICK = 0.006;
+/** 고름이 달리는 곳 (겉깃 끝) */
+const GOREUM_AT = { phi: -6.58 + Math.PI * 2, y: 0.818 };
+
+function collar(): THREE.BufferGeometry[] {
+  const samples = 40;
+  // 안깃은 낮게, 겉깃은 높게 띄워 겹치는 곳에서 겉깃이 위로 온다
+  const path = surfacePath(BODY_SURFACE, COLLAR_PATH, samples, (t) => 0.003 + 0.009 * smoothstep(0.4, 0.62, t));
+  // 동정: 깃의 목 쪽 가장자리에 덧댄 흰 띠
+  const from = Math.round(samples * 0.06);
+  const to = Math.round(samples * 0.92);
+  const dongjeong = path.slice(from, to + 1).map((s) => ({ p: s.p.clone().addScaledVector(s.n, COLLAR_THICK * 0.7), n: s.n }));
+  const dw = 0.015;
+  return [band(path, COLLAR_WIDTH, COLLAR_THICK, JAJU), band(dongjeong, dw, 0.004, DONGJEONG, (COLLAR_WIDTH - dw) / 2)];
+}
+
+// ---- 행주치마: 저고리 도련 밑에 허리끈으로 매어 앞을 덮는 흰 무명. 등 뒤에서 나비매듭 ----
+const APRON_TOP = 0.738;
+const APRON_BOTTOM = 0.25;
+// 맨 위 1cm는 저고리 도련과 허리끈 밑에 숨는다 (가장자리 감침 색이 그 안에서만 번진다)
+const APRON_PROFILE: Array<[number, number]> = [...overSkirt(0.007, APRON_BOTTOM, APRON_TOP - 0.01, 11), [CHIMA_SURFACE.radius(APRON_TOP) + 0.007, APRON_TOP]];
+const APRON_SURFACE = new Surface(APRON_PROFILE);
+/** 고름 가닥이 내려오는 겉면: 위는 저고리, 아래는 행주치마와 허리끈 위 */
+const OVER_APRON = new Surface([...overSkirt(0.013, 0.45, 0.728, 8), ...JEOGORI_PROFILE.slice(1)]);
+/** 허리끈 높이 */
+const TIE_Y = [0.712, 0.728] as const;
+
+/** 앞에서 감싸는 각(한쪽). 네모난 천이라 아래로 퍼질수록 덜 감싼다 */
+function apronHalf(y: number): number {
+  return 0.5 * (0.34 / APRON_SURFACE.radius(y)) + 0.8;
+}
+
+function apron(): THREE.BufferGeometry[] {
+  // shell은 앞이 트인 옷이라 뒤를 감싸게 만든 뒤 반 바퀴 돌려 앞으로 보낸다
+  const cloth = shell({
+    profile: APRON_PROFILE,
+    gap: (y) => Math.PI - apronHalf(y),
+    cols: 20,
+    color: APRON,
+    trim: APRON_HEM,
+    trimWidth: 0.012,
+    thick: 0.006,
+  }).rotateY(Math.PI);
+  // 허리끈: 앞은 행주치마 위, 뒤는 치마 위에 붙어 한 바퀴
+  const tieR = (y: number) => APRON_SURFACE.radius(y) + 0.003;
+  const [lo, hi] = TIE_Y;
+  const tie = revolve(
+    [
+      { y: lo, rx: tieR(lo) - 0.004, color: APRON_TIE },
+      { y: lo + 0.0005, rx: tieR(lo), color: APRON_TIE },
+      { y: hi - 0.0005, rx: tieR(hi), color: APRON_TIE },
+      { y: hi, rx: tieR(hi) - 0.004, color: APRON_TIE },
+    ],
+    48,
+    (phi, y) => {
+      const a = Math.abs(Math.atan2(Math.sin(phi), Math.cos(phi)));
+      const covered = 1 - smoothstep(apronHalf(y) - 0.15, apronHalf(y) + 0.1, a);
+      const bare = (CHIMA_SURFACE.radius(y) + 0.003) / tieR(y);
+      return bare + (1 - bare) * covered;
+    },
+  );
+  // 나비매듭: 등 가운데 매듭과 양옆 고리 둘, 늘어진 두 가닥
+  const midY = (lo + hi) / 2;
+  const knotFrame = surfaceFrame(CHIMA_SURFACE, Math.PI, midY, 0.018);
+  const knot = new THREE.SphereGeometry(0.02, 10, 7).scale(1.1, 1, 0.75).applyMatrix4(knotFrame);
+  const loops = [-1, 1].map((s) =>
+    new THREE.SphereGeometry(1, 10, 7)
+      .scale(0.056, 0.028, 0.012)
+      .rotateZ(s * 0.3)
+      .translate(s * 0.055, 0.01, -0.002)
+      .applyMatrix4(knotFrame),
+  );
+  const backSkirt = new Surface(overSkirt(0.004, 0.3, CHIMA_TOP, 10));
+  const tail = (ctrl: ReadonlyArray<readonly [number, number]>) =>
+    band(surfacePath(backSkirt, ctrl, 8, (t) => 0.012 - 0.008 * smoothstep(0, 0.3, t)), 0.028, 0.004, APRON_TIE);
+  return [
+    cloth,
+    tie,
+    paint(knot, APRON_TIE),
+    ...loops.map((g) => paint(g, APRON_TIE)),
+    tail([[Math.PI - 0.03, midY - 0.01], [Math.PI - 0.06, midY - 0.08], [Math.PI - 0.08, midY - 0.17]]),
+    tail([[Math.PI + 0.03, midY - 0.01], [Math.PI + 0.07, midY - 0.07], [Math.PI + 0.1, midY - 0.13]]),
+  ];
+}
+
+/** 옷고름: 겉깃 끝의 매듭과 넓적한 고 하나, 길이가 다른 두 가닥 (긴 가닥은 행주치마 위로 배까지) */
+function goreum(): THREE.BufferGeometry[] {
+  const { phi, y } = GOREUM_AT;
+  const knot = new THREE.SphereGeometry(0.021, 10, 7).scale(1.15, 0.95, 0.7).applyMatrix4(surfaceFrame(BODY_SURFACE, phi, y, 0.022));
+  const loop = new THREE.SphereGeometry(1, 10, 7)
+    .scale(0.046, 0.022, 0.01)
+    .translate(-0.012, 0, 0)
+    .rotateZ(-0.42)
+    .applyMatrix4(surfaceFrame(BODY_SURFACE, phi - 0.17, y + 0.016, 0.018));
+  const tail = (ctrl: ReadonlyArray<readonly [number, number]>, width: number) =>
+    band(surfacePath(OVER_APRON, ctrl, 10, (t) => 0.016 - 0.01 * smoothstep(0, 0.35, t)), width, 0.004, JAJU);
+  return [
+    paint(knot, JAJU),
+    paint(loop, JAJU),
+    tail([[phi + 0.02, y - 0.006], [phi - 0.03, y - 0.07], [phi - 0.07, y - 0.14], [phi - 0.1, y - 0.205]], 0.034),
+    tail([[phi + 0.06, y - 0.006], [phi + 0.1, y - 0.06], [phi + 0.14, y - 0.12]], 0.03),
+  ];
+}
+
+/** 버선코: 치맛단 앞으로 살짝 나온 두 발끝 (손님 버선과 같은 모양) */
+function toes(): THREE.BufferGeometry[] {
+  return [-1, 1].map((s) => hanbokFoot(DETAIL_PRESETS.self).rotateY(s * 0.12).translate(s * 0.068, 0.04, 0.252));
+}
+
+// ---- 머리: 얼굴과 쪽 찐 머리(비녀), 머리를 따라 감싼 흰 머릿수건 ----
+/** 얼굴 구(중심 y 1.12, 반지름 0.22, 세로 1.02배, 앞뒤 0.98배)와 머리카락 구(중심 y 1.17 z -0.035, 반지름 0.226, 세로 0.9배) */
+function headSlice(y: number): { rx: number; rz: number; cz: number } {
+  const slice = (cy: number, r: number, sy: number) => Math.sqrt(Math.max(0, r * r - ((y - cy) / sy) ** 2));
+  const face = slice(1.12, 0.22, 1.02);
+  const hair = slice(1.17, 0.226, 0.9);
+  const front = Math.max(face * 0.98, hair - 0.035);
+  const back = Math.max(face * 0.98, hair + 0.035);
+  return { rx: Math.max(face, hair), rz: (front + back) / 2, cz: (front - back) / 2 };
+}
+
+function scarf(): THREE.BufferGeometry[] {
+  const lift = 0.007;
+  const ring = (y: number, inset = 0): Ring => {
+    const s = headSlice(y);
+    return { y, rx: s.rx + lift - inset, rz: s.rz + lift - inset, cz: s.cz, color: SCARF };
+  };
+  // 위아래 가장자리는 안으로 접어 천 두께가 보인다
+  const wrap = revolve([ring(1.195, 0.006), ring(1.196), ring(1.215), ring(1.235), ring(1.255), ring(1.274), ring(1.275, 0.006)], 28);
+  // 뒤통수 오른쪽에서 묶은 매듭과 짧은 두 가닥
+  const phi = Math.PI + 0.5;
+  const s = headSlice(1.22);
+  const at = new THREE.Vector3(Math.sin(phi) * (s.rx + lift + 0.012), 1.22, s.cz + Math.cos(phi) * (s.rz + lift + 0.012));
+  const knot = new THREE.SphereGeometry(0.026, 10, 7).scale(1.2, 1, 0.75).rotateY(phi).translate(at.x, at.y, at.z);
+  const tails = [-1, 1].map((side) =>
+    new THREE.SphereGeometry(1, 8, 6)
+      .scale(0.02, 0.055, 0.007)
+      .rotateZ(side * 0.35)
+      .translate(side * 0.022, -0.045, -0.004)
+      .rotateY(phi)
+      .translate(at.x, at.y, at.z),
+  );
+  return [wrap, paint(knot, SCARF), ...tails.map((g) => paint(g, SCARF))];
+}
+
+function head(): THREE.BufferGeometry[] {
   const b = new Batch(77);
-  // 치마(남색)와 앞치마(흰색), 저고리(연노랑)와 고름(붉은색)
-  b.cylinder(0.2, 0.34, 0.66, 14, [0, 0.33, 0], 0x2d4a86, { jitter: 0.04 });
-  b.box([0.3, 0.5, 0.03], [0, 0.34, 0.255], 0xf3efe4, { jitter: 0.03 });
-  b.box([0.34, 0.035, 0.05], [0, 0.62, 0.2], 0xe2dccb);
-  b.cylinder(0.17, 0.2, 0.3, 12, [0, 0.8, 0], SLEEVE, { jitter: 0.03 });
-  b.box([0.05, 0.14, 0.02], [-0.03, 0.78, 0.2], 0xc23b32, { rz: 0.15 });
-  b.box([0.05, 0.12, 0.02], [0.05, 0.77, 0.2], 0xc23b32, { rz: -0.2 });
-  // 머리: 얼굴, 쪽 찐 머리, 흰 두건
   b.sphere(0.22, [0, 1.12, 0], SKIN, {}, [1, 1.02, 0.98], [18, 12]);
   b.sphere(0.226, [0, 1.17, -0.035], HAIR, {}, [1, 0.9, 1], [16, 8]);
-  b.sphere(0.095, [0, 1.17, -0.235], HAIR, {}, [1, 1, 1], [10, 7]);
-  b.cylinder(0.228, 0.228, 0.075, 18, [0, 1.235, -0.01], 0xf6f2e8, {}, true);
-  b.box([0.07, 0.07, 0.03], [0.05, 1.2, -0.215], 0xf6f2e8, { rz: 0.5 });
+  // 쪽: 목덜미에 틀어 올린 머리와 가로지른 비녀 (머리 쪽 끝이 동그랗다)
+  b.sphere(0.088, [0, 1.07, -0.235], HAIR, {}, [1.15, 0.9, 1], [12, 8]);
+  b.cylinder(0.008, 0.008, 0.27, 6, [0.01, 1.075, -0.25], BINYEO, { rz: Math.PI / 2 });
+  b.sphere(0.017, [0.145, 1.075, -0.25], BINYEO, {}, [1, 1, 1], [8, 6]);
   // 눈웃음과 볼
   for (const s of [-1, 1]) {
     b.add(new THREE.TorusGeometry(0.03, 0.008, 4, 8, Math.PI), 0x2a1a14, [s * 0.075, 1.125, 0.205], { rz: 0 });
@@ -36,14 +284,42 @@ function buildBody(): THREE.BufferGeometry {
   }
   b.add(new THREE.TorusGeometry(0.045, 0.008, 4, 10, Math.PI), 0x9a3a32, [0, 1.065, 0.215], { rz: Math.PI });
   const g = b.build();
-  if (!g) throw new Error('jumak: 주모를 만들지 못했어요');
-  return g;
+  if (!g) throw new Error('jumak: 주모 얼굴을 만들지 못했어요');
+  return [g, ...scarf()];
 }
+
+function buildBody(): THREE.BufferGeometry {
+  return mergeParts([chimaJeogori(), ...collar(), ...apron(), ...goreum(), ...toes(), ...head()], true);
+}
+
+// ---- 소매: 어깨에서 넓어졌다가 소맷부리로 둥글게 좁아지는 배래, 자주 끝동 ----
+// 원점이 어깨, 아래(-y)로 늘어진다. 손님 소매처럼 뒤쪽 아래가 불룩해서, 팔을 앞으로 들면 배래가 아래로 처진다
+const SLEEVE_RINGS: readonly Ring[] = [
+  { y: 0.045, rx: 0.0, color: JACKET },
+  { y: 0.038, rx: 0.034, rz: 0.038, color: JACKET },
+  { y: 0.018, rx: 0.05, rz: 0.055, color: JACKET },
+  { y: -0.03, rx: 0.056, rz: 0.064, cz: -0.004, color: JACKET },
+  { y: -0.1, rx: 0.059, rz: 0.074, cz: -0.012, color: JACKET },
+  { y: -0.17, rx: 0.06, rz: 0.082, cz: -0.019, color: JACKET },
+  { y: -0.23, rx: 0.058, rz: 0.083, cz: -0.022, color: JACKET },
+  { y: -0.27, rx: 0.054, rz: 0.074, cz: -0.017, color: JACKET },
+  { y: -0.286, rx: 0.052, rz: 0.068, cz: -0.013, color: JACKET },
+  // 끝동: 소맷부리에 두른 자주 단
+  { y: -0.2862, rx: 0.052, rz: 0.068, cz: -0.013, color: JAJU },
+  { y: -0.305, rx: 0.049, rz: 0.058, cz: -0.008, color: JAJU },
+  { y: -0.322, rx: 0.045, rz: 0.05, cz: -0.004, color: JAJU },
+  { y: -0.328, rx: 0.041, rz: 0.045, cz: -0.003, color: JAJU },
+  // 소맷부리 안쪽 (위로 접혀 들어가 손목을 감싼다)
+  { y: -0.3278, rx: 0.037, rz: 0.041, cz: -0.003, color: JACKET_SHADE },
+  { y: -0.315, rx: 0.032, rz: 0.035, cz: -0.002, color: JACKET_SHADE },
+  { y: -0.29, rx: 0.0, color: JACKET_SHADE },
+];
 
 /** 팔 한 짝: 원점이 어깨, 아래(-y)로 늘어진 소매와 손, 그리고 손에 든 도구 */
 function buildArm(tool: 'ladle' | 'spatula'): THREE.BufferGeometry {
+  // 단면은 어깨에서 소맷부리로 적었지만, 바깥을 보는 면이 되도록 아래에서 위로 돌린다
+  const sleeve = revolve([...SLEEVE_RINGS].reverse(), 18);
   const b = new Batch(tool === 'ladle' ? 78 : 79);
-  b.cylinder(0.05, 0.045, 0.34, 8, [0, -0.17, 0], SLEEVE, { jitter: 0.03 });
   b.sphere(0.045, [0, -0.36, 0], SKIN, {}, [1, 1, 1], [8, 6]);
   if (tool === 'ladle') {
     // 국자: 손에서 아래로 긴 자루, 끝에 둥근 국자
@@ -54,9 +330,9 @@ function buildArm(tool: 'ladle' | 'spatula'): THREE.BufferGeometry {
     b.cylinder(0.011, 0.011, 0.24, 6, [0, -0.5, 0.01], 0x8a5e36);
     b.box([0.11, 0.012, 0.13], [0, -0.63, 0.04], 0x9a9aa0);
   }
-  const g = b.build();
-  if (!g) throw new Error('jumak: 주모 팔을 만들지 못했어요');
-  return g;
+  const hand = b.build();
+  if (!hand) throw new Error('jumak: 주모 팔을 만들지 못했어요');
+  return mergeParts([sleeve, hand], true);
 }
 
 /** 번철 위에서 뒤집히는 전 한 장 */
