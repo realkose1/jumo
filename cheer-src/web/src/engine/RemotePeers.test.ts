@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import type { PeerInfo } from '@shared/protocol';
-import { disposeAvatarResources, type OutfitSpec } from './avatar';
+import { DETAIL_PRESETS, disposeAvatarResources, getAvatarGeometries, type OutfitSpec } from './avatar';
 import { RemotePeers } from './RemotePeers';
 import { SeatManager } from './seats';
 import type { SeatDef } from './types';
@@ -96,6 +96,62 @@ describe('RemotePeers 그리기 호출', () => {
     peers.reset(Array.from({ length: 8 }, (_, i) => info(i + 1)), {});
     tick(50);
     expect(drawCalls()).toBe(6);
+  });
+
+  it('옷이 몸통·팔·발을 직접 만들면 인스턴스도 그것으로 그리고, 그리기 호출은 그대로다', () => {
+    const outfit: OutfitSpec = {
+      id: 'robe-peers',
+      bodyColor: 0xffffff,
+      skinColor: 0xffddcc,
+      body: () => new THREE.CylinderGeometry(0.2, 0.25, 0.6, 8).translate(0, 0.3, 0),
+      arm: () => new THREE.BoxGeometry(0.1, 0.2, 0.1).translate(0, -0.1, 0),
+      foot: () => new THREE.BoxGeometry(0.1, 0.05, 0.15),
+    };
+    const { peers, info, tick, drawCalls } = setup({ outfit, capacity: 4 });
+    peers.reset([info(1), info(2, 1, 0)], {});
+    tick(50);
+    const custom = getAvatarGeometries(DETAIL_PRESETS.peer, outfit);
+    const meshes = peers.getMeshes();
+    expect(meshes[1]!.geometry).toBe(custom.body);
+    expect(meshes[1]!.geometry).toBeInstanceOf(THREE.CylinderGeometry);
+    expect(meshes[2]!.geometry).toBe(custom.foot);
+    expect(meshes.at(-2)!.geometry).toBe(custom.arm);
+    expect(drawCalls()).toBe(5);
+
+    // 몸 부위를 만들지 않는 옷은 기본 캡슐
+    const plain = setup();
+    expect(plain.peers.getMeshes()[1]!.geometry).toBe(getAvatarGeometries(DETAIL_PRESETS.peer).body);
+    expect(plain.peers.getMeshes()[1]!.geometry).toBeInstanceOf(THREE.CapsuleGeometry);
+  });
+
+  it('차림마다 다른 소품은 그 차림인 사람만 그리고, 아무도 안 쓴 소품은 그리지 않는다', () => {
+    const hat = (key: string, looks: number[]) => ({
+      key,
+      attach: 'head' as const,
+      create: () => new THREE.ConeGeometry(0.1, 0.2, 6),
+      color: 0x222222,
+      position: [0, 0.3, 0] as [number, number, number],
+      looks,
+    });
+    const outfit: OutfitSpec = { id: 'hats', bodyColor: 0x336699, skinColor: 0xffddcc, looks: 3, accessories: [hat('hat-0', [0]), hat('hat-2', [2])] };
+    const { peers, info, tick, drawCalls, posOf } = setup({ outfit, capacity: 8, reduced: true });
+    // 번호 3, 6은 차림 0이고 4는 차림 1이다. 차림 2는 아무도 없다
+    peers.reset([info(3, 0, 0), info(4, 2, 0), info(6, 4, 0)], {});
+    tick(50);
+    const [hat0, hat2] = peers.getMeshes().slice(3, 5);
+    expect(hat0!.count).toBe(2);
+    expect(posOf(hat0!, 0).x).toBeCloseTo(0, 3);
+    expect(posOf(hat0!, 1).x).toBeCloseTo(4, 3); // 차림 1인 사람(x=2)은 건너뛴다
+    expect(hat2!.count).toBe(0);
+    expect(hat2!.visible).toBe(false);
+    expect(drawCalls()).toBe(6);
+    peers.remove(3);
+    tick(32);
+    expect(hat0!.count).toBe(1);
+    expect(posOf(hat0!, 0).x).toBeCloseTo(4, 3);
+    peers.clear();
+    peers.update(0.016);
+    expect(drawCalls()).toBe(0);
   });
 });
 
