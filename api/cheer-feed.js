@@ -200,10 +200,38 @@ const isManualOut = (p, koMs) => {
   return MANUAL_OUT.some((m) => m.ids.includes(p.id) && d >= m.from && d <= m.to);
 };
 
+// ── 명단 제외 확정 ──────────────────────────────────────────────────────
+// 라인업이 나왔는데 우리 선수가 선발·벤치 어디에도 없으면 그 경기엔 안 나온다 — TV 에서 그 선수를
+// 빼고, 남는 우리 선수가 없으면 경기째 뺀다(제보: 명단에 없는 백승호의 링컨전이 방에 걸렸다).
+// 재료(새 AF 호출 없음): 앱이 경기 상세를 열 때 공유하는 sf_cache 'af-detail-<id>' 의 lineups(AF 원본,
+// 팀별)와 패치 u(진행 중·종료 경기의 우리 선수 출전 정보, r:'x' = 명단 제외).
+// AF 는 명단을 조각으로 낸다(실측: 킥오프 25분 전 선발 7명·벤치 0명) — 그 선수 자기 팀의 선발 11명과
+// 벤치(5명 이상)가 다 찼을 때만 판정하고, 상대 팀 데이터는 보지 않는다(크론 라인업 알림과 같은 원칙).
+// 행은 anon 도 쓸 수 있지만, 잘못된 행이 할 수 있는 건 TV 에서 경기를 빼는 것뿐이다.
+const LINEUP_PRE_MS = 90 * 60e3;        // 킥오프 90분 전부터
+const LINEUP_POST_MS = 4 * 3600e3;      // 킥오프 4시간 뒤까지 본다
+function lineupTeams(lu) {
+  const out = {};
+  const ids = (list) => new Set((Array.isArray(list) ? list : []).map((e) => e?.player?.id).filter((x) => x != null));
+  for (const t of Array.isArray(lu) ? lu : []) {
+    const id = t?.team?.id;
+    const xi = ids(t?.startXI), subs = ids(t?.substitutes);
+    if (id != null && xi.size >= 11 && subs.size >= 5) out[id] = { xi, subs };
+  }
+  return out;
+}
+// info: { teams: { [afTeamId]: { xi, subs } }, out: Set(afPlayerId) } | null
+const lineupOut = (p, info) => {
+  if (!info) return false;
+  if (info.out && info.out.has(String(p.afPlayerId))) return true;
+  const t = info.teams && info.teams[p.afTeamId];
+  return !!t && !t.xi.has(p.afPlayerId) && !t.subs.has(p.afPlayerId);
+};
+
 // 패치 fixtures[id] 모양 { s, el, h, a, ko, p, u, fx } → 관측(obs). 우리 경기가 아니면 null.
 // 우리 팀은 AF 팀 id 로만 잡는다(이름 매칭이 아니라 앱의 유스·여자팀 거르기가 필요 없다 —
-// 그래서 박승수의 Newcastle U21 경기도 들어온다).
-function soccerObs(id, f, stamp, nowMs) {
+// 그래서 박승수의 Newcastle U21 경기도 들어온다). lineup = 이 경기의 명단 판정(loadLineups, 없으면 null).
+function soccerObs(id, f, stamp, nowMs, lineup = null) {
   const fx = f && f.fx;
   const H = fx?.teams?.home, A = fx?.teams?.away;
   if (!H || !A) return null;
@@ -223,10 +251,10 @@ function soccerObs(id, f, stamp, nowMs) {
       .filter(([pid, v]) => BY_AF_ID.has(pid) && BY_AF_ID.get(pid).sport === 'soccer' && ((v?.g || 0) + (v?.a || 0)) > 0)
       .map(([pid, v]) => ({ name: BY_AF_ID.get(pid).name, side, g: goalsNum(v.g, 20) || 0, a: goalsNum(v.a, 20) || 0 }));
   } else {
-    // 소속팀 경기: 그 팀 우리 선수 전원(차출 기간 선수는 뺀다 — 앱 캐러셀과 같다). 라인업 '명단 제외'는
-    // 빼지 않는다 — 앱도 정규 경기의 '미출전'은 계속 보여 준다(카드가 사라지면 방이 헷갈린다).
+    // 소속팀 경기: 그 팀 우리 선수 전원. 차출 기간 선수(앱 캐러셀과 같다)와 라인업에서 명단 제외가
+    // 확정된 선수는 뺀다 — 주막은 같이 볼 경기를 거는 곳이라 안 나오는 게 정해진 경기는 걸지 않는다.
     // p 가 왔으면 그 회차는 이벤트를 다 본 것(크론은 소속팀 선수를 0 으로 채운다) — 없는 선수는 0.
-    pl = SOCCER.filter((p) => (p.afTeamId === H.id || p.afTeamId === A.id) && !isManualOut(p, ko))
+    pl = SOCCER.filter((p) => (p.afTeamId === H.id || p.afTeamId === A.id) && !isManualOut(p, ko) && !lineupOut(p, lineup))
       .map((p) => {
         const v = pp ? pp[p.afPlayerId] : undefined;
         return { name: p.name, side: p.afTeamId === H.id ? 'home' : 'away', g: pp ? (goalsNum(v?.g, 20) || 0) : null, a: pp ? (goalsNum(v?.a, 20) || 0) : null };
@@ -353,10 +381,11 @@ function settle(rec, key, val, nowMs, canDrop = true) {
 
 // input: { nowMs, patch, far: {soccer:[{id,f,stamp}], mlb:[{pk,g,stamp}]}, mlbLive: Map(pk → fetchMlbGame 결과),
 //          hw: {v:1, at, m:{}}(제자리에서 고친다), clocks: Map(경기 id → 직전 진행 표시),
-//          recent: Map(경기 id → 직전에 낸 진행 중·종료 경기) }
+//          recent: Map(경기 id → 직전에 낸 진행 중·종료 경기),
+//          lineups: Map(경기 id → 명단 판정, loadLineups) | null }
 const ORDER = { live: 0, pre: 1, final: 2 };
 const RECENT_KEEP_MS = 5 * 60e3;
-function buildFeed({ nowMs, patch, far, mlbLive, hw, clocks = new Map(), recent = new Map() }) {
+function buildFeed({ nowMs, patch, far, mlbLive, hw, clocks = new Map(), recent = new Map(), lineups = null }) {
   const obs = new Map();
   // 입력 행은 anon 도 쓸 수 있다 — 한 경기의 이상한 값이 피드 전체를 깨지 않게 경기마다 따로 잡는다.
   const put = (make) => {
@@ -368,8 +397,9 @@ function buildFeed({ nowMs, patch, far, mlbLive, hw, clocks = new Map(), recent 
   const fat = Date.parse(patch?.fat) || 0, gat = Date.parse(patch?.gat) || 0;
   const entries = (x) => (x && typeof x === 'object' ? Object.entries(x) : []);
   const idOk = (x) => /^\d{1,10}$/.test(String(x));   // 행의 키가 그대로 id·statsapi 경로가 된다
-  for (const [id, f] of entries(patch?.fixtures)) if (idOk(id)) put(() => soccerObs(id, f, fat, nowMs));
-  for (const c of far?.soccer || []) put(() => soccerObs(c.id, c.f, c.stamp, nowMs));
+  const lineupOf = (id) => (lineups && lineups.get(String(id))) || null;
+  for (const [id, f] of entries(patch?.fixtures)) if (idOk(id)) put(() => soccerObs(id, f, fat, nowMs, lineupOf(id)));
+  for (const c of far?.soccer || []) put(() => soccerObs(c.id, c.f, c.stamp, nowMs, lineupOf(c.id)));
   for (const [pk, g] of entries(patch?.games)) if (idOk(pk)) put(() => mlbObs(fromMlbPatch(pk, g, gat)));
   for (const d of (mlbLive || new Map()).values()) put(() => mlbObs(fromMlbDirect(d)));
   for (const c of far?.mlb || []) put(() => mlbObs(fromMlbPatch(c.pk, c.g, c.stamp)));
@@ -487,6 +517,44 @@ const clocks = new Map();
 const recent = new Map();
 const mlbMemo = new Map();      // pk → { at, data }
 let farMemo = { at: -Infinity, soccer: [], mlb: [] };
+// 경기 id → { ko, teams, out } — 명단은 안 바뀌므로 한 번 본 판정은 붙잡는다(행 읽기에 실패하거나
+// 패치에 u 가 빠진 회차에 경기가 TV 에 다시 나타났다 사라지며 킥오프를 두 번 쏘지 않게).
+const lineupMemo = new Map();
+
+// 킥오프 90분 전 ~ 4시간 뒤의 소속팀 경기만 명단을 본다. 행에서 lineups 만 잘라 읽는다(수 KB).
+async function loadLineups(patch, nowMs) {
+  const ids = [];
+  for (const [id, f] of Object.entries(patch?.fixtures || {})) {
+    if (!/^\d{1,10}$/.test(id) || !f || typeof f !== 'object') continue;
+    const H = f.fx?.teams?.home?.id, A = f.fx?.teams?.away?.id;
+    if (NATIONAL_TEAMS[H] || NATIONAL_TEAMS[A]) continue;
+    if (!SOCCER.some((p) => p.afTeamId === H || p.afTeamId === A)) continue;
+    const ko = Date.parse(f.ko || f.fx?.fixture?.date) || 0;
+    if (!ko || ko - nowMs > LINEUP_PRE_MS || nowMs - ko > LINEUP_POST_MS) continue;
+    ids.push(id);
+    const m = lineupMemo.get(id) || { ko, teams: {}, out: new Set() };
+    m.ko = ko;
+    lineupMemo.set(id, m);
+    // 패치 u 의 명단 제외(r:'x') — 크론이 라인업으로 판정한 값
+    for (const [pid, v] of Object.entries(f.u && typeof f.u === 'object' ? f.u : {})) {
+      if (v && v.r === 'x' && BY_AF_ID.has(pid)) m.out.add(pid);
+    }
+  }
+  const list = ids.slice(0, 20);
+  if (list.length) {
+    try {
+      const keys = list.map((id) => `"af-detail-${id}"`).join(',');
+      const rows = await getJson(`${process.env.SUPABASE_URL}/rest/v1/sf_cache?select=date,lu:events->lineups&date=in.(${encodeURIComponent(keys)})`,
+        { headers: sbHeaders() });
+      for (const r of Array.isArray(rows) ? rows : []) {
+        const m = lineupMemo.get(String(r?.date || '').replace('af-detail-', ''));
+        if (m) Object.assign(m.teams, lineupTeams(r.lu));   // 한 번 다 찬 팀 명단은 그대로 둔다
+      }
+    } catch (e) { /* 읽기 실패 — 기억한 판정으로 간다 */ }
+  }
+  for (const [id, m] of lineupMemo) if (nowMs - m.ko > LINEUP_POST_MS + 3600e3) lineupMemo.delete(id);
+  return lineupMemo;
+}
 
 // 패치 games 중 지금 창 근처 경기만 statsapi 로 직접 확인한다.
 async function mlbDirect(patch, nowMs) {
@@ -562,11 +630,12 @@ async function loadFeed(nowMs = Date.now()) {
   const before = JSON.stringify(base.m);
   const hw = { v: 1, at: base.at || 0, m: JSON.parse(before) };
 
-  const [far, mlbLive] = await Promise.all([
+  const [far, mlbLive, lineups] = await Promise.all([
     farCandidates(nowMs).catch(() => farMemo),
     mlbDirect(patch, nowMs).catch(() => new Map()),
+    loadLineups(patch, nowMs).catch(() => lineupMemo),
   ]);
-  const feed = buildFeed({ nowMs, patch, far, mlbLive, hw, clocks, recent });
+  const feed = buildFeed({ nowMs, patch, far, mlbLive, hw, clocks, recent, lineups });
   if (JSON.stringify(hw.m) !== before) {
     hw.at = nowMs;
     hwMemo = hw;
@@ -605,6 +674,8 @@ module.exports.soccerObs = soccerObs;
 module.exports.fetchMlbGame = fetchMlbGame;
 module.exports.loadFeed = loadFeed;
 module.exports.farCandidates = farCandidates;
+module.exports.loadLineups = loadLineups;
+module.exports.lineupTeams = lineupTeams;
 module.exports.packHw = packHw;
 module.exports.unpackHw = unpackHw;
 module.exports.DROP_CONFIRM_MS = DROP_CONFIRM_MS;
