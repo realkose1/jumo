@@ -214,7 +214,7 @@ function buildShell(lit: Batch, glow: Batch): void {
     const color = wallBase.clone().multiplyScalar(0.88 + rand() * 0.24).getHex();
     lit.plane(strip - 0.02, boardTop - bottom, [x, (boardTop + bottom) / 2, ROOM.frontZ], color, { shade: wallShade, jitter: 0.05 }, [1, 4]);
     // 뒷면(마당 밖에서 보이는 쪽)
-    lit.plane(strip - 0.02, boardTop - bottom, [x, (boardTop + bottom) / 2, ROOM.frontZ - 0.12], C.wallDark, { ry: Math.PI });
+    lit.plane(strip - 0.02, boardTop - bottom, [x, (boardTop + bottom) / 2, ROOM.frontZ - 0.12], color, { ry: Math.PI, shade: wallShade });
   }
   lit.box([boardHalf * 2 + 0.3, 0.22, 0.3], [0, boardTop + 0.05, ROOM.frontZ - 0.06], C.trim);
   for (const sx of [-1, 1]) lit.box([0.26, boardTop + ROOM.yardDrop + 0.1, 0.3], [sx * (boardHalf + 0.1), (boardTop - ROOM.yardDrop) / 2, ROOM.frontZ - 0.06], C.post);

@@ -13,6 +13,7 @@ import { Service } from './service';
 import { JumakSound } from './sound';
 import { createDot } from './stage-dot';
 import { TvScreen } from './tv';
+import { buildScenery } from './scenery';
 
 const ACTION_IDS = Object.keys(ACTION_EMOJI);
 
@@ -231,10 +232,10 @@ export function createJumakScene(ctx: SceneContext): SceneHandle {
   // 달빛: 마당을 푸르스름하게 비춘다
   const moonLight = add(new THREE.DirectionalLight(0xaebfff, 0.35));
   moonLight.position.copy(MOON_POS);
-  // 먼 산 능선 (어두운 실루엣)
-  const hills = own(buildHills());
-  const hillMat = own(new THREE.MeshBasicMaterial({ color: 0x0c1220, fog: false, side: THREE.DoubleSide }));
-  add(new THREE.Mesh(hills, hillMat));
+  // 마당 밖 풍경: 하늘 돔, 산 능선 세 겹, 불 켜진 마을과 소나무, 흐르는 구름
+  const scenery = buildScenery(MOON_POS);
+  disposables.push(scenery);
+  for (const o of scenery.objects) add(o);
   ctx.reportProgress(0.8);
 
   // ---- 효과와 소리 ----
@@ -274,6 +275,7 @@ export function createJumakScene(ctx: SceneContext): SceneHandle {
     bursts.setReducedMotion(reduced);
     tv.update(now);
     bursts.update(dt);
+    scenery.update(dt, reduced);
     confetti.update(dt);
     service.setReducedMotion(reduced);
     service.update(dt);
@@ -417,32 +419,4 @@ function makeMoonTexture(): THREE.CanvasTexture {
   g.restore();
   tex.needsUpdate = true;
   return tex;
-}
-
-/** 마당 밖을 둘러싼 먼 산들 (낮은 원뿔을 이어 붙인 능선) */
-function buildHills(): THREE.BufferGeometry {
-  const parts: THREE.BufferGeometry[] = [];
-  const n = 22;
-  for (let i = 0; i < n; i++) {
-    const a = (i / n) * Math.PI * 2 + 0.13 * Math.sin(i * 2.3);
-    const r = 78 + 8 * Math.sin(i * 1.7);
-    const h = 9 + 7 * Math.abs(Math.sin(i * 1.13 + 0.5));
-    const w = 16 + 6 * Math.abs(Math.cos(i * 0.9));
-    const cone = new THREE.ConeGeometry(w, h, 5, 1, true);
-    cone.translate(Math.cos(a) * r, h / 2 - 3, Math.sin(a) * r);
-    parts.push(cone.toNonIndexed());
-    cone.dispose();
-  }
-  let count = 0;
-  for (const p of parts) count += p.getAttribute('position').count;
-  const pos = new Float32Array(count * 3);
-  let o = 0;
-  for (const p of parts) {
-    pos.set(p.getAttribute('position').array as Float32Array, o);
-    o += p.getAttribute('position').count * 3;
-    p.dispose();
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  return g;
 }
