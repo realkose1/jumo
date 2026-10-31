@@ -351,6 +351,26 @@ async function sbInsertLogBulk(keys) {
   return new Set(Array.isArray(rows) ? rows.map((x) => x.event_key) : []);
 }
 
+// ── 관리용: 앱 동시 접속자 수 ───────────────────────────────────────────────
+// GET /api/online?secret=<PUSH_CRON_SECRET> (vercel.json 이 이 함수의 ?op=online 으로 돌린다).
+// 새 함수 파일을 만들지 않고 여기에 얹었다 — Hobby 요금제는 배포당 함수가 12개까지인데
+// api/ 가 이미 12개다. 집계는 db/presence.sql 의 app_presence_stats() 가 한다.
+async function onlineStats(res) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!process.env.SUPABASE_SERVICE_KEY) return res.status(500).json({ error: 'missing env (SUPABASE_SERVICE_KEY)' });
+  try {
+    const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/rpc/app_presence_stats`, {
+      method: 'POST', headers: sbHeaders(), body: '{}', signal: AbortSignal.timeout(8000),
+    });
+    const body = await r.json().catch(() => null);
+    if (r.status === 404) return res.status(503).json({ error: 'db/presence.sql 을 Supabase SQL Editor 에서 먼저 실행하세요' });
+    if (!r.ok) return res.status(502).json({ error: 'supabase', status: r.status, detail: body });
+    return res.status(200).json(body);
+  } catch (e) {
+    return res.status(502).json({ error: 'supabase', detail: e?.message });
+  }
+}
+
 // ── Event collection ────────────────────────────────────────────────────────
 const J = (u) => fetch(u).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 
@@ -1250,6 +1270,8 @@ module.exports = async (req, res) => {
   if (secret && req.query?.secret !== secret && req.headers['x-cron-secret'] !== secret) {
     return res.status(401).json({ error: 'unauthorized' });
   }
+  // 접속자 수는 비밀키가 설정돼 있을 때만 보여 준다(크론 실행 없이 바로 답한다).
+  if (req.query?.op === 'online') return secret ? onlineStats(res) : res.status(401).json({ error: 'unauthorized' });
   // 서울 지하철 라이브 푸시 체인 하트비트 — 끊긴 체인을 되살린다(2초 제한, 실패해도 Jumo 동작엔 영향 없음)
   try {
     const hb = fetch('https://seoul-subway-lyart.vercel.app/api/la?op=kick', { signal: AbortSignal.timeout(2000) }).catch(() => {});
