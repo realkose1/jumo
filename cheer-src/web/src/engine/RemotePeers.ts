@@ -94,6 +94,12 @@ export class RemotePeers {
   private bodyMesh!: THREE.InstancedMesh;
   /** 발: 한 사람에 인스턴스 2개 (2i가 왼발, 2i+1이 오른발). 그리기 호출은 1번 */
   private feetMesh!: THREE.InstancedMesh;
+  /** 팔(소매)과 손. 한 사람에 두 짝씩 (왼쪽 2i, 오른쪽 2i+1). 손 geometry는 팔과 같은 어깨 기준이라 행렬을 같이 쓴다 */
+  private armsMesh!: THREE.InstancedMesh;
+  private handsMesh!: THREE.InstancedMesh;
+  private readonly mArm = new THREE.Matrix4();
+  private readonly qArm = new THREE.Quaternion();
+  private readonly armEuler = new THREE.Euler(0, 0, 0, 'XYZ');
   private layers: AccessoryLayer[] = [];
   private order: Peer[] = [];
 
@@ -145,7 +151,7 @@ export class RemotePeers {
 
   /** 장면에 올려 둔 InstancedMesh들 (그리기 호출 수 점검용) */
   getMeshes(): THREE.InstancedMesh[] {
-    return [this.headMesh, this.bodyMesh, this.feetMesh, ...this.layers.map((l) => l.mesh)];
+    return [this.headMesh, this.bodyMesh, this.feetMesh, ...this.layers.map((l) => l.mesh), this.armsMesh, this.handsMesh];
   }
 
   has(id: PeerId): boolean {
@@ -465,6 +471,18 @@ export class RemotePeers {
       this.mFoot.multiplyMatrices(this.mRP, this.mTmp);
       this.feetMesh.setMatrixAt(i * 2 + 1, this.mFoot);
 
+      // 팔 두 짝: 어깨에서 앞으로 든 정도(fwd)와 벌린 정도(out)만큼 돌린다. 손은 같은 행렬
+      for (let side = 0; side < 2; side++) {
+        const right = side === 1;
+        this.armEuler.set(-(right ? pose.armRFwd : pose.armLFwd), 0, right ? pose.armROut : -pose.armLOut);
+        this.qArm.setFromEuler(this.armEuler);
+        this.pos.set(right ? pose.shoulderX : -pose.shoulderX, pose.shoulderY, pose.shoulderZ);
+        this.mTmp.compose(this.pos, this.qArm, this.unit);
+        this.mArm.multiplyMatrices(this.mRP, this.mTmp);
+        this.armsMesh.setMatrixAt(i * 2 + side, this.mArm);
+        this.handsMesh.setMatrixAt(i * 2 + side, this.mArm);
+      }
+
       this.bodyMesh.setMatrixAt(i, this.mBody);
       this.headMesh.setMatrixAt(i, this.mHead);
       const look = lookFor(this.outfit, p.id);
@@ -485,7 +503,7 @@ export class RemotePeers {
   private syncCounts(): void {
     const n = Math.min(this.order.length, this.capacity);
     for (const mesh of this.getMeshes()) {
-      mesh.count = mesh === this.feetMesh ? n * 2 : n;
+      mesh.count = mesh === this.feetMesh || mesh === this.armsMesh || mesh === this.handsMesh ? n * 2 : n;
       mesh.visible = n > 0; // 아무도 없으면 그리기 호출도 없다
     }
   }
@@ -501,6 +519,8 @@ export class RemotePeers {
     const geo = getAvatarGeometries(this.detail);
     this.bodyMesh = this.makeMesh(geo.body, getAvatarMaterial(this.outfit.bodyColor, true));
     this.feetMesh = this.makeMesh(geo.foot, getAvatarMaterial(this.outfit.bodyColor, true), this.capacity * 2);
+    this.armsMesh = this.makeMesh(geo.arm, getAvatarMaterial(this.outfit.bodyColor, true), this.capacity * 2);
+    this.handsMesh = this.makeMesh(geo.hand, getAvatarMaterial(this.outfit.skinColor, true), this.capacity * 2);
     this.headMesh = this.makeMesh(geo.head, getAvatarMaterial(this.outfit.skinColor, true));
     this.layers = (this.outfit.accessories ?? []).map((spec) => {
       const mesh = this.makeMesh(getAccessoryGeometry(spec, this.detail), getAvatarMaterial(spec.color, false));

@@ -18,6 +18,11 @@ html,
 body {
   margin: 0;
   height: 100%;
+  /* 인앱 브라우저에서 페이지가 끌려 움직이지 않게 화면에 못 박는다 (스크롤 잠금은 ui/scrollLock.ts) */
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  touch-action: none;
   background: var(--bg);
   color: var(--ink);
   font-family: system-ui, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;

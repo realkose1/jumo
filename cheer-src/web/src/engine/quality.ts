@@ -11,8 +11,10 @@ export interface QualitySettings {
 
 const TABLE: Record<QualityTier, QualitySettings> = {
   high: { tier: 'high', shadows: true, shadowMapSize: 1024, pixelRatioCap: 2, antialias: true },
-  medium: { tier: 'medium', shadows: true, shadowMapSize: 512, pixelRatioCap: 1.5, antialias: true },
-  low: { tier: 'low', shadows: false, shadowMapSize: 512, pixelRatioCap: 1, antialias: false },
+  // 휴대폰(레티나 3배)에서 1~1.5배로 그리면 선이 계단처럼 찌글거린다. 장면이 가벼워 2배까지 그려도 된다
+  medium: { tier: 'medium', shadows: true, shadowMapSize: 512, pixelRatioCap: 2, antialias: true },
+  // 느려져서 낮출 때도 해상도는 1.5배를 지키고 그림자부터 끈다(안티앨리어싱은 처음 만들 때 정해져 바뀌지 않는다)
+  low: { tier: 'low', shadows: false, shadowMapSize: 512, pixelRatioCap: 1.5, antialias: true },
 };
 
 export function qualitySettings(tier: QualityTier): QualitySettings {
@@ -53,7 +55,8 @@ export function readDeviceHints(): DeviceHints {
 export function detectTier(hints: DeviceHints = readDeviceHints()): QualityTier {
   const lowCpu = (hints.hardwareConcurrency ?? 8) <= 4;
   const lowMemory = (hints.deviceMemory ?? 8) <= 2;
-  if (lowMemory || (hints.coarsePointer && lowCpu)) return 'low';
+  // iOS 사파리는 코어 수를 낮게 알려 주기도 해서, 터치 기기라는 이유만으로 low로 떨어뜨리지 않는다
+  if (lowMemory) return 'low';
   if (hints.coarsePointer || lowCpu) return 'medium';
   return 'high';
 }

@@ -6,6 +6,7 @@ import { withRoom } from './engine/net/room';
 import { parseRoute, stripBase } from './route';
 import { DEFAULT_SPACE_ID, loadSpace } from './spaces';
 import { mountUI, type UIHandle } from './ui';
+import { lockPageScroll } from './ui/scrollLock';
 
 const stage = document.getElementById('stage');
 const uiRoot = document.getElementById('ui-root');
@@ -38,6 +39,8 @@ let cheer: CheerController | null = null;
 let stopDemo: (() => void) | null = null;
 
 async function boot(): Promise<void> {
+  // 인앱 브라우저에서 조이스틱·화면을 끌 때 페이지가 끌려 내려가지 않게
+  lockPageScroll();
   if (!stage || !uiRoot) return;
   // 주소의 공간 id는 배포 기준 경로(/cheer/) 다음 첫 마디다
   const route = parseRoute(stripBase(location.pathname, import.meta.env.BASE_URL), location.search, DEFAULT_SPACE_ID);

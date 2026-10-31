@@ -5,14 +5,17 @@ describe('quality', () => {
   it('등급마다 설정이 낮아진다', () => {
     expect(qualitySettings('high').shadows).toBe(true);
     expect(qualitySettings('low').shadows).toBe(false);
-    expect(qualitySettings('low').pixelRatioCap).toBe(1);
+    // 휴대폰에서 찌글거리지 않게 가장 낮은 등급도 1.5배 해상도와 안티앨리어싱은 지킨다
+    expect(qualitySettings('low').pixelRatioCap).toBe(1.5);
+    expect(qualitySettings('low').antialias).toBe(true);
     expect(qualitySettings('medium').shadowMapSize).toBeLessThan(qualitySettings('high').shadowMapSize);
   });
 
   it('기기 단서로 등급을 고른다', () => {
     expect(detectTier({ hardwareConcurrency: 10, deviceMemory: 8 })).toBe('high');
     expect(detectTier({ hardwareConcurrency: 8, coarsePointer: true })).toBe('medium');
-    expect(detectTier({ hardwareConcurrency: 4, coarsePointer: true })).toBe('low');
+    // iOS가 코어 수를 낮게 알려도 터치 기기라는 이유만으로 low가 되지 않는다
+    expect(detectTier({ hardwareConcurrency: 4, coarsePointer: true })).toBe('medium');
     expect(detectTier({ deviceMemory: 1 })).toBe('low');
   });
 

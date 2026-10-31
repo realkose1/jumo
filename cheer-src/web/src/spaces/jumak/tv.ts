@@ -5,6 +5,8 @@ import type { TvMatchView, TvPlayerLine, TvView } from '../../cheer/feed';
 import type { TallySnapshot } from '../../cheer/tally';
 import { ACTION_EMOJI, ACTION_PICTURE } from './layout';
 import { MAKGEOLLI_ICON, makgeolliImage } from './makgeolli';
+import { PitchSim, drawPitch, drawPlayerCard, drawScoreBug, ourPlayers, sceneAt, type BroadcastScene } from './broadcast';
+import { playerPhoto } from './playerPhotos';
 
 export const TV_W = 1024;
 export const TV_H = 576;
@@ -25,6 +27,16 @@ const COLOR = {
 
 /** 다시 그리는 사이의 최소 간격(ms) */
 const MIN_REDRAW_MS = 120;
+/** 경기장 중계가 움직이는 동안 다시 그리는 간격(ms, 약 15fps). 움직임 줄이기면 느리게 */
+const PITCH_REDRAW_MS = 66;
+const PITCH_REDRAW_REDUCED_MS = 400;
+
+/** 중계 화면에 필요한 것 (TvScreen이 채운다) */
+export interface BroadcastState {
+  scene: BroadcastScene;
+  sim: PitchSim;
+  photo: (name: string) => HTMLImageElement | null;
+}
 
 export interface TvBannerState {
   text: string;
@@ -293,6 +305,7 @@ export function drawTv(
   tally: TallySnapshot | null,
   actionIds: readonly string[],
   pulse = 0,
+  broadcast: BroadcastState | null = null,
 ): void {
   // 바탕
   const bg = ctx.createLinearGradient(0, 0, 0, TV_H);
@@ -310,6 +323,19 @@ export function drawTv(
     drawQuiet(ctx, view);
   } else if (view.kind === 'idle') {
     drawIdle(ctx, view);
+  } else if (broadcast && broadcast.scene.kind === 'pitch' && view.matches[0]) {
+    // 중계: 첫 경기를 경기장 화면으로
+    const m = view.matches[0];
+    const ours = ourPlayers(m)[0] ?? null;
+    drawPitch(ctx, broadcast.sim, { match: m, ourName: ours?.name ?? null, ourSide: ours?.side ?? null, bottom });
+  } else if (broadcast && broadcast.scene.kind === 'player' && view.matches[0]) {
+    const m = view.matches[0];
+    const list = ourPlayers(m);
+    const p = list[broadcast.scene.index % Math.max(1, list.length)];
+    if (p) {
+      drawPlayerCard(ctx, m, p, broadcast.photo(p.name), bottom);
+      drawScoreBug(ctx, m);
+    }
   } else {
     const list = view.matches;
     if (list.length === 1) {
@@ -343,6 +369,11 @@ export class TvScreen {
   private dirty = true;
   private lastDraw = -Infinity;
   private reduced = false;
+  /** 중계 장면 순서의 기준 시각과 경기장 움직임 */
+  private readonly startedAt = performance.now();
+  private readonly sim = new PitchSim(Math.floor(Math.random() * 1e9));
+  private scene: BroadcastScene = { kind: 'scores' };
+  private lastStep = performance.now();
 
   constructor(private readonly actionIds: readonly string[], maxAnisotropy = 4) {
     this.canvas = document.createElement('canvas');
@@ -394,14 +425,33 @@ export class TvScreen {
       this.banner = null;
       this.dirty = true;
     }
+    // 중계 장면: 첫 경기가 있으면 시간에 따라 경기장 -> 선수 카드 -> 점수판으로 바뀐다
+    const first = this.view.kind === 'matches' ? this.view.matches[0] : undefined;
+    const scene: BroadcastScene = first ? sceneAt(first, now - this.startedAt) : { kind: 'scores' };
+    if (scene.kind !== this.scene.kind || (scene.kind === 'player' && this.scene.kind === 'player' && scene.index !== this.scene.index)) {
+      this.scene = scene;
+      this.dirty = true;
+    }
+    const pitch = scene.kind === 'pitch';
+    // 경기장은 계속 움직인다(그리지 않는 동안에도 시간은 흐르게 여기서 진행)
+    const dt = Math.min(0.25, (now - this.lastStep) / 1000);
+    this.lastStep = now;
+    if (pitch) this.sim.step(dt);
+    // 선수 카드는 사진이 늦게 와도 곧 다시 그려지게 가끔 다시 그린다
+    const card = scene.kind === 'player';
     // 띄우는 글이 있는 동안은 글자가 살짝 뛰도록 조금 더 자주 그린다
-    const wantAnimate = this.banner !== null && !this.reduced;
+    const wantAnimate = (this.banner !== null && !this.reduced) || pitch || card;
     if (!this.dirty && !wantAnimate) return false;
-    if (now - this.lastDraw < MIN_REDRAW_MS) return false;
+    const gap = pitch && !this.banner ? (this.reduced ? PITCH_REDRAW_REDUCED_MS : PITCH_REDRAW_MS) : card && !this.dirty ? 500 : MIN_REDRAW_MS;
+    if (now - this.lastDraw < gap) return false;
     this.lastDraw = now;
     this.dirty = false;
     const pulse = this.banner && !this.reduced ? (now % 900) / 900 : 0;
-    drawTv(this.ctx, this.view, this.banner, this.tally, this.actionIds, pulse);
+    drawTv(this.ctx, this.view, this.banner, this.tally, this.actionIds, pulse, {
+      scene,
+      sim: this.sim,
+      photo: (name) => playerPhoto(name),
+    });
     this.texture.needsUpdate = true;
     return true;
   }

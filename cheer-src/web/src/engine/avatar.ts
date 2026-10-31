@@ -13,6 +13,16 @@ const HEAD_RISE = 0.2; // 몸통 위끝에서 머리 중심까지
 
 export const AVATAR_HEIGHT = BODY_HEIGHT + HEAD_RISE + HEAD_RADIUS;
 
+// ---- 팔 ----
+/** 팔(어깨에서 손 중심까지) 길이, 소매 굵기, 손 크기 */
+const ARM_LENGTH = 0.2;
+const ARM_RADIUS = 0.046;
+const HAND_RADIUS = 0.052;
+/** 어깨 자리 (몸통 바닥 기준. 왼팔 x<0) */
+const SHOULDER_X = 0.2;
+const SHOULDER_Y = 0.4;
+const SHOULDER_Z = 0.01;
+
 // ---- 분할 수 ----
 export type AvatarDetail = 'self' | 'peer';
 
@@ -85,6 +95,10 @@ export interface BodyGeometries {
   body: THREE.BufferGeometry;
   /** 발 한 짝 (원점이 발 중심). 왼발 오른발이 같은 geometry를 나눠 쓰고 걸을 때 따로 움직인다 */
   foot: THREE.BufferGeometry;
+  /** 팔 한 짝(소매). 원점이 어깨이고 아래(-y)로 늘어진다. 몸통 색 */
+  arm: THREE.BufferGeometry;
+  /** 손 한 짝. 원점이 어깨(팔과 같은 기준)이고 팔 끝에 있다. 피부 색 */
+  hand: THREE.BufferGeometry;
 }
 
 const geometryCache = new Map<string, BodyGeometries>();
@@ -131,7 +145,17 @@ function buildGeometries(d: AvatarDetailOptions): BodyGeometries {
     0.6,
     1.3,
   );
-  return { head: merge([head, ...eyes]), body, foot };
+  // 팔(소매)과 손. 어깨에서 아래로 늘어진 모양이고, 어깨를 축으로 돌린다
+  const arm = paintVertices(
+    new THREE.CapsuleGeometry(ARM_RADIUS, ARM_LENGTH - ARM_RADIUS * 2, Math.max(2, d.bodyCapSegments - 2), Math.max(6, d.bodyRadialSegments - 6)),
+    0.94,
+  ).translate(0, -ARM_LENGTH / 2 + ARM_RADIUS * 0.4, 0);
+  const hand = paintVertices(new THREE.SphereGeometry(HAND_RADIUS, d.eyeSegments + 2, Math.max(4, d.eyeSegments - 1)), 1).translate(
+    0,
+    -ARM_LENGTH,
+    0,
+  );
+  return { head: merge([head, ...eyes]), body, foot, arm, hand };
 }
 
 /** 같은 분할 수의 머리와 몸통 geometry (공유). 인스턴싱으로 한꺼번에 그릴 때도 이걸 쓴다 */
@@ -173,6 +197,8 @@ export function disposeAvatarResources(): void {
     g.head.dispose();
     g.body.dispose();
     g.foot.dispose();
+    g.arm.dispose();
+    g.hand.dispose();
   }
   for (const g of accessoryGeometryCache.values()) g.dispose();
   for (const m of materialCache.values()) m.dispose();
@@ -267,6 +293,66 @@ export interface PoseOutput {
   footLZ: number;
   footRY: number;
   footRZ: number;
+  /** 어깨 자리 (pose 그룹 기준. 왼팔은 x=-shoulderX) */
+  shoulderX: number;
+  shoulderY: number;
+  shoulderZ: number;
+  /** 팔 각도(라디안). fwd는 앞으로 든 정도(0 = 늘어뜨림, π/2 = 앞으로 쭉, π = 머리 위), out은 바깥으로 벌린 정도(음수면 안쪽으로 모음) */
+  armLFwd: number;
+  armLOut: number;
+  armRFwd: number;
+  armROut: number;
+}
+
+/** 팔 한 쌍의 각도 */
+export interface ArmPose {
+  lf: number;
+  lo: number;
+  rf: number;
+  ro: number;
+}
+
+/** 가만히 서 있을 때 팔은 살짝 벌어져 늘어진다 */
+const ARM_REST_OUT = 0.22;
+/** 앉으면 손을 무릎 위에 올린다 */
+const ARM_SEATED_FWD = 0.75;
+const ARM_SEATED_OUT = 0.08;
+
+const smooth01 = (x: number): number => {
+  const c = Math.min(1, Math.max(0, x));
+  return c * c * (3 - 2 * c);
+};
+
+/**
+ * 동작 중 팔 모양과 그 세기(w, 0~1). 세기만큼 평소 팔(걷기·앉기)과 섞는다.
+ * 박수: 두 손을 앞으로 모아 짝짝, 건배: 오른손을 높이 들어 사발을 올림,
+ * 외치기(주문): 오른손을 들어 흔들며 부름, 골: 두 팔 번쩍 만세, 뛰기: 팔을 벌린다.
+ */
+export function motionArms(motion: ActionMotion, t: number, reduced: boolean): ArmPose & { w: number } {
+  const spec = MOTIONS[motion];
+  const p = Math.min(1, Math.max(0, t / spec.duration));
+  // 처음 15%에 들어 올리고 마지막 20%에 내린다
+  const w = smooth01(p / 0.15) * smooth01((1 - p) / 0.2);
+  const wave = (cycles: number, amp: number): number => (reduced ? 0 : amp * Math.sin(2 * Math.PI * cycles * p));
+  switch (motion) {
+    case 'clap': {
+      // 손이 만났다(-0.95) 벌어졌다(-0.35)를 다섯 번
+      const apart = reduced ? 0.5 : 0.5 + 0.5 * Math.cos(2 * Math.PI * spec.hops * p);
+      const o = -0.95 + 0.6 * apart;
+      return { lf: 1.25, lo: o, rf: 1.25, ro: o, w };
+    }
+    case 'toast':
+      return { lf: 0.35, lo: ARM_REST_OUT, rf: 2.5, ro: 0.05 + wave(0.5, 0.15), w };
+    case 'roar':
+      return { lf: 0.2, lo: ARM_REST_OUT, rf: 2.75, ro: 0.35 + wave(3, 0.35), w };
+    case 'celebrate':
+      return { lf: 2.85, lo: 0.45 + wave(3, 0.25), rf: 2.85, ro: 0.45 - wave(3, 0.25), w };
+    default: {
+      // 뛰기: 뛰는 높이만큼 팔을 벌린다
+      const arc = Math.abs(Math.sin(Math.PI * spec.hops * p));
+      return { lf: 0.3, lo: 0.6 + 0.5 * arc, rf: 0.3, ro: 0.6 + 0.5 * arc, w };
+    }
+  }
 }
 
 // ---- 걷기 (발 번갈아 내딛기) ----
@@ -300,11 +386,16 @@ export interface Gait {
   bob: number;
   sway: number;
   lean: number;
+  /** 팔 흔들기(라디안). 왼팔은 -arm, 오른팔은 +arm만큼 앞으로 (발과 엇갈린다) */
+  arm: number;
 }
 
 export function createGait(): Gait {
-  return { stepL: 0, liftL: 0, stepR: 0, liftR: 0, bob: 0, sway: 0, lean: 0 };
+  return { stepL: 0, liftL: 0, stepR: 0, liftR: 0, bob: 0, sway: 0, lean: 0, arm: 0 };
 }
+
+/** 걸을 때 팔이 앞뒤로 흔들리는 최대 각(라디안) */
+const WALK_ARM_SWING = 0.55;
 
 /**
  * 걷기 한 바퀴는 위상 2π. 왼발과 오른발은 반 바퀴(π) 어긋나 번갈아 앞으로 나온다.
@@ -324,6 +415,8 @@ export function walkGait(phase: number, amount: number, reduced: boolean, out: G
   // 딛고 선 발 쪽으로 몸이 기운다 (왼발이 x<0)
   out.sway = reduced ? 0 : -WALK_SWAY * amount * c;
   out.lean = reduced ? 0 : WALK_LEAN * amount;
+  // 왼발이 앞으로 나올 때(sin>0) 오른팔이 앞으로
+  out.arm = WALK_ARM_SWING * amount * (reduced ? REDUCED_STRIDE : 1) * s;
   return out;
 }
 
@@ -426,6 +519,20 @@ export class PoseState {
     const footX = (FOOT_X + (SEATED_FOOT_X - FOOT_X) * seat) * sxz;
     const footLZ = (FOOT_Z + (SEATED_FOOT_Z - FOOT_Z) * seat) * sxz + g.stepL;
     const footRZ = (FOOT_Z + (SEATED_FOOT_Z - FOOT_Z) * seat) * sxz + g.stepR;
+    // 팔: 평소(서 있음/걷기)와 앉은 자세를 섞고, 동작 중이면 동작 팔과 섞는다
+    const restOut = ARM_REST_OUT + (ARM_SEATED_OUT - ARM_REST_OUT) * seat + breathe * 0.6;
+    const restFwd = ARM_SEATED_FWD * seat;
+    let lf = restFwd - g.arm;
+    let rf = restFwd + g.arm;
+    let lo = restOut;
+    let ro = restOut;
+    if (this.motion && this.motion.t >= 0) {
+      const a = motionArms(this.motion.name, this.motion.t, this.reduced);
+      lf += (a.lf - lf) * a.w;
+      rf += (a.rf - rf) * a.w;
+      lo += (a.lo - lo) * a.w;
+      ro += (a.ro - ro) * a.w;
+    }
     return {
       // 앉으면 앉는 면 높이로, 서 있으면 서 있는 바닥 높이로 (그 사이는 앉는 정도로 섞는다)
       rootY: this.ground * (1 - seat) + this.seatY * seat,
@@ -442,6 +549,13 @@ export class PoseState {
       footLZ,
       footRY: FOOT_Y * sy + SIT_SETTLE_DEPTH * settle + g.liftR - g.bob + footRZ * g.lean - footX * g.sway,
       footRZ,
+      shoulderX: SHOULDER_X * sxz,
+      shoulderY: SHOULDER_Y * sy,
+      shoulderZ: SHOULDER_Z,
+      armLFwd: lf,
+      armLOut: lo,
+      armRFwd: rf,
+      armROut: ro,
     };
   }
 }
@@ -462,6 +576,11 @@ export class Avatar {
   /** 발 두 짝 (같은 geometry를 나눠 쓰고 걸을 때 따로 움직인다). 왼발이 x<0 */
   private readonly footL: THREE.Mesh;
   private readonly footR: THREE.Mesh;
+  /** 팔 두 짝(소매)과 각 팔 끝의 손 (손은 팔의 자식이라 같이 돈다). 왼팔이 x<0 */
+  private readonly armL: THREE.Mesh;
+  private readonly armR: THREE.Mesh;
+  private readonly handL: THREE.Mesh;
+  private readonly handR: THREE.Mesh;
   private readonly accessories: THREE.Mesh[] = [];
   private accessorySpecs: AccessorySpec[] = [];
   private outfitSpec: OutfitSpec = PLAIN_OUTFIT;
@@ -479,11 +598,18 @@ export class Avatar {
     this.head = new THREE.Mesh(geo.head);
     this.footL = new THREE.Mesh(geo.foot);
     this.footR = new THREE.Mesh(geo.foot);
+    this.armL = new THREE.Mesh(geo.arm);
+    this.armR = new THREE.Mesh(geo.arm);
+    this.handL = new THREE.Mesh(geo.hand);
+    this.handR = new THREE.Mesh(geo.hand);
+    this.armL.add(this.handL);
+    this.armR.add(this.handR);
+    for (const m of [this.armL, this.armR, this.handL, this.handR]) m.castShadow = true;
     this.body.castShadow = true;
     this.head.castShadow = true;
     this.footL.castShadow = true;
     this.footR.castShadow = true;
-    this.pose.add(this.body, this.head, this.footL, this.footR);
+    this.pose.add(this.body, this.head, this.footL, this.footR, this.armL, this.armR);
     this.root.add(this.pose);
     this.setOutfit(options.outfit ?? PLAIN_OUTFIT);
     this.applyPose();
@@ -491,7 +617,7 @@ export class Avatar {
 
   /** 장면에 올라가는 mesh 개수 (그리기 호출 수 점검용) */
   getMeshes(): THREE.Mesh[] {
-    return [this.body, this.head, this.footL, this.footR, ...this.accessories];
+    return [this.body, this.head, this.footL, this.footR, ...this.accessories, this.armL, this.armR, this.handL, this.handR];
   }
 
   get yaw(): number {
@@ -513,7 +639,11 @@ export class Avatar {
     this.body.material = getAvatarMaterial(spec.bodyColor, true);
     this.footL.material = this.body.material;
     this.footR.material = this.body.material;
+    this.armL.material = this.body.material;
+    this.armR.material = this.body.material;
     this.head.material = getAvatarMaterial(spec.skinColor, true);
+    this.handL.material = this.head.material;
+    this.handR.material = this.head.material;
     for (const m of this.accessories) m.parent?.remove(m);
     this.accessories.length = 0;
     this.outfitSpec = spec;
@@ -595,6 +725,10 @@ export class Avatar {
     this.footR.position.set(p.footX, p.footRY, p.footRZ);
     this.footL.scale.set(p.bodyScaleXZ, p.bodyScaleY, p.bodyScaleXZ);
     this.footR.scale.set(p.bodyScaleXZ, p.bodyScaleY, p.bodyScaleXZ);
+    this.armL.position.set(-p.shoulderX, p.shoulderY, p.shoulderZ);
+    this.armR.position.set(p.shoulderX, p.shoulderY, p.shoulderZ);
+    this.armL.rotation.set(-p.armLFwd, 0, -p.armLOut);
+    this.armR.rotation.set(-p.armRFwd, 0, p.armROut);
   }
 
   /** 장면에서 뗀다. geometry와 material은 공유 중이라 여기서 놓지 않는다 */
