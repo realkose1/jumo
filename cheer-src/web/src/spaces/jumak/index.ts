@@ -2,25 +2,147 @@
 // 모두가 이 공간 하나에 들어오고, 방이 차면 서버가 다음 방으로 나눈다(정원 24).
 // 정원, 이름 단어, 자리 id, 동작 id는 shared/spaces/jumak.ts가 원본이고, 여기에는 3D 배치와 이름표, 몸짓, 색만 둔다.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { jumak as shared } from '@shared/spaces/jumak';
 import { registerOutfit } from '../../engine/avatar';
 import type { ActionDef, SpaceDefinition } from '../../engine/types';
 import { ACTION_EMOJI, buildSeats } from './layout';
 import { createJumakScene } from './stage';
 
-// 옷: 흰 윗옷에 붉은 머리띠. 모두가 같은 응원 차림이다.
+// 옷: 흰 한복에 붉은 옷고름. 머리는 사람 번호로 네 가지 차림 중 하나다(누구 화면에서나 같다).
+//   0 갓 + 콧수염 + 턱수염   1 상투 + 콧수염 + 턱수염   2 갓 + 콧수염   3 상투 + 콧수염
+// 모두 망건(검은 머리띠)과 검은 머리를 하고, 갓에는 붉은 갓끈 구슬이 늘어진다.
+// 머리 기준 좌표: 머리 중심이 원점, 반지름 0.27, 앞이 +z (눈은 y 0.035, z 0.248)
+const HAIR = 0x221d1a;
+const GAT = 0x1a1716;
+const CHEER_RED = 0xc8321f;
+const GAT_LOOKS = [0, 2];
+const SANGTU_LOOKS = [1, 3];
+const GOATEE_LOOKS = [0, 1];
+
+function mergeParts(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
+  // 소품은 정점 색 없이 한 색으로 그리니 위치, 법선만 남겨 합친다
+  const clean = parts.map((g) => {
+    const n = g.index ? g.toNonIndexed() : g;
+    if (n !== g) g.dispose();
+    for (const name of Object.keys(n.attributes)) if (name !== 'position' && name !== 'normal') n.deleteAttribute(name);
+    return n;
+  });
+  const merged = mergeGeometries(clean, false);
+  if (!merged) throw new Error('jumak outfit merge failed');
+  for (const g of clean) g.dispose();
+  return merged;
+}
+
+const seg = (d: { headWidthSegments: number }, min: number): number => Math.max(min, d.headWidthSegments);
+
 registerOutfit({
   id: 'jumak',
   bodyColor: 0xeee7d6,
   skinColor: 0xf6d7b8,
+  looks: 4,
   accessories: [
     {
-      key: 'headband',
+      // 머리카락(정수리를 덮는 반구) + 망건
+      key: 'hair',
       attach: 'head',
-      create: (d) => new THREE.TorusGeometry(0.252, 0.03, Math.max(4, Math.round(d.eyeSegments / 2)), Math.max(10, d.headWidthSegments)),
-      color: 0xd8321f,
-      position: [0, 0.105, 0],
-      rotation: [Math.PI / 2, 0, 0],
+      create: (d) =>
+        mergeParts([
+          new THREE.SphereGeometry(0.277, seg(d, 12), Math.max(5, d.headHeightSegments), 0, Math.PI * 2, 0, 1.12),
+          new THREE.TorusGeometry(0.244, 0.024, Math.max(4, Math.round(d.eyeSegments / 2)), seg(d, 10))
+            .rotateX(Math.PI / 2)
+            .translate(0, 0.118, 0),
+        ]),
+      color: HAIR,
+      position: [0, 0, 0],
+    },
+    {
+      // 갓: 넓은 챙과 원통 모자
+      key: 'gat',
+      attach: 'head',
+      looks: GAT_LOOKS,
+      create: (d) =>
+        mergeParts([
+          new THREE.CylinderGeometry(0.38, 0.38, 0.014, seg(d, 14)).translate(0, 0.205, 0),
+          new THREE.CylinderGeometry(0.15, 0.19, 0.17, seg(d, 12)).translate(0, 0.205 + 0.085, 0),
+        ]),
+      color: GAT,
+      position: [0, 0, 0],
+      rotation: [-0.08, 0, 0],
+    },
+    {
+      // 갓끈: 챙 양옆에서 턱 옆으로 늘어진 붉은 구슬 줄
+      key: 'gatkkeun',
+      attach: 'head',
+      looks: GAT_LOOKS,
+      create: (d) => {
+        const beads: THREE.BufferGeometry[] = [];
+        const ws = Math.max(5, Math.round(d.eyeSegments * 0.8));
+        for (const side of [-1, 1]) {
+          for (let i = 0; i < 7; i++) {
+            const y = 0.18 - i * 0.05;
+            const x = side * (0.275 + i * 0.004);
+            beads.push(new THREE.SphereGeometry(0.019, ws, Math.max(3, ws - 2)).translate(x, y, 0.07 + i * 0.012));
+          }
+        }
+        return mergeParts(beads);
+      },
+      color: CHEER_RED,
+      position: [0, 0, 0],
+    },
+    {
+      // 상투: 정수리에 틀어 올린 머리와 가로지른 동곳
+      key: 'sangtu',
+      attach: 'head',
+      looks: SANGTU_LOOKS,
+      create: (d) =>
+        mergeParts([
+          new THREE.SphereGeometry(0.075, seg(d, 10), Math.max(5, d.headHeightSegments)).scale(1, 1.25, 1).translate(0, 0.31, -0.02),
+          new THREE.CylinderGeometry(0.05, 0.075, 0.06, seg(d, 8)).translate(0, 0.26, -0.02),
+          new THREE.CylinderGeometry(0.009, 0.009, 0.2, 6).rotateZ(Math.PI / 2).translate(0, 0.32, -0.02),
+        ]),
+      color: HAIR,
+      position: [0, 0, 0],
+    },
+    {
+      // 콧수염: 양옆으로 처진 두 가닥
+      key: 'mustache',
+      attach: 'head',
+      create: (d) => {
+        const ws = Math.max(6, d.eyeSegments);
+        return mergeParts(
+          [-1, 1].map((side) =>
+            new THREE.SphereGeometry(1, ws, Math.max(4, ws - 2))
+              .scale(0.058, 0.016, 0.022)
+              .rotateZ(side * -0.38)
+              .translate(side * 0.05, -0.05, 0.262),
+          ),
+        );
+      },
+      color: HAIR,
+      position: [0, 0, 0],
+    },
+    {
+      // 턱수염: 턱 아래로 뾰족하게
+      key: 'goatee',
+      attach: 'head',
+      looks: GOATEE_LOOKS,
+      create: (d) => new THREE.ConeGeometry(0.05, 0.15, Math.max(6, d.eyeSegments)).rotateX(Math.PI - 0.45).translate(0, -0.2, 0.2),
+      color: HAIR,
+      position: [0, 0, 0],
+    },
+    {
+      // 옷고름: 가슴 앞 붉은 매듭과 늘어진 두 가닥
+      key: 'goreum',
+      attach: 'body',
+      create: () =>
+        mergeParts([
+          new THREE.BoxGeometry(0.055, 0.035, 0.03).translate(0.05, 0.41, 0.2),
+          new THREE.BoxGeometry(0.026, 0.15, 0.012).rotateZ(0.12).translate(0.04, 0.32, 0.207),
+          new THREE.BoxGeometry(0.026, 0.12, 0.012).rotateZ(-0.22).translate(0.075, 0.335, 0.204),
+        ]),
+      color: CHEER_RED,
+      position: [0, 0, 0],
     },
   ],
 });

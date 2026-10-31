@@ -3,6 +3,7 @@
 // 켜짐/꺼짐과 크기는 엔진의 SoundMixer가 맡는다.
 import type { MomentSound } from '../../cheer/moments';
 import type { SoundLayerId, SoundMixer, SynthAudio } from '../../engine/sound';
+import { startMusic, type JumakMusic } from './music';
 import * as recipes from './recipes';
 
 export type SoundSource = 'self' | 'peer';
@@ -19,27 +20,33 @@ interface Bus {
 export class JumakSound {
   private readonly buses = new Map<SoundLayerId, Bus>();
   private murmur: recipes.Murmur | null = null;
+  private music: JumakMusic | null = null;
   private intensity = 0;
 
   constructor(private readonly mixer: SoundMixer) {
-    // 환경음 층이 켜져 있는 동안 웅성거림이 돈다
+    // 환경음 층이 켜져 있는 동안 웅성거림과 배경 음악(한산할 땐 가야금, 경기 중엔 장구 응원가)이 돈다
     mixer.setSynthLoop('ambient', {
       start: (ctx, out) => {
         const m = recipes.startMurmur(ctx, out);
         m.setIntensity(this.intensity);
         this.murmur = m;
+        const music = startMusic(ctx, out, this.intensity > 0);
+        this.music = music;
         return () => {
           m.stop();
+          music.stop();
           if (this.murmur === m) this.murmur = null;
+          if (this.music === music) this.music = null;
         };
       },
     });
   }
 
-  /** 경기가 진행 중이면 웅성거림이 더 활기차다 */
+  /** 경기가 진행 중이면 웅성거림이 더 활기차고, 음악이 장구 응원가로 바뀐다 */
   setLive(live: boolean): void {
     this.intensity = live ? 1 : 0;
     this.murmur?.setIntensity(this.intensity);
+    this.music?.setLive(live);
   }
 
   /** 박수, 건배, 주문(딸랑). 내 동작은 크게, 남의 동작은 작게 */
@@ -99,6 +106,7 @@ export class JumakSound {
   dispose(): void {
     this.mixer.setSynthLoop('ambient', null);
     this.murmur = null;
+    this.music = null;
     for (const b of this.buses.values()) b.input.disconnect();
     this.buses.clear();
   }
