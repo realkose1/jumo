@@ -47,15 +47,15 @@ describe('RemotePeers 그리기 호출', () => {
     expect(drawCalls()).toBe(0);
   });
 
-  it('1명이든 50명이든 그리기 호출은 같다 (머리 1 + 몸통 1 + 발 1)', () => {
+  it('1명이든 50명이든 그리기 호출은 같다 (머리 1 + 몸통 1 + 발 1 + 팔 1 + 손 1)', () => {
     const one = setup({ capacity: 60 });
     one.peers.reset([one.info(1)], {});
     one.tick(50);
     const many = setup({ capacity: 60 });
     many.peers.reset(Array.from({ length: 50 }, (_, i) => many.info(i + 1, i * 0.5, 0)), {});
     many.tick(50);
-    expect(one.drawCalls()).toBe(3);
-    expect(many.drawCalls()).toBe(3);
+    expect(one.drawCalls()).toBe(5);
+    expect(many.drawCalls()).toBe(5);
     expect(many.peers.getMeshes()).toHaveLength(one.peers.getMeshes().length);
     expect(many.peers.getMeshes()[0]!.count).toBe(50);
     expect(many.peers.getMeshes()[2]!.count).toBe(100); // 발은 한 사람에 인스턴스 2개
@@ -67,7 +67,8 @@ describe('RemotePeers 그리기 호출', () => {
     tick(500);
     expect(peers.getMeshes()[0]!.count).toBe(7);
     expect(peers.getMeshes()[2]!.count).toBe(14);
-    expect(drawCalls()).toBe(3);
+    expect(peers.getMeshes().at(-1)!.count).toBe(14); // 손도 사람당 2개
+    expect(drawCalls()).toBe(5);
   });
 
   it('발 자리도 정원과 같이 늘어난다 (사람당 2개)', () => {
@@ -94,7 +95,7 @@ describe('RemotePeers 그리기 호출', () => {
     const { peers, info, tick, drawCalls } = setup({ outfit, capacity: 10 });
     peers.reset(Array.from({ length: 8 }, (_, i) => info(i + 1)), {});
     tick(50);
-    expect(drawCalls()).toBe(4);
+    expect(drawCalls()).toBe(6);
   });
 });
 
@@ -480,7 +481,7 @@ describe('RemotePeers 걷기 (발 번갈아 내딛기)', () => {
     expect(normal.bodyTop).toBeGreaterThan(0.02);
   });
 
-  it('수십 명이 걸어도 그리기 호출은 그대로 3번이다', () => {
+  it('수십 명이 걸어도 그리기 호출은 그대로 5번이다', () => {
     const h = setup({ capacity: 60 });
     h.setNow(1000);
     h.peers.reset(Array.from({ length: 50 }, (_, i) => h.info(i + 1, 0, i * 0.5)), {});
@@ -494,7 +495,7 @@ describe('RemotePeers 걷기 (발 번갈아 내딛기)', () => {
       }));
       h.tick(100, 20);
     }
-    expect(h.drawCalls()).toBe(3);
+    expect(h.drawCalls()).toBe(5);
     const feet = h.peers.getMeshes()[2]!;
     expect(feet.count).toBe(100);
     expect(feet.visible).toBe(true);

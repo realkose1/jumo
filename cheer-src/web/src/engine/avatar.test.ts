@@ -7,6 +7,7 @@ import {
   createGait,
   disposeAvatarResources,
   getOutfit,
+  motionArms,
   motionOffset,
   registerOutfit,
   walkGait,
@@ -19,8 +20,8 @@ const vertexCount = (a: Avatar) =>
   a.getMeshes().reduce((n, m) => n + m.geometry.getAttribute('position').count, 0);
 
 describe('Avatar', () => {
-  it('기본 캐릭터는 그리기 호출 4번(몸통, 머리, 발 두 짝)', () => {
-    expect(new Avatar({ detail: 'peer' }).getMeshes()).toHaveLength(4);
+  it('기본 캐릭터는 그리기 호출 8번(몸통, 머리, 발 두 짝, 팔 두 짝, 손 두 짝)', () => {
+    expect(new Avatar({ detail: 'peer' }).getMeshes()).toHaveLength(8);
   });
 
   it('내 캐릭터가 남의 캐릭터보다 분할 수가 많다', () => {
@@ -68,15 +69,15 @@ describe('Avatar', () => {
       ],
     });
     const a = new Avatar({ detail: 'peer' });
-    expect(a.getMeshes()).toHaveLength(4);
+    expect(a.getMeshes()).toHaveLength(8);
     a.setOutfit('test-hat');
-    expect(a.getMeshes()).toHaveLength(5);
+    expect(a.getMeshes()).toHaveLength(9);
     const body = a.getMeshes()[0]!.material as THREE.MeshLambertMaterial;
     expect(body.color.getHex()).toBe(0x336699);
     // 발도 몸통 옷 색을 따라간다
     expect((a.getMeshes()[2]!.material as THREE.MeshLambertMaterial).color.getHex()).toBe(0x336699);
     a.setOutfit('plain');
-    expect(a.getMeshes()).toHaveLength(4);
+    expect(a.getMeshes()).toHaveLength(8);
   });
 
   it('모르는 옷 id는 기본형으로', () => {
@@ -536,5 +537,44 @@ describe('Avatar 걷기', () => {
     const { l, r } = feet(a);
     expect(Math.abs(l.position.z - r.position.z)).toBeLessThanOrEqual(2 * 0.13 + 1e-6);
     expect(WALK_SPEED).toBe(2.6);
+  });
+});
+
+describe('팔', () => {
+  it('서 있으면 두 팔이 살짝 벌어져 늘어지고, 앉으면 무릎 쪽 앞으로 온다', () => {
+    const s = new PoseState(true);
+    const stand = s.compute();
+    expect(stand.armLFwd).toBeCloseTo(0, 6);
+    expect(stand.armLOut).toBeGreaterThan(0.1);
+    s.snapSeated(true);
+    const seated = s.compute();
+    expect(seated.armLFwd).toBeGreaterThan(0.5);
+    expect(seated.armRFwd).toBeGreaterThan(0.5);
+  });
+
+  it('걸을 때 두 팔이 엇갈려 흔들린다', () => {
+    const s = new PoseState(false);
+    s.speedTarget = 1;
+    const fwds: number[] = [];
+    for (let i = 0; i < 90; i++) {
+      s.update(1 / 60);
+      const f = s.compute();
+      fwds.push(f.armLFwd + f.armRFwd);
+      if (i > 30) expect(Math.sign(f.armLFwd) * Math.sign(f.armRFwd)).toBeLessThanOrEqual(0);
+    }
+    expect(Math.max(...fwds.map(Math.abs))).toBeLessThan(1e-6);
+  });
+
+  it('동작마다 팔 모양: 박수는 앞으로 모으고, 건배·주문은 오른팔을 들고, 골은 두 팔을 든다', () => {
+    const mid = (m: 'clap' | 'toast' | 'roar' | 'celebrate') => motionArms(m, 0.45, false);
+    expect(mid('clap').lf).toBeGreaterThan(1);
+    expect(mid('clap').lo).toBeLessThan(0);
+    expect(mid('toast').rf).toBeGreaterThan(2);
+    expect(mid('roar').rf).toBeGreaterThan(2);
+    expect(mid('celebrate').lf).toBeGreaterThan(2.5);
+    expect(mid('celebrate').rf).toBeGreaterThan(2.5);
+    expect(mid('celebrate').w).toBeCloseTo(1, 3);
+    // 끝나면 원래 팔로 돌아간다
+    expect(motionArms('celebrate', 1.6, false).w).toBeCloseTo(0, 6);
   });
 });
