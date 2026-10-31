@@ -24,7 +24,9 @@ export function buildSoundPanel(engine: Engine): { el: HTMLElement; dispose: () 
   const mixer = engine.sound;
   const rows = {} as Record<SoundLayerId, Row>;
   const note = h('p', { class: 'qs-note', role: 'status' });
-  const items: HTMLElement[] = [note];
+  // 위쪽 스피커 버튼으로 모두 꺼 두었으면 여기 스위치를 켜도 소리가 나지 않는다 — 그 까닭을 알린다
+  const mutedNote = h('p', { class: 'qs-note', role: 'status', hidden: true }, S.sound.mutedNote);
+  const items: HTMLElement[] = [note, mutedNote];
 
   for (const id of SOUND_LAYER_IDS) {
     const text = S.sound[id];
@@ -91,6 +93,7 @@ export function buildSoundPanel(engine: Engine): { el: HTMLElement; dispose: () 
     const blocked = !state.supported || !state.unlocked;
     note.textContent = !state.supported ? S.sound.unsupported : !state.unlocked ? S.sound.locked : '';
     note.hidden = !blocked;
+    mutedNote.hidden = !state.muted;
     for (const id of SOUND_LAYER_IDS) {
       const layer = state.layers[id];
       const r = rows[id];

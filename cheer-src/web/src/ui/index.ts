@@ -8,6 +8,7 @@ import { mountCheerBar } from './cheerBar';
 import { h } from './dom';
 import { mountJoystick } from './joystick';
 import { mountLoading } from './loading';
+import { mountMuteButton } from './muteButton';
 import { mountNetUI } from './net';
 import { createNotice, type NoticeTone } from './notice';
 import { mountSettings } from './settings';
@@ -58,6 +59,7 @@ export function mountUI(engine: Engine, root: HTMLElement, options: UIOptions = 
   cleanups.push(mountActionBar(engine, host));
   // 터치 기기 왼쪽 아래 조이스틱. 보이면 host에 qs-ui--touch 를 달아 동작 버튼을 오른쪽 아래 세로 줄로 옮긴다
   cleanups.push(mountJoystick(engine, host));
+  cleanups.push(mountMuteButton(engine, host));
   cleanups.push(mountSettings(engine, host));
   const cheerBar = mountCheerBar(engine, host, { embedded: options.embedded ?? false, onClose: () => options.onClose?.() });
   cleanups.push(cheerBar.dispose);

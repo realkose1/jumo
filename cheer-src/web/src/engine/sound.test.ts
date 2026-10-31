@@ -139,3 +139,59 @@ describe('SoundMixer (공간이 직접 만든 소리)', () => {
     expect(stop).toHaveBeenCalled();
   });
 });
+
+describe('SoundMixer 모두 끄기 (위쪽 스피커 버튼)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('처음에는 켜져 있고, 끄면 층 설정은 그대로 두고 장면에는 꺼진 것으로 알린다', () => {
+    const mixer = new SoundMixer(layers, { storage: new SpaceStorage('t', memoryBackend()) });
+    expect(mixer.getState().muted).toBe(false);
+    mixer.unlock();
+    expect(mixer.getAudio()!.isEnabled('ambient')).toBe(true);
+    mixer.setMuted(true);
+    const s = mixer.getState();
+    expect(s.muted).toBe(true);
+    expect(s.layers.ambient.enabled).toBe(true);
+    expect(mixer.getAudio()!.isEnabled('ambient')).toBe(false);
+    mixer.setMuted(false);
+    expect(mixer.getAudio()!.isEnabled('ambient')).toBe(true);
+  });
+
+  it('끈 값은 기억하고, 첫 누르기 전에 꺼 두어도 소리가 열릴 때 따른다', () => {
+    const backend = memoryBackend();
+    const first = new SoundMixer(layers, { storage: new SpaceStorage('t', backend) });
+    first.setMuted(true);
+    const second = new SoundMixer(layers, { storage: new SpaceStorage('t', backend) });
+    expect(second.isMuted()).toBe(true);
+    second.unlock();
+    expect(second.getAudio()!.isEnabled('shared')).toBe(false);
+  });
+
+  it('꺼 두면 소리가 잦아든 뒤 장치를 멈추고, 다시 켜면 깨운다', () => {
+    vi.useFakeTimers();
+    const mixer = new SoundMixer(layers, { storage: new SpaceStorage('t', memoryBackend()) });
+    mixer.unlock();
+    const ctx = mixer.getAudio()!.ctx;
+    const suspend = vi.spyOn(ctx, 'suspend');
+    const resume = vi.spyOn(ctx, 'resume');
+    mixer.setMuted(true);
+    expect(suspend).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1000);
+    expect(suspend).toHaveBeenCalledTimes(1);
+    mixer.setMuted(false);
+    expect(resume).toHaveBeenCalled();
+  });
+
+  it('껐다가 금방 다시 켜면 장치를 멈추지 않는다', () => {
+    vi.useFakeTimers();
+    const mixer = new SoundMixer(layers, { storage: new SpaceStorage('t', memoryBackend()) });
+    mixer.unlock();
+    const suspend = vi.spyOn(mixer.getAudio()!.ctx, 'suspend');
+    mixer.setMuted(true);
+    mixer.setMuted(false);
+    vi.advanceTimersByTime(1000);
+    expect(suspend).not.toHaveBeenCalled();
+  });
+});
