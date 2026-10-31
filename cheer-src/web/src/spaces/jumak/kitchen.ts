@@ -304,6 +304,12 @@ const SIZZLE_LEVEL = 0.2;
 const SIZZLE_LIVE_BOOST = 0.35;
 /** 새 전을 올릴 때 치익 갈래가 솟는 크기(LAY_BURST, FLIP_BURST를 곱한다) */
 export const FIZZ_LEVEL = 0.22;
+/**
+ * 번철 소리 전체(지글거림, 치익, 반죽 철퍽, 뒤집기, 기름 톡)에 곱하는 크기. 전 부치는 소리가 너무 크다는 제보로
+ * 0.4(약 -8 dB)로 낮췄다. 솥·장작·국자·칼질은 그대로 두고 번철만 한 갈래로 묶어 줄인다.
+ * (위 KITCHEN_LEVEL의 잰 값은 이 갈래를 줄이기 전 것이다)
+ */
+export const GRIDDLE_LEVEL = 0.4;
 
 export interface Kitchen {
   /** 0(한산함)~1(경기 중이라 전을 더 부친다) */
@@ -360,12 +366,16 @@ export function startKitchen(ctx: Ctx, out: AudioNode, seed = Math.floor(Math.ra
   const rumbleGain = ctx.createGain();
   rumbleGain.gain.value = RUMBLE_LEVEL;
   bedIn.connect(rumbleLp).connect(rumbleGain).connect(bus);
+  // 번철 소리는 모두 이 갈래를 지나 함께 줄어든다
+  const griddleBus = ctx.createGain();
+  griddleBus.gain.value = GRIDDLE_LEVEL;
+  griddleBus.connect(bus);
   // 번철: 잡음에서 문턱을 넘는 알갱이만 남겨 높은 대역으로 보내면 지글지글
   const sizzleHp = ctx.createBiquadFilter();
   sizzleHp.type = 'highpass';
   sizzleHp.frequency.value = 2300;
   sizzleHp.Q.value = 0.6;
-  sizzleHp.connect(bus);
+  sizzleHp.connect(griddleBus);
   const shaper = ctx.createWaveShaper();
   shaper.curve = crackleCurve(4096, SIZZLE_CURVE.threshold, SIZZLE_CURVE.ceiling, SIZZLE_CURVE.power);
   const sizzleBase = ctx.createGain();
@@ -377,7 +387,7 @@ export function startKitchen(ctx: Ctx, out: AudioNode, seed = Math.floor(Math.ra
   const fizzGain = ctx.createGain();
   fizzGain.gain.value = 0;
   bedIn.connect(fizzShaper).connect(fizzGain).connect(sizzleHp);
-  const persistent: AudioNode[] = [bus, soft, bedIn, rumbleLp, rumbleGain, sizzleHp, shaper, sizzleBase, fizzShaper, fizzGain];
+  const persistent: AudioNode[] = [bus, soft, bedIn, rumbleLp, rumbleGain, griddleBus, sizzleHp, shaper, sizzleBase, fizzShaper, fizzGain];
 
   const bed: Array<{ src: AudioBufferSourceNode; end: number }> = [];
   let bedAt = onFrame(start);
@@ -398,8 +408,8 @@ export function startKitchen(ctx: Ctx, out: AudioNode, seed = Math.floor(Math.ra
 
   // 번철: 전을 올리거나 뒤집으면 지글거림이 빨리 솟고 천천히 가라앉는다
   const fry = (t: number, f: FryEvent): void => {
-    if (f.kind === 'lay') batterDown(ctx, bus, t, 1, rand);
-    else spatulaFlip(ctx, bus, t, 1, rand);
+    if (f.kind === 'lay') batterDown(ctx, griddleBus, t, 1, rand);
+    else spatulaFlip(ctx, griddleBus, t, 1, rand);
     const at = t + (f.kind === 'lay' ? 0.02 : 0.17);
     const p = fizzGain.gain;
     p.setTargetAtTime(FIZZ_LEVEL * f.burst, at, 0.05);
@@ -434,7 +444,7 @@ export function startKitchen(ctx: Ctx, out: AudioNode, seed = Math.floor(Math.ra
       const events: KitchenEvent[] = batch.fries.map((f) => ({ t: at + f.at, hold: 0.3, always: true, fire: (t) => fry(t, f) }));
       for (const p of batch.pops) {
         const vel = 0.5 + rand() * 0.5;
-        events.push({ t: at + p, hold: 0.015, fire: (t) => oilPop(ctx, bus, t, vel, 1, rand) });
+        events.push({ t: at + p, hold: 0.015, fire: (t) => oilPop(ctx, griddleBus, t, vel, 1, rand) });
       }
       events.sort((a, b) => a.t - b.t);
       return { events, next: at + batch.next };
@@ -446,7 +456,7 @@ export function startKitchen(ctx: Ctx, out: AudioNode, seed = Math.floor(Math.ra
     next: start + 1.2,
     generate: (at) => {
       const vel = 0.3 + rand() * 0.5;
-      return { events: [{ t: at, hold: 0.015, fire: (t) => oilPop(ctx, bus, t, vel, 1, rand) }], next: at + idlePopGap(rand, intensity) };
+      return { events: [{ t: at, hold: 0.015, fire: (t) => oilPop(ctx, griddleBus, t, vel, 1, rand) }], next: at + idlePopGap(rand, intensity) };
     },
   };
 

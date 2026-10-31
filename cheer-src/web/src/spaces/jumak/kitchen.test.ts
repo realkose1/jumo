@@ -441,6 +441,21 @@ describe('부엌 소리 예약기', () => {
     live.kitchen.stop();
   });
 
+  it('번철 소리(지글거림, 치익, 철퍽, 뒤집기, 기름 톡)는 한 갈래로 묶여 GRIDDLE_LEVEL만큼 작다', () => {
+    const { ctx, kitchen } = start(7);
+    advance(ctx, 120);
+    expect(K.GRIDDLE_LEVEL).toBeLessThan(0.5);
+    const griddle = ctx.nodes.find((n) => n.kind === 'gain' && n.gain.value === K.GRIDDLE_LEVEL)!;
+    expect(griddle).toBeDefined();
+    // 갈래는 부엌 전체 크기(KITCHEN_LEVEL)로 이어진다
+    expect(griddle.outputs[0]!.gain.targets.some((x) => x.v === K.KITCHEN_LEVEL)).toBe(true);
+    // 지글거림(높은 대역 거름)과, 전 올리기·뒤집기·기름 톡 같은 짧은 소리들이 이 갈래로 들어온다
+    const feeders = ctx.nodes.filter((n) => n.outputs.includes(griddle));
+    expect(feeders.some((n) => n.kind === 'filter' && n.frequency.value === 2300)).toBe(true);
+    expect(feeders.length).toBeGreaterThan(5);
+    kitchen.stop();
+  });
+
   it('경기 중엔 번철 지글거림이 조금 커지고, 끝나면 돌아온다', () => {
     const { ctx, kitchen } = start();
     advance(ctx, 2);
