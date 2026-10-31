@@ -4986,7 +4986,8 @@ const cardFromHSL = (hsl, l = 30) => hsl ? `hsl(${Math.round(hsl.h)}, ${Math.rou
 // 파일이 없거나, open 이 true 가 아니면 앱 어디에도 새 화면·버튼이 뜨지 않는다(처음 상태도 닫힘).
 // 앱을 켤 때 한 번, 앞에 떠 있는 동안 5분마다 다시 확인한다. 네트워크 오류는 직전 상태를 유지한다.
 // 응원 주막 화면은 Vercel 에 올라간 /cheer/ 페이지를 iframe 으로 연다(앱 빌드와 따로 배포된다).
-const JUMAK_WEB_BASE = 'https://jumo-git-main-realkose1s-projects.vercel.app';
+// 응원 주막 전용 도메인(Cloudflare에서 산 jumak.dev, Vercel jumo 프로젝트에 연결). 실시간 서버는 cheer.jumak.dev
+const JUMAK_WEB_BASE = 'https://jumak.dev';
 const JUMAK_STATUS_URL = `${API_BASE}/cheer-status.json`;
 // 뒤로가기 제스처(네이티브 엣지 스와이프)로 응원방을 닫을지. 3D 화면은 화면 전체를 손가락으로
 // 끌어 돌려 보므로 왼쪽 가장자리에서 시작한 드래그가 방을 닫아 버리지 않게, 페이지가
