@@ -4,6 +4,7 @@
 //   3) 점수판: 여러 경기 점수(tv.ts의 기존 화면)
 // 장면 순서와 경기장 움직임은 three.js를 모르는 계산이라 시험하기 쉽다. 그리기는 캔버스 2D.
 import type { TvMatchView, TvPlayerLine } from '../../cheer/feed';
+import { PAPER, SERIF, drawPaper, drawSeal, oldClock } from './joseon';
 
 // ---------------------------------------------------------------------------
 // 장면 순서
@@ -305,7 +306,8 @@ export class PitchSim {
 // 그리기
 // ---------------------------------------------------------------------------
 
-const FONT = '-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif';
+// 글꼴은 조선풍 명조. 경기장 그림은 그대로 두고 점수 패, 선수 카드만 한지와 먹, 낙관으로
+const FONT = SERIF;
 
 /** 화면에서 경기장이 차지하는 곳 */
 interface View {
@@ -527,7 +529,7 @@ export function drawPitch(ctx: CanvasRenderingContext2D, sim: PitchSim, info: Pi
   ctx.textAlign = 'right';
   ctx.textBaseline = 'top';
   ctx.fillStyle = 'rgba(255,255,255,0.55)';
-  ctx.fillText('가상 중계 화면 · 점수는 실제', 1006, 18);
+  ctx.fillText('가상 중계 화면 · 점수는 실제', 1006, 24);
 }
 
 /** 왼쪽 위 점수 막대: 대회 | 홈 1 - 0 원정 | 67' */
@@ -540,46 +542,50 @@ export function drawScoreBug(ctx: CanvasRenderingContext2D, m: TvMatchView): voi
   const an = clip(ctx, m.awayName, 170);
   const hw = ctx.measureText(hn).width;
   const aw = ctx.measureText(an).width;
-  const score = m.state === 'pre' ? 'vs' : `${m.homeScore} - ${m.awayScore}`;
+  const score = m.state === 'pre' ? '對' : `${m.homeScore} : ${m.awayScore}`;
   ctx.font = `900 26px ${FONT}`;
   const sw = ctx.measureText(score).width;
   ctx.font = `800 22px ${FONT}`;
-  const clock = m.clock || (m.state === 'live' ? 'LIVE' : '');
+  const clock = oldClock(m.state, m.clock);
   const cw = ctx.measureText(clock).width;
   const w = 16 + hw + 18 + sw + 28 + 18 + aw + 16 + cw + 34;
-  ctx.fillStyle = 'rgba(10,13,19,0.88)';
+  // 한지 패(牌): 먹선 두른 종이
+  ctx.fillStyle = 'rgba(236,220,182,0.95)';
   ctx.beginPath();
-  rrect(ctx, x, y, w, h, 10);
+  rrect(ctx, x, y, w, h, 6);
   ctx.fill();
+  ctx.strokeStyle = 'rgba(40,24,10,0.8)';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
   // 점수 칸
   let cx = x + 16;
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
   ctx.font = `800 24px ${FONT}`;
-  ctx.fillStyle = m.ours === 'home' || m.ours === 'both' ? '#f5c400' : '#ffffff';
+  ctx.fillStyle = m.ours === 'home' || m.ours === 'both' ? PAPER.red : PAPER.ink;
   ctx.fillText(hn, cx, y + h / 2 + 1);
   cx += hw + 18;
-  ctx.fillStyle = '#f5c400';
+  ctx.fillStyle = PAPER.red;
   ctx.beginPath();
-  rrect(ctx, cx - 8, y + 6, sw + 16 + 12, h - 12, 6);
+  rrect(ctx, cx - 8, y + 6, sw + 16 + 12, h - 12, 3);
   ctx.fill();
-  ctx.fillStyle = '#1a1400';
+  ctx.fillStyle = PAPER.redInk;
   ctx.font = `900 26px ${FONT}`;
   ctx.fillText(score, cx + 6, y + h / 2 + 1);
   cx += sw + 28 + 18;
   ctx.font = `800 24px ${FONT}`;
-  ctx.fillStyle = m.ours === 'away' || m.ours === 'both' ? '#f5c400' : '#ffffff';
+  ctx.fillStyle = m.ours === 'away' || m.ours === 'both' ? PAPER.red : PAPER.ink;
   ctx.fillText(an, cx, y + h / 2 + 1);
   cx += aw + 16;
   // 시계
   if (m.state === 'live') {
-    ctx.fillStyle = '#ff4b4b';
+    ctx.fillStyle = PAPER.red;
     ctx.beginPath();
     ctx.arc(cx + 6, y + h / 2, 5, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.font = `800 22px ${FONT}`;
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = PAPER.soft;
   ctx.fillText(clock, cx + 16, y + h / 2 + 1);
 }
 
@@ -610,19 +616,8 @@ export function drawPlayerCard(
 ): void {
   const team = player.side === 'home' ? m.homeName : m.awayName;
   const opp = player.side === 'home' ? m.awayName : m.homeName;
-  // 바탕: 비스듬한 띠
-  const g = ctx.createLinearGradient(0, 0, 1024, bottom);
-  g.addColorStop(0, '#132241');
-  g.addColorStop(1, '#0a0d13');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 1024, 576);
-  ctx.fillStyle = 'rgba(245,196,0,0.12)';
-  ctx.beginPath();
-  ctx.moveTo(300, 0);
-  ctx.lineTo(560, 0);
-  ctx.lineTo(380, 576);
-  ctx.lineTo(120, 576);
-  ctx.fill();
+  // 바탕: 한지와 광곽. 초상화(영정)처럼 사진을 걸고 옆에 행장(行狀)을 적는다
+  drawPaper(ctx);
 
   // 사진
   const px = 60;
@@ -633,7 +628,7 @@ export function drawPlayerCard(
   ctx.beginPath();
   rrect(ctx, px, py, pw, ph, 24);
   ctx.clip();
-  ctx.fillStyle = '#1d2638';
+  ctx.fillStyle = '#b89b68';
   ctx.fillRect(px, py, pw, ph);
   if (photo) {
     // 덮어 채우기(cover)
@@ -643,7 +638,7 @@ export function drawPlayerCard(
     ctx.drawImage(photo, px + (pw - w) / 2, py + (ph - h) * 0.2, w, h);
   } else {
     // 사진이 없으면 실루엣
-    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fillStyle = 'rgba(60,38,16,0.25)';
     ctx.beginPath();
     ctx.arc(px + pw / 2, py + ph * 0.36, pw * 0.2, 0, Math.PI * 2);
     ctx.fill();
@@ -653,46 +648,53 @@ export function drawPlayerCard(
   }
   // 아래쪽 어둡게
   const fade = ctx.createLinearGradient(0, py + ph * 0.6, 0, py + ph);
-  fade.addColorStop(0, 'rgba(0,0,0,0)');
-  fade.addColorStop(1, 'rgba(0,0,0,0.55)');
+  fade.addColorStop(0, 'rgba(60,38,16,0)');
+  fade.addColorStop(1, 'rgba(60,38,16,0.35)');
   ctx.fillStyle = fade;
   ctx.fillRect(px, py, pw, ph);
   ctx.restore();
-  ctx.strokeStyle = 'rgba(245,196,0,0.8)';
-  ctx.lineWidth = 3;
+  // 족자 테두리: 짙은 비단 띠
+  ctx.strokeStyle = '#3b2412';
+  ctx.lineWidth = 8;
   ctx.beginPath();
   rrect(ctx, px, py, pw, ph, 24);
   ctx.stroke();
+  // 사진 귀퉁이에 이름 낙관 (성씨 한 글자)
+  drawSeal(ctx, px + pw - 40, py + ph - 40, [...player.name][0] ?? '', 58);
 
   // 글자
   const tx = 470;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#f5c400';
-  ctx.font = `800 26px ${FONT}`;
-  ctx.fillText(m.state === 'live' ? '● 지금 뛰는 중' : m.state === 'pre' ? '오늘의 출격' : '오늘의 경기', tx, 92);
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = PAPER.red;
+  ctx.font = `800 28px ${FONT}`;
+  ctx.fillText(m.state === 'live' ? '出戰 · 출전 중' : m.state === 'pre' ? '오늘의 출전' : '오늘의 겨룸', tx, 92);
+  ctx.fillStyle = PAPER.ink;
   ctx.font = `900 84px ${FONT}`;
-  ctx.fillText(clip(ctx, player.name, 520), tx, 172);
-  ctx.fillStyle = '#b4bccb';
+  ctx.fillText(clip(ctx, player.name, 500), tx, 172);
+  ctx.fillStyle = PAPER.soft;
   ctx.font = `700 34px ${FONT}`;
-  ctx.fillText(clip(ctx, team, 520), tx, 240);
-  ctx.fillStyle = '#7a8496';
-  ctx.font = `600 26px ${FONT}`;
-  ctx.fillText(clip(ctx, `${m.comp} · 상대 ${opp}`, 520), tx, 286);
+  ctx.fillText(clip(ctx, team, 500), tx, 240);
+  ctx.fillStyle = PAPER.dim;
+  ctx.font = `700 26px ${FONT}`;
+  ctx.fillText(clip(ctx, `〔${m.comp}〕 상대 ${opp}`, 500), tx, 286);
 
   // 오늘 기록
-  ctx.fillStyle = 'rgba(255,255,255,0.07)';
+  ctx.fillStyle = 'rgba(247,236,210,0.7)';
   ctx.beginPath();
-  rrect(ctx, tx, 324, 500, 108, 18);
+  rrect(ctx, tx, 324, 480, 108, 6);
   ctx.fill();
+  ctx.strokeStyle = 'rgba(60,38,16,0.5)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
   const goals = player.goals;
-  const unit = m.sport === 'baseball' ? '홈런' : '골';
-  ctx.fillStyle = goals > 0 ? '#f5c400' : '#ffffff';
-  ctx.font = `900 60px ${FONT}`;
-  ctx.fillText(goals > 0 ? `${goals}${unit}` : m.state === 'pre' ? '출격 대기' : `${unit} 기다리는 중`, tx + 28, 380);
-  ctx.fillStyle = '#b4bccb';
+  const unit = m.sport === 'baseball' ? '홈런' : '득점';
+  ctx.fillStyle = goals > 0 ? PAPER.red : PAPER.ink;
+  ctx.font = `900 56px ${FONT}`;
+  ctx.fillText(goals > 0 ? `${unit} ${goals}` : m.state === 'pre' ? '출전 대기' : `${unit}을 기다리는 중`, tx + 28, 380);
+  if (goals > 0) drawSeal(ctx, tx + 430, 378, '慶', 70);
+  ctx.fillStyle = PAPER.soft;
   ctx.font = `700 26px ${FONT}`;
-  const score = m.state === 'pre' ? m.clock : `${m.homeName} ${m.homeScore} : ${m.awayScore} ${m.awayName}`;
+  const score = m.state === 'pre' ? oldClock('pre', m.clock) : `${m.homeName} ${m.homeScore} : ${m.awayScore} ${m.awayName}`;
   ctx.fillText(clip(ctx, score, 500), tx, Math.min(bottom - 26, 472));
 }
