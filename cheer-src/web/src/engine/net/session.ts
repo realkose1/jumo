@@ -4,6 +4,7 @@
 // 서버에 못 붙는 동안(혼자 모드)에는 아무 일도 하지 않고, 자리도 기존 로컬 판정을 쓴다.
 import type * as THREE from 'three';
 import type { CheerFeed, ErrorMsg, LocalizedName, Moment, PeerId } from '@shared/protocol';
+import type { LabelState } from '../peerLabel';
 import { RemotePeers } from '../RemotePeers';
 import { LocalSeatArbiter, type SeatArbiter, type SeatDenial, type SeatManager } from '../seats';
 import type { QuietClock } from '../time';
@@ -24,8 +25,8 @@ export interface NetEventMap {
   greeted: { from: PeerId; name: LocalizedName; actionId: string };
   /** 오늘 보낼 수 있는 선물을 다 썼다 */
   'daily-limit': { actionId: string | null };
-  /** 다른 사람 머리 위에 이름을 보여준다(null이면 숨김). x, y는 화면(뷰포트) 픽셀 */
-  'peer-label': { name: LocalizedName; x: number; y: number } | null;
+  /** 다른 손님 머리 위 이름표들(빈 배열이면 모두 숨김). 또렷한 사람 먼저, 그다음 가까운 순. x, y는 화면(뷰포트) 픽셀 */
+  'peer-labels': readonly LabelState[];
   /** 경기 피드(주막 TV). 들어가자마자 한 번, 그 뒤로는 바뀔 때마다 온다. 피드를 쓰지 않는 공간에는 오지 않는다 */
   feed: CheerFeed;
   /** 경기에서 일이 났다. 방 모두가 같은 순간에 반응한다: moment.at(서버 시각)을 clock으로 기기 시각에 맞춰 쓴다 */
