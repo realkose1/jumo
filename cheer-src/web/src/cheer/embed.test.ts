@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { isEmbedded, parseAppInset, postCloseToApp, postToApp } from './embed';
+import { embeddedSafeTop, isEmbedded, parseAppInset, postCloseToApp, postToApp } from './embed';
 
 describe('isEmbedded', () => {
   it('최상위 창이면 아니다', () => {
@@ -61,5 +61,16 @@ describe('parseAppInset (?sat, ?sab)', () => {
 
   it('소수는 반올림', () => {
     expect(parseAppInset('?sab=33.6', 'sab')).toBe(34);
+  });
+});
+
+describe('embeddedSafeTop (앱 안의 위쪽 안전 영역)', () => {
+  it('앱 안에서는 env 대신 ?sat 만 쓴다 — 없으면 0', () => {
+    expect(embeddedSafeTop('?from=app&sab=34', true)).toBe('0px');
+    expect(embeddedSafeTop('?from=app&sat=47', true)).toBe('47px');
+  });
+
+  it('앱 밖이면 손대지 않는다', () => {
+    expect(embeddedSafeTop('?sat=47', false)).toBeNull();
   });
 });
