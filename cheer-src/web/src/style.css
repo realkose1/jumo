@@ -1,0 +1,94 @@
+:root {
+  color-scheme: dark;
+  --bg: #0b0b0d;
+  --ink: #ffffff;
+  /* 앱(iOS 웹뷰)이 iframe 안에서는 env(safe-area-inset-*)를 0으로 주기 때문에, 앱이 주소로 알려 준 값(?sat, ?sab)을
+     --jumo-sat, --jumo-sab 로 받아 더 큰 쪽을 쓴다 (main.ts) */
+  --safe-top: max(env(safe-area-inset-top), var(--jumo-sat, 0px));
+  --safe-bottom: max(env(safe-area-inset-bottom), var(--jumo-sab, 0px));
+  --safe-left: env(safe-area-inset-left);
+  --safe-right: env(safe-area-inset-right);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  overscroll-behavior: none;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#stage {
+  position: fixed;
+  inset: 0;
+  height: 100dvh;
+}
+
+#stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  outline: none;
+}
+
+/* UI는 캔버스 위에 겹치되, 비어 있는 곳은 누르기가 캔버스로 통과한다.
+   눌러야 하는 요소(버튼, 창)만 src/ui/ui.css에서 pointer-events: auto를 준다. */
+#ui-root {
+  position: fixed;
+  inset: 0;
+  height: 100dvh;
+  pointer-events: none;
+  padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+}
+
+.temp-message {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  pointer-events: none;
+}
+
+/* 3D 화면을 열 수 없을 때(WebGL 없음 등): 한 줄 안내와 버튼 하나 */
+.fatal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: calc(24px + var(--safe-top)) 24px calc(24px + var(--safe-bottom));
+  background: var(--bg);
+  color: var(--ink);
+  text-align: center;
+  font-size: 17px;
+  line-height: 1.5;
+  word-break: keep-all;
+}
+
+.fatal button {
+  min-width: 140px;
+  min-height: 48px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: 999px;
+  background: #f5c400;
+  color: #1a1400;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
