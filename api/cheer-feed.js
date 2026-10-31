@@ -228,6 +228,23 @@ const lineupOut = (p, info) => {
   return !!t && !t.xi.has(p.afPlayerId) && !t.subs.has(p.afPlayerId);
 };
 
+// ── 출전 정보 ───────────────────────────────────────────────────────────
+// 명단에 든 우리 선수가 지금 그라운드에 있는지: 'start' 선발 · 'bench' 벤치 · 'in' 교체 투입 · 'off' 교체 아웃.
+// 모르면 undefined(방 TV 는 예전처럼 적는다). 벤치 선수도 TV 에 '출전 중'으로 걸렸다(제보: 벤치 대기인 배준호).
+// 재료(새 AF 호출 없음): 패치 u(크론이 라인업과 교체 이벤트로 판정 — 진행 중·종료 경기), 없으면 af-detail 명단.
+const ROLE_RANK = { start: 1, bench: 1, in: 2, off: 3 };
+function playerRole(p, u, lineup) {
+  const v = u && typeof u === 'object' ? u[p.afPlayerId] : null;
+  if (v && (v.r === 's' || v.r === 'b')) {
+    if (v.o !== undefined) return 'off';
+    if (v.r === 'b') return v.i !== undefined ? 'in' : 'bench';
+    return 'start';
+  }
+  const t = lineup && lineup.teams && lineup.teams[p.afTeamId];
+  if (t) return t.xi.has(p.afPlayerId) ? 'start' : t.subs.has(p.afPlayerId) ? 'bench' : undefined;
+  return undefined;
+}
+
 // 패치 fixtures[id] 모양 { s, el, h, a, ko, p, u, fx } → 관측(obs). 우리 경기가 아니면 null.
 // 우리 팀은 AF 팀 id 로만 잡는다(이름 매칭이 아니라 앱의 유스·여자팀 거르기가 필요 없다 —
 // 그래서 박승수의 Newcastle U21 경기도 들어온다). lineup = 이 경기의 명단 판정(loadLineups, 없으면 null).
@@ -257,7 +274,10 @@ function soccerObs(id, f, stamp, nowMs, lineup = null) {
     pl = SOCCER.filter((p) => (p.afTeamId === H.id || p.afTeamId === A.id) && !isManualOut(p, ko) && !lineupOut(p, lineup))
       .map((p) => {
         const v = pp ? pp[p.afPlayerId] : undefined;
-        return { name: p.name, side: p.afTeamId === H.id ? 'home' : 'away', g: pp ? (goalsNum(v?.g, 20) || 0) : null, a: pp ? (goalsNum(v?.a, 20) || 0) : null };
+        const out = { name: p.name, side: p.afTeamId === H.id ? 'home' : 'away', g: pp ? (goalsNum(v?.g, 20) || 0) : null, a: pp ? (goalsNum(v?.a, 20) || 0) : null };
+        const role = playerRole(p, f.u, lineup);
+        if (role) out.role = role;
+        return out;
       });
     if (!pl.length) return null;
   }
@@ -382,10 +402,11 @@ function settle(rec, key, val, nowMs, canDrop = true) {
 // input: { nowMs, patch, far: {soccer:[{id,f,stamp}], mlb:[{pk,g,stamp}]}, mlbLive: Map(pk → fetchMlbGame 결과),
 //          hw: {v:1, at, m:{}}(제자리에서 고친다), clocks: Map(경기 id → 직전 진행 표시),
 //          recent: Map(경기 id → 직전에 낸 진행 중·종료 경기),
-//          lineups: Map(경기 id → 명단 판정, loadLineups) | null }
+//          lineups: Map(경기 id → 명단 판정, loadLineups) | null,
+//          roles: Map(경기 id → { 선수 이름: 직전에 낸 출전 정보 }) }
 const ORDER = { live: 0, pre: 1, final: 2 };
 const RECENT_KEEP_MS = 5 * 60e3;
-function buildFeed({ nowMs, patch, far, mlbLive, hw, clocks = new Map(), recent = new Map(), lineups = null }) {
+function buildFeed({ nowMs, patch, far, mlbLive, hw, clocks = new Map(), recent = new Map(), lineups = null, roles = new Map() }) {
   const obs = new Map();
   // 입력 행은 anon 도 쓸 수 있다 — 한 경기의 이상한 값이 피드 전체를 깨지 않게 경기마다 따로 잡는다.
   const put = (make) => {
@@ -410,7 +431,7 @@ function buildFeed({ nowMs, patch, far, mlbLive, hw, clocks = new Map(), recent 
     let rec = hw.m[o.id];
     if (rec && (typeof rec !== 'object' || !rec.v || !rec.low || !rec.ps || !intIn(rec.st, 0, 2))) { delete hw.m[o.id]; rec = undefined; }
     // 창 밖의 예정 경기는 지킬 값이 없다 — 고수위에 올리지 않는다(행을 작게).
-    if (!rec && o.st === 'pre' && o.ko - nowMs > WINDOW_PRE_MS) { later.push(toMatch(o, null, nowMs, clocks)); continue; }
+    if (!rec && o.st === 'pre' && o.ko - nowMs > WINDOW_PRE_MS) { later.push(toMatch(o, null, nowMs, clocks, roles)); continue; }
     if (!rec && o.st === 'pre' && nowMs - o.ko > STALE_PRE_MS) continue;
     // 처음 보는데 이미 창 밖으로 끝난 경기(어제 경기 등)도 지킬 게 없다.
     if (!rec && o.st === 'final' && nowMs - Math.min(nowMs, o.ko + o.dur) > WINDOW_FINAL_MS) continue;
@@ -423,7 +444,7 @@ function buildFeed({ nowMs, patch, far, mlbLive, hw, clocks = new Map(), recent 
       rec.st = r;
     }
     if (rec.st === 2 && !rec.fin) rec.fin = Math.min(nowMs, o.ko + o.dur);
-    const m = toMatch(o, rec, nowMs, clocks);
+    const m = toMatch(o, rec, nowMs, clocks, roles);
     if (m.state === 'pre' && nowMs - o.ko > STALE_PRE_MS) continue;
     if (m.state === 'live') inWin.push(m);
     else if (m.state === 'pre') (o.ko - nowMs <= WINDOW_PRE_MS ? inWin : later).push(m);
@@ -445,6 +466,7 @@ function buildFeed({ nowMs, patch, far, mlbLive, hw, clocks = new Map(), recent 
     if (!rec || !(rec.ko > nowMs - HW_KEEP_MS)) delete hw.m[id];
   }
   for (const id of [...clocks.keys()]) if (!obs.has(id) && !recent.has(id)) clocks.delete(id);
+  for (const id of [...roles.keys()]) if (!obs.has(id) && !recent.has(id)) roles.delete(id);
 
   inWin.sort((a, b) => ORDER[a.state] - ORDER[b.state] || a.ko - b.ko);
   later.sort((a, b) => a.ko - b.ko);
@@ -452,7 +474,7 @@ function buildFeed({ nowMs, patch, far, mlbLive, hw, clocks = new Map(), recent 
 }
 
 // 관측 + 고수위 → CheerMatch. rec 가 없으면(창 밖 예정 경기) 관측 그대로.
-function toMatch(o, rec, nowMs, clocks) {
+function toMatch(o, rec, nowMs, clocks, roles) {
   const st = rec ? STATES[rec.st] : o.st;
   const canDrop = !rec || RANK[o.st] >= rec.st;
   let h = null, a = null;
@@ -475,9 +497,19 @@ function toMatch(o, rec, nowMs, clocks) {
       if (o.pAll) { settle(rec, `g:${n}`, 0, nowMs, canDrop); settle(rec, `a:${n}`, 0, nowMs, canDrop); }
     }
   }
+  // 출전 정보는 앞으로만 간다(벤치 → 투입 → 아웃, 선발 → 아웃). 크론이 이벤트를 못 받은 회차엔 패치 u 가
+  // 빠지고 명단(선발·벤치)만 남으니, 이 인스턴스가 이미 낸 투입·아웃을 벤치로 되돌리지 않는다.
+  const seen = (roles && roles.get(o.id)) || {};
+  const roleOf = {};
+  for (const p of o.pl) {
+    const r = p.role && (ROLE_RANK[seen[p.name]] || 0) > ROLE_RANK[p.role] ? seen[p.name] : (p.role || seen[p.name]);
+    if (r) roleOf[p.name] = r;
+  }
+  if (roles && Object.keys(roleOf).length) roles.set(o.id, roleOf);
   const players = names.map((n) => {
     const p = { name: n, side: sideOf[n], g: rec ? (rec.v[`g:${n}`] ?? 0) : 0 };
     if (o.sport === 'soccer') p.a = rec ? (rec.v[`a:${n}`] ?? 0) : 0;
+    if (roleOf[n]) p.role = roleOf[n];
     return p;
   }).sort((x, y) => (x.side === y.side ? (ORDER_OF.get(x.name) ?? 99) - (ORDER_OF.get(y.name) ?? 99) : x.side === 'home' ? -1 : 1));
 
@@ -514,6 +546,7 @@ function koTeam(name) {
 let lastGood = null;
 let hwMemo = { v: 1, at: 0, m: {} };
 const clocks = new Map();
+const roles = new Map();       // 경기 id → { 선수 이름: 직전에 낸 출전 정보 }
 const recent = new Map();
 const mlbMemo = new Map();      // pk → { at, data }
 let farMemo = { at: -Infinity, soccer: [], mlb: [] };
@@ -635,7 +668,7 @@ async function loadFeed(nowMs = Date.now()) {
     mlbDirect(patch, nowMs).catch(() => new Map()),
     loadLineups(patch, nowMs).catch(() => lineupMemo),
   ]);
-  const feed = buildFeed({ nowMs, patch, far, mlbLive, hw, clocks, recent, lineups });
+  const feed = buildFeed({ nowMs, patch, far, mlbLive, hw, clocks, recent, lineups, roles });
   if (JSON.stringify(hw.m) !== before) {
     hw.at = nowMs;
     hwMemo = hw;

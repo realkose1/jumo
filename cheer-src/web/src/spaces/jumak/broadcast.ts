@@ -31,6 +31,25 @@ export function ourPlayers(m: TvMatchView): Array<TvPlayerLine & { side: 'home' 
   ].sort((a, b) => b.goals - a.goals);
 }
 
+/** 지금 그라운드에 있는(또는 있는지 모르는) 선수인가. 벤치에서 기다리거나 교체돼 나간 선수는 아니다 */
+export function onPitch(p: TvPlayerLine): boolean {
+  return p.role !== 'bench' && p.role !== 'off';
+}
+
+/**
+ * 선수 카드 머리말과, 골이 없을 때 기록 칸에 적는 말. 벤치 선수를 '출전 중'으로 적지 않는다(제보: 벤치 대기인 배준호).
+ * 출전 정보를 모르면 예전처럼 적는다.
+ */
+export function playerCardText(state: TvMatchView['state'], role: TvPlayerLine['role'], unit: string): { head: string; idle: string } {
+  if (role === 'bench' && state !== 'final') return { head: '待機 · 벤치 대기', idle: '교체 투입 대기' };
+  if (state === 'live') {
+    if (role === 'off') return { head: '交替 · 교체 아웃', idle: '교체되어 쉬는 중' };
+    return { head: role === 'in' ? '出戰 · 교체 출전 중' : '出戰 · 출전 중', idle: `${unit}을 기다리는 중` };
+  }
+  if (state === 'pre') return { head: role === 'start' ? '先發 · 선발 출전' : '오늘의 출전', idle: '출전 대기' };
+  return { head: '오늘의 겨룸', idle: `${unit}을 기다리는 중` };
+}
+
 /**
  * 한 바퀴의 장면 순서. 경기가 겹치면 주막을 나누지 않고 한 TV가 경기마다 돌아가며 보여 준다:
  *   경기마다 (진행 중 축구면 경기장 화면) -> 그 경기 우리 선수 카드들, 마지막에 모든 경기 점수판.
@@ -663,8 +682,10 @@ export function drawPlayerCard(
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = PAPER.red;
+  const unit = m.sport === 'baseball' ? '홈런' : '득점';
+  const text = playerCardText(m.state, player.role, unit);
   ctx.font = `800 28px ${FONT}`;
-  ctx.fillText(m.state === 'live' ? '出戰 · 출전 중' : m.state === 'pre' ? '오늘의 출전' : '오늘의 겨룸', tx, 92);
+  ctx.fillText(text.head, tx, 92);
   ctx.fillStyle = PAPER.ink;
   ctx.font = `900 56px ${FONT}`;
   ctx.fillText(clip(ctx, team, 500), tx, 168);
@@ -681,9 +702,8 @@ export function drawPlayerCard(
   ctx.lineWidth = 2;
   ctx.stroke();
   const goals = player.goals;
-  const unit = m.sport === 'baseball' ? '홈런' : '득점';
   ctx.fillStyle = goals > 0 ? PAPER.red : PAPER.ink;
   ctx.font = `900 56px ${FONT}`;
-  ctx.fillText(goals > 0 ? `${unit} ${goals}` : m.state === 'pre' ? '출전 대기' : `${unit}을 기다리는 중`, tx + 28, 380);
+  ctx.fillText(goals > 0 ? `${unit} ${goals}` : text.idle, tx + 28, 380);
   if (goals > 0) drawSeal(ctx, tx + 430, 378, '慶', 70);
 }

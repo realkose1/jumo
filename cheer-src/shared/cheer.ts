@@ -1,7 +1,9 @@
 /** 주모 경기 피드(GET /api/cheer-feed). 주막 방 서버와 화면이 같이 쓴다. */
 export interface CheerTeam { name: string; score: number | null }
-/** g: 축구는 골, 야구는 홈런. a: 축구 도움(선택) */
-export interface CheerPlayer { name: string; side: 'home' | 'away'; g: number; a?: number }
+/** 축구 출전 정보: start 선발 · bench 벤치 · in 교체 투입 · off 교체 아웃 */
+export type CheerRole = 'start' | 'bench' | 'in' | 'off';
+/** g: 축구는 골, 야구는 홈런. a: 축구 도움(선택). role: 축구 출전 정보(선택, 모르면 없다) */
+export interface CheerPlayer { name: string; side: 'home' | 'away'; g: number; a?: number; role?: CheerRole }
 export interface CheerMatch {
   id: string;
   sport: 'soccer' | 'baseball';

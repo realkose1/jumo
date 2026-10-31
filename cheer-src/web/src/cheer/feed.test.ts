@@ -64,6 +64,13 @@ describe('toMatchView', () => {
     expect(many.homePlayers[0]!.badge).toBe('⚽×5');
   });
 
+  it('출전 정보(선발·벤치·교체)는 그대로 넘기고, 모르는 값은 버린다', () => {
+    const v = toMatchView(match('a', { players: [{ name: '배준호', side: 'home', g: 0, role: 'bench' }] }));
+    expect(v.homePlayers[0]!.role).toBe('bench');
+    const junk = toMatchView(match('b', { players: [{ name: '배준호', side: 'home', g: 0, role: 'sleeping' as never }] }));
+    expect(junk.homePlayers[0]).not.toHaveProperty('role');
+  });
+
   it('시작 전에는 점수를 비우고, 점수를 모르면 -', () => {
     const pre = toMatchView(match('a', { state: 'pre', home: { name: 'a', score: null }, away: { name: 'b', score: null } }));
     expect(pre.homeScore).toBe('');

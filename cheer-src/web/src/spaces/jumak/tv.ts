@@ -6,7 +6,7 @@ import type { TallySnapshot } from '../../cheer/tally';
 import { ACTION_EMOJI, ACTION_PICTURE } from './layout';
 import { MAKGEOLLI_ICON, makgeolliImage } from './makgeolli';
 import { SERIF, drawPaper, drawSeal, oldClock } from './joseon';
-import { PitchSim, drawPitch, drawPlayerCard, drawScoreBug, ourPlayers, sameScene, sceneAt, seedOf, type BroadcastScene } from './broadcast';
+import { PitchSim, drawPitch, drawPlayerCard, drawScoreBug, onPitch, ourPlayers, sameScene, sceneAt, seedOf, type BroadcastScene } from './broadcast';
 
 export const TV_W = 1024;
 export const TV_H = 576;
@@ -349,7 +349,8 @@ export function drawTv(
   } else if (broadcast && broadcast.scene.kind === 'pitch' && view.matches[broadcast.scene.match]) {
     // 중계: 지금 차례인 경기를 경기장 화면으로
     const m = view.matches[broadcast.scene.match]!;
-    const ours = ourPlayers(m)[0] ?? null;
+    // 이름표는 그라운드에 있는 우리 선수에게만 단다(벤치·교체 아웃 선수를 뛰는 것처럼 보이지 않게)
+    const ours = ourPlayers(m).find(onPitch) ?? null;
     drawPitch(ctx, broadcast.sim(m.id), { match: m, ourName: ours?.name ?? null, ourSide: ours?.side ?? null, bottom });
   } else if (broadcast && broadcast.scene.kind === 'player' && view.matches[broadcast.scene.match]) {
     const m = view.matches[broadcast.scene.match]!;
