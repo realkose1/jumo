@@ -4,6 +4,10 @@
   "outputDirectory": ".",
   "rewrites": [
     {
+      "source": "/api/online",
+      "destination": "/api/push-cron?op=online"
+    },
+    {
       "source": "/api/:path*",
       "destination": "/api/:path*"
     },

@@ -1,4 +1,5 @@
 // 기본 도형 캐릭터: 둥근 머리(구) + 몸통(캡슐). 외부 3D 파일은 쓰지 않는다.
+// 공간의 옷이 몸통, 팔, 발 모양을 직접 만들 수도 있다(OutfitSpec.body/arm/foot, 예: 주막 한복).
 // 같은 분할 수의 캐릭터는 geometry와 material을 공유한다(인스턴싱으로 가기 쉬운 구조).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -55,7 +56,15 @@ export interface AccessorySpec {
   looks?: number[];
   /** 높이 솟은 소품(갓 등). 카메라가 내 머리 높이까지 내려오면 내 화면에서만 감춰 시야를 가리지 않는다 */
   tall?: boolean;
+  /**
+   * 정점 색(color 속성)을 쓴다. 여러 색 조각을 한 소품으로 합쳐 그리기 호출을 줄일 때 쓴다.
+   * 이때 color는 정점 색에 곱해지는 색이라 보통 흰색(0xffffff)이다. 정점 색이 없는 geometry는 흰색으로 칠한다
+   */
+  vertexColors?: boolean;
 }
+
+/** 옷이 직접 만드는 몸 부위 geometry. 정점 색(color 속성)을 쓰며 재질 색(bodyColor)과 곱해진다(없으면 흰색으로 칠한다) */
+export type OutfitPart = (detail: AvatarDetailOptions) => THREE.BufferGeometry;
 
 export interface OutfitSpec {
   id: string;
@@ -64,6 +73,15 @@ export interface OutfitSpec {
   accessories?: AccessorySpec[];
   /** 차림 가짓수. 사람 번호로 하나를 고른다(번호 % looks). 없으면 1 */
   looks?: number;
+  /**
+   * 기본 캡슐 대신 쓰는 몸통. 바닥이 y=0, 앞이 +z, 꼭대기가 BODY_HEIGHT 안팎이고 어깨(±0.2, 0.4)에 팔이 붙는다.
+   * 앉으면 기본 몸통처럼 눌린다. 모든 차림이 같이 쓴다(차림마다 다른 것은 소품으로)
+   */
+  body?: OutfitPart;
+  /** 기본 소매 대신 쓰는 팔 한 짝. 원점이 어깨이고 아래(-y)로 늘어지며, 손은 y=-0.2에 붙는다 */
+  arm?: OutfitPart;
+  /** 기본 발 대신 쓰는 발 한 짝. 원점이 발 중심, 앞이 +z */
+  foot?: OutfitPart;
 }
 
 /** 사람 번호 -> 차림 번호. 같은 번호면 누구 화면에서나 같은 차림이다 */
@@ -104,6 +122,8 @@ export interface BodyGeometries {
 }
 
 const geometryCache = new Map<string, BodyGeometries>();
+/** 옷이 만든 몸 부위: 만드는 함수 -> 분할 수 -> geometry */
+const outfitPartCache = new Map<OutfitPart, Map<string, THREE.BufferGeometry>>();
 const accessoryGeometryCache = new Map<string, THREE.BufferGeometry>();
 const materialCache = new Map<string, THREE.MeshLambertMaterial>();
 
@@ -160,15 +180,44 @@ function buildGeometries(d: AvatarDetailOptions): BodyGeometries {
   return { head: merge([head, ...eyes]), body, foot, arm, hand };
 }
 
-/** 같은 분할 수의 머리와 몸통 geometry (공유). 인스턴싱으로 한꺼번에 그릴 때도 이걸 쓴다 */
-export function getAvatarGeometries(d: AvatarDetailOptions): BodyGeometries {
+/** 정점 색이 없으면 흰색으로 칠한다 (정점 색을 쓰는 재질에서 검게 나오지 않게) */
+function ensureVertexColors(g: THREE.BufferGeometry): THREE.BufferGeometry {
+  return g.getAttribute('color') ? g : paintVertices(g, 1);
+}
+
+function getOutfitPart(create: OutfitPart, d: AvatarDetailOptions): THREE.BufferGeometry {
+  let byDetail = outfitPartCache.get(create);
+  if (!byDetail) {
+    byDetail = new Map();
+    outfitPartCache.set(create, byDetail);
+  }
+  const key = detailKey(d);
+  let g = byDetail.get(key);
+  if (!g) {
+    g = ensureVertexColors(create(d));
+    byDetail.set(key, g);
+  }
+  return g;
+}
+
+/**
+ * 같은 분할 수의 머리와 몸통 geometry (공유). 인스턴싱으로 한꺼번에 그릴 때도 이걸 쓴다.
+ * 옷이 몸통, 팔, 발을 직접 만들면(OutfitSpec.body/arm/foot) 그것으로 바꿔 끼운다. 없으면 기본 캡슐 몸통
+ */
+export function getAvatarGeometries(d: AvatarDetailOptions, outfit?: OutfitSpec): BodyGeometries {
   const key = detailKey(d);
   let g = geometryCache.get(key);
   if (!g) {
     g = buildGeometries(d);
     geometryCache.set(key, g);
   }
-  return g;
+  if (!outfit || (!outfit.body && !outfit.arm && !outfit.foot)) return g;
+  return {
+    ...g,
+    body: outfit.body ? getOutfitPart(outfit.body, d) : g.body,
+    arm: outfit.arm ? getOutfitPart(outfit.arm, d) : g.arm,
+    foot: outfit.foot ? getOutfitPart(outfit.foot, d) : g.foot,
+  };
 }
 
 /** 같은 색은 하나를 나눠 쓰는 재질 */
@@ -188,9 +237,15 @@ export function getAccessoryGeometry(acc: AccessorySpec, d: AvatarDetailOptions)
   let geometry = accessoryGeometryCache.get(cacheKey);
   if (!geometry) {
     geometry = acc.create(d);
+    if (acc.vertexColors) ensureVertexColors(geometry);
     accessoryGeometryCache.set(cacheKey, geometry);
   }
   return geometry;
+}
+
+/** 소품의 재질 (정점 색을 쓰는 소품이면 정점 색 재질) */
+export function getAccessoryMaterial(acc: AccessorySpec): THREE.MeshLambertMaterial {
+  return getAvatarMaterial(acc.color, acc.vertexColors ?? false);
 }
 
 /** 엔진이 끝날 때 공유 자원을 한꺼번에 놓는다 */
@@ -202,9 +257,11 @@ export function disposeAvatarResources(): void {
     g.arm.dispose();
     g.hand.dispose();
   }
+  for (const byDetail of outfitPartCache.values()) for (const g of byDetail.values()) g.dispose();
   for (const g of accessoryGeometryCache.values()) g.dispose();
   for (const m of materialCache.values()) m.dispose();
   geometryCache.clear();
+  outfitPartCache.clear();
   accessoryGeometryCache.clear();
   materialCache.clear();
 }
@@ -639,6 +696,13 @@ export class Avatar {
   /** 옷 색과 소품을 바꾼다 */
   setOutfit(outfit: string | OutfitSpec): void {
     const spec = typeof outfit === 'string' ? getOutfit(outfit) : outfit;
+    // 옷이 몸통, 팔, 발을 직접 만들면 그것으로 바꿔 끼운다 (없으면 기본 캡슐 몸통)
+    const geo = getAvatarGeometries(this.detail, spec);
+    this.body.geometry = geo.body;
+    this.footL.geometry = geo.foot;
+    this.footR.geometry = geo.foot;
+    this.armL.geometry = geo.arm;
+    this.armR.geometry = geo.arm;
     this.body.material = getAvatarMaterial(spec.bodyColor, true);
     this.footL.material = this.body.material;
     this.footR.material = this.body.material;
@@ -652,7 +716,7 @@ export class Avatar {
     this.outfitSpec = spec;
     this.accessorySpecs = spec.accessories ?? [];
     for (const acc of this.accessorySpecs) {
-      const mesh = new THREE.Mesh(getAccessoryGeometry(acc, this.detail), getAvatarMaterial(acc.color, false));
+      const mesh = new THREE.Mesh(getAccessoryGeometry(acc, this.detail), getAccessoryMaterial(acc));
       mesh.position.set(...acc.position);
       if (acc.rotation) mesh.rotation.set(...acc.rotation);
       if (acc.scale) mesh.scale.set(...acc.scale);

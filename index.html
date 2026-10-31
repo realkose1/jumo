@@ -14477,6 +14477,44 @@ function App() {
     return () => { delete window.__jumoLiveToken; };
   }, [deviceId]);
 
+  // ── 동시 접속자 집계(관리용 /api/online, db/presence.sql) ──────────────
+  // 앱이 앞에 떠 있는 동안 2분마다, 그리고 다시 앞으로 올 때 '살아 있음'을 알린다.
+  // 기기 ID 를 그대로 보내지 않고 (기기 ID + KST 날짜) 해시를 보낸다 — 하루 안에서만
+  // 같은 값이라 날을 넘어 이어 볼 수 없고, 다른 테이블과도 이어지지 않는다.
+  // 실패해도(테이블이 아직 없어도) 조용히 넘어간다.
+  React.useEffect(() => {
+    const EVERY = 2 * 60 * 1000;
+    const sid = () => {
+      const s = `${deviceId}|${new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10)}`;
+      const h = (seed) => {   // cyrb53
+        let a = 0xdeadbeef ^ seed, b = 0x41c6ce57 ^ seed;
+        for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); a = Math.imul(a ^ c, 2654435761); b = Math.imul(b ^ c, 1597334677); }
+        a = Math.imul(a ^ (a >>> 16), 2246822507) ^ Math.imul(b ^ (b >>> 13), 3266489909);
+        b = Math.imul(b ^ (b >>> 16), 2246822507) ^ Math.imul(a ^ (a >>> 13), 3266489909);
+        return (4294967296 * (2097151 & b) + (a >>> 0)).toString(16).padStart(14, '0');
+      };
+      return h(1) + h(2);
+    };
+    let last = 0;
+    const ping = () => {
+      // 집계 창이 5분이라 2분 간격이면 넉넉하다. 앞으로 돌아온 직후의 신호와 타이머가 겹치면 하나만 보낸다.
+      if (document.hidden || Date.now() - last < EVERY - 10000) return;
+      last = Date.now();
+      try {
+        SB.rpc('app_ping', {
+          p_sid: sid(),
+          p_platform: window.Capacitor?.getPlatform?.() || 'web',
+          p_build: window.__jumoAppInfo?.build || null,
+        }).then(() => {}, () => {});
+      } catch {}
+    };
+    ping();
+    const timer = setInterval(ping, EVERY);
+    const onVisible = () => { if (!document.hidden) ping(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
+  }, [deviceId]);
+
   // ── 키보드가 떠도 상단이 밀리지 않게 ────────────────────────────────
   // iOS 는 키보드가 올라오면 입력창을 보이게 하려고 웹뷰 스크롤뷰를 통째로
   // 밀어 올린다. 앱 컨테이너가 position:fixed 라 그것까지 따라 올라가고,
