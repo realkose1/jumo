@@ -93,12 +93,18 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
-function pill(ctx: CanvasRenderingContext2D, cx: number, cy: number, label: string, o: { size: number; bg: string; fg: string; dot?: string; padX?: number }): void {
+/** 알약의 너비 (pill과 같은 계산) */
+function pillWidth(ctx: CanvasRenderingContext2D, label: string, o: { size: number; dot?: string | boolean; padX?: number }): number {
   ctx.font = `800 ${o.size}px ${FONT}`;
   const padX = o.padX ?? o.size * 0.7;
   const dotW = o.dot ? o.size * 0.9 : 0;
-  const tw = ctx.measureText(label).width;
-  const w = tw + padX * 2 + dotW;
+  return ctx.measureText(label).width + padX * 2 + dotW;
+}
+
+function pill(ctx: CanvasRenderingContext2D, cx: number, cy: number, label: string, o: { size: number; bg: string; fg: string; dot?: string; padX?: number }): void {
+  const padX = o.padX ?? o.size * 0.7;
+  const dotW = o.dot ? o.size * 0.9 : 0;
+  const w = pillWidth(ctx, label, o);
   const h = o.size * 1.55;
   roundRect(ctx, cx - w / 2, cy - h / 2, w, h, h / 2);
   ctx.fillStyle = o.bg;
@@ -200,7 +206,12 @@ function drawRow(ctx: CanvasRenderingContext2D, m: TvMatchView, top: number, h: 
   ctx.strokeStyle = COLOR.line;
   ctx.lineWidth = 2;
   ctx.stroke();
-  const cy = top + h * 0.5;
+  // 시계 알약은 대회 이름과 같은 윗줄 오른쪽 끝에 둔다. 가운데 줄 오른쪽에 두면 긴 원정팀 이름
+  // ('아틀레티코 마드리드')이 알약 밑으로 겹쳤다(제보). 이름 줄은 그만큼 조금 내린다.
+  const clockSize = 24;
+  const clockW = pillWidth(ctx, oldClock(m.state, m.clock), { size: clockSize, dot: m.state === 'live' });
+  clockPill(ctx, m, TV_W - 48 - clockW / 2, top + 26, clockSize);
+  const cy = top + h * 0.56;
   drawText(ctx, m.homeName, 400, cy, { size: 42, weight: 800, color: teamColor(m, 'home'), align: 'right', maxWidth: 300, minSize: 24 });
   drawText(ctx, m.awayName, 624, cy, { size: 42, weight: 800, color: teamColor(m, 'away'), align: 'left', maxWidth: 300, minSize: 24 });
   if (m.state === 'pre') drawText(ctx, '對', 512, cy, { size: 42, weight: 800, color: COLOR.accent });
@@ -211,8 +222,8 @@ function drawRow(ctx: CanvasRenderingContext2D, m: TvMatchView, top: number, h: 
   }
   const scorers = [...m.homePlayers, ...m.awayPlayers].filter((p) => p.goals > 0).map(playerText);
   drawText(ctx, m.comp, 52, top + 26, { size: 26, weight: 600, color: COLOR.dim, align: 'left', maxWidth: 220 });
-  if (scorers.length > 0) drawText(ctx, scorers.join('  '), 52, top + h - 26, { size: 28, weight: 700, color: COLOR.soft, align: 'left', maxWidth: 560 });
-  clockPill(ctx, m, 910, cy, 28);
+  // 득점자는 아랫줄 왼쪽, 가운데 점수 앞에서 끊는다
+  if (scorers.length > 0) drawText(ctx, scorers.join('  '), 52, top + h - 20, { size: 28, weight: 700, color: COLOR.soft, align: 'left', maxWidth: 340 });
 }
 
 /** 경기 소식이 한동안 안 올 때: 차분한 주막 이름 카드 */

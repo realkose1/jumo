@@ -606,7 +606,11 @@ function clip(ctx: CanvasRenderingContext2D, text: string, max: number): string 
   return `${t}…`;
 }
 
-/** 선수 카드: 왼쪽 족자에 선수 이름을 세로 붓글씨로, 오른쪽에 오늘 기록. 사진은 쓰지 않는다 */
+/**
+ * 선수 카드: 왼쪽 족자에 선수 이름을 세로 붓글씨로, 오른쪽에 소속과 오늘 기록. 사진은 쓰지 않는다.
+ * 같은 말을 두 번 적지 않는다(제보: 이름·팀이 겹쳐 보였다) — 이름은 족자에만, 팀·대회는 오른쪽에 한 번,
+ * 상대 팀과 시각·점수는 함께 그리는 점수 띠(drawScoreBug)에 맡긴다.
+ */
 export function drawPlayerCard(
   ctx: CanvasRenderingContext2D,
   m: TvMatchView,
@@ -614,7 +618,6 @@ export function drawPlayerCard(
   bottom: number,
 ): void {
   const team = player.side === 'home' ? m.homeName : m.awayName;
-  const opp = player.side === 'home' ? m.awayName : m.homeName;
   // 바탕: 한지와 광곽. 왼쪽에 족자를 걸고 옆에 행장(行狀)을 적는다
   drawPaper(ctx);
 
@@ -644,12 +647,7 @@ export function drawPlayerCard(
   ctx.textBaseline = 'middle';
   ctx.font = `900 ${fs}px ${FONT}`;
   const top = py + 34 + 20 + (room - fs * 1.08 * chars.length) / 2 + fs * 0.54;
-  chars.forEach((ch, i) => ctx.fillText(ch, px + pw / 2 - 18, top + i * fs * 1.08));
-  // 옆에 작은 글씨로 소속 팀 (세로)
-  const small = [...team.replace(/\s+/g, '')].slice(0, 8);
-  ctx.font = `700 26px ${FONT}`;
-  ctx.fillStyle = PAPER.soft;
-  small.forEach((ch, i) => ctx.fillText(ch, px + pw - 52, py + 34 + 40 + i * 30));
+  chars.forEach((ch, i) => ctx.fillText(ch, px + pw / 2, top + i * fs * 1.08));
   ctx.restore();
   // 족자 테두리: 짙은 비단 띠
   ctx.strokeStyle = '#3b2412';
@@ -668,14 +666,11 @@ export function drawPlayerCard(
   ctx.font = `800 28px ${FONT}`;
   ctx.fillText(m.state === 'live' ? '出戰 · 출전 중' : m.state === 'pre' ? '오늘의 출전' : '오늘의 겨룸', tx, 92);
   ctx.fillStyle = PAPER.ink;
-  ctx.font = `900 84px ${FONT}`;
-  ctx.fillText(clip(ctx, player.name, 500), tx, 172);
-  ctx.fillStyle = PAPER.soft;
-  ctx.font = `700 34px ${FONT}`;
-  ctx.fillText(clip(ctx, team, 500), tx, 240);
+  ctx.font = `900 56px ${FONT}`;
+  ctx.fillText(clip(ctx, team, 500), tx, 168);
   ctx.fillStyle = PAPER.dim;
-  ctx.font = `700 26px ${FONT}`;
-  ctx.fillText(clip(ctx, `〔${m.comp}〕 상대 ${opp}`, 500), tx, 286);
+  ctx.font = `700 30px ${FONT}`;
+  ctx.fillText(clip(ctx, `〔${m.comp}〕`, 500), tx, 238);
 
   // 오늘 기록
   ctx.fillStyle = 'rgba(247,236,210,0.7)';
@@ -691,8 +686,4 @@ export function drawPlayerCard(
   ctx.font = `900 56px ${FONT}`;
   ctx.fillText(goals > 0 ? `${unit} ${goals}` : m.state === 'pre' ? '출전 대기' : `${unit}을 기다리는 중`, tx + 28, 380);
   if (goals > 0) drawSeal(ctx, tx + 430, 378, '慶', 70);
-  ctx.fillStyle = PAPER.soft;
-  ctx.font = `700 26px ${FONT}`;
-  const score = m.state === 'pre' ? oldClock('pre', m.clock) : `${m.homeName} ${m.homeScore} : ${m.awayScore} ${m.awayName}`;
-  ctx.fillText(clip(ctx, score, 500), tx, Math.min(bottom - 26, 472));
 }
