@@ -658,6 +658,7 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  touch-action: pan-y; /* body는 touch-action: none이라 설정 창만 세로 스크롤을 다시 연다 */
   padding: 16px 22px 22px;
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--qs-ink) 32%, transparent) transparent;
