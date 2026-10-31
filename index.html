@@ -2400,6 +2400,18 @@ const internationalWindowNow = (matches = [], now = Date.now()) => {
   if (!activeCallups.length && !hasNearbyMatch) return null;
   return { active: true, range, callups: activeCallups, matches: aTeamMatches };
 };
+// 이 경기 자체 데이터가 선수를 당일 명단(선발·벤치·출전)에 올려 둔 상태인가.
+// 명단에 든 것이 어떤 부상·차출 목록보다 강한 증거다 — 그 목록들은 24시간 캐시라 낡을 수 있다
+// (제보: 교체 투입된 카스트로프가 어깨 부상 배지에 카드까지 사라짐). 라이브 중엔 minutesPlayed 가 0 이라 event 로도 본다.
+// event 근거는 축구만 — 야구 패치 카드의 '출전 중'은 명단을 모르고 붙인 추정이라 IL 선수를 살리면 안 된다.
+const SQUAD_EVENTS = new Set(['선발 출전', '벤치 대기', '출전 중', '교체 출전 중', '교체 아웃', '벤치', '풀타임', '출전 완료']);
+const inMatchSquad = (kp) => {
+  if (!kp || kp.isTeam) return false;
+  if ((kp.minutesPlayed || 0) > 0) return true;
+  const ev = kp.event || '';
+  if (!SQUAD_EVENTS.has(ev) && !/^\d+분 출전$/.test(ev)) return false;
+  return ALL_PLAYERS.find(p => p.name === kp.name)?.sport === '축구';
+};
 // 대표팀 엔트리(kind:'team')는 합성 항목이라 결장 개념이 없다 — 항상 가용.
 // 코리안 더비 등 팔로우한 선수가 둘 이상일 때 히어로의 '주인공'을 고르는 데 쓴다.
 // 이 경기에 걸린 우리 선수가 전원 출전 불가(대표팀 차출·소집, 결장급 부상)인가.
@@ -2407,7 +2419,7 @@ const internationalWindowNow = (matches = [], now = Date.now()) => {
 const matchNoChance = (m) => {
   const kps = (m?.koreanPlayers || [m?.koreanPlayer]).filter(Boolean);
   return kps.length > 0 && kps.every(kp => {
-    if (kp.isTeam) return false;
+    if (kp.isTeam || inMatchSquad(kp)) return false;
     if (manualAvailabilityFor(kp.name, m.fullDate ? Date.parse(m.fullDate) : Date.now())) return true;
     const inj = ALL_PLAYERS.find(p => p.name === kp.name)?.injury;
     return !!inj && inj.severity === 'high';
@@ -2429,14 +2441,14 @@ const setHideUnavailable = (v) => {
   try { localStorage.setItem(HIDE_UNAVAILABLE_KEY, v ? '1' : '0'); } catch {}
   try { window.dispatchEvent(new Event('jumo:hide-unavailable')); } catch {}
 };
-// 결장급 부상(데이터 제공처 부상 명단, 수동 차출 제외) 중이고 이 경기에서 아직 뛴 기록이
+// 결장급 부상(데이터 제공처 부상 명단, 수동 차출 제외) 중이고 이 경기 명단(inMatchSquad)에
 // 없으면 '출격 대기' 등 히어로 주인공이 될 수 없다(제보: 어깨 부상 카스트로프가 출격 대기).
 const injuredOut = (kp) => {
-  if (!kp || kp.isTeam || (kp.minutesPlayed || 0) > 0) return false;
+  if (!kp || kp.isTeam || inMatchSquad(kp)) return false;
   const inj = ALL_PLAYERS.find(p => p.name === kp.name)?.injury;
   return !!inj && !inj.manual && inj.severity === 'high';
 };
-const heroAvailable = (kp) => !!kp && (kp.isTeam || (!manualAvailabilityFor(kp.name) && !injuredOut(kp)));
+const heroAvailable = (kp) => !!kp && (kp.isTeam || inMatchSquad(kp) || (!manualAvailabilityFor(kp.name) && !injuredOut(kp)));
 // 매치에서 히어로가 내세울 대표 선수: 팔로우(또는 전체) 목록 중 가용한 첫 번째,
 // 없으면 기존 m.koreanPlayer로 그대로 폴백(아무도 못 찾는 것보다 낫다).
 const heroRepOf = (m) => {
@@ -6661,7 +6673,8 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
             const renderKoreanCard = (kp, idx) => {
               const playerObj = ALL_PLAYERS.find(p => p.name === kp.name);
               // 수동 결장(차출)은 이 경기 날짜가 기간 안일 때만 배지로 보인다.
-              const injury = (playerObj?.injury?.manual && !manualAvailabilityFor(kp.name, match.fullDate ? Date.parse(match.fullDate) : Date.now()))
+              // 이 경기 명단에 올라 있으면(교체 투입 등) 부상 배지도 달지 않는다.
+              const injury = ((playerObj?.injury?.manual && !manualAvailabilityFor(kp.name, match.fullDate ? Date.parse(match.fullDate) : Date.now())) || inMatchSquad(kp))
                 ? null : playerObj?.injury;
               // 대표팀 엔트리는 선수가 아니라 팀이다 — 사진 대신 해당 진영 로고를 쓴다.
               const kpSide = kp.isTeam ? (match.home.code === kp.team ? match.home : match.away.code === kp.team ? match.away : null) : null;
@@ -12935,9 +12948,11 @@ function App() {
   // 40-man roster status code), soccer from API-Football injuries via the proxy.
   // Result is cached in localStorage for 24h and written onto ALL_PLAYERS so the
   // status badges and live "not in lineup" labels stay accurate.
+  // v3: AF 부상 항목이 팀의 이후 경기에도 12일간 남던 낡은 24시간 캐시를 버린다(카스트로프).
+  const PLAYER_STATUS_KEY = 'jumoPlayerStatus_v3';
   React.useEffect(() => {
     let cancelled = false;
-    const KEY = 'jumoPlayerStatus_v2'; // bumped: ESPN-based soccer status source
+    const KEY = PLAYER_STATUS_KEY;
     const DAY = 24 * 60 * 60 * 1000;
     // Apply a name→status map onto ALL_PLAYERS. A present key with null clears any
     // (now stale) injury; an absent key leaves the existing value untouched.
@@ -13044,6 +13059,23 @@ function App() {
       } catch (e) { console.warn('Soccer ESPN status sync failed:', e?.message || e); }
 
       // ── Soccer: API-Football injuries via proxy (enriches when available) ──
+      // AF 는 결장자를 경기별로만 적고 리그에 따라 아예 빠뜨리기도 한다 — 그래서 '그 뒤 팀이 경기를
+      // 치렀다'만으론 낡았다고 못 한다. 그 뒤 끝난 경기의 당일 명단(선발·벤치)에 실제로 이름이
+      // 올랐을 때만 낡은 항목으로 본다. 팀·경기당 한 번만 묻고, 실패·정보 없음은 false = 기존대로 결장.
+      const teamFix = {}, lineupFix = {};
+      const inSquadSince = async (teamId, playerId, sinceMs) => {
+        if (!teamId || !playerId) return false;
+        try {
+          teamFix[teamId] = teamFix[teamId] || afFetch(`path=fixtures&team=${teamId}&last=2`, { priority: 'low' });
+          const fxs = ((await teamFix[teamId])?.response || []).filter(f => f.fixture?.id
+            && LP_FINAL.has(f.fixture?.status?.short) && new Date(f.fixture?.date || 0).getTime() > sinceMs);
+          const lineups = await Promise.all(fxs.map(f => (lineupFix[f.fixture.id] = lineupFix[f.fixture.id]
+            || afFetch(`path=fixtures/lineups&fixture=${f.fixture.id}`, { priority: 'low' }).catch(() => null))));
+          const id = Number(playerId);
+          return lineups.some(lj => (lj?.response || []).some(t =>
+            [...(t.startXI || []), ...(t.substitutes || [])].some(x => Number(x.player?.id) === id)));
+        } catch { return false; }
+      };
       try {
         const soccer = ALL_PLAYERS.filter(p => p.sport === '축구' && p.apiFootballId);
         await Promise.all(soccer.map(async (p, i) => {
@@ -13058,6 +13090,8 @@ function App() {
             const dt = new Date(latest.fixture?.date || 0).getTime();
             // Only treat as currently unavailable if the latest entry is recent (~12 days).
             if (dt && (Date.now() - dt) < 12 * DAY) {
+              // 그 뒤 경기 명단에 올랐으면 AF 항목은 낡았다. 단 ESPN 이 부상으로 본 선수는 그 판정을 지킨다(둘이 일치할 때만 회복).
+              if (await inSquadSince(latest.team?.id, p.apiFootballId, dt)) { if (!map[p.name]) map[p.name] = null; return; }
               const reason = latest.player?.reason || '';
               const low = reason.toLowerCase();
               const kind = (low.includes('suspend') || low.includes('red card')) ? 'suspended'
@@ -13099,6 +13133,37 @@ function App() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // 경기가 돌아가는 동안의 자가 치유: 진행 중이거나 막 끝난 경기의 명단(선발·벤치·출전)에
+  // 올라 있는 선수의 제공처 부상 항목은 낡은 것이다 — 지우고 24시간 캐시에도 반영한다
+  // (동기화가 나중에 낡은 값을 다시 얹어도 liveMatches 가 바뀔 때 이 효과가 또 지운다).
+  // 축구만: 야구 패치 카드의 '출전 중'은 명단을 모르고 붙인 추정이라 근거가 못 된다.
+  React.useEffect(() => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const healed = [];
+    (liveMatches || []).forEach(m => {
+      const live = m.live || m.time === 'LIVE';
+      const recent = isFinalStatus(m.status) && m.fullDate && (Date.now() - Date.parse(m.fullDate)) < DAY;
+      if (!live && !recent) return;
+      (m.koreanPlayers || [m.koreanPlayer]).forEach(kp => {
+        if (!kp || !inMatchSquad(kp)) return;
+        const p = ALL_PLAYERS.find(x => x.name === kp.name && x.sport === '축구');
+        const inj = p?.injury;
+        if (!inj || inj.manual || inj.kind === 'national') return;
+        p.injury = null;
+        healed.push(p.name);
+      });
+    });
+    if (!healed.length) return;   // 바뀐 게 있을 때만 다시 그린다 — 루프 방지
+    try {
+      const c = JSON.parse(localStorage.getItem(PLAYER_STATUS_KEY) || 'null');
+      if (c && c.map) {
+        healed.forEach(n => { c.map[n] = null; });
+        localStorage.setItem(PLAYER_STATUS_KEY, JSON.stringify(c));   // ts 는 그대로
+      }
+    } catch {}
+    setLiveMatches(prev => [...prev]);
+  }, [liveMatches]);
 
 
   // Adaptive polling: 20s near kickoff (so confirmed lineups land within seconds),
