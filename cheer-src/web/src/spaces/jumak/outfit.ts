@@ -34,11 +34,11 @@ const GAT_LOOKS = [0, 2];
 const SANGTU_LOOKS = [1, 3];
 const GOATEE_LOOKS = [0, 1];
 
-// ---- geometry 도우미 ----
+// ---- geometry 도우미 (주모 옷, jumo.ts 도 같이 쓴다) ----
 type Hex = number;
 
 /** 정점 색을 한 가지로 칠한다 (색은 sRGB 16진수. three가 선형 값으로 바꿔 준다) */
-function paint(g: THREE.BufferGeometry, hex: Hex): THREE.BufferGeometry {
+export function paint(g: THREE.BufferGeometry, hex: Hex): THREE.BufferGeometry {
   const c = new THREE.Color(hex);
   const n = g.getAttribute('position').count;
   const colors = new Float32Array(n * 3);
@@ -48,7 +48,7 @@ function paint(g: THREE.BufferGeometry, hex: Hex): THREE.BufferGeometry {
 }
 
 /** 위치, 법선, (정점 색)만 남겨 합친다. 모두 색이 있거나(withColor) 모두 없어야 한다 */
-function mergeParts(parts: THREE.BufferGeometry[], withColor = false): THREE.BufferGeometry {
+export function mergeParts(parts: THREE.BufferGeometry[], withColor = false): THREE.BufferGeometry {
   const keep = withColor ? ['position', 'normal', 'color'] : ['position', 'normal'];
   for (const g of parts) {
     for (const name of Object.keys(g.attributes)) if (!keep.includes(name)) g.deleteAttribute(name);
@@ -65,13 +65,13 @@ function mergeParts(parts: THREE.BufferGeometry[], withColor = false): THREE.Buf
 }
 
 const seg = (d: { headWidthSegments: number }, min: number): number => Math.max(min, d.headWidthSegments);
-const smoothstep = (a: number, b: number, x: number): number => {
+export const smoothstep = (a: number, b: number, x: number): number => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 };
 
 /** 단면 하나: 높이 y에서 x 반지름 rx, z 반지름 rz(없으면 rx), z 쪽으로 cz만큼 밀린 타원. 색 하나 */
-interface Ring {
+export interface Ring {
   y: number;
   rx: number;
   rz?: number;
@@ -84,7 +84,7 @@ interface Ring {
  * 색이 바뀌는 곳은 높이가 거의 같은 단면 두 개를 겹쳐 두면 경계가 또렷하다.
  * deform으로 각(phi, 0이 앞 +z, +x 쪽으로 커진다)과 높이마다 반지름을 조금씩 바꿀 수 있다.
  */
-function revolve(rings: readonly Ring[], segments: number, deform?: (phi: number, y: number) => number): THREE.BufferGeometry {
+export function revolve(rings: readonly Ring[], segments: number, deform?: (phi: number, y: number) => number): THREE.BufferGeometry {
   const cols = segments;
   const pos = new Float32Array(rings.length * cols * 3);
   const col = new Float32Array(rings.length * cols * 3);
@@ -123,7 +123,7 @@ function revolve(rings: readonly Ring[], segments: number, deform?: (phi: number
 }
 
 /** 돌린 몸의 겉면. 옆모습(반지름, 높이) 점들 사이를 이어 겉면 위의 점과 법선을 낸다 (띠와 고름을 몸에 붙일 때) */
-class Surface {
+export class Surface {
   constructor(private readonly pts: ReadonlyArray<readonly [number, number]>) {}
 
   radius(y: number): number {
@@ -155,7 +155,7 @@ class Surface {
   }
 }
 
-interface BandSample {
+export interface BandSample {
   p: THREE.Vector3;
   n: THREE.Vector3;
 }
@@ -164,7 +164,7 @@ interface BandSample {
  * 겉면 위의 길(각, 높이 조절점)을 따라가는 표본 점들. 조절점 사이는 매끈하게 잇고 다시 겉면에 붙인다.
  * lift(t)는 길의 처음(0)부터 끝(1)까지 겉면에서 띄우는 높이
  */
-function surfacePath(surface: Surface, ctrl: ReadonlyArray<readonly [number, number]>, samples: number, lift: (t: number) => number): BandSample[] {
+export function surfacePath(surface: Surface, ctrl: ReadonlyArray<readonly [number, number]>, samples: number, lift: (t: number) => number): BandSample[] {
   const curve = new THREE.CatmullRomCurve3(
     ctrl.map(([phi, y]) => surface.point(phi, y)),
     false,
@@ -181,7 +181,7 @@ function surfacePath(surface: Surface, ctrl: ReadonlyArray<readonly [number, num
  * 길을 따라가는 납작한 띠(천). 윗면과 양 옆면, 양 끝을 막아 두께가 보인다. 아랫면은 몸에 붙어 안 보이니 없다.
  * offset은 띠 가운데를 길에서 옆(+쪽은 목 쪽)으로 미는 거리
  */
-function band(samples: readonly BandSample[], width: number, thick: number, hex: Hex, offset = 0): THREE.BufferGeometry {
+export function band(samples: readonly BandSample[], width: number, thick: number, hex: Hex, offset = 0): THREE.BufferGeometry {
   const n = samples.length;
   const bl: THREE.Vector3[] = [];
   const br: THREE.Vector3[] = [];
@@ -232,7 +232,7 @@ function band(samples: readonly BandSample[], width: number, thick: number, hex:
 }
 
 /** 겉면의 한 점에 붙인 좌표계 (옆 s, 위 u, 바깥 n). 고름 매듭처럼 몸에 납작하게 붙는 조각을 놓을 때 쓴다 */
-function surfaceFrame(surface: Surface, phi: number, y: number, lift: number): THREE.Matrix4 {
+export function surfaceFrame(surface: Surface, phi: number, y: number, lift: number): THREE.Matrix4 {
   const n = surface.normal(phi, y);
   const upT = new THREE.Vector3(0, 1, 0).addScaledVector(n, -n.y).normalize();
   const s = new THREE.Vector3().crossVectors(upT, n).normalize();
@@ -392,7 +392,7 @@ function hanbokSleeve(d: AvatarDetailOptions): THREE.BufferGeometry {
 }
 
 // ---- 발: 코가 위로 살짝 들린 흰 버선 (평상에는 신을 벗고 오른다) ----
-function hanbokFoot(d: AvatarDetailOptions): THREE.BufferGeometry {
+export function hanbokFoot(d: AvatarDetailOptions): THREE.BufferGeometry {
   const g = new THREE.SphereGeometry(0.07, Math.max(9, d.eyeSegments + 4), Math.max(5, d.eyeSegments - 1)).scale(1, 0.6, 1.3);
   const pos = g.getAttribute('position');
   const colors = new Float32Array(pos.count * 3);
@@ -415,7 +415,7 @@ function hanbokFoot(d: AvatarDetailOptions): THREE.BufferGeometry {
 }
 
 // ---- 도포와 조끼: 몸 위에 한 겹 더 입는 앞트임 옷 ----
-interface ShellSpec {
+export interface ShellSpec {
   /** 옷의 옆모습 [반지름, 높이]. 아래에서 위로. 마지막 점이 뒷목 쪽 윗단 */
   profile: ReadonlyArray<readonly [number, number]>;
   /** 높이 y에서 앞 가운데로부터 트인 각(한쪽, 라디안) */
@@ -434,7 +434,7 @@ interface ShellSpec {
  * 몸을 감싸는 겉옷 한 겹. 앞이 트여 있고(트임은 높이마다 다르다), 앞섶 가장자리와 윗단에 선을 두르며,
  * 가장자리에는 두께를 붙여 종잇장처럼 보이지 않게 한다. 정점 색을 쓴다.
  */
-function shell(spec: ShellSpec): THREE.BufferGeometry {
+export function shell(spec: ShellSpec): THREE.BufferGeometry {
   const surface = new Surface(spec.profile);
   const rows = spec.profile.length;
   const top = spec.profile[rows - 1]![1];
