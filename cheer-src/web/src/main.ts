@@ -1,6 +1,6 @@
 import './style.css';
 import { CheerController } from './cheer/controller';
-import { isEmbedded, parseAppInset, postCloseToApp, postToApp } from './cheer/embed';
+import { embeddedSafeTop, isEmbedded, parseAppInset, postCloseToApp, postToApp } from './cheer/embed';
 import { Engine } from './engine/Engine';
 import { withRoom } from './engine/net/room';
 import { parseRoute, stripBase } from './route';
@@ -44,20 +44,24 @@ async function boot(): Promise<void> {
   if (!stage || !uiRoot) return;
   // 주소의 공간 id는 배포 기준 경로(/cheer/) 다음 첫 마디다
   const route = parseRoute(stripBase(location.pathname, import.meta.env.BASE_URL), location.search, DEFAULT_SPACE_ID);
-  const space = await loadSpace(route.spaceId);
   const embedded = isEmbedded(location.search);
+  // iOS 웹뷰가 iframe 안에 주는 안전 영역(노치, 홈 바)은 기기마다 달라(0이거나 페이지 전체 값), 앱이 주소(?sat, ?sab)로
+  // 알려 준 값을 쓴다. 위쪽은 앱 안이면 앱 값만(embeddedSafeTop), 아래쪽은 env와 앱 값 중 큰 쪽(style.css).
+  // 불러오기·오류 화면도 같은 여백을 쓰도록 공간을 받기 전에 정한다
+  const root = document.documentElement.style;
+  const sat = parseAppInset(location.search, 'sat');
+  const sab = parseAppInset(location.search, 'sab');
+  if (sat > 0) root.setProperty('--jumo-sat', `${sat}px`);
+  if (sab > 0) root.setProperty('--jumo-sab', `${sab}px`);
+  const safeTop = embeddedSafeTop(location.search, embedded);
+  if (safeTop !== null) root.setProperty('--safe-top', safeTop);
+  const space = await loadSpace(route.spaceId);
   if (!space) {
     showFatal('이 주소의 공간을 찾지 못했어요', embedded);
     return;
   }
   document.title = space.title.ko;
   const params = new URLSearchParams(location.search);
-  // iOS 웹뷰는 iframe 안에서 안전 영역(노치, 홈 바)을 0으로 알려 줘서, 앱이 주소(?sat, ?sab)로 알려 준 값을 쓴다
-  const root = document.documentElement.style;
-  const sat = parseAppInset(location.search, 'sat');
-  const sab = parseAppInset(location.search, 'sab');
-  if (sat > 0) root.setProperty('--jumo-sat', `${sat}px`);
-  if (sab > 0) root.setProperty('--jumo-sab', `${sab}px`);
   // 개발 빌드의 ?demo=1: 서버 없이 가짜 경기와 가짜 사람들로 돌린다 (배포 빌드에서는 이 줄들이 통째로 빠진다)
   const demo = import.meta.env.DEV && params.get('demo') === '1';
   try {

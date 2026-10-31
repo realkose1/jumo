@@ -36,3 +36,13 @@ export function parseAppInset(search: string, key: 'sat' | 'sab'): number {
   if (!Number.isFinite(n)) return 0;
   return Math.min(MAX_APP_INSET, Math.max(0, Math.round(n)));
 }
+
+/**
+ * 앱 안에서 쓸 위쪽 안전 영역(--safe-top). 앱 밖이면 null(style.css의 env 값을 그대로 쓴다).
+ * iOS 웹뷰가 iframe 안에 주는 env(safe-area-inset-top)는 믿을 수 없다 — 시뮬레이터(iOS 27)는 0, 실기기(iOS 18)는
+ * 페이지 전체 값(상태 표시줄 59px)을 그대로 준다. 앱은 iframe을 상태 표시줄 아래에 두므로 실기기에서 버튼이
+ * 두 번 내려갔다(제보). 그래서 앱 안에서는 위쪽을 앱이 주소로 알려 준 값(?sat)만으로 정한다(없으면 0)
+ */
+export function embeddedSafeTop(search: string, embedded: boolean): string | null {
+  return embedded ? `${parseAppInset(search, 'sat')}px` : null;
+}

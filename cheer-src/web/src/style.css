@@ -2,8 +2,8 @@
   color-scheme: dark;
   --bg: #0b0b0d;
   --ink: #ffffff;
-  /* 앱(iOS 웹뷰)이 iframe 안에서는 env(safe-area-inset-*)를 0으로 주기 때문에, 앱이 주소로 알려 준 값(?sat, ?sab)을
-     --jumo-sat, --jumo-sab 로 받아 더 큰 쪽을 쓴다 (main.ts) */
+  /* 앱(iOS 웹뷰)의 iframe 안 env(safe-area-inset-*)는 기기마다 0이거나 페이지 전체 값이라, 앱이 주소로 알려 준 값(?sat, ?sab)을
+     --jumo-sat, --jumo-sab 로 받아 더 큰 쪽을 쓴다. 앱 안에서는 main.ts 가 --safe-top 을 앱 값으로 덮어쓴다(embeddedSafeTop) */
   --safe-top: max(env(safe-area-inset-top), var(--jumo-sat, 0px));
   --safe-bottom: max(env(safe-area-inset-bottom), var(--jumo-sab, 0px));
   --safe-left: env(safe-area-inset-left);
