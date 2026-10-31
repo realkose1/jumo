@@ -5,6 +5,8 @@ const BODY = {
   sliders:
     '<path d="M4 7h8.4M17.6 7H20M4 17h2.4M11.6 17H20"/><circle cx="15" cy="7" r="2.6"/><circle cx="9" cy="17" r="2.6"/>',
   close: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
+  sound: '<path d="M4 9.5h3.2L12 5.8v12.4l-4.8-3.7H4z"/><path d="M15.5 9.3a3.8 3.8 0 0 1 0 5.4M18.2 6.8a7.4 7.4 0 0 1 0 10.4"/>',
+  'sound-off': '<path d="M4 9.5h3.2L12 5.8v12.4l-4.8-3.7H4z"/><path d="M15.5 9.5l5 5M20.5 9.5l-5 5"/>',
   hop: '<circle cx="12" cy="9.5" r="4"/><path d="M8.5 19.5h7"/>',
   'hop-double':
     '<path d="M3.5 19c1.2-6.2 6.8-6.2 8 0 1.2-6.2 6.8-6.2 8 0"/><circle cx="7.5" cy="8.5" r="1.7" fill="currentColor" stroke="none"/><circle cx="15.5" cy="8.5" r="1.7" fill="currentColor" stroke="none"/>',

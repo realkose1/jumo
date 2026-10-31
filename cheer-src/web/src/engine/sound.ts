@@ -22,6 +22,8 @@ export interface SoundState {
   /** 사용자가 화면을 한 번 눌러서 소리를 켤 수 있는 상태인지 */
   unlocked: boolean;
   keepPlayingInBackground: boolean;
+  /** 위쪽 스피커 버튼으로 소리를 모두 껐는지. 층마다의 켜짐·크기는 그대로 두고 맨 끝에서 막는다 */
+  muted: boolean;
   layers: Record<SoundLayerId, SoundLayerState>;
 }
 
@@ -73,8 +75,11 @@ export class SoundMixer {
   private readonly loopToken: Record<SoundLayerId, number> = { ambient: 0, shared: 0, effects: 0 };
   private readonly buffers = new Map<string, Promise<AudioBuffer | null>>();
   private ctx: AudioContext | null = null;
+  private master: GainNode | null = null;
   private unlocked = false;
   private keepPlaying: boolean;
+  private muted: boolean;
+  private suspendTimer: ReturnType<typeof setTimeout> | null = null;
   private removeGestureListeners: (() => void) | null = null;
 
   constructor(
@@ -96,6 +101,8 @@ export class SoundMixer {
     this.enabled = { ambient: enabledOf('ambient'), shared: enabledOf('shared'), effects: enabledOf('effects') };
     // 처음에는 모두 켜 둔다: 다른 탭으로 가도 소리가 이어진다(사용자가 끄면 그 값을 기억한다)
     this.keepPlaying = this.storage?.get<boolean | null>('sound.keepPlaying', null) !== false;
+    // 모두 끄기는 사용자가 켠 적이 있을 때만 (처음에는 꺼 두지 않는다)
+    this.muted = this.storage?.get<boolean | null>('sound.muted', null) === true;
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', this.onVisibility);
     }
@@ -111,6 +118,7 @@ export class SoundMixer {
       supported: audioCtor() !== undefined,
       unlocked: this.unlocked,
       keepPlayingInBackground: this.keepPlaying,
+      muted: this.muted,
       layers: {
         ambient: layerState('ambient'),
         shared: layerState('shared'),
@@ -144,6 +152,8 @@ export class SoundMixer {
     try {
       const ctx = new Ctor();
       const master = ctx.createGain();
+      master.gain.value = this.muted ? 0 : 1;
+      this.master = master;
       // 여럿이 한꺼번에 소리를 내도 찢어지지 않게 마지막에 가볍게 눌러 준다
       const limiter = ctx.createDynamicsCompressor();
       limiter.threshold.value = -14;
@@ -162,7 +172,7 @@ export class SoundMixer {
       this.ctx = ctx;
       this.unlocked = true;
       this.removeGestureListeners?.();
-      if (!this.isHidden() || this.keepPlaying) void ctx.resume().catch(() => undefined);
+      this.syncSuspend();
       // 처음부터 켜져 있어야 하는 층을 켠다
       for (const id of SOUND_LAYER_IDS) {
         if (!this.enabled[id]) continue;
@@ -216,12 +226,30 @@ export class SoundMixer {
     this.emitChange();
   }
 
+  isMuted(): boolean {
+    return this.muted;
+  }
+
+  /**
+   * 소리를 모두 끄고 켠다(위쪽 스피커 버튼). 층마다의 켜짐·크기는 건드리지 않고 맨 끝(master)에서 줄인다.
+   * 첫 누르기 전에도 값은 기억해 두었다가 소리가 열릴 때 따른다. 다시 켤 때 장치를 깨우므로 누르는 동작 안에서 부른다
+   */
+  setMuted(on: boolean): void {
+    if (this.muted === on) return;
+    this.muted = on;
+    this.storage?.set('sound.muted', on);
+    if (this.master && this.ctx) this.master.gain.setTargetAtTime(on ? 0 : 1, this.ctx.currentTime, FADE_SECONDS);
+    this.syncSuspend();
+    this.emitChange();
+  }
+
   /** 장면이 직접 만든 소리를 이을 지점. 사용자가 화면을 누르기 전에는 null */
   getAudio(): SynthAudio | null {
     const ctx = this.ctx;
     const { ambient, shared, effects } = this.gains;
     if (!ctx || !ambient || !shared || !effects) return null;
-    return { ctx, out: { ambient, shared, effects }, isEnabled: (layer) => this.enabled[layer] };
+    // 모두 꺼 둔 동안은 층도 꺼진 것으로 알려 장면이 소리를 예약하지 않게 한다
+    return { ctx, out: { ambient, shared, effects }, isEnabled: (layer) => this.enabled[layer] && !this.muted };
   }
 
   /** 층이 켜져 있는 동안 이어지는 소리를 장면이 만든다. 이미 켜져 있으면 바로 시작한다 */
@@ -245,6 +273,8 @@ export class SoundMixer {
 
   dispose(): void {
     this.removeGestureListeners?.();
+    if (this.suspendTimer) clearTimeout(this.suspendTimer);
+    this.suspendTimer = null;
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', this.onVisibility);
     }
@@ -337,7 +367,7 @@ export class SoundMixer {
     const path = this.layers[layer].oneShots?.[id];
     const ctx = this.ctx;
     const gain = this.gains[layer];
-    if (!path || !ctx || !gain || !this.enabled[layer]) return;
+    if (!path || !ctx || !gain || !this.enabled[layer] || this.muted) return;
     const buffer = await this.loadBuffer(path);
     if (!buffer || this.ctx !== ctx) return;
     const source = ctx.createBufferSource();
@@ -350,10 +380,19 @@ export class SoundMixer {
     return typeof document !== 'undefined' && document.visibilityState === 'hidden';
   }
 
-  /** 탭이 숨겨지면 멈추고(기본), 돌아오면 다시 잇는다 */
+  /** 탭이 숨겨지면 멈추고(기본), 돌아오면 다시 잇는다. 모두 꺼 두면 소리가 잦아든 뒤 장치도 멈춰 배터리를 아낀다 */
   private syncSuspend(): void {
     const ctx = this.ctx;
     if (!ctx) return;
+    if (this.suspendTimer) clearTimeout(this.suspendTimer);
+    this.suspendTimer = null;
+    if (this.muted) {
+      this.suspendTimer = setTimeout(() => {
+        this.suspendTimer = null;
+        if (this.muted) void ctx.suspend().catch(() => undefined);
+      }, FADE_SECONDS * 6 * 1000);
+      return;
+    }
     if (this.isHidden() && !this.keepPlaying) void ctx.suspend().catch(() => undefined);
     else void ctx.resume().catch(() => undefined);
   }
