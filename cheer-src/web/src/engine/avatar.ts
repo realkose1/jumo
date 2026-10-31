@@ -53,6 +53,8 @@ export interface AccessorySpec {
   scale?: [number, number, number];
   /** 이 소품을 쓰는 차림 번호들(OutfitSpec.looks 중). 없으면 모든 차림이 쓴다 */
   looks?: number[];
+  /** 높이 솟은 소품(갓 등). 카메라가 내 머리 높이까지 내려오면 내 화면에서만 감춰 시야를 가리지 않는다 */
+  tall?: boolean;
 }
 
 export interface OutfitSpec {
@@ -585,6 +587,7 @@ export class Avatar {
   private accessorySpecs: AccessorySpec[] = [];
   private outfitSpec: OutfitSpec = PLAIN_OUTFIT;
   private look = 0;
+  private tallHidden = false;
   private readonly detail: AvatarDetailOptions;
 
   private readonly state: PoseState;
@@ -666,9 +669,17 @@ export class Avatar {
     this.applyLook();
   }
 
+  /** 카메라가 머리 바로 뒤로 내려왔을 때 높이 솟은 소품(갓)을 감춘다. 내 캐릭터에만 쓴다 */
+  setTallHidden(on: boolean): void {
+    if (on === this.tallHidden) return;
+    this.tallHidden = on;
+    this.applyLook();
+  }
+
   private applyLook(): void {
     this.accessories.forEach((m, i) => {
-      m.visible = accessoryShown(this.accessorySpecs[i]!, this.look);
+      const spec = this.accessorySpecs[i]!;
+      m.visible = accessoryShown(spec, this.look) && !(this.tallHidden && spec.tall);
     });
   }
 

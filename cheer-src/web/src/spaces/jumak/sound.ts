@@ -1,8 +1,9 @@
-// 주막의 소리: 동작(박수, 건배, 주문), 경기 순간(골, 킥오프, 실점, 끝), 깔리는 웅성거림.
-// 소리 만드는 법은 recipes.ts에 있고, 여기서는 층(효과음, 공동 소리, 환경음)에 이어 주고
-// 켜짐/꺼짐과 크기는 엔진의 SoundMixer가 맡는다.
+// 주막의 소리: 동작(박수, 건배, 주문), 경기 순간(골, 킥오프, 실점, 끝), 깔리는 부엌 소리(가마솥, 전 부치기).
+// 소리 만드는 법은 recipes.ts(동작, 순간), kitchen.ts(부엌), music.ts(배경 음악)에 있고, 여기서는 층(효과음, 공동 소리,
+// 환경음)에 이어 주고 켜짐/꺼짐과 크기는 엔진의 SoundMixer가 맡는다.
 import type { MomentSound } from '../../cheer/moments';
 import type { SoundLayerId, SoundMixer, SynthAudio } from '../../engine/sound';
+import { startKitchen, type Kitchen } from './kitchen';
 import { startMusic, type JumakMusic } from './music';
 import * as recipes from './recipes';
 
@@ -19,33 +20,34 @@ interface Bus {
 
 export class JumakSound {
   private readonly buses = new Map<SoundLayerId, Bus>();
-  private murmur: recipes.Murmur | null = null;
+  private kitchen: Kitchen | null = null;
   private music: JumakMusic | null = null;
   private intensity = 0;
 
   constructor(private readonly mixer: SoundMixer) {
-    // 환경음 층이 켜져 있는 동안 웅성거림과 배경 음악(한산할 땐 가야금, 경기 중엔 장구 응원가)이 돈다
+    // 환경음 층이 켜져 있는 동안 부엌 소리(가마솥 보글거림, 전 부치는 지글거림)와
+    // 배경 음악(한산할 땐 가야금, 경기 중엔 장구 응원가)이 돈다
     mixer.setSynthLoop('ambient', {
       start: (ctx, out) => {
-        const m = recipes.startMurmur(ctx, out);
-        m.setIntensity(this.intensity);
-        this.murmur = m;
+        const kitchen = startKitchen(ctx, out);
+        kitchen.setIntensity(this.intensity);
+        this.kitchen = kitchen;
         const music = startMusic(ctx, out, this.intensity > 0);
         this.music = music;
         return () => {
-          m.stop();
+          kitchen.stop();
           music.stop();
-          if (this.murmur === m) this.murmur = null;
+          if (this.kitchen === kitchen) this.kitchen = null;
           if (this.music === music) this.music = null;
         };
       },
     });
   }
 
-  /** 경기가 진행 중이면 웅성거림이 더 활기차고, 음악이 장구 응원가로 바뀐다 */
+  /** 경기가 진행 중이면 부엌에서 전을 더 자주 부치고, 음악이 장구 응원가로 바뀐다 */
   setLive(live: boolean): void {
     this.intensity = live ? 1 : 0;
-    this.murmur?.setIntensity(this.intensity);
+    this.kitchen?.setIntensity(this.intensity);
     this.music?.setLive(live);
   }
 
@@ -105,7 +107,7 @@ export class JumakSound {
 
   dispose(): void {
     this.mixer.setSynthLoop('ambient', null);
-    this.murmur = null;
+    this.kitchen = null;
     this.music = null;
     for (const b of this.buses.values()) b.input.disconnect();
     this.buses.clear();

@@ -94,7 +94,8 @@ export class SoundMixer {
       return typeof saved === 'boolean' ? saved : layers[id].defaultOn === true;
     };
     this.enabled = { ambient: enabledOf('ambient'), shared: enabledOf('shared'), effects: enabledOf('effects') };
-    this.keepPlaying = this.storage?.get<boolean>('sound.keepPlaying', false) === true;
+    // 처음에는 모두 켜 둔다: 다른 탭으로 가도 소리가 이어진다(사용자가 끄면 그 값을 기억한다)
+    this.keepPlaying = this.storage?.get<boolean | null>('sound.keepPlaying', null) !== false;
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', this.onVisibility);
     }

@@ -139,20 +139,3 @@ describe('주막 소리 재료', () => {
     check((c, o) => R.bell(asCtx(c), asOut(o), { ...cue(), gain: 0.01 }, 1));
   });
 });
-
-describe('웅성거림', () => {
-  it('켜면 계속 도는 소리가 시작되고, 멈추면 모두 끝난다', () => {
-    const ctx = new Ctx();
-    const m = R.startMurmur(ctx as unknown as AudioContext, asOut(new Node('out')));
-    const running = ctx.sources.filter((s) => s.startedAt !== null);
-    expect(running.length).toBeGreaterThanOrEqual(5); // 잡음 하나와 천천히 일렁이는 소리 넷
-    m.setIntensity(1);
-    m.stop();
-    for (const s of ctx.sources) expect(s.stoppedAt, `${s.kind} 멈춤`).not.toBeNull();
-    // 멈춘 뒤에 또 불러도 괜찮다
-    expect(() => {
-      m.setIntensity(0);
-      m.stop();
-    }).not.toThrow();
-  });
-});

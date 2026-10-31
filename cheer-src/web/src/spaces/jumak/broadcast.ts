@@ -366,7 +366,7 @@ export function drawPitch(ctx: CanvasRenderingContext2D, sim: PitchSim, info: Pi
     ctx.font = `800 11px ${FONT}`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText('JUMO · 주모 응원 주막', x + 20, v.top - 7);
+    ctx.fillText('주모 · 응원 주막 · 酒幕', x + 20, v.top - 7);
   }
 
   // 잔디 (줄무늬)

@@ -1,5 +1,4 @@
-// 주막 응원방 실시간 서버. 계정 정보(account_id)와 배포 설정(routes 등)은 일부러 넣지 않았다.
-// 배포는 사용자 계정이 필요한 일이라 사용자와 정한다.
+// 주막 응원방 실시간 서버. 계정 정보(account_id)는 일부러 넣지 않았다(배포하는 사람의 wrangler 로그인을 쓴다).
 // 로컬 가짜 경기(FEED_SIM)는 여기 넣지 않는다: `npm run dev:sim`(--var FEED_SIM:1)으로만 켠다.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
@@ -16,6 +15,12 @@
   // 두 클래스 모두 SQLite 기반 Durable Object
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room", "Lobby"] }],
 
+  // 주소: 사용자 도메인 jumak.dev(Cloudflare에서 산 도메인, 같은 계정)의 cheer.jumak.dev 에 붙인다.
+  // 배포하면 Cloudflare가 DNS와 인증서를 알아서 만든다. 기존 workers.dev 주소도 그대로 열어 둔다
+  // (옮기는 동안 예전 화면이 계속 붙을 수 있게).
+  "routes": [{ "pattern": "cheer.jumak.dev", "custom_domain": true }],
+  "workers_dev": true,
+
   // 운영 중에 바꾸는 값들. 모두 문자열이다.
   "vars": {
     // 같은 IP(와이파이, 통신사 NAT)에서 한 방에 들어올 수 있는 사람 수(join한 연결만 센다)
@@ -24,8 +29,8 @@
     // rooms는 늘 여는 방, maxRooms는 다 차면 더 여는 상한. 없는 항목은 shared/spaces의 값을 쓴다.
     "SPACE_OVERRIDES": "{}",
     // 웹소켓 접속을 허용할 Origin(쉼표로 구분). 비워 두면 모두 허용.
-    // 주모 웹(iOS 앱 안의 iframe도 같은 Origin)과 로컬 vite 개발 서버(5180)
-    "ALLOWED_ORIGINS": "https://jumo-git-main-realkose1s-projects.vercel.app,http://localhost:5180,http://127.0.0.1:5180",
+    // 응원 주막 도메인(jumak.dev), 주모 웹(iOS 앱 안의 iframe도 같은 Origin), 로컬 vite 개발 서버(5180)
+    "ALLOWED_ORIGINS": "https://jumak.dev,https://www.jumak.dev,https://jumo-git-main-realkose1s-projects.vercel.app,http://localhost:5180,http://127.0.0.1:5180",
     // GET /rooms 결과를 메모리에 두는 시간(ms)
     "ROOMS_CACHE_MS": "3000",
     // 주막 TV 경기 피드. 피드를 쓰는 공간(jumak)의 방이 사람이 있는 동안 받아 온다
