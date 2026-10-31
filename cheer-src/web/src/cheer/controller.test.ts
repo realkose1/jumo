@@ -328,15 +328,15 @@ describe('CheerController: 간판 이름과 피드가 없을 때', () => {
     next: null,
   });
 
-  it('피드가 오면 간판과 문서 제목 이름을 선수 이름으로 바꾼다 (바뀔 때만)', () => {
+  it('간판과 문서 제목은 선수와 상관없이 늘 해외 축구 응원 주막 (같은 이름이면 다시 그리지 않는다)', () => {
     const { engine, emit, stage } = makeEngine();
     const names: string[] = [];
     new CheerController({ engine, ui: makeUi(), onRoomName: (n) => names.push(n) }).start();
     emit('feed', live('이강인'));
     emit('feed', live('이강인'));
     emit('feed', live('황희찬'));
-    expect(names).toEqual(['이강인 응원 주막', '황희찬 응원 주막']);
-    expect(stage.setRoomName).toHaveBeenCalledTimes(2);
+    expect(names.every((n) => n === '해외 축구 응원 주막')).toBe(true);
+    expect((stage.setRoomName as ReturnType<typeof vi.fn>).mock.calls.length).toBeLessThanOrEqual(1);
   });
 
   it('피드가 20초 안 오면 불러오는 중 대신 차분한 안내 카드', () => {
@@ -346,7 +346,7 @@ describe('CheerController: 간판 이름과 피드가 없을 때', () => {
     vi.advanceTimersByTime(19_000);
     expect(stage.setView).toHaveBeenLastCalledWith({ kind: 'waiting' });
     vi.advanceTimersByTime(1_500);
-    expect(stage.setView).toHaveBeenLastCalledWith({ kind: 'quiet', name: '주모 응원 주막' });
+    expect(stage.setView).toHaveBeenLastCalledWith({ kind: 'quiet', name: '해외 축구 응원 주막' });
   });
 
   it('안내 카드 뒤에 피드가 오면 다시 정상', () => {

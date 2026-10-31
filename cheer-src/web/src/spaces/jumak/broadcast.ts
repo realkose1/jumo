@@ -1,6 +1,6 @@
 // 주막 TV의 '중계' 화면들: 실제 중계처럼 장면이 바뀐다.
 //   1) 경기장: 위에서 비스듬히 본 잔디 위로 22명이 움직이고 공이 오간다(가상 중계, 실제 위치 자료가 아니다)
-//   2) 선수 카드: 우리 선수 사진과 오늘 기록
+//   2) 선수 카드: 족자에 우리 선수 이름(세로 붓글씨)과 오늘 기록. 사진은 쓰지 않는다
 //   3) 점수판: 여러 경기 점수(tv.ts의 기존 화면)
 // 장면 순서와 경기장 움직임은 three.js를 모르는 계산이라 시험하기 쉽다. 그리기는 캔버스 2D.
 import type { TvMatchView, TvPlayerLine } from '../../cheer/feed';
@@ -606,20 +606,19 @@ function clip(ctx: CanvasRenderingContext2D, text: string, max: number): string 
   return `${t}…`;
 }
 
-/** 선수 카드: 왼쪽에 사진, 오른쪽에 이름과 오늘 기록 */
+/** 선수 카드: 왼쪽 족자에 선수 이름을 세로 붓글씨로, 오른쪽에 오늘 기록. 사진은 쓰지 않는다 */
 export function drawPlayerCard(
   ctx: CanvasRenderingContext2D,
   m: TvMatchView,
   player: TvPlayerLine & { side: 'home' | 'away' },
-  photo: HTMLImageElement | null,
   bottom: number,
 ): void {
   const team = player.side === 'home' ? m.homeName : m.awayName;
   const opp = player.side === 'home' ? m.awayName : m.homeName;
-  // 바탕: 한지와 광곽. 초상화(영정)처럼 사진을 걸고 옆에 행장(行狀)을 적는다
+  // 바탕: 한지와 광곽. 왼쪽에 족자를 걸고 옆에 행장(行狀)을 적는다
   drawPaper(ctx);
 
-  // 사진
+  // 족자: 밝은 비단 바탕에 이름을 위에서 아래로 크게
   const px = 60;
   const py = 78;
   const pw = 360;
@@ -628,30 +627,29 @@ export function drawPlayerCard(
   ctx.beginPath();
   rrect(ctx, px, py, pw, ph, 24);
   ctx.clip();
-  ctx.fillStyle = '#b89b68';
+  const silk = ctx.createLinearGradient(0, py, 0, py + ph);
+  silk.addColorStop(0, '#f3e7c9');
+  silk.addColorStop(1, '#e2cf9f');
+  ctx.fillStyle = silk;
   ctx.fillRect(px, py, pw, ph);
-  if (photo) {
-    // 덮어 채우기(cover)
-    const s = Math.max(pw / photo.naturalWidth, ph / photo.naturalHeight);
-    const w = photo.naturalWidth * s;
-    const h = photo.naturalHeight * s;
-    ctx.drawImage(photo, px + (pw - w) / 2, py + (ph - h) * 0.2, w, h);
-  } else {
-    // 사진이 없으면 실루엣
-    ctx.fillStyle = 'rgba(60,38,16,0.25)';
-    ctx.beginPath();
-    ctx.arc(px + pw / 2, py + ph * 0.36, pw * 0.2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(px + pw / 2, py + ph * 0.95, pw * 0.4, ph * 0.38, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  // 아래쪽 어둡게
-  const fade = ctx.createLinearGradient(0, py + ph * 0.6, 0, py + ph);
-  fade.addColorStop(0, 'rgba(60,38,16,0)');
-  fade.addColorStop(1, 'rgba(60,38,16,0.35)');
-  ctx.fillStyle = fade;
-  ctx.fillRect(px, py, pw, ph);
+  // 위아래 쪽빛 비단 띠(족자의 천두·천지)
+  ctx.fillStyle = '#34507a';
+  ctx.fillRect(px, py, pw, 34);
+  ctx.fillRect(px, py + ph - 34, pw, 34);
+  const chars = [...player.name.replace(/\s+/g, '')];
+  const room = ph - 34 * 2 - 40;
+  const fs = Math.min(116, Math.floor(room / Math.max(1, chars.length) / 1.08));
+  ctx.fillStyle = PAPER.ink;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `900 ${fs}px ${FONT}`;
+  const top = py + 34 + 20 + (room - fs * 1.08 * chars.length) / 2 + fs * 0.54;
+  chars.forEach((ch, i) => ctx.fillText(ch, px + pw / 2 - 18, top + i * fs * 1.08));
+  // 옆에 작은 글씨로 소속 팀 (세로)
+  const small = [...team.replace(/\s+/g, '')].slice(0, 8);
+  ctx.font = `700 26px ${FONT}`;
+  ctx.fillStyle = PAPER.soft;
+  small.forEach((ch, i) => ctx.fillText(ch, px + pw - 52, py + 34 + 40 + i * 30));
   ctx.restore();
   // 족자 테두리: 짙은 비단 띠
   ctx.strokeStyle = '#3b2412';
@@ -659,7 +657,7 @@ export function drawPlayerCard(
   ctx.beginPath();
   rrect(ctx, px, py, pw, ph, 24);
   ctx.stroke();
-  // 사진 귀퉁이에 이름 낙관 (성씨 한 글자)
+  // 족자 귀퉁이에 이름 낙관 (성씨 한 글자)
   drawSeal(ctx, px + pw - 40, py + ph - 40, [...player.name][0] ?? '', 58);
 
   // 글자

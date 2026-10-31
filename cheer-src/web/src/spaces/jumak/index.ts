@@ -274,7 +274,7 @@ function buildActions(): SpaceDefinition['actions'] {
 const space: SpaceDefinition = {
   id: shared.id,
   // 간판 이름은 경기 피드의 선수에 따라 "이강인 응원 주막"처럼 바뀐다(cheer/roomName.ts). 이건 로딩 때 쓰는 기본 이름
-  title: { ko: '응원 주막' },
+  title: { ko: '해외 축구 응원 주막' },
   capacityPerRoom: shared.capacityPerRoom,
   initialRoomCount: shared.initialRoomCount,
   nameWords: shared.nameWords,

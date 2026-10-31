@@ -28,9 +28,9 @@ describe('formatRoomName', () => {
     expect(formatRoomName(['a', 'b', 'c', 'd', 'e'])).toBe('a 외 4명 응원 주막');
   });
 
-  it('이름이 없으면 주모', () => {
+  it('이름이 없으면 해외 축구 응원 주막', () => {
     expect(formatRoomName([])).toBe(FALLBACK_ROOM_NAME);
-    expect(formatRoomName(['', '  '])).toBe('주모 응원 주막');
+    expect(formatRoomName(['', '  '])).toBe('해외 축구 응원 주막');
   });
 });
 
@@ -38,8 +38,8 @@ describe('roomPlayerNames', () => {
   it('진행 중인 경기의 선수들(킥오프 순) 다음에 곧 시작하는 경기의 선수들: 경기가 겹쳐도 주막은 하나', () => {
     const f = feed([match('live', 300, ['황희찬']), match('live', 100, ['이강인']), match('pre', 50, ['김민재'])]);
     expect(roomPlayerNames(f)).toEqual(['이강인', '황희찬', '김민재']);
-    // 오늘 밤: 백승호 경기가 진행 중이고 이강인 경기가 곧 시작
-    expect(roomName(feed([match('live', 100, ['백승호']), match('pre', 200, ['이강인'])]))).toBe('백승호·이강인 응원 주막');
+    // 간판은 선수와 상관없이 늘 같은 이름
+    expect(roomName(feed([match('live', 100, ['백승호']), match('pre', 200, ['이강인'])]))).toBe('해외 축구 응원 주막');
   });
 
   it('진행 중인 경기가 없으면 곧 시작하는 경기의 선수들', () => {
@@ -53,8 +53,8 @@ describe('roomPlayerNames', () => {
 
   it('피드가 없거나 선수가 없으면 빈 목록 -> 주모 응원 주막', () => {
     expect(roomPlayerNames(null)).toEqual([]);
-    expect(roomName(feed([match('live', 1, [])]))).toBe('주모 응원 주막');
-    expect(roomName(null)).toBe('주모 응원 주막');
+    expect(roomName(feed([match('live', 1, [])]))).toBe('해외 축구 응원 주막');
+    expect(roomName(null)).toBe('해외 축구 응원 주막');
   });
 
   it('같은 이름은 한 번만', () => {
@@ -81,6 +81,6 @@ describe('roomPlayerNames', () => {
 
   it('?m=이 다음 경기(next)일 때도 이름은 선택된 집합 안에서만', () => {
     const next = match('pre', 99, ['김하성'], 'n');
-    expect(roomName(feed([], next), 'n')).toBe('김하성 응원 주막');
+    expect(roomName(feed([], next), 'n')).toBe('해외 축구 응원 주막');
   });
 });

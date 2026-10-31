@@ -271,7 +271,10 @@ export class Engine {
           if (seatId) this.aimCameraFromSeat(seatId);
           this.events.emit('seat-change', { seatId });
         },
-        onSeatDenied: (seatId, reason) => this.events.emit('seat-denied', { seatId, reason }),
+        onSeatDenied: (seatId, reason) => {
+          this.seats?.markSeat(null);
+          this.events.emit('seat-denied', { seatId, reason });
+        },
       });
       this.player.setWalkArea(handle.bounds, handle.blockers);
       this.player.setGroundHeight(handle.groundHeight ?? null);
@@ -594,10 +597,13 @@ export class Engine {
     }
     const seat = this.seats.pick(ray);
     if (seat) {
+      // 누른 방석에 마커를 띄운다(앉으면, 다른 곳을 누르면, 자리가 막히면 사라진다)
+      this.seats.markSeat(seat);
       this.player.sitAt(seat);
       return;
     }
     if (ray.direction.y >= -1e-4) return; // 하늘을 눌렀다
+    this.seats.markSeat(null);
     const t = -ray.origin.y / ray.direction.y;
     this.player.walkTo(ray.origin.x + ray.direction.x * t, ray.origin.z + ray.direction.z * t);
   }
@@ -675,6 +681,11 @@ export class Engine {
 
     if (this.player) {
       this.player.update(dt, this.input.getMoveVector(), this.rig.yaw);
+      // 방석 마커: 앉았거나(자리 id가 생김) 조이스틱·키로 걸어 나가면 거둔다
+      const marked = this.seats?.markedSeatId ?? null;
+      const mv = this.input.getMoveVector();
+      if (marked && (this.player.seatId === marked || mv.x * mv.x + mv.y * mv.y > 0.01)) this.seats?.markSeat(null);
+      this.seats?.update(dt, this.getReducedMotion());
       const p = this.player.position;
       // 평상 위나 자리에 앉았을 때는 캐릭터와 함께 시선도 올라간다
       this.rig.setFollowTarget(p.x, this.player.avatar.root.position.y + this.focusHeight, p.z);

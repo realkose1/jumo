@@ -37,6 +37,6 @@ export async function loadSpace(id: string): Promise<SpaceDefinition | null> {
 
 /** 화면에 보여줄 공간 이름 (자료 정보 묶음 제목 등). 공간 모듈을 불러오지 않고도 쓸 수 있다. */
 export const SPACE_LABELS: Readonly<Record<string, string>> = {
-  jumak: '응원 주막',
+  jumak: '해외 축구 응원 주막',
   'test-room': '시험용 방',
 };

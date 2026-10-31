@@ -7,7 +7,6 @@ import { ACTION_EMOJI, ACTION_PICTURE } from './layout';
 import { MAKGEOLLI_ICON, makgeolliImage } from './makgeolli';
 import { SERIF, drawPaper, drawSeal, oldClock } from './joseon';
 import { PitchSim, drawPitch, drawPlayerCard, drawScoreBug, ourPlayers, sameScene, sceneAt, seedOf, type BroadcastScene } from './broadcast';
-import { playerPhoto } from './playerPhotos';
 
 export const TV_W = 1024;
 export const TV_H = 576;
@@ -38,7 +37,6 @@ export interface BroadcastState {
   scene: BroadcastScene;
   /** 경기장 화면에 쓸 그 경기의 움직임 */
   sim: (matchId: string) => PitchSim;
-  photo: (name: string) => HTMLImageElement | null;
 }
 
 export interface TvBannerState {
@@ -347,7 +345,7 @@ export function drawTv(
     const list = ourPlayers(m);
     const p = list[broadcast.scene.index % Math.max(1, list.length)];
     if (p) {
-      drawPlayerCard(ctx, m, p, broadcast.photo(p.name), bottom);
+      drawPlayerCard(ctx, m, p, bottom);
       drawScoreBug(ctx, m);
     }
   } else {
@@ -463,7 +461,6 @@ export class TvScreen {
     drawTv(this.ctx, this.view, this.banner, this.tally, this.actionIds, pulse, {
       scene,
       sim: (id) => this.simFor(id),
-      photo: (name) => playerPhoto(name),
     });
     this.texture.needsUpdate = true;
     return true;

@@ -120,6 +120,67 @@ export class SeatManager {
     return this.byId.get(id);
   }
 
+  // ---- 고른 자리 표시: 방석을 누르면 그 방석 위에 노란 고리와 아래를 가리키는 화살표가 뜬다 ----
+  private marker: { group: THREE.Group; ring: THREE.Mesh; arrow: THREE.Mesh; geos: THREE.BufferGeometry[]; mat: THREE.MeshBasicMaterial } | null = null;
+  private marked: SeatDef | null = null;
+  private markT = 0;
+  private fade = 0;
+
+  private ensureMarker(): NonNullable<SeatManager['marker']> {
+    if (this.marker) return this.marker;
+    const mat = new THREE.MeshBasicMaterial({ color: 0xf5c400, transparent: true, depthTest: false, depthWrite: false, toneMapped: false });
+    const ringGeo = new THREE.TorusGeometry(0.36, 0.04, 8, 40).rotateX(Math.PI / 2);
+    const arrowGeo = new THREE.ConeGeometry(0.14, 0.28, 4).rotateX(Math.PI).rotateY(Math.PI / 4);
+    const ring = new THREE.Mesh(ringGeo, mat);
+    const arrow = new THREE.Mesh(arrowGeo, mat);
+    ring.renderOrder = 20;
+    arrow.renderOrder = 20;
+    const group = new THREE.Group();
+    group.add(ring, arrow);
+    group.visible = false;
+    this.scene.add(group);
+    this.marker = { group, ring, arrow, geos: [ringGeo, arrowGeo], mat };
+    return this.marker;
+  }
+
+  /** 이 자리를 골랐다고 표시한다. null이면 표시를 거둔다(살짝 사라진다) */
+  markSeat(seat: SeatDef | null): void {
+    if (seat) {
+      const m = this.ensureMarker();
+      this.marked = seat;
+      this.markT = 0;
+      this.fade = 1;
+      m.group.position.set(seat.x, this.seatHeight(seat) + 0.03, seat.z);
+      m.group.visible = true;
+    } else {
+      this.marked = null;
+    }
+  }
+
+  /** 지금 표시 중인 자리 id (시험용) */
+  get markedSeatId(): string | null {
+    return this.marked?.id ?? null;
+  }
+
+  /** 매 프레임: 고리가 숨 쉬듯 커졌다 작아지고 화살표가 통통 뛴다. 표시를 거두면 0.25초에 걸쳐 사라진다 */
+  update(dt: number, reduced = false): void {
+    const m = this.marker;
+    if (!m) return;
+    this.markT += dt;
+    if (!this.marked) {
+      this.fade = Math.max(0, this.fade - dt / 0.25);
+      if (this.fade <= 0) {
+        m.group.visible = false;
+        return;
+      }
+    }
+    const pulse = reduced ? 0 : Math.sin(this.markT * 6);
+    m.ring.scale.setScalar(1 + 0.08 * pulse);
+    m.arrow.position.y = 0.75 + (reduced ? 0 : 0.08 * Math.abs(Math.sin(this.markT * 4)));
+    m.arrow.rotation.y = reduced ? 0 : this.markT * 1.5;
+    m.mat.opacity = this.fade * (0.85 + 0.15 * pulse);
+  }
+
   seatHeight(seat: SeatDef): number {
     return seat.y ?? DEFAULT_SEAT_HEIGHT;
   }
@@ -154,6 +215,12 @@ export class SeatManager {
   }
 
   dispose(): void {
+    if (this.marker) {
+      this.scene.remove(this.marker.group);
+      for (const g of this.marker.geos) g.dispose();
+      this.marker.mat.dispose();
+      this.marker = null;
+    }
     if (this.mesh) this.scene.remove(this.mesh);
     this.mesh?.dispose();
     this.geometry?.dispose();

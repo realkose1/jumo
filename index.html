@@ -5228,7 +5228,8 @@ function JumakHomeBanner({ matches, now }) {
   // 경기가 겹치면 주막을 나누지 않고 하나로: 이름은 열린 경기들의 선수를 모두, 둘째 줄은 경기 수
   const open = jumakOpenMatches(matches, now.getTime());
   const who = open.all.length > 1 ? jumakWhoAll(open.all) : jumakWho(pick.m);
-  const title = `${who ? who + ' ' : ''}응원 주막`;
+  // 간판과 같은 이름. 선수 이름은 붙이지 않는다
+  const title = '해외 축구 응원 주막';
   const line = open.all.length > 1
     ? (open.live.length > 0 ? `${open.all.length}경기 함께 보는 중` : `${open.all.length}경기 곧 시작`)
     : jumakMatchLine(pick.m, pick.phase);
@@ -5290,7 +5291,7 @@ function JumakRoomFrame({ matchId, label, onClose, animate }) {
   const closeRef = React.useRef(onClose);
   closeRef.current = onClose;
   const failedRef = React.useRef(false);   // 페이지가 직접 error 를 알렸다(늦은 ready 로 되살리지 않는다)
-  const title = label ? `${label} 응원 주막` : '응원 주막';
+  const title = '해외 축구 응원 주막';
   React.useEffect(() => {
     let origin = '';
     try { origin = new URL(src).origin; } catch {}
