@@ -79,7 +79,8 @@ export function buildRoom(): RoomBuild {
   buildFloor(lit);
   buildPlatforms(lit);
   buildShell(lit, glow);
-  buildCanopy(lit);
+  // TV 위 차양(작은 기와지붕)은 하늘을 가려서 없앴다. 앞줄 초롱은 기둥 사이에 건 줄에 단다
+  buildLanternRope(lit);
   buildTvSet(lit);
   buildStove(lit, glow);
   buildPennants(lit);
@@ -268,40 +269,27 @@ function stoneWall(b: Batch, x0: number, x1: number, z: number, seed: number): v
   }
 }
 
-// ---- TV 위에 달린 차양(작은 기와지붕) ----
-function buildCanopy(b: Batch): void {
-  const wallZ = ROOM.frontZ;
-  const edgeZ = wallZ + 1.5;
-  const yWall = 4.45;
-  const yEdge = 4.0;
-  const width = 13.2;
-  const len = Math.hypot(edgeZ - wallZ, yWall - yEdge);
-  const tilt = Math.atan2(yWall - yEdge, edgeZ - wallZ); // 앞쪽이 낮다
-  const midZ = (wallZ + edgeZ) / 2;
-  const midY = (yWall + yEdge) / 2;
-  // 안쪽 널(아래를 본다)과 기와 면(위를 본다)
-  b.plane(width, len, [0, midY - 0.03, midZ], C.roofUnder, { rx: Math.PI / 2 + tilt });
-  const stripes = 22;
-  for (let i = 0; i < stripes; i++) {
-    const sw = width / stripes;
-    b.plane(sw, len, [-width / 2 + (i + 0.5) * sw, midY + 0.12, midZ], i % 2 ? C.tileA : C.tileB, { rx: -Math.PI / 2 + tilt });
+// ---- 앞줄 초롱을 거는 줄: 양옆 앞 기둥 사이 ----
+function buildLanternRope(b: Batch): void {
+  const z = ROOM.frontZ + 1.4;
+  const y0 = ROOM.postTopY - 0.15;
+  const n = 24;
+  // 가운데가 살짝 처진 줄
+  const sag = (x: number): number => y0 - 0.38 * (1 - Math.pow(x / ROOM.halfWidth, 2));
+  for (let i = 0; i < n; i++) {
+    const x0 = -ROOM.halfWidth + (i * ROOM.halfWidth * 2) / n;
+    const x1 = -ROOM.halfWidth + ((i + 1) * ROOM.halfWidth * 2) / n;
+    const ya = sag(x0);
+    const yb = sag(x1);
+    b.box([Math.hypot(x1 - x0, yb - ya), 0.02, 0.02], [(x0 + x1) / 2, (ya + yb) / 2, z], C.lacquer, { rz: Math.atan2(yb - ya, x1 - x0) });
   }
-  // 서까래
-  const rafters = 28;
-  for (let i = 0; i < rafters; i++) {
-    b.box([0.1, 0.08, len], [-width / 2 + (i + 0.5) * (width / rafters), midY - 0.08, midZ], C.rafter, { rx: tilt });
-  }
-  // 앞 끝 평고대와 막새
-  b.box([width, 0.22, 0.14], [0, yEdge + 0.02, edgeZ], C.trim);
-  const caps = Math.round(width / 0.3);
-  for (let i = 0; i < caps; i++) {
-    b.cylinder(0.125, 0.125, 0.05, 8, [-width / 2 + (i + 0.5) * (width / caps), yEdge + 0.2, edgeZ + 0.05], i % 2 ? C.eaveTile : C.eaveTileB, { rx: Math.PI / 2 - 0.12 });
-  }
-  // 차양을 받치는 두 팔
-  for (const sx of [-1, 1]) {
-    b.box([0.14, 0.14, 1.6], [sx * 5.6, 4.1, midZ], C.beam, { rx: tilt });
-    b.box([0.12, 0.8, 0.12], [sx * 5.6, 3.7, wallZ + 0.18], C.beam);
-  }
+  // 줄이 기둥에 닿도록 앞 기둥에서 줄까지 짧은 가로대
+  for (const s of [-1, 1]) b.box([0.12, 0.12, 1.0], [s * ROOM.halfWidth, y0, z - 0.5], C.beam);
+}
+
+/** 앞줄 초롱 줄의 높이 (x에서). 초롱이 이 줄에 매달린다 */
+export function lanternRopeY(x: number): number {
+  return ROOM.postTopY - 0.15 - 0.38 * (1 - Math.pow(x / ROOM.halfWidth, 2));
 }
 
 // ---- TV 틀, 장식장, 항아리 ----
@@ -393,7 +381,7 @@ function buildLanterns(lit: Batch, glow: Batch, out: LanternSpot[]): void {
   const spots: Array<{ x: number; z: number; topY: number; ropeTo: number; scale: number }> = [];
   // TV 앞 시선을 가리지 않게: 차양 앞줄은 TV 폭(±2.15) 바깥에만, 지붕 아래 줄은 양옆 기둥 쪽에만 둔다.
   // (방 한가운데 줄에 달면 통로와 앞줄 어느 자리에서든 TV 앞에 걸린다)
-  for (const x of [-5.9, -4.65, -3.45, 3.45, 4.65, 5.9]) spots.push({ x, z: ROOM.frontZ + 1.4, topY: 3.62, ropeTo: 4.02, scale: 1.1 });
+  for (const x of [-5.9, -4.65, -3.45, 3.45, 4.65, 5.9]) spots.push({ x, z: ROOM.frontZ + 1.4, topY: 3.62, ropeTo: lanternRopeY(x), scale: 1.1 });
   for (const x of [-ROOM.halfWidth, ROOM.halfWidth]) for (const z of [-1.5, 1.5, 4.5]) spots.push({ x, z, topY: 3.55, ropeTo: ROOM.postTopY - 0.22, scale: 1 });
 
   spots.forEach((s, i) => {
