@@ -1,12 +1,18 @@
-// 소리 세 층: 환경음, 공동 소리, 효과음. Web Audio GainNode 세 개로 층을 나눈다.
+// 소리 네 층: 배경 음악, 환경음, 공동 소리, 효과음. Web Audio GainNode 네 개로 층을 나눈다.
 // 소리 파일을 읽어 틀 수도 있고, 장면이 WebAudio로 직접 만든 소리를 층에 이을 수도 있다(getAudio, setSynthLoop).
 // 사용자의 첫 누르기 뒤에야 소리가 난다(브라우저 자동 재생 규칙). 층의 처음 켜짐 여부와 크기는 공간 정의(SoundLayerDef)가 정한다.
 import { Emitter, type Unsubscribe } from './events';
 import type { SpaceStorage } from './storage';
 import type { SoundLayerDef, SoundLayers } from './types';
 
-export type SoundLayerId = 'ambient' | 'shared' | 'effects';
-export const SOUND_LAYER_IDS: readonly SoundLayerId[] = ['ambient', 'shared', 'effects'];
+export type SoundLayerId = 'music' | 'ambient' | 'shared' | 'effects';
+/** 설정 창에 놓이는 순서이기도 하다 */
+export const SOUND_LAYER_IDS: readonly SoundLayerId[] = ['music', 'ambient', 'shared', 'effects'];
+
+/** 층마다 값을 하나씩 */
+function perLayer<T>(make: (id: SoundLayerId) => T): Record<SoundLayerId, T> {
+  return { music: make('music'), ambient: make('ambient'), shared: make('shared'), effects: make('effects') };
+}
 
 export interface SoundLayerState {
   enabled: boolean;
@@ -72,7 +78,7 @@ export class SoundMixer {
   private readonly synthStops: Partial<Record<SoundLayerId, () => void>> = {};
   private readonly gains: Partial<Record<SoundLayerId, GainNode>> = {};
   private readonly loops: Partial<Record<SoundLayerId, AudioBufferSourceNode>> = {};
-  private readonly loopToken: Record<SoundLayerId, number> = { ambient: 0, shared: 0, effects: 0 };
+  private readonly loopToken: Record<SoundLayerId, number> = perLayer(() => 0);
   private readonly buffers = new Map<string, Promise<AudioBuffer | null>>();
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
@@ -88,17 +94,18 @@ export class SoundMixer {
   ) {
     this.storage = options.storage;
     this.resolveUrl = options.resolveUrl ?? ((p) => p);
+    this.splitMusicFromAmbient();
     const volumeOf = (id: SoundLayerId): number => {
       const fallback = layers[id].defaultVolume ?? DEFAULT_VOLUME;
       return clamp01(this.storage?.get(`sound.volume.${id}`, fallback) ?? fallback);
     };
-    this.volume = { ambient: volumeOf('ambient'), shared: volumeOf('shared'), effects: volumeOf('effects') };
+    this.volume = perLayer(volumeOf);
     // 사용자가 직접 켜고 끈 값이 있으면 그것, 없으면 공간이 정한 처음 값
     const enabledOf = (id: SoundLayerId): boolean => {
       const saved = this.storage?.get<boolean | null>(`sound.enabled.${id}`, null);
       return typeof saved === 'boolean' ? saved : layers[id].defaultOn === true;
     };
-    this.enabled = { ambient: enabledOf('ambient'), shared: enabledOf('shared'), effects: enabledOf('effects') };
+    this.enabled = perLayer(enabledOf);
     // 처음에는 모두 켜 둔다: 다른 탭으로 가도 소리가 이어진다(사용자가 끄면 그 값을 기억한다)
     this.keepPlaying = this.storage?.get<boolean | null>('sound.keepPlaying', null) !== false;
     // 모두 끄기는 사용자가 켠 적이 있을 때만 (처음에는 꺼 두지 않는다)
@@ -119,11 +126,7 @@ export class SoundMixer {
       unlocked: this.unlocked,
       keepPlayingInBackground: this.keepPlaying,
       muted: this.muted,
-      layers: {
-        ambient: layerState('ambient'),
-        shared: layerState('shared'),
-        effects: layerState('effects'),
-      },
+      layers: perLayer(layerState),
     };
   }
 
@@ -246,10 +249,10 @@ export class SoundMixer {
   /** 장면이 직접 만든 소리를 이을 지점. 사용자가 화면을 누르기 전에는 null */
   getAudio(): SynthAudio | null {
     const ctx = this.ctx;
-    const { ambient, shared, effects } = this.gains;
-    if (!ctx || !ambient || !shared || !effects) return null;
+    if (!ctx || SOUND_LAYER_IDS.some((id) => !this.gains[id])) return null;
+    const out = perLayer((id) => this.gains[id]!);
     // 모두 꺼 둔 동안은 층도 꺼진 것으로 알려 장면이 소리를 예약하지 않게 한다
-    return { ctx, out: { ambient, shared, effects }, isEnabled: (layer) => this.enabled[layer] && !this.muted };
+    return { ctx, out, isEnabled: (layer) => this.enabled[layer] && !this.muted };
   }
 
   /** 층이 켜져 있는 동안 이어지는 소리를 장면이 만든다. 이미 켜져 있으면 바로 시작한다 */
@@ -285,6 +288,20 @@ export class SoundMixer {
   }
 
   // ---- 안쪽 ----
+
+  /**
+   * 배경 음악은 예전엔 환경음 층에 섞여 있었다. 나뉜 뒤 처음 한 번, 환경음에 정해 둔 켜짐·크기를 음악 값으로 적어 둔다
+   * (환경음을 꺼 두었던 사람에게 음악이 다시 들리지 않게). 그 뒤로는 서로 따로 — 부엌 소리만 꺼도 음악은 그대로다
+   */
+  private splitMusicFromAmbient(): void {
+    const storage = this.storage;
+    if (!storage || storage.get<boolean>('sound.musicSplit', false)) return;
+    for (const kind of ['enabled', 'volume'] as const) {
+      const old = storage.get<unknown>(`sound.${kind}.ambient`, null);
+      if (old != null && storage.get<unknown>(`sound.${kind}.music`, null) == null) storage.set(`sound.${kind}.music`, old);
+    }
+    storage.set('sound.musicSplit', true);
+  }
 
   private hasFiles(def: SoundLayerDef): boolean {
     return def.synth === true || Boolean(def.loop) || Object.keys(def.oneShots ?? {}).length > 0;

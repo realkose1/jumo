@@ -114,7 +114,7 @@ const space: SpaceDefinition = {
   seats,
   actions: buildActions(),
   greetingActionId: shared.greetingActionId,
-  sound: { ambient: {}, shared: {}, effects: {} },
+  sound: { music: {}, ambient: {}, shared: {}, effects: {} },
   schedule: [],
   personalCounters: [{ id: 'visits', label: { ko: '다녀간 날' }, unit: { ko: '일' } }],
   loadingToy: { id: 'bubbles', label: { ko: '방울 톡톡' } },

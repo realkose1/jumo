@@ -40,8 +40,10 @@ const space: SpaceDefinition = {
   seats: buildSeats(),
   actions: buildActions(),
   greetingActionId: shared.greetingActionId,
-  // 소리는 모두 WebAudio로 직접 만든다. 효과음과 공동 소리는 켜 두고, 환경음은 낮게 깔린다.
+  // 소리는 모두 WebAudio로 직접 만든다. 효과음과 공동 소리는 켜 두고, 배경 음악과 환경음(부엌 소리)은 낮게 깔린다.
+  // 음악과 부엌 소리는 한 층에 섞여 있다가 따로 켜고 끌 수 있게 나뉘었다(같은 크기라 둘을 합친 소리는 전과 같다)
   sound: {
+    music: { synth: true, defaultOn: true, defaultVolume: 0.4 },
     ambient: { synth: true, defaultOn: true, defaultVolume: 0.4 },
     shared: { synth: true, defaultOn: true, defaultVolume: 0.8 },
     effects: { synth: true, defaultOn: true, defaultVolume: 0.8 },
