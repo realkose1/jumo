@@ -683,6 +683,12 @@ export class Engine {
     this.trackPeerCount();
     this.sceneHandle?.update?.(dt, this.elapsed);
     this.rig.update(dt);
+    if (this.player) {
+      // 하늘을 보려고 시점을 낮추면 카메라가 내 머리 바로 뒤로 온다. 그때 내 갓이 화면을 가리며
+      // 따라다니지 않게, 카메라가 머리 꼭대기 높이 근처까지 내려오면 내 화면에서만 갓을 감춘다
+      const headTop = this.player.avatar.root.position.y + AVATAR_HEIGHT + 0.35;
+      this.player.avatar.setTallHidden(this.rig.camera.position.y < headTop);
+    }
     if (this.labeler) {
       this.updateHover();
       if (this.labeler.isActive()) {

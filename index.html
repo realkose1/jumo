@@ -5198,7 +5198,9 @@ function jumakWhoAll(ms) {
 function jumakMatchLine(m, phase) {
   const kp = heroRepOf(m) || m.koreanPlayer;
   const isHome = !!kp && m.home && m.home.code === kp.team;
-  const opp = ((isHome ? m.away : m.home) || {}).name || '';
+  // 응원 주막 입구에는 영어를 쓰지 않는다: 상대 팀 이름이 영어면 빼고 시각만
+  const oppRaw = ((isHome ? m.away : m.home) || {}).name || '';
+  const opp = /[A-Za-z]/.test(oppRaw) ? '' : oppRaw;
   const when = phase === 'live' ? '진행 중' : (m.fullDate ? formatHHMM(m.fullDate) : '');
   return [opp ? `${opp}전` : '', when].filter(Boolean).join(' ');
 }

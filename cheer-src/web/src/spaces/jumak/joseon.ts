@@ -117,5 +117,6 @@ export function oldClock(state: 'pre' | 'live' | 'final', clock: string): string
   if (/^HT$/i.test(c)) return '쉬는 참';
   const min = /^(\d+)(\+\d+)?'$/.exec(c);
   if (min) return `${min[1]}${min[2] ?? ''}분`;
-  return c || '겨루는 중';
+  if (!c || /^live$/i.test(c)) return '겨루는 중';
+  return c;
 }

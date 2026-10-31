@@ -59,6 +59,7 @@ registerOutfit({
     {
       // 갓: 넓은 챙과 원통 모자
       key: 'gat',
+      tall: true,
       attach: 'head',
       looks: GAT_LOOKS,
       create: (d) =>
@@ -73,6 +74,7 @@ registerOutfit({
     {
       // 갓끈: 챙 양옆에서 턱 옆으로 늘어진 붉은 구슬 줄
       key: 'gatkkeun',
+      tall: true,
       attach: 'head',
       looks: GAT_LOOKS,
       create: (d) => {
@@ -93,6 +95,7 @@ registerOutfit({
     {
       // 상투: 정수리에 틀어 올린 머리와 가로지른 동곳
       key: 'sangtu',
+      tall: true,
       attach: 'head',
       looks: SANGTU_LOOKS,
       create: (d) =>

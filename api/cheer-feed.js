@@ -45,6 +45,8 @@
 const {
   PLAYERS, NATIONAL_TEAMS, MANUAL_OUT, natNameFor, countryKo, teamMatches,
 } = require('./push-cron.js');
+// 응원 주막에는 영어를 쓰지 않는다: 팀·대회 이름을 한글로(api/team-ko.js)
+const { teamKo, compKo } = require('./team-ko.js');
 
 const WINDOW_PRE_MS = 60 * 60e3;        // 시작 60분 전부터 창에 넣는다
 const WINDOW_FINAL_MS = 30 * 60e3;      // 끝나고 30분까지
@@ -192,14 +194,6 @@ const AF_LIVE = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'INT', 'LIVE', 'SUSP
 const AF_FINAL = new Set(['FT', 'AET', 'PEN', 'AWD', 'WO', 'ABD']);
 // PST·CANC(연기·취소)는 피드에서 뺀다.
 const PHASE = { '1H': 1, HT: 2, '2H': 3, BT: 4, ET: 5, P: 6 };
-// 앱 transformApiFootballFixture 의 TOURNEY_ABBR 와 같은 표(대회 약칭) — 바꾸면 양쪽을 같이.
-const TOURNEY_ABBR = {
-  'Premier League': 'EPL', 'Bundesliga': 'GER', 'Ligue 1': 'L1', 'Serie A': 'ITA',
-  'Premiership': 'SPL', 'Süper Lig': 'TUR', 'Eredivisie': 'NED', 'Primeira Liga': 'POR',
-  'Jupiler Pro League': 'BEL', 'Major League Soccer': 'MLS', 'Superliga': 'DEN', 'La Liga': 'ESP',
-  'Championship': 'CHA', 'Serbian SuperLiga': 'SRB', 'UEFA Champions League': 'UCL',
-  'UEFA Europa League': 'UEL', 'UEFA Conference League': 'UECL', 'Asian Games': 'AG', 'Friendlies': 'A매치',
-};
 
 const isManualOut = (p, koMs) => {
   const d = kstDay(koMs);
@@ -245,7 +239,8 @@ function soccerObs(id, f, stamp, nowMs) {
   // 대회 약칭·팀명 — 앱과 같은 규칙(올림픽 대표팀 친선은 'A매치'가 아니라 '친선', 대표팀 경기면 상대국 한글).
   const oly = natNameFor(H.id, lg.id) === '올림픽 대표팀' || natNameFor(A.id, lg.id) === '올림픽 대표팀';
   const tn = lg.name || '';
-  const comp = clean(oly ? '친선' : (TOURNEY_ABBR[tn] || tn.split(' ').map((w) => w[0] || '').join('').toUpperCase().slice(0, 4)), 8);
+  // 대회는 한글 이름으로(앱의 TOURNEY_ABBR 약칭 EPL·GER 같은 영어 대신). 같은 이름을 쓰는 나라(오스트리아 분데스리가)는 나라로 가른다
+  const comp = clean(oly ? '친선' : compKo(tn, lg.country), 16);
   const teamName = (t) => clean((NATIONAL_TEAMS[t.id] ? natNameFor(t.id, lg.id) : null)
     || (isNat ? countryKo(t.name || '', oly) : (t.name || ''))) || '?';
 
@@ -254,7 +249,7 @@ function soccerObs(id, f, stamp, nowMs) {
   const el = goalsNum(f.el ?? fst.elapsed, 150);
   const extra = (el === 45 || el === 90 || el === 105 || el === 120) ? (goalsNum(fst.extra, 30) || 0) : 0;
   const liveClock = s === 'HT' ? 'HT' : s === 'BT' ? '연장 전 휴식' : s === 'P' ? '승부차기'
-    : (s === 'INT' || s === 'SUSP') ? '중단' : el == null ? 'LIVE' : extra ? `${el}+${extra}'` : `${el}'`;
+    : (s === 'INT' || s === 'SUSP') ? '중단' : el == null ? '진행 중' : extra ? `${el}+${extra}'` : `${el}'`;
   const prog = PHASE[s] ? PHASE[s] * 10000 + (el || 0) * 100 + extra : null;
   const pen = fx.score?.penalty;
   const finClock = s === 'PEN' ? (goalsNum(pen?.home) != null ? `종료(승부차기 ${goalsNum(pen.home)}:${goalsNum(pen.away) ?? 0})` : '종료(승부차기)')
@@ -327,11 +322,11 @@ function mlbObs(x) {
   const m = /^([A-Za-z]+)\s+(\d+)$/.exec(x.inn || '');
   const inning = m ? `${m[2]}회${HALF_KO[m[1]] || ''}` : '';
   return {
-    id: `mlbpatch-${x.pk}`, sport: 'baseball', comp: 'MLB', ko: x.ko, st: x.st, stamp: x.stamp || 0,
+    id: `mlbpatch-${x.pk}`, sport: 'baseball', comp: '메이저리그', ko: x.ko, st: x.st, stamp: x.stamp || 0,
     home: clean(x.hn), away: clean(x.an),
     h: x.st === 'pre' ? null : goalsNum(x.h), a: x.st === 'pre' ? null : goalsNum(x.a),
     side: sides.size > 1 ? 'both' : [...sides][0], pl,
-    liveClock: (inning || 'LIVE') + (/Delayed|Suspended/i.test(x.det || '') ? ' 중단' : ''),
+    liveClock: (inning || '진행 중') + (/Delayed|Suspended/i.test(x.det || '') ? ' 중단' : ''),
     prog: m && HALF[m[1]] != null ? Number(m[2]) * 4 + HALF[m[1]] : null,
     finClock: '종료', dur: 190 * 60e3,
   };
@@ -462,7 +457,7 @@ function toMatch(o, rec, nowMs, clocks) {
   else if (st === 'final') clock = o.st === 'final' ? o.finClock : '종료';
   else {
     const prev = clocks.get(o.id);
-    if (o.st !== 'live') clock = prev?.clock || 'LIVE';
+    if (o.st !== 'live') clock = prev?.clock || '진행 중';
     else if (prev && o.prog != null && prev.prog != null && o.prog < prev.prog) clock = prev.clock;
     else { clock = o.liveClock; clocks.set(o.id, { clock, prog: o.prog }); }
   }
@@ -471,10 +466,16 @@ function toMatch(o, rec, nowMs, clocks) {
   const side = o.side || (sides.size > 1 ? 'both' : sides.size ? [...sides][0] : null);
   return {
     id: o.id, sport: o.sport, comp: o.comp,
-    home: { name: o.home, score: st === 'pre' ? null : (h ?? 0) },
-    away: { name: o.away, score: st === 'pre' ? null : (a ?? 0) },
+    home: { name: koTeam(o.home), score: st === 'pre' ? null : (h ?? 0) },
+    away: { name: koTeam(o.away), score: st === 'pre' ? null : (a ?? 0) },
     side, state: st, clock, ko: o.ko, players,
   };
+}
+
+// 팀 이름을 한글로. 표에 없는 이름은 영어로 내보내지 않고 '상대 팀'으로
+function koTeam(name) {
+  const ko = teamKo(name);
+  return /[A-Za-z]/.test(ko) ? '상대 팀' : ko;
 }
 
 // ── 입출력 ──────────────────────────────────────────────────────────────
