@@ -1,6 +1,6 @@
 // 주막의 소리: 동작(박수, 건배, 주문), 경기 순간(골, 킥오프, 실점, 끝), 깔리는 부엌 소리(가마솥, 전 부치기).
 // 소리 만드는 법은 recipes.ts(동작, 순간), kitchen.ts(부엌), music.ts(배경 음악)에 있고, 여기서는 층(효과음, 공동 소리,
-// 환경음)에 이어 주고 켜짐/꺼짐과 크기는 엔진의 SoundMixer가 맡는다.
+// 환경음 = 부엌, 배경 음악)에 이어 주고 켜짐/꺼짐과 크기는 엔진의 SoundMixer가 맡는다.
 import type { MomentSound } from '../../cheer/moments';
 import type { SoundLayerId, SoundMixer, SynthAudio } from '../../engine/sound';
 import { startKitchen, type Kitchen } from './kitchen';
@@ -25,19 +25,25 @@ export class JumakSound {
   private intensity = 0;
 
   constructor(private readonly mixer: SoundMixer) {
-    // 환경음 층이 켜져 있는 동안 부엌 소리(가마솥 보글거림, 전 부치는 지글거림)와
-    // 배경 음악(한산할 땐 가야금, 경기 중엔 장구 응원가)이 돈다
+    // 환경음 층이 켜져 있는 동안 부엌 소리(가마솥 보글거림, 전 부치는 지글거림)가 돈다
     mixer.setSynthLoop('ambient', {
       start: (ctx, out) => {
         const kitchen = startKitchen(ctx, out);
         kitchen.setIntensity(this.intensity);
         this.kitchen = kitchen;
+        return () => {
+          kitchen.stop();
+          if (this.kitchen === kitchen) this.kitchen = null;
+        };
+      },
+    });
+    // 배경 음악 층이 켜져 있는 동안 음악(한산할 땐 가야금, 경기 중엔 장구 응원가)이 돈다
+    mixer.setSynthLoop('music', {
+      start: (ctx, out) => {
         const music = startMusic(ctx, out, this.intensity > 0);
         this.music = music;
         return () => {
-          kitchen.stop();
           music.stop();
-          if (this.kitchen === kitchen) this.kitchen = null;
           if (this.music === music) this.music = null;
         };
       },
@@ -107,6 +113,7 @@ export class JumakSound {
 
   dispose(): void {
     this.mixer.setSynthLoop('ambient', null);
+    this.mixer.setSynthLoop('music', null);
     this.kitchen = null;
     this.music = null;
     for (const b of this.buses.values()) b.input.disconnect();

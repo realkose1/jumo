@@ -51,6 +51,7 @@ function memoryBackend(): StorageBackend & { data: Map<string, string> } {
 }
 
 const layers: SoundLayers = {
+  music: { synth: true, defaultOn: true, defaultVolume: 0.4 },
   ambient: { synth: true, defaultOn: true, defaultVolume: 0.4 },
   shared: { synth: true, defaultOn: true, defaultVolume: 0.8 },
   effects: { synth: true, defaultOn: false },
@@ -123,7 +124,7 @@ describe('SoundMixer (공간이 직접 만든 소리)', () => {
   });
 
   it('소리 없음 표시는 파일도 직접 만든 소리도 없는 층에만', () => {
-    const mixer = new SoundMixer({ ambient: {}, shared: { synth: true }, effects: { oneShots: { a: 'a.mp3' } } });
+    const mixer = new SoundMixer({ music: {}, ambient: {}, shared: { synth: true }, effects: { oneShots: { a: 'a.mp3' } } });
     const s = mixer.getState().layers;
     expect(s.ambient.hasFiles).toBe(false);
     expect(s.shared.hasFiles).toBe(true);
@@ -137,6 +138,53 @@ describe('SoundMixer (공간이 직접 만든 소리)', () => {
     mixer.unlock();
     mixer.dispose();
     expect(stop).toHaveBeenCalled();
+  });
+});
+
+describe('SoundMixer 배경 음악 층 (환경음에서 나뉨)', () => {
+  it('배경 음악과 환경음은 따로 켜고 끈다', () => {
+    const mixer = new SoundMixer(layers, { storage: new SpaceStorage('t', memoryBackend()) });
+    const music = vi.fn(() => () => undefined);
+    const musicStop = vi.fn();
+    const kitchenStop = vi.fn();
+    mixer.setSynthLoop('music', { start: () => (music(), musicStop) });
+    mixer.setSynthLoop('ambient', { start: () => kitchenStop });
+    mixer.unlock();
+    expect(music).toHaveBeenCalledTimes(1);
+    mixer.setEnabled('music', false);
+    expect(musicStop).toHaveBeenCalled();
+    expect(kitchenStop).not.toHaveBeenCalled();
+    const audio = mixer.getAudio()!;
+    expect(audio.isEnabled('music')).toBe(false);
+    expect(audio.isEnabled('ambient')).toBe(true);
+    expect(audio.out.music).toBeDefined();
+  });
+
+  it('나뉘기 전에 환경음에 정해 둔 값을 음악이 한 번 물려받는다', () => {
+    const backend = memoryBackend();
+    // 나뉘기 전 판이 남긴 값(음악 값·나뉨 표시 없음)
+    const before = new SpaceStorage('t', backend);
+    before.set('sound.enabled.ambient', false);
+    before.set('sound.volume.ambient', 0.15);
+    const s = new SoundMixer(layers, { storage: new SpaceStorage('t', backend) }).getState().layers;
+    expect(s.music.enabled).toBe(false);
+    expect(s.music.volume).toBeCloseTo(0.15);
+    expect(s.ambient.enabled).toBe(false);
+  });
+
+  it('물려받기는 처음 한 번뿐 — 나뉜 뒤에 부엌 소리만 끄면 음악은 그대로', () => {
+    const backend = memoryBackend();
+    const first = new SoundMixer(layers, { storage: new SpaceStorage('t', backend) });
+    first.unlock();
+    first.setEnabled('ambient', false);
+    const s = new SoundMixer(layers, { storage: new SpaceStorage('t', backend) }).getState().layers;
+    expect(s.music.enabled).toBe(true);
+    expect(s.ambient.enabled).toBe(false);
+  });
+
+  it('아무것도 정한 적 없으면 공간이 정한 처음 값', () => {
+    const s = new SoundMixer(layers, { storage: new SpaceStorage('t', memoryBackend()) }).getState().layers;
+    expect(s.music).toMatchObject({ enabled: true, volume: 0.4, hasFiles: true });
   });
 });
 

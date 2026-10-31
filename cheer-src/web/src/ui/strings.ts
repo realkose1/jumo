@@ -20,7 +20,8 @@ export const S = {
     tabs: { sound: '소리', controls: '조작', motion: '움직임' },
   },
   sound: {
-    ambient: { label: '환경음', hint: '주막에 깔린 사람들 말소리예요' },
+    music: { label: '배경 음악', hint: '가야금 가락이에요. 경기 중엔 장구 응원가로 바뀌어요' },
+    ambient: { label: '부엌 소리', hint: '가마솥 끓는 소리, 전 부치는 소리예요' },
     shared: { label: '공동 소리', hint: '골이나 킥오프처럼 모두가 함께 듣는 소리예요' },
     effects: { label: '효과음', hint: '박수, 건배, 주문 소리예요' },
     volume: (label: string) => `${label} 크기`,

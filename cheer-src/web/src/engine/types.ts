@@ -72,6 +72,8 @@ export interface SoundLayerDef {
 }
 
 export interface SoundLayers {
+  /** 배경 음악 */
+  music: SoundLayerDef;
   ambient: SoundLayerDef;
   shared: SoundLayerDef;
   effects: SoundLayerDef;
