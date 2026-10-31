@@ -113,7 +113,7 @@ export function createJumakScene(ctx: SceneContext): SceneHandle {
   };
 
   const previousBackground = scene.background;
-  scene.background = new THREE.Color(0x06080f);
+  scene.background = new THREE.Color(0x0a1122); // 달 밝은 밤하늘
 
   // ---- 방 ----
   const room = buildRoom();
@@ -216,14 +216,25 @@ export function createJumakScene(ctx: SceneContext): SceneHandle {
   starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
   const starMat = own(new THREE.PointsMaterial({ size: 1.8, sizeAttenuation: false, color: 0xdfe6ff, transparent: true, opacity: 0.75, depthWrite: false, fog: false }));
   add(new THREE.Points(starGeo, starMat));
-  const moonGeo = own(new THREE.SphereGeometry(3.4, 20, 14));
-  const moonMat = own(new THREE.MeshBasicMaterial({ color: 0xf3ecd0, fog: false, toneMapped: false }));
+  // 보름달: 지붕이 없어 마당 어디서든 TV 오른쪽 위 하늘에 크게 보인다. 표면 무늬는 캔버스로 그린다
+  const MOON_POS = new THREE.Vector3(9, 20.6, -64);
+  const moonTex = own(makeMoonTexture());
+  const moonGeo = own(new THREE.CircleGeometry(3.7, 48));
+  const moonMat = own(new THREE.MeshBasicMaterial({ map: moonTex, fog: false, toneMapped: false, transparent: true }));
   const moon = add(new THREE.Mesh(moonGeo, moonMat));
-  moon.position.set(-30, 26, -56);
+  moon.position.copy(MOON_POS);
+  moon.lookAt(0, 2, 2); // 마당을 바라본다
   const moonHaloGeo = own(new THREE.BufferGeometry());
-  moonHaloGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-30, 26, -56]), 3));
-  const moonHaloMat = own(new THREE.PointsMaterial({ size: 30, map: dot, color: 0x9fb2e8, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, fog: false }));
+  moonHaloGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([MOON_POS.x, MOON_POS.y, MOON_POS.z]), 3));
+  const moonHaloMat = own(new THREE.PointsMaterial({ size: 150, sizeAttenuation: false, map: dot, color: 0xcdd8ff, transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, fog: false }));
   add(new THREE.Points(moonHaloGeo, moonHaloMat));
+  // 달빛: 마당을 푸르스름하게 비춘다
+  const moonLight = add(new THREE.DirectionalLight(0xaebfff, 0.35));
+  moonLight.position.copy(MOON_POS);
+  // 먼 산 능선 (어두운 실루엣)
+  const hills = own(buildHills());
+  const hillMat = own(new THREE.MeshBasicMaterial({ color: 0x0c1220, fog: false, side: THREE.DoubleSide }));
+  add(new THREE.Mesh(hills, hillMat));
   ctx.reportProgress(0.8);
 
   // ---- 효과와 소리 ----
@@ -361,4 +372,77 @@ export function createJumakScene(ctx: SceneContext): SceneHandle {
       scene.background = previousBackground;
     },
   };
+}
+
+/** 보름달 그림: 밝은 원판에 옅은 바다(어두운 무늬)와 가장자리 어둡게 */
+function makeMoonTexture(): THREE.CanvasTexture {
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const g = canvas.getContext('2d');
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  if (!g) return tex;
+  const c = size / 2;
+  const r = size / 2 - 2;
+  const base = g.createRadialGradient(c * 0.92, c * 0.9, r * 0.1, c, c, r);
+  base.addColorStop(0, '#fffbea');
+  base.addColorStop(0.8, '#f2e9c8');
+  base.addColorStop(1, '#d9cfa8');
+  g.fillStyle = base;
+  g.beginPath();
+  g.arc(c, c, r, 0, Math.PI * 2);
+  g.fill();
+  // 달의 바다 (토끼 무늬처럼 보이는 어두운 곳)
+  g.save();
+  g.beginPath();
+  g.arc(c, c, r, 0, Math.PI * 2);
+  g.clip();
+  const maria: Array<[number, number, number, number]> = [
+    [0.38, 0.36, 0.17, 0.22],
+    [0.6, 0.3, 0.12, 0.2],
+    [0.52, 0.52, 0.15, 0.18],
+    [0.34, 0.62, 0.1, 0.16],
+    [0.66, 0.6, 0.09, 0.14],
+    [0.46, 0.76, 0.08, 0.1],
+  ];
+  for (const [x, y, rad, a] of maria) {
+    const m = g.createRadialGradient(x * size, y * size, 0, x * size, y * size, rad * size);
+    m.addColorStop(0, `rgba(150,140,115,${a + 0.12})`);
+    m.addColorStop(1, 'rgba(150,140,115,0)');
+    g.fillStyle = m;
+    g.fillRect(0, 0, size, size);
+  }
+  g.restore();
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/** 마당 밖을 둘러싼 먼 산들 (낮은 원뿔을 이어 붙인 능선) */
+function buildHills(): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [];
+  const n = 22;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + 0.13 * Math.sin(i * 2.3);
+    const r = 78 + 8 * Math.sin(i * 1.7);
+    const h = 9 + 7 * Math.abs(Math.sin(i * 1.13 + 0.5));
+    const w = 16 + 6 * Math.abs(Math.cos(i * 0.9));
+    const cone = new THREE.ConeGeometry(w, h, 5, 1, true);
+    cone.translate(Math.cos(a) * r, h / 2 - 3, Math.sin(a) * r);
+    parts.push(cone.toNonIndexed());
+    cone.dispose();
+  }
+  let count = 0;
+  for (const p of parts) count += p.getAttribute('position').count;
+  const pos = new Float32Array(count * 3);
+  let o = 0;
+  for (const p of parts) {
+    pos.set(p.getAttribute('position').array as Float32Array, o);
+    o += p.getAttribute('position').count * 3;
+    p.dispose();
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  return g;
 }

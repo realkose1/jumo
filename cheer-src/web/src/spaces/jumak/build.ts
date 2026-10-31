@@ -1,4 +1,4 @@
-// 주막의 고정된 모양을 만든다: 마루, 평상 넷과 방석, 소반, 기둥과 기와지붕, TV 벽, 청사초롱.
+// 주막의 고정된 모양을 만든다: 흙 마당, 평상 넷과 방석, 소반, 돌담, 기둥, TV 판벽과 차양, 청사초롱. 지붕이 없는 바깥 마당이다.
 // 모두 기본 도형이고, 재질이 같은 것은 한 덩어리로 합친다.
 //   lit  : 정점 색 Lambert (나무, 기와, 방석, 소반 …)  -> 그리기 호출 1번
 //   glow : 정점 색 Basic  (초롱 종이, 문종이처럼 스스로 빛나는 것)  -> 그리기 호출 1번
@@ -68,12 +68,8 @@ const C = {
 /** 방석 색: 청, 홍, 황이 돌아가며 (평상마다 시작이 다르다) */
 const CUSHION_COLORS = [0xc8382a, 0x2d5fb0, 0xd9a21b] as const;
 
-const roofY = (x: number): number =>
-  ROOM.ridgeY - ((ROOM.ridgeY - ROOM.eaveY) * Math.min(Math.abs(x), ROOM.eaveHalfWidth)) / ROOM.eaveHalfWidth;
-
 const wallShade = (y: number): number => 0.5 + 0.5 * smoothstep(0, 2.6, y);
 
-const SLOPE = Math.atan2(ROOM.ridgeY - ROOM.eaveY, ROOM.eaveHalfWidth);
 
 export function buildRoom(): RoomBuild {
   const lit = new Batch(7);
@@ -103,13 +99,21 @@ function buildFloor(b: Batch): void {
   const midZ = (ROOM.frontZ + ROOM.backZ) / 2;
   // 널 사이 틈으로 보이는 어두운 바닥
   b.plane(width + 0.4, depth, [0, -0.02, midZ], C.floorSlab, { rx: -Math.PI / 2 });
-  const planks = Math.round(width / 0.23);
-  const pw = width / planks;
-  const base = new THREE.Color(C.floorBase);
-  for (let i = 0; i < planks; i++) {
-    const tint = 0.88 + rand() * 0.24;
-    const color = base.clone().multiplyScalar(tint).getHex();
-    b.plane(pw - 0.018, depth, [-ROOM.halfWidth + (i + 0.5) * pw, 0, midZ], color, { rx: -Math.PI / 2, jitter: 0.07 }, [1, 10]);
+  // 다진 흙 마당: 조각마다 색이 조금씩 다르고, 군데군데 납작한 돌
+  const dirt = new THREE.Color(0x6b5236);
+  const tiles = 12;
+  const tw = width / tiles;
+  const td = depth / tiles;
+  for (let i = 0; i < tiles; i++) {
+    for (let j = 0; j < tiles; j++) {
+      const color = dirt.clone().multiplyScalar(0.86 + rand() * 0.22).getHex();
+      b.plane(tw + 0.01, td + 0.01, [-ROOM.halfWidth + (i + 0.5) * tw, 0, ROOM.frontZ + (j + 0.5) * td], color, { rx: -Math.PI / 2, jitter: 0.05 });
+    }
+  }
+  for (let k = 0; k < 26; k++) {
+    const x = -ROOM.halfWidth + rand() * width;
+    const z = ROOM.frontZ + rand() * depth;
+    b.cylinder(0.12 + rand() * 0.16, 0.16 + rand() * 0.18, 0.04, 7, [x, 0.01, z], C.stone, { jitter: 0.12 });
   }
   // 마루 가장자리(옆이 트인 쪽)와 마당
   for (const s of [-1, 1]) {
@@ -189,89 +193,79 @@ function buildTable(b: Batch, parent: THREE.Matrix4): void {
   b.cylinder(0.085, 0.085, 0.02, 12, [x + 0.32, topY + 0.022, z + 0.02], C.pancake, o);
 }
 
-// ---- 벽, 기둥, 지붕 ----
+// ---- 담장, 기둥 (지붕 없이 하늘이 트인 마당) ----
+// 예전에는 기와지붕 아래 방이었지만, 지금은 지붕을 걷고 돌담으로 둘러싼 바깥 마당이다.
+// TV 뒤에만 나무 판벽(차양이 달린다)이 서고, 양옆 기둥과 도리는 초롱을 거는 시렁으로 남는다.
 function buildShell(lit: Batch, glow: Batch): void {
+  void glow;
   const midZ = (ROOM.frontZ + ROOM.backZ) / 2;
   const depth = ROOM.backZ - ROOM.frontZ;
-  const roofDepth = depth + 2.6; // 앞뒤 처마
 
-  // 앞벽과 뒷벽: 세로 널. 지붕 안쪽 선을 따라 위가 뾰족하다
+  // TV 뒤 판벽: 세로 널
   const rand = seeded(61);
   const wallBase = new THREE.Color(C.wall);
   const strip = 0.6;
-  const strips = Math.round((ROOM.eaveHalfWidth * 2) / strip);
-  for (const [z, faceBack] of [
-    [ROOM.frontZ, false],
-    [ROOM.backZ, true],
-  ] as const) {
-    for (let i = 0; i < strips; i++) {
-      const x = -ROOM.eaveHalfWidth + (i + 0.5) * strip;
-      const top = roofY(x);
-      const bottom = -ROOM.yardDrop;
-      const color = wallBase.clone().multiplyScalar(0.88 + rand() * 0.24).getHex();
-      lit.plane(strip - 0.02, top - bottom, [x, (top + bottom) / 2, z], color, { ry: faceBack ? Math.PI : 0, shade: wallShade, jitter: 0.05 }, [1, 4]);
-    }
-    // 허리띠(걸레받이 위 가로 장식)
-    lit.box([ROOM.eaveHalfWidth * 2, 0.12, 0.1], [0, 1.15, z + (faceBack ? -0.05 : 0.05)], C.trim);
-    lit.box([ROOM.eaveHalfWidth * 2, 0.22, 0.12], [0, 0.11, z + (faceBack ? -0.06 : 0.06)], C.trim);
+  const boardHalf = 4.2;
+  const boardTop = 4.7;
+  const strips = Math.round((boardHalf * 2) / strip);
+  for (let i = 0; i < strips; i++) {
+    const x = -boardHalf + (i + 0.5) * strip;
+    const bottom = -ROOM.yardDrop;
+    const color = wallBase.clone().multiplyScalar(0.88 + rand() * 0.24).getHex();
+    lit.plane(strip - 0.02, boardTop - bottom, [x, (boardTop + bottom) / 2, ROOM.frontZ], color, { shade: wallShade, jitter: 0.05 }, [1, 4]);
+    // 뒷면(마당 밖에서 보이는 쪽)
+    lit.plane(strip - 0.02, boardTop - bottom, [x, (boardTop + bottom) / 2, ROOM.frontZ - 0.12], C.wallDark, { ry: Math.PI });
   }
+  lit.box([boardHalf * 2 + 0.3, 0.22, 0.3], [0, boardTop + 0.05, ROOM.frontZ - 0.06], C.trim);
+  for (const sx of [-1, 1]) lit.box([0.26, boardTop + ROOM.yardDrop + 0.1, 0.3], [sx * (boardHalf + 0.1), (boardTop - ROOM.yardDrop) / 2, ROOM.frontZ - 0.06], C.post);
 
-  // 뒷벽 문 둘 (살창과 문종이)
-  for (const dx of [-3.2, 3.2]) {
-    const z = ROOM.backZ - 0.05;
-    glow.plane(1.7, 2.3, [dx, 1.3, z - 0.01], 0xa77f48, { ry: Math.PI });
-    for (let i = 0; i <= 4; i++) lit.box([0.04, 2.3, 0.04], [dx - 0.85 + (i * 1.7) / 4, 1.3, z - 0.05], C.trim);
-    for (let j = 0; j <= 5; j++) lit.box([1.74, 0.04, 0.04], [dx, 0.15 + (j * 2.3) / 5, z - 0.05], C.trim);
-  }
+  // 돌담: 앞(판벽 양옆)과 뒤
+  stoneWall(lit, -ROOM.eaveHalfWidth, -boardHalf - 0.2, ROOM.frontZ - 0.1, 71);
+  stoneWall(lit, boardHalf + 0.2, ROOM.eaveHalfWidth, ROOM.frontZ - 0.1, 72);
+  stoneWall(lit, -ROOM.eaveHalfWidth, ROOM.eaveHalfWidth, ROOM.backZ, 73);
 
-  // 기둥과 주춧돌, 위에서 이어 주는 보
+  // 기둥과 주춧돌, 옆 도리(초롱을 거는 시렁)
   const postZ = [ROOM.frontZ + 0.4, -3.0, 0, 3.0, 6.0, ROOM.backZ - 0.4];
   for (const s of [-1, 1]) {
     for (const z of postZ) {
-      lit.cylinder(0.16, 0.18, ROOM.postTopY + ROOM.yardDrop, 10, [s * ROOM.halfWidth, (ROOM.postTopY - ROOM.yardDrop) / 2, z], C.post, { shade: wallShade, jitter: 0.04 });
+      lit.cylinder(0.14, 0.17, ROOM.postTopY + ROOM.yardDrop, 10, [s * ROOM.halfWidth, (ROOM.postTopY - ROOM.yardDrop) / 2, z], C.post, { shade: wallShade, jitter: 0.04 });
       lit.cylinder(0.27, 0.3, 0.3, 8, [s * ROOM.halfWidth, 0.1, z], C.stone, { jitter: 0.06 });
     }
-    lit.box([0.24, 0.32, depth], [s * ROOM.halfWidth, ROOM.postTopY - 0.12, midZ], C.beam);
-    // 중간 도리: 용마루와 나란히, 지붕 안쪽에 붙는다
-    const px = s * (ROOM.eaveHalfWidth / 2 + 0.2);
-    lit.box([0.26, 0.26, roofDepth], [px, roofY(px) - 0.15, midZ], C.beam);
+    lit.box([0.2, 0.24, depth], [s * ROOM.halfWidth, ROOM.postTopY - 0.1, midZ], C.beam);
   }
-  // 용마루 도리
-  lit.box([0.34, 0.34, roofDepth], [0, ROOM.ridgeY - 0.2, midZ], C.beam);
-  // 가로 보는 벽 쪽(앞벽과 뒷벽 바로 앞)에만 둔다. 방 한가운데를 가로지르면 어느 자리에서든 TV 위를 가린다
-  for (const z of [ROOM.frontZ + 0.4, ROOM.backZ - 0.4]) {
-    lit.box([ROOM.halfWidth * 2, 0.26, 0.24], [0, ROOM.postTopY - 0.2, z], C.beam);
-  }
+}
 
-  // 지붕 안쪽: 비스듬한 널과 그 아래 서까래
-  const slopeLen = Math.hypot(ROOM.eaveHalfWidth, ROOM.ridgeY - ROOM.eaveY);
-  const midY = (ROOM.ridgeY + ROOM.eaveY) / 2;
-  for (const s of [-1, 1]) {
-    // 안쪽 면 (아래를 본다)
-    lit.plane(slopeLen, roofDepth, [s * (ROOM.eaveHalfWidth / 2), midY - 0.04, midZ], C.roofUnder, { rx: Math.PI / 2, rz: -s * SLOPE, jitter: 0.06 });
-    // 위쪽 기와 면 (위를 본다): 줄무늬를 번갈아 칠한 기와골
-    const stripCount = 34;
-    const sd = roofDepth / stripCount;
-    for (let i = 0; i < stripCount; i++) {
-      lit.plane(slopeLen, sd, [s * (ROOM.eaveHalfWidth / 2), midY + 0.12, midZ - roofDepth / 2 + (i + 0.5) * sd], i % 2 ? C.tileA : C.tileB, { rx: -Math.PI / 2, rz: -s * SLOPE });
-    }
-    // 서까래
-    const rafters = 38;
-    const rd = roofDepth / rafters;
-    for (let i = 0; i < rafters; i++) {
-      const z = midZ - roofDepth / 2 + (i + 0.5) * rd;
-      lit.box([slopeLen, 0.07, 0.1], [s * (ROOM.eaveHalfWidth / 2), midY - 0.1, z], C.rafter, { rz: -s * SLOPE });
-    }
-    // 처마 끝: 평고대와 막새(둥근 기와 끝)
-    lit.box([0.14, 0.26, roofDepth], [s * ROOM.eaveHalfWidth, ROOM.eaveY - 0.02, midZ], C.trim);
-    const caps = Math.round(roofDepth / 0.34);
-    for (let i = 0; i < caps; i++) {
-      const z = midZ - roofDepth / 2 + (i + 0.5) * (roofDepth / caps);
-      lit.cylinder(0.12, 0.12, 0.05, 8, [s * (ROOM.eaveHalfWidth + 0.06), ROOM.eaveY + 0.16, z], i % 2 ? C.eaveTile : C.eaveTileB, { rz: Math.PI / 2 });
+/** 돌담: 둥글둥글한 돌을 몇 줄 쌓고 위에 기와를 얹는다 (x0~x1, 높이 약 1.3m) */
+function stoneWall(b: Batch, x0: number, x1: number, z: number, seed: number): void {
+  const rand = seeded(seed);
+  const bottom = -ROOM.yardDrop;
+  const rows = 4;
+  const rowH = 0.3;
+  const len = x1 - x0;
+  // 속을 채우는 흙벽
+  b.box([len, rows * rowH, 0.5], [(x0 + x1) / 2, bottom + (rows * rowH) / 2, z], 0x5d4a38, { jitter: 0.05 });
+  for (let r = 0; r < rows; r++) {
+    let x = x0 + (r % 2) * 0.2;
+    while (x < x1 - 0.1) {
+      const w = Math.min(x1 - x, 0.38 + rand() * 0.3);
+      const shade = 0.8 + rand() * 0.35;
+      const col = new THREE.Color(C.stone).multiplyScalar(shade).getHex();
+      for (const side of [-1, 1]) {
+        b.box([w - 0.05, rowH - 0.05, 0.12], [x + w / 2, bottom + r * rowH + rowH / 2, z + side * 0.25], col, { jitter: 0.1 });
+      }
+      x += w;
     }
   }
-  // 용마루 기와
-  lit.box([0.5, 0.26, roofDepth], [0, ROOM.ridgeY + 0.15, midZ], C.tileA);
+  // 기와 지붕(담 위)
+  const top = bottom + rows * rowH;
+  b.box([len + 0.2, 0.1, 0.8], [(x0 + x1) / 2, top + 0.05, z], C.tileB);
+  b.box([len + 0.2, 0.14, 0.36], [(x0 + x1) / 2, top + 0.17, z], C.tileA);
+  const caps = Math.max(1, Math.round(len / 0.32));
+  for (let i = 0; i < caps; i++) {
+    for (const side of [-1, 1]) {
+      b.cylinder(0.07, 0.07, 0.04, 6, [x0 + (i + 0.5) * (len / caps), top + 0.06, z + side * 0.42], i % 2 ? C.eaveTile : C.eaveTileB, { rx: Math.PI / 2 });
+    }
+  }
 }
 
 // ---- TV 위에 달린 차양(작은 기와지붕) ----
@@ -400,7 +394,7 @@ function buildLanterns(lit: Batch, glow: Batch, out: LanternSpot[]): void {
   // TV 앞 시선을 가리지 않게: 차양 앞줄은 TV 폭(±2.15) 바깥에만, 지붕 아래 줄은 양옆 기둥 쪽에만 둔다.
   // (방 한가운데 줄에 달면 통로와 앞줄 어느 자리에서든 TV 앞에 걸린다)
   for (const x of [-5.9, -4.65, -3.45, 3.45, 4.65, 5.9]) spots.push({ x, z: ROOM.frontZ + 1.4, topY: 3.62, ropeTo: 4.02, scale: 1.1 });
-  for (const x of [-5.9, 5.9]) for (const z of [-3.4, 0.8, 5.0]) spots.push({ x, z, topY: 3.7, ropeTo: roofY(x) - 0.1, scale: 1 });
+  for (const x of [-ROOM.halfWidth, ROOM.halfWidth]) for (const z of [-1.5, 1.5, 4.5]) spots.push({ x, z, topY: 3.55, ropeTo: ROOM.postTopY - 0.22, scale: 1 });
 
   spots.forEach((s, i) => {
     const blueBody = i % 3 === 1;
