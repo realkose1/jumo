@@ -90,8 +90,13 @@
         window.addEventListener(
           'error',
           function (e) {
+            // 우리 화면 코드(/cheer/assets/)만 본다 — 광고 차단기가 방문 집계(Cloudflare) 스크립트를
+            // 막거나 그 스크립트가 오류를 내도 주막은 그대로 열려야 한다
             var t = e && e.target;
             var isScript = t && t.tagName === 'SCRIPT';
+            if (isScript && String(t.src || '').indexOf(location.origin + '/cheer/assets/') !== 0) return;
+            var f = (e && e.filename) || '';
+            if (!isScript && (f && f.indexOf(location.origin) !== 0)) return;
             if (!isScript && !(e && e.message && /module|import|fetch/i.test(e.message))) return;
             broken();
           },
@@ -106,5 +111,8 @@
     <!-- 버튼 막대, 설정 창, 로딩 화면 같은 UI가 3D 위에 겹쳐지는 자리 -->
     <div id="ui-root"></div>
     <script type="module" src="/src/main.ts"></script>
+    <!-- 방문 집계(Cloudflare Web Analytics, 쿠키 없음). jumak.dev 는 Cloudflare 프록시를 거치지 않아
+         자동 집계가 안 되므로 스니펫으로 센다. 앱 안 iframe 으로 열려도 jumak.dev 방문으로 잡힌다 -->
+    <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "98bae858f2d646fca5ef717a23a6ac13"}'></script><!-- End Cloudflare Web Analytics -->
   </body>
 </html>
