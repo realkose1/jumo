@@ -3009,27 +3009,45 @@ function trimmedLogoUrl(blob) {
   });
 }
 
-function TeamBadge({ code, size=36, logo }) {
-  const colors = { TOT:'#132257', MCI:'#6CABDD', PSG:'#003399', Atletico:'#CB3524', ATM:'#CB3524', OL:'#FFFFFF', LAD:'#005A9C', TOR:'#134A8E', FCB:'#DC052D', BVB:'#FDE100', T1:'#C89B3C', GEN:'#EC1C24' };
-  const textColors = { MCI:'#132257', OL:'#1B3A6B', BVB:'#1B1B1B' };
-  const bg = colors[code] || '#333';
-  const tc = textColors[code] || '#fff';
+// 팀 로고를 불러와 여백을 잘라 낸 blob URL. 아직 불러오는 중이거나 실패하면 null.
+// TeamBadge 와 이벤트 목록·선수 카드의 작은 로고가 같은 캐시를 쓴다.
+function useTeamLogoUrl(logo) {
   const [blobUrl, setBlobUrl] = React.useState(logo ? (teamLogoCache[logo] || null) : null);
 
   React.useEffect(() => {
-    if (!logo) return;
+    if (!logo) { setBlobUrl(null); return; }
     if (teamLogoCache[logo]) { setBlobUrl(teamLogoCache[logo]); return; }
+    setBlobUrl(null);
     if (teamLogoCache[logo] === '') return;
+    let alive = true;
     fetch(logo, { referrerPolicy: 'no-referrer' })
       .then(r => r.ok ? r.blob() : null)
       .then(blob => blob ? trimmedLogoUrl(blob) : null)
       .then(url => {
         if (!url) { teamLogoCache[logo] = ''; return; }
         teamLogoCache[logo] = url;
-        setBlobUrl(url);
+        if (alive) setBlobUrl(url);
       })
       .catch(() => { teamLogoCache[logo] = ''; });
+    return () => { alive = false; };
   }, [logo]);
+
+  return blobUrl;
+}
+
+// TeamBadge 를 거치지 않던 작은 로고 자리용. 여백을 잘라 낸 그림을 쓰고, 불러오지 못하면
+// 예전처럼 원본 주소를 그대로 보여 준다.
+function TeamLogoImg({ src, alt = '', style }) {
+  const blobUrl = useTeamLogoUrl(src);
+  return <img src={blobUrl || src} alt={alt} style={style}/>;
+}
+
+function TeamBadge({ code, size=36, logo }) {
+  const colors = { TOT:'#132257', MCI:'#6CABDD', PSG:'#003399', Atletico:'#CB3524', ATM:'#CB3524', OL:'#FFFFFF', LAD:'#005A9C', TOR:'#134A8E', FCB:'#DC052D', BVB:'#FDE100', T1:'#C89B3C', GEN:'#EC1C24' };
+  const textColors = { MCI:'#132257', OL:'#1B3A6B', BVB:'#1B1B1B' };
+  const bg = colors[code] || '#333';
+  const tc = textColors[code] || '#fff';
+  const blobUrl = useTeamLogoUrl(logo);
 
   if (blobUrl) {
     return <img src={blobUrl} alt={code} style={{ width:size, height:size, objectFit:'contain', flexShrink:0 }}/>;
@@ -6901,7 +6919,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3 }}>
                       {(isHome ? match.home.logo : match.away.logo)
-                        ? <img src={isHome ? match.home.logo : match.away.logo} alt="" style={{ width:14, height:14, objectFit:'contain', flexShrink:0 }}/>
+                        ? <TeamLogoImg src={isHome ? match.home.logo : match.away.logo} style={{ width:14, height:14, objectFit:'contain', flexShrink:0 }}/>
                         : <span style={{ fontSize:9, fontWeight:700, color:'var(--text5)', background:'var(--border)', padding:'1px 5px', borderRadius:4 }}>{isHome ? match.home.code : match.away.code}</span>
                       }
                       <span style={{ ...NUM, fontSize:13, fontWeight:800, color:'var(--text)' }}>{p.awayScore}–{p.homeScore}</span>
@@ -7048,7 +7066,7 @@ function LiveDetailScreen({ match, onBack, liveApiMatches = [], onPlayer, onTeam
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                       {teamLogo
-                        ? <img src={teamLogo} alt={teamCode} style={{ width:14, height:14, objectFit:'contain', flexShrink:0 }}/>
+                        ? <TeamLogoImg src={teamLogo} alt={teamCode} style={{ width:14, height:14, objectFit:'contain', flexShrink:0 }}/>
                         : <span style={{ fontSize:9, fontWeight:700, color:'var(--text5)', background:'var(--border)', padding:'1px 5px', borderRadius:4 }}>{teamCode}</span>
                       }
                       <span style={{ fontSize:13, fontWeight:700, color: accentColor || 'var(--text)' }}>{title}</span>
@@ -8722,7 +8740,7 @@ function PlayersScreen({ onPlayer, onAdd, onToggleFollow, onTabBarScroll, follow
                   <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:8, marginTop:6 }}>
                     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', flexShrink:0 }}>
                       {teamLogo
-                        ? <img src={teamLogo} alt={p.team} style={{ width:22, height:22, objectFit:'contain', marginTop:10 }}/>
+                        ? <TeamLogoImg src={teamLogo} alt={p.team} style={{ width:22, height:22, objectFit:'contain', marginTop:10 }}/>
                         : <div style={{ width:22, height:22, marginTop:10 }}/>
                       }
                       <div style={{ fontSize:9, marginTop:1, visibility:'hidden' }}>·</div>
