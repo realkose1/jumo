@@ -44,11 +44,14 @@ async function loadRooms(env: PresenceEnv, spaceId: string): Promise<RoomsBody |
   return body;
 }
 
-function originAllowed(env: PresenceEnv, request: Request): boolean {
+export function originAllowed(env: PresenceEnv, request: Request): boolean {
   const allowed = (env.ALLOWED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
   if (allowed.length === 0) return true;
   const origin = request.headers.get('Origin');
-  return origin !== null && allowed.includes(origin);
+  if (origin === null) return false;
+  // 같은 Worker가 화면(정적 파일)도 내어 주므로, 화면과 같은 주소에서 온 연결은 늘 받는다
+  if (origin === new URL(request.url).origin) return true;
+  return allowed.includes(origin);
 }
 
 export default {

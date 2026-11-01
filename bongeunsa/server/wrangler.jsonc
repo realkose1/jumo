@@ -17,6 +17,14 @@
   // 주소: 지금은 workers.dev 주소만 연다. 사용자 도메인이 생기면 routes에 custom_domain으로 더한다.
   "workers_dev": true,
 
+  // 화면(web/dist)도 이 Worker가 같이 내어 준다. /ws, /rooms, /health만 Worker 코드로 가고 나머지는 정적 파일.
+  // 없는 경로(/bongeunsa 등)는 index.html로 보내 화면이 주소를 읽게 한다. 배포 전에 web에서 npm run build
+  "assets": {
+    "directory": "../web/dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/ws", "/rooms", "/health"]
+  },
+
   // 운영 중에 바꾸는 값들. 모두 문자열이다.
   "vars": {
     // 같은 IP(와이파이, 통신사 NAT)에서 한 방에 들어올 수 있는 사람 수(join한 연결만 센다)

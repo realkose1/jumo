@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --local --port 8797",
+    "deploy": "npm --prefix ../web run build && wrangler deploy",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

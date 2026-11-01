@@ -24,6 +24,12 @@ function showFatal(text: string): void {
   document.body.appendChild(el);
 }
 
+/** 'same-origin'이면 화면을 내어 준 주소의 /ws (배포: 한 Worker가 화면과 실시간 서버를 같이 맡는다) */
+function resolvePresenceUrl(value: string | undefined): string | undefined {
+  if (value?.trim() !== 'same-origin') return value;
+  return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
+}
+
 /** 안내 문구를 읽을 시간을 준 뒤 추천 방으로 옮긴다 */
 const ROOM_FULL_MOVE_DELAY_MS = 2800;
 
@@ -55,7 +61,7 @@ async function boot(): Promise<void> {
       container: stage,
       space,
       room: route.room,
-      presenceUrl: import.meta.env.VITE_PRESENCE_URL,
+      presenceUrl: resolvePresenceUrl(import.meta.env.VITE_PRESENCE_URL),
       timeOffsetMinutes: route.timeOffsetMinutes,
       quality: route.quality,
     });
