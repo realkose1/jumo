@@ -1,0 +1,35 @@
+// 실시간 서버(방, 로비). 계정 정보(account_id)는 일부러 넣지 않았다(배포하는 사람의 wrangler 로그인을 쓴다).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bongeunsa",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-22",
+
+  "durable_objects": {
+    "bindings": [
+      { "name": "ROOM", "class_name": "Room" },
+      { "name": "LOBBY", "class_name": "Lobby" }
+    ]
+  },
+  // 두 클래스 모두 SQLite 기반 Durable Object
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room", "Lobby"] }],
+
+  // 주소: 지금은 workers.dev 주소만 연다. 사용자 도메인이 생기면 routes에 custom_domain으로 더한다.
+  "workers_dev": true,
+
+  // 운영 중에 바꾸는 값들. 모두 문자열이다.
+  "vars": {
+    // 같은 IP(와이파이, 통신사 NAT)에서 한 방에 들어올 수 있는 사람 수(join한 연결만 센다)
+    "MAX_CONN_PER_IP": "30",
+    // 공간별로 정원과 방 개수를 덮어쓴다. 예: {"test-room":{"capacity":30,"rooms":5,"maxRooms":20}}
+    // rooms는 늘 여는 방, maxRooms는 다 차면 더 여는 상한. 없는 항목은 shared/spaces의 값을 쓴다.
+    "SPACE_OVERRIDES": "{}",
+    // 웹소켓 접속을 허용할 Origin(쉼표로 구분). 비워 두면 모두 허용.
+    // 지금은 로컬 vite 개발 서버(5180)만. 배포할 화면 주소가 정해지면 여기에 더한다
+    "ALLOWED_ORIGINS": "http://localhost:5180,http://127.0.0.1:5180",
+    // GET /rooms 결과를 메모리에 두는 시간(ms)
+    "ROOMS_CACHE_MS": "3000"
+  },
+
+  "dev": { "port": 8797 }
+}

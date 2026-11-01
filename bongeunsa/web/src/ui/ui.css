@@ -1,0 +1,1403 @@
+/* 3D 위에 겹치는 화면(UI). 밝고 정돈된 톤이 기본이다(docs/design.md): 크림 반투명 면, 검정 계열 글자, 슬레이트 강조색.
+   색과 크기는 모두 --qs-* 변수이고, 공간 정의의 theme 값이 있으면 덮어쓴다. */
+
+.qs-ui {
+  /* 공간이 theme로 덮어쓰는 값 */
+  --qs-accent: #4f5b66;
+  --qs-accent-ink: #ffffff;
+  --qs-surface: rgba(246, 243, 237, 0.86);
+  --qs-surface-solid: rgba(246, 243, 237, 0.97);
+  --qs-surface-strong: rgba(248, 246, 241, 0.94);
+  --qs-ink: #26282b;
+  --qs-ink-soft: #52565b;
+  --qs-line: rgba(38, 40, 43, 0.14);
+  --qs-radius: 18px;
+  --qs-blur: 14px;
+  /* 기본 모양 */
+  --qs-shadow: 0 6px 24px rgba(38, 40, 43, 0.14), 0 1px 2px rgba(38, 40, 43, 0.1);
+  --qs-hit: 44px;
+  --qs-ease: cubic-bezier(0.22, 0.7, 0.2, 1);
+  /* 글자색(--qs-ink)을 따라가는 눌림, 칸, 선택 표시 */
+  --qs-fill: color-mix(in srgb, var(--qs-ink) 6%, transparent);
+  --qs-fill-strong: color-mix(in srgb, var(--qs-ink) 11%, transparent);
+  --qs-track: color-mix(in srgb, var(--qs-ink) 55%, transparent);
+  --qs-card: rgba(255, 255, 255, 0.58);
+  --qs-card-hover: rgba(255, 255, 255, 0.88);
+  /* 설정 창 뒤를 덮는 막과 로딩 화면 */
+  --qs-scrim: rgba(38, 40, 43, 0.4);
+  --qs-loading-bg: rgba(246, 243, 237, 0.92);
+
+  color-scheme: light;
+
+  position: relative;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  color: var(--qs-ink);
+  font-family: system-ui, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.qs-ui *,
+.qs-ui *::before,
+.qs-ui *::after {
+  box-sizing: border-box;
+}
+
+.qs-ui [hidden] {
+  display: none !important;
+}
+
+/* 반투명 유리면. 블러를 못 쓰는 브라우저는 아래 @supports에서 더 진한 면으로 바꾼다 */
+.qs-glass {
+  background: var(--qs-surface);
+  border: 1px solid var(--qs-line);
+  box-shadow: var(--qs-shadow);
+  -webkit-backdrop-filter: blur(var(--qs-blur)) saturate(1.1);
+  backdrop-filter: blur(var(--qs-blur)) saturate(1.1);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .qs-glass {
+    background: var(--qs-surface-solid);
+  }
+}
+
+/* 초기화 규칙은 :where()로 우선순위를 0으로 둔다(컴포넌트 클래스가 항상 이기게) */
+:where(.qs-ui) :where(button, input, summary, a) {
+  font: inherit;
+  color: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(.qs-ui) :where(button) {
+  appearance: none;
+  background: none;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.qs-ui :focus-visible {
+  outline: 2px solid var(--qs-accent);
+  outline-offset: 2px;
+}
+
+.qs-ui h2,
+.qs-ui h3,
+.qs-ui h4,
+.qs-ui p,
+.qs-ui dl,
+.qs-ui dd,
+.qs-ui ul {
+  margin: 0;
+  padding: 0;
+}
+
+/* ---------- 로딩 중에는 버튼들을 숨겨 둔다 ---------- */
+
+.qs-actions,
+.qs-settings-btn,
+.qs-mute-btn {
+  transition:
+    opacity 0.6s var(--qs-ease) 0.2s,
+    transform 0.6s var(--qs-ease) 0.2s;
+}
+
+.qs-ui--loading .qs-actions,
+.qs-ui--loading .qs-settings-btn,
+.qs-ui--loading .qs-mute-btn {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.qs-ui--loading .qs-actions {
+  transform: translateY(8px);
+}
+
+/* ---------- 동작 버튼 막대 ---------- */
+
+.qs-actions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 14px;
+  margin-inline: auto;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  border-radius: calc(var(--qs-radius) + 8px);
+  pointer-events: auto;
+}
+
+.qs-action {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 84px;
+  max-width: 116px;
+  min-height: 64px;
+  padding: 9px 10px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border-radius: var(--qs-radius);
+  border: 1px solid transparent;
+  transition:
+    background-color 0.18s,
+    transform 0.18s var(--qs-ease),
+    opacity 0.2s,
+    filter 0.2s;
+}
+
+.qs-action:hover {
+  background: var(--qs-fill);
+}
+
+.qs-action:active {
+  transform: scale(0.95);
+}
+
+.qs-action__icon {
+  display: grid;
+  place-items: center;
+  height: 28px;
+  color: var(--qs-ink);
+}
+
+.qs-action__emoji {
+  font-size: 27px;
+  line-height: 28px;
+}
+
+.qs-action__img {
+  display: block;
+  width: 30px;
+  height: 30px;
+  pointer-events: none;
+}
+
+.qs-action__label {
+  font-size: 13px;
+  line-height: 1.25;
+  text-align: center;
+  text-wrap: balance;
+  word-break: keep-all;
+  color: var(--qs-ink);
+}
+
+.qs-action__key {
+  position: absolute;
+  top: 5px;
+  right: 7px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--qs-line);
+  border-radius: 5px;
+  font-size: 10px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--qs-ink-soft);
+}
+
+.qs-action.is-cooling {
+  opacity: 0.45;
+  filter: saturate(0.5);
+}
+
+.qs-action.is-pop .qs-action__icon {
+  animation: qs-pop 0.36s var(--qs-ease);
+}
+
+@keyframes qs-pop {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: translateY(-4px) scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* 키보드가 없는 휴대폰에서는 숫자 표시를 감춘다 */
+@media (hover: none) and (pointer: coarse) {
+  .qs-action__key {
+    display: none;
+  }
+}
+
+/* ---------- 설정 버튼 ---------- */
+
+.qs-settings-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: var(--qs-hit);
+  height: var(--qs-hit);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  pointer-events: auto;
+  transition:
+    opacity 0.6s var(--qs-ease) 0.2s,
+    background-color 0.18s,
+    transform 0.18s var(--qs-ease);
+}
+
+.qs-settings-btn:hover {
+  background: var(--qs-surface-solid);
+}
+
+.qs-settings-btn:active {
+  transform: scale(0.94);
+}
+
+/* ---------- 소리 모두 끄기 (설정 버튼 바로 왼쪽) ---------- */
+
+.qs-mute-btn {
+  position: absolute;
+  top: 12px;
+  right: calc(12px + var(--qs-hit) + 8px);
+  width: var(--qs-hit);
+  height: var(--qs-hit);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  pointer-events: auto;
+  transition:
+    opacity 0.6s var(--qs-ease) 0.2s,
+    background-color 0.18s,
+    transform 0.18s var(--qs-ease);
+}
+
+.qs-mute-btn[hidden] {
+  display: none;
+}
+
+.qs-mute-btn:hover {
+  background: var(--qs-surface-solid);
+}
+
+.qs-mute-btn:active {
+  transform: scale(0.94);
+}
+
+/* 꺼 둔 상태는 흐리게 — 한눈에 '소리 꺼짐'으로 보이게 */
+.qs-mute-btn.is-muted {
+  color: var(--qs-ink-soft);
+}
+
+/* ---------- 알림 한 줄 ---------- */
+
+.qs-notice {
+  position: absolute;
+  top: 66px;
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  padding: 10px 20px;
+  border-radius: 999px;
+  text-align: center;
+  font-size: 15px;
+  line-height: 1.4;
+  word-break: keep-all;
+  text-wrap: balance;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition:
+    opacity 0.35s var(--qs-ease),
+    transform 0.35s var(--qs-ease);
+  pointer-events: none;
+}
+
+.qs-notice.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+.qs-notice:empty {
+  visibility: hidden;
+}
+
+/* 모두가 함께 보는 특별한 알림: 강조색 면에 accent-ink 글자 */
+.qs-notice[data-tone='accent'] {
+  background: var(--qs-accent);
+  border-color: transparent;
+  color: var(--qs-accent-ink);
+  font-size: 17px;
+  font-weight: 800;
+  box-shadow:
+    var(--qs-shadow),
+    0 0 0 6px color-mix(in srgb, var(--qs-accent) 22%, transparent);
+}
+
+/* ---------- 로딩 화면 ---------- */
+
+.qs-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--qs-loading-bg);
+  -webkit-backdrop-filter: blur(22px);
+  backdrop-filter: blur(22px);
+  pointer-events: auto;
+  transition:
+    opacity 0.8s ease,
+    background-color 0.8s ease,
+    -webkit-backdrop-filter 0.8s ease,
+    backdrop-filter 0.8s ease;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .qs-loading {
+    background: var(--qs-surface-solid);
+  }
+}
+
+.qs-loading.is-done {
+  opacity: 0;
+  background: transparent;
+  -webkit-backdrop-filter: blur(0);
+  backdrop-filter: blur(0);
+  pointer-events: none;
+}
+
+.qs-loading__box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: min(240px, 100%);
+  text-align: center;
+}
+
+.qs-loading__title {
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  color: var(--qs-ink);
+}
+
+.qs-bar {
+  width: 100%;
+  height: 3px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--qs-fill-strong);
+}
+
+.qs-bar__fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--qs-accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.35s var(--qs-ease);
+}
+
+.qs-loading__status {
+  min-height: 21px;
+  font-size: 13px;
+  color: var(--qs-ink-soft);
+}
+
+.qs-loading__toy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.qs-loading__caption {
+  font-size: 12px;
+  color: var(--qs-ink-soft);
+}
+
+.qs-loading.is-error .qs-bar,
+.qs-loading.is-error .qs-loading__toy {
+  display: none;
+}
+
+/* 손장난: 동그라미가 고리를 한 바퀴 돈다 */
+.qs-toy {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 1px solid var(--qs-line);
+  background: var(--qs-card);
+  box-shadow: var(--qs-shadow);
+  transition:
+    background-color 0.2s,
+    transform 0.18s var(--qs-ease),
+    border-color 0.3s;
+}
+
+.qs-toy:hover {
+  background: var(--qs-card-hover);
+}
+
+.qs-toy:active {
+  transform: scale(0.95);
+}
+
+.qs-toy__orbit {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.qs-toy__dot {
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  width: 11px;
+  height: 11px;
+  margin-left: -5.5px;
+  border-radius: 50%;
+  background: var(--qs-accent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--qs-accent) 45%, transparent);
+  transition: opacity 0.3s;
+}
+
+.qs-toy.is-go .qs-toy__orbit {
+  animation: qs-orbit 0.95s cubic-bezier(0.5, 0.05, 0.3, 1);
+}
+
+.qs-toy.is-lit {
+  border-color: var(--qs-accent);
+}
+
+@keyframes qs-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------- 공용 부품 ---------- */
+
+.qs-button {
+  min-height: var(--qs-hit);
+  padding: 0 20px;
+  border-radius: 999px;
+  border: 1px solid var(--qs-line);
+  background: var(--qs-card);
+  transition: background-color 0.18s;
+}
+
+.qs-button:hover {
+  background: var(--qs-card-hover);
+}
+
+.qs-icon-btn {
+  width: var(--qs-hit);
+  height: var(--qs-hit);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--qs-ink-soft);
+  transition:
+    background-color 0.18s,
+    color 0.18s;
+}
+
+.qs-icon-btn:hover {
+  background: var(--qs-fill-strong);
+  color: var(--qs-ink);
+}
+
+.qs-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.qs-note {
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--qs-fill);
+  font-size: 13px;
+  color: var(--qs-ink-soft);
+}
+
+.qs-note.is-nudge {
+  animation: qs-nudge 0.4s var(--qs-ease);
+  color: var(--qs-ink);
+}
+
+@keyframes qs-nudge {
+  0%,
+  100% {
+    transform: none;
+  }
+  30% {
+    transform: translateX(-4px);
+  }
+  60% {
+    transform: translateX(3px);
+  }
+}
+
+.qs-footnote {
+  font-size: 12px;
+  color: var(--qs-ink-soft);
+}
+
+.qs-tag {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--qs-accent);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--qs-accent-ink);
+  vertical-align: 1px;
+}
+
+/* ---------- 설정 창 ---------- */
+
+.qs-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: max(16px, var(--safe-top, 0px)) max(16px, var(--safe-right, 0px)) max(16px, var(--safe-bottom, 0px))
+    max(16px, var(--safe-left, 0px));
+  background: var(--qs-scrim);
+  opacity: 0;
+  pointer-events: auto;
+  transition: opacity 0.2s ease;
+}
+
+.qs-backdrop.is-open {
+  opacity: 1;
+}
+
+.qs-modal {
+  --qs-blur: 24px;
+  width: min(440px, 100%);
+  height: min(580px, 100%);
+  display: flex;
+  flex-direction: column;
+  border-radius: calc(var(--qs-radius) + 8px);
+  background: var(--qs-surface-strong);
+  transform: translateY(10px) scale(0.98);
+  transition: transform 0.28s var(--qs-ease);
+  overflow: hidden;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .qs-modal {
+    background: var(--qs-surface-solid);
+  }
+}
+
+.qs-backdrop.is-open .qs-modal {
+  transform: none;
+}
+
+.qs-modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 10px 4px 22px;
+}
+
+.qs-modal__title {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.qs-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  margin: 6px 16px 0;
+  padding: 3px;
+  border-radius: 14px;
+  background: var(--qs-fill);
+}
+
+.qs-tab {
+  min-height: var(--qs-hit);
+  padding: 0 4px;
+  border-radius: 11px;
+  font-size: 13px;
+  white-space: nowrap;
+  color: var(--qs-ink-soft);
+  transition:
+    background-color 0.18s,
+    color 0.18s;
+}
+
+.qs-tab:hover {
+  color: var(--qs-ink);
+}
+
+.qs-tab[aria-selected='true'] {
+  background: var(--qs-card-hover);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  color: var(--qs-ink);
+  font-weight: 600;
+}
+
+.qs-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y; /* body는 touch-action: none이라 설정 창만 세로 스크롤을 다시 연다 */
+  padding: 16px 22px 22px;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--qs-ink) 32%, transparent) transparent;
+}
+
+.qs-panel:focus-visible {
+  outline-offset: -3px;
+  border-radius: 12px;
+}
+
+/* 폰: 아래에서 올라오는 시트 */
+@media (max-width: 560px) {
+  .qs-backdrop {
+    place-items: end stretch;
+    padding: 0;
+  }
+
+  .qs-modal {
+    width: 100%;
+    height: min(600px, 88dvh);
+    border-radius: 24px 24px 0 0;
+    padding-bottom: var(--safe-bottom, 0px);
+    transform: translateY(28px);
+  }
+}
+
+/* ---------- 소리 ---------- */
+
+.qs-sound {
+  padding: 14px 16px 12px;
+  border-radius: 16px;
+  background: var(--qs-card);
+  border: 1px solid var(--qs-line);
+}
+
+.qs-sound__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.qs-sound__title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.qs-sound__hint {
+  margin-top: 1px;
+  font-size: 12px;
+  color: var(--qs-ink-soft);
+}
+
+.qs-sound__nofiles {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--qs-ink-soft);
+}
+
+.qs-sound__volume {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.qs-sound__value {
+  flex: none;
+  width: 40px;
+  text-align: right;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--qs-ink-soft);
+}
+
+.qs-sound.is-off .qs-sound__volume {
+  opacity: 0.5;
+}
+
+.qs-sound.is-empty .qs-sound__title {
+  color: var(--qs-ink-soft);
+}
+
+/* 켜고 끄는 스위치: 누르는 영역은 44px, 눈에 보이는 것은 44x26 */
+.qs-switch {
+  flex: none;
+  width: 56px;
+  height: var(--qs-hit);
+  display: grid;
+  place-items: center;
+}
+
+.qs-switch__track {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  border-radius: 13px;
+  background: var(--qs-track);
+  transition: background-color 0.22s;
+}
+
+.qs-switch__thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(38, 40, 43, 0.4);
+  transition: transform 0.22s var(--qs-ease);
+}
+
+.qs-switch[aria-checked='true'] .qs-switch__track {
+  background: var(--qs-accent);
+}
+
+.qs-switch[aria-checked='true'] .qs-switch__thumb {
+  transform: translateX(18px);
+}
+
+.qs-switch[aria-disabled='true'] {
+  opacity: 0.45;
+}
+
+/* 크기 슬라이더 */
+.qs-range {
+  --qs-fill: 70%;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--qs-hit);
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.qs-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--qs-accent) 0 var(--qs-fill),
+    var(--qs-track) var(--qs-fill) 100%
+  );
+}
+
+.qs-range::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--qs-track);
+}
+
+.qs-range::-moz-range-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--qs-accent);
+}
+
+.qs-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -9px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow:
+    0 0 0 1px rgba(38, 40, 43, 0.22),
+    0 1px 4px rgba(38, 40, 43, 0.35);
+}
+
+.qs-range::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow:
+    0 0 0 1px rgba(38, 40, 43, 0.22),
+    0 1px 4px rgba(38, 40, 43, 0.35);
+}
+
+/* ---------- 조작 방법 ---------- */
+
+.qs-controls__group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.qs-controls__heading {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--qs-ink-soft);
+}
+
+.qs-controls__list {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  column-gap: 16px;
+  align-items: center;
+  border: 1px solid var(--qs-line);
+  border-radius: 16px;
+  background: var(--qs-card);
+  padding: 4px 16px;
+}
+
+.qs-controls__list dt,
+.qs-controls__list dd {
+  padding: 9px 0;
+}
+
+.qs-controls__list dt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.qs-controls__list dd {
+  font-size: 13px;
+}
+
+.qs-controls__or {
+  margin: 0 2px;
+  font-size: 11px;
+  color: var(--qs-ink-soft);
+}
+
+.qs-kbd {
+  display: inline-block;
+  min-width: 24px;
+  padding: 2px 8px;
+  border: 1px solid var(--qs-line);
+  border-bottom-width: 2px;
+  border-radius: 7px;
+  background: var(--qs-card-hover);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* ---------- 움직임 줄이기 ---------- */
+
+.qs-radios {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.qs-radio {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 60px;
+  padding: 10px 16px;
+  border: 1px solid var(--qs-line);
+  border-radius: 16px;
+  background: var(--qs-card);
+  cursor: pointer;
+  transition:
+    background-color 0.18s,
+    border-color 0.18s;
+}
+
+.qs-radio:hover {
+  background: var(--qs-card-hover);
+}
+
+.qs-radio__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.qs-radio__mark {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--qs-track);
+  display: grid;
+  place-items: center;
+  transition: border-color 0.18s;
+}
+
+.qs-radio__mark::after {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--qs-accent);
+  transform: scale(0);
+  transition: transform 0.2s var(--qs-ease);
+}
+
+.qs-radio:has(:checked) {
+  border-color: color-mix(in srgb, var(--qs-accent) 60%, transparent);
+  background: color-mix(in srgb, var(--qs-accent) 10%, transparent);
+}
+
+.qs-radio:has(:checked) .qs-radio__mark {
+  border-color: var(--qs-accent);
+}
+
+.qs-radio:has(:checked) .qs-radio__mark::after {
+  transform: scale(1);
+}
+
+.qs-radio:has(:focus-visible) {
+  outline: 2px solid var(--qs-accent);
+  outline-offset: 2px;
+}
+
+.qs-radio__text {
+  display: flex;
+  flex-direction: column;
+}
+
+.qs-radio__label {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.qs-radio__hint {
+  font-size: 12px;
+  color: var(--qs-ink-soft);
+}
+
+/* ---------- 움직임 줄이기가 켜진 상태: 엔진 설정(기기 설정 포함)을 따른다 ---------- */
+
+.qs-reduced *,
+.qs-reduced *::before,
+.qs-reduced *::after {
+  animation-duration: 0.001s !important;
+  animation-delay: 0s !important;
+  transition-duration: 0.001s !important;
+  transition-delay: 0s !important;
+}
+
+/* 끝없이 도는 애니메이션은 아예 멈춘다 (색은 그대로 남아 알려 준다) */
+.qs-reduced .qs-people[data-tone='pending'] .qs-people__dot {
+  animation: none !important;
+}
+
+/* ---------- 작은 화면 ---------- */
+
+@media (max-width: 400px) {
+  .qs-action {
+    min-width: 0;
+    padding-inline: 4px;
+  }
+
+  .qs-action__label {
+    font-size: 12.5px;
+  }
+
+  .qs-notice {
+    font-size: 14px;
+  }
+
+  .qs-notice[data-tone='accent'] {
+    font-size: 16px;
+  }
+}
+
+/* ---------- 왼쪽 위: "N명이 함께 있어요", 사람 이름표, 설정 창의 오늘의 이름 ---------- */
+
+.qs-topbar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+  transition: opacity 0.6s var(--qs-ease) 0.2s;
+}
+
+.qs-people {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px 0 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--qs-ink);
+  pointer-events: none;
+}
+
+.qs-people__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--qs-track);
+}
+
+.qs-people[data-tone='online'] .qs-people__dot {
+  background: var(--qs-accent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--qs-accent) 70%, transparent);
+}
+
+.qs-people[data-tone='pending'] .qs-people__dot {
+  background: var(--qs-track);
+  animation: qs-conn-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes qs-conn-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+/* 로딩 중에는 다른 버튼들처럼 숨겨 둔다 */
+.qs-ui--loading .qs-topbar {
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* 다른 손님 머리 위 이름표: 평소엔 어두운 반투명 알약(여럿이 떠도 시끄럽지 않게), 마우스를 올리거나 누른 사람은 노란 알약.
+   한 줄 높이는 ui/net.ts 의 LABEL_H(22px)와 맞춘다 */
+.qs-peer-labels {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.qs-peer-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(11, 11, 13, 0.58);
+  color: var(--qs-ink);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+  opacity: 0;
+  transition:
+    opacity 0.18s var(--qs-ease),
+    background-color 0.18s;
+  will-change: transform, opacity;
+}
+
+/* 내 이름표: 같은 어두운 알약에 노란 테두리와 노란 글씨 — 한눈에 '나'로 보이게 */
+.qs-peer-label.is-self {
+  color: var(--qs-accent);
+  box-shadow: inset 0 0 0 1.5px var(--qs-accent);
+}
+
+.qs-peer-label.is-focus {
+  z-index: 1;
+  padding: 2px 10px;
+  background: var(--qs-accent);
+  color: var(--qs-accent-ink);
+  font-size: 12px;
+}
+
+.qs-modal__titles {
+  min-width: 0;
+}
+
+.qs-modal__name {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--qs-ink-soft);
+}
+
+/* ======================================================================
+   화면 조이스틱과 터치 배치 (src/ui/joystick.ts)
+   조이스틱은 왼쪽 아래, 동작 버튼은 오른쪽 아래 세로 줄. 둘 다 #ui-root의 안전 영역 여백 안쪽이라
+   노치와 홈 막대를 따로 피할 필요가 없다. 호스트에 qs-ui--touch 가 붙었을 때만 적용된다.
+   ====================================================================== */
+
+.qs-joystick {
+  position: absolute;
+  left: 24px; /* 화면 왼쪽 가장자리에서 24px 이상: iOS 가장자리 쓸기(뒤로 가기)와 겹치지 않게 */
+  bottom: 20px;
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--qs-surface-solid) 52%, transparent);
+  border: 1px solid var(--qs-line);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+  touch-action: none;
+  cursor: grab;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    opacity 0.6s var(--qs-ease) 0.2s,
+    background-color 0.18s,
+    border-color 0.18s;
+}
+
+.qs-joystick.is-active {
+  cursor: grabbing;
+  background: color-mix(in srgb, var(--qs-surface-solid) 68%, transparent);
+  border-color: color-mix(in srgb, var(--qs-accent) 55%, transparent);
+}
+
+.qs-ui--loading .qs-joystick {
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* 네 방향 눈금 */
+.qs-joystick__tick {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-top: 2px solid var(--qs-ink);
+  border-left: 2px solid var(--qs-ink);
+  border-radius: 1px;
+  opacity: 0.32;
+  pointer-events: none;
+}
+
+.qs-joystick__tick--up {
+  top: 9px;
+  left: 50%;
+  margin-left: -4px;
+  transform: rotate(45deg);
+}
+
+.qs-joystick__tick--right {
+  right: 9px;
+  top: 50%;
+  margin-top: -4px;
+  transform: rotate(135deg);
+}
+
+.qs-joystick__tick--down {
+  bottom: 9px;
+  left: 50%;
+  margin-left: -4px;
+  transform: rotate(225deg);
+}
+
+.qs-joystick__tick--left {
+  left: 9px;
+  top: 50%;
+  margin-top: -4px;
+  transform: rotate(315deg);
+}
+
+/* 손잡이: 노란 면에 어두운 점. 놓으면 가운데로 부드럽게 돌아오고, 잡고 있는 동안은 손가락을 바로 따라간다 */
+.qs-joystick__thumb {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 48px;
+  height: 48px;
+  margin: -24px 0 0 -24px;
+  border-radius: 50%;
+  background: var(--qs-accent);
+  box-shadow:
+    0 3px 10px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 1px color-mix(in srgb, var(--qs-accent-ink) 22%, transparent);
+  pointer-events: none;
+  will-change: transform;
+  transition: transform 0.18s var(--qs-ease);
+}
+
+.qs-joystick__thumb::after {
+  content: '';
+  position: absolute;
+  inset: 16px;
+  border-radius: 50%;
+  background: var(--qs-accent-ink);
+  opacity: 0.55;
+}
+
+.qs-joystick.is-active .qs-joystick__thumb {
+  transition: none;
+}
+
+/* 화면 읽기 프로그램에만 읽히는 설명 */
+.qs-joystick__hint {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 터치 배치: 동작 버튼을 오른쪽 아래 세로 줄로 (3개 x 56px). 가로 막대는 좁은 폰에서 조이스틱과 겹친다 */
+.qs-ui--touch .qs-actions {
+  left: auto;
+  right: 12px;
+  bottom: 20px;
+  margin-inline: 0;
+  width: auto;
+  max-width: none;
+  flex-direction: column;
+  gap: 4px;
+  padding: 5px;
+  border-radius: calc(var(--qs-radius) + 6px);
+}
+
+.qs-ui--touch .qs-action {
+  flex: none;
+  width: 64px;
+  min-width: 64px;
+  max-width: none;
+  min-height: 56px;
+  padding: 6px 2px 5px;
+  gap: 2px;
+}
+
+.qs-ui--touch .qs-action__label {
+  font-size: 12px;
+}
+
+/* 키보드가 없는 배치라서 숫자 표시는 감춘다(주소로 조이스틱만 켠 데스크톱에서도) */
+.qs-ui--touch .qs-action__key {
+  display: none;
+}
+
+/* 가로로 눕힌 폰처럼 낮은 화면: 세로 줄이 알림 줄과 만나지 않게 조금 줄인다 */
+@media (max-height: 430px) {
+  .qs-ui--touch .qs-actions {
+    bottom: 12px;
+    gap: 3px;
+    padding: 4px;
+  }
+
+  .qs-ui--touch .qs-action {
+    min-height: 48px;
+    padding-block: 3px;
+  }
+
+  .qs-ui--touch .qs-action__icon {
+    height: 24px;
+  }
+
+  .qs-ui--touch .qs-action__emoji {
+    font-size: 22px;
+    line-height: 24px;
+  }
+
+  .qs-ui--touch .qs-action__img {
+    width: 26px;
+    height: 26px;
+  }
+
+  .qs-joystick {
+    bottom: 12px;
+  }
+}
+
+/* ---------- 말풍선: 사람 머리 위의 말(speech), 장면 속 인물의 대답(reply) ---------- */
+
+.qs-bubbles {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.qs-bubble {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: min(220px, 62vw);
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: #fffaf0;
+  color: #1c1710;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
+  word-break: keep-all;
+  text-wrap: balance;
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  margin-top: -10px; /* 꼬리 길이만큼 머리 위로 */
+  will-change: transform;
+  transition: opacity 0.22s var(--qs-ease);
+}
+
+.qs-bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  background: inherit;
+  transform: rotate(45deg);
+  border-radius: 0 0 3px 0;
+  box-shadow: 2px 2px 3px rgba(0, 0, 0, 0.18);
+}
+
+.qs-bubble.is-on {
+  opacity: 1;
+}
+
+.qs-bubble.is-off {
+  opacity: 0 !important;
+}
+
+/* 대답: 따뜻한 노란 면 */
+.qs-bubble[data-kind='reply'] {
+  background: #ffe49a;
+  color: #2a1d06;
+}

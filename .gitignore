@@ -45,3 +45,8 @@ credentials.json
 # --- cheer-src (주모 응원 하위 프로젝트) ---
 cheer-src/**/node_modules/
 cheer-src/server/.wrangler/
+
+# --- bongeunsa (봉은사 메타버스 하위 프로젝트) ---
+bongeunsa/**/node_modules/
+bongeunsa/**/dist/
+bongeunsa/server/.wrangler/
