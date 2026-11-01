@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- 홈 화면 아이콘: 달 뜬 주막 하늘 앞의 막걸리 사발(src/spaces/jumak/makgeolli.ts 그림을 키운 것).
+       iOS는 투명한 곳을 검게 칠하므로 바탕을 꽉 채우고, 모서리는 기기가 둥글린다.
+       PNG(apple-touch-icon.png, icon-192.png, icon-512.png)는 이 파일에서 뽑는다: scripts/cheer-icons.sh -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2b3a66"/>
+      <stop offset="0.62" stop-color="#18213f"/>
+      <stop offset="1" stop-color="#0e1326"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffd27a" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#ffd27a" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="moonGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fff3c8" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#fff3c8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="b" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c98e55"/>
+      <stop offset="1" stop-color="#7d4f2b"/>
+    </linearGradient>
+    <radialGradient id="m" cx="0.45" cy="0.4" r="0.7">
+      <stop offset="0" stop-color="#fffdf6"/>
+      <stop offset="1" stop-color="#e6dcc4"/>
+    </radialGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#sky)"/>
+  <!-- 보름달과 별 -->
+  <circle cx="770" cy="236" r="190" fill="url(#moonGlow)"/>
+  <circle cx="770" cy="236" r="96" fill="#f6e7b0"/>
+  <circle cx="742" cy="214" r="16" fill="#e8d394" opacity="0.7"/>
+  <circle cx="792" cy="262" r="11" fill="#e8d394" opacity="0.6"/>
+  <g fill="#fff6dc">
+    <circle cx="186" cy="168" r="6"/>
+    <circle cx="318" cy="96" r="4"/>
+    <circle cx="452" cy="200" r="5"/>
+    <circle cx="590" cy="118" r="3.5"/>
+    <circle cx="120" cy="330" r="3.5"/>
+  </g>
+  <!-- 사발 뒤 따뜻한 등불빛 -->
+  <ellipse cx="512" cy="610" rx="420" ry="330" fill="url(#glow)"/>
+  <!-- 막걸리 사발 (64 단위 그림을 11배로, 위아래 가운데) -->
+  <g transform="translate(160 220) scale(11)">
+    <g fill="#f7f1e2" stroke="#a88a5c" stroke-width="1.2">
+      <circle cx="22" cy="14" r="3.4"/>
+      <circle cx="33" cy="8" r="4.2"/>
+      <circle cx="44" cy="15" r="3"/>
+      <path d="M27 24c0-5 3-8 5-12 2 4 5 7 5 12z"/>
+    </g>
+    <path d="M23 53h18l-2 6H25z" fill="#6e4425"/>
+    <path d="M5 30h54c0 13-11 24-27 24S5 43 5 30z" fill="url(#b)" stroke="#5b3a1f" stroke-width="1.6" stroke-linejoin="round"/>
+    <path d="M10 39c7 3 37 3 44 0" fill="none" stroke="#e9d3ad" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+    <ellipse cx="32" cy="30" rx="27" ry="7.5" fill="#d8b98e" stroke="#5b3a1f" stroke-width="1.6"/>
+    <ellipse cx="32" cy="30.6" rx="23" ry="5.4" fill="url(#m)"/>
+  </g>
+</svg>

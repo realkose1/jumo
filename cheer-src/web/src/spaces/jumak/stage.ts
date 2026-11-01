@@ -14,6 +14,11 @@ import { JumakSound } from './sound';
 import { createDot } from './stage-dot';
 import { TvScreen } from './tv';
 import { buildScenery } from './scenery';
+import { daylightLevel, solarPosition, sunDirection, twilightLevel } from './daylight';
+
+/** 낮의 하늘빛(반구광 위)과 땅에서 튀는 빛(아래) */
+const DAY_SKY_LIGHT = new THREE.Color(0xd6e6ff);
+const DAY_GROUND_LIGHT = new THREE.Color(0x7a6244);
 
 const ACTION_IDS = Object.keys(ACTION_EMOJI);
 
@@ -216,7 +221,7 @@ export function createJumakScene(ctx: SceneContext): SceneHandle {
   const starGeo = own(new THREE.BufferGeometry());
   starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
   const starMat = own(new THREE.PointsMaterial({ size: 1.8, sizeAttenuation: false, color: 0xdfe6ff, transparent: true, opacity: 0.75, depthWrite: false, fog: false }));
-  add(new THREE.Points(starGeo, starMat));
+  const stars = add(new THREE.Points(starGeo, starMat));
   // 보름달: 표면 무늬는 캔버스로 그린다
   // 하늘 한 곳에 박혀 있다(보는 사람을 따라오지 않는다). TV 정가운데 위 하늘이라 시점을 조금 들면 보인다.
   // 휴대폰 세로 화면은 좌우가 좁아서 양옆 자리에서는 시점을 돌려야 보인다
@@ -241,6 +246,71 @@ export function createJumakScene(ctx: SceneContext): SceneHandle {
   const scenery = buildScenery(MOON_POS);
   disposables.push(scenery);
   for (const o of scenery.objects) add(o);
+
+  // ---- 낮과 밤: 서울 하늘의 실제 해 높이로 (daylight.ts) ----
+  // 해는 하늘 돔(96) 안, 먼 산(90) 뒤에 둔다 — 그래서 해돋이 때는 왼쪽(동쪽) 산 너머에서 솟아오른다
+  const SUN_DIST = 93;
+  const sunTex = own(makeSunTexture());
+  const sunMat = own(new THREE.SpriteMaterial({ map: sunTex, fog: false, toneMapped: false, transparent: true, depthWrite: false }));
+  const sun = add(new THREE.Sprite(sunMat));
+  sun.scale.set(6.5, 6.5, 1);
+  sun.renderOrder = 2;
+  const sunHaloMat = own(new THREE.SpriteMaterial({ map: dot, transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, fog: false }));
+  const sunHalo = add(new THREE.Sprite(sunHaloMat));
+  sunHalo.scale.set(34, 34, 1);
+  sunHalo.renderOrder = 1;
+  const nightBg = new THREE.Color(0x0a1122);
+  const dayBg = new THREE.Color(0x8fbbe6);
+  const NIGHT_KEY_POS = key.position.clone();
+  const sunDir = new THREE.Vector3();
+  const lightDir = new THREE.Vector3();
+  const lowSun = new THREE.Color(0xffa85a);
+  const highSun = new THREE.Color(0xfff6e2);
+  const sunCol = new THREE.Color();
+  // 낮일수록 초롱 불빛·번짐은 약해지고(낮에도 켜 둔 초롱), 하늘빛·햇빛이 세진다
+  let warmScale = 1;
+  let haloScale = 1;
+  let hemiBase = 0.62;
+  let lastElevation = Infinity;
+  let sinceSky = Infinity;
+  const applyDaylight = (): void => {
+    const { elevation, azimuth } = solarPosition(ctx.clock.now());
+    if (Math.abs(elevation - lastElevation) < 0.0015) return; // 해는 1분에 0.25도쯤 움직인다
+    lastElevation = elevation;
+    sunDirection(elevation, azimuth, sunDir);
+    const day = daylightLevel(elevation);
+    const twilight = twilightLevel(elevation);
+    const night = 1 - day;
+    scenery.setDaylight({ day, twilight, sunDir });
+    (scene.background as THREE.Color).copy(nightBg).lerp(dayBg, day);
+    // 별과 달은 밤에만
+    starMat.opacity = 0.75 * night * night;
+    stars.visible = starMat.opacity > 0.01;
+    moonMat.opacity = night;
+    moonHaloMat.opacity = 0.4 * night;
+    moon.visible = halo.visible = night > 0.01;
+    moonLight.intensity = 0.35 * night;
+    // 해: 낮게 뜰수록 주황, 높이 뜰수록 희다
+    sunCol.copy(lowSun).lerp(highSun, Math.min(1, Math.max(0, elevation / 0.45)));
+    sun.position.copy(sunDir).multiplyScalar(SUN_DIST);
+    sunHalo.position.copy(sunDir).multiplyScalar(SUN_DIST + 1.5);
+    sunMat.color.copy(sunCol);
+    sunHaloMat.color.copy(sunCol);
+    sun.visible = sunHalo.visible = elevation > -0.06;
+    // 조명: 하늘빛(반구광)과 햇빛(그림자를 드리우는 빛). 해가 낮으면 햇빛이 비스듬히 길게 든다
+    hemi.color.setHex(0x5a6498).lerp(DAY_SKY_LIGHT, day);
+    hemi.groundColor.setHex(0x2f2218).lerp(DAY_GROUND_LIGHT, day);
+    hemiBase = 0.62 + (1.45 - 0.62) * day;
+    lightDir.copy(sunDir);
+    lightDir.y = Math.max(lightDir.y, 0.2);
+    lightDir.normalize();
+    key.position.copy(NIGHT_KEY_POS).lerp(lightDir.multiplyScalar(14).add(key.target.position), day);
+    key.color.setHex(0xffd7a6).lerp(sunCol, day);
+    key.intensity = 0.4 + (2.1 - 0.4) * day;
+    warmScale = 1 - 0.6 * day;
+    haloScale = 1 - 0.65 * day;
+  };
+  applyDaylight();
   ctx.reportProgress(0.8);
 
   // ---- 효과와 소리 ----
@@ -283,16 +353,22 @@ export function createJumakScene(ctx: SceneContext): SceneHandle {
     service.update(dt);
     jumo.update(dt, reduced);
     for (const fn of tickers) fn(dt);
+    // 해 높이는 몇 초에 한 번만 다시 본다(1분에 0.25도쯤이라 매 프레임 볼 필요가 없다)
+    sinceSky += dt;
+    if (sinceSky >= 3) {
+      sinceSky = 0;
+      applyDaylight();
+    }
 
     glowLevel *= Math.exp(-dt / 1.1);
     if (glowLevel < 0.003) glowLevel = 0;
-    // 초롱 불빛이 숨 쉬듯 살짝 흔들린다 (움직임 줄이기면 고정)
+    // 초롱 불빛이 숨 쉬듯 살짝 흔들린다 (움직임 줄이기면 고정). 낮에는 약하다
     for (const w of warm) {
       const flicker = reduced ? 0 : 0.045 * half(elapsed * 6.3 + w.seed);
-      w.light.intensity = w.base * (1 + flicker + 0.9 * glowLevel);
+      w.light.intensity = w.base * warmScale * (1 + flicker + 0.9 * glowLevel);
     }
-    hemi.intensity = 0.62 + 0.3 * glowLevel;
-    haloMat.opacity = 0.62 + 0.3 * glowLevel;
+    hemi.intensity = hemiBase + 0.3 * glowLevel;
+    haloMat.opacity = (0.62 + 0.3 * glowLevel) * haloScale;
     const pulse = tv.bannerActive && !reduced ? 0.06 * Math.sin(elapsed * 9) : 0;
     tvMat.color.setScalar(1 + pulse + 0.18 * glowLevel);
     tvLight.intensity = tvLightBase * (1 + 1.6 * glowLevel + (tv.bannerActive ? 0.35 : 0));
@@ -376,6 +452,29 @@ export function createJumakScene(ctx: SceneContext): SceneHandle {
 }
 
 /** 보름달 그림: 밝은 원판에 옅은 바다(어두운 무늬)와 가장자리 어둡게 */
+/** 해: 가운데가 하얗게 타는 둥근 원판과 가장자리 번짐. 색은 SpriteMaterial.color 로 입힌다(낮으면 주황, 높으면 흰빛) */
+function makeSunTexture(): THREE.CanvasTexture {
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const g = canvas.getContext('2d');
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  if (!g) return tex;
+  const c = size / 2;
+  const grad = g.createRadialGradient(c, c, 0, c, c, c);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.42, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.5, 'rgba(255,255,255,0.75)');
+  grad.addColorStop(0.7, 'rgba(255,255,255,0.18)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, size, size);
+  tex.needsUpdate = true;
+  return tex;
+}
+
 function makeMoonTexture(): THREE.CanvasTexture {
   const size = 256;
   const canvas = document.createElement('canvas');

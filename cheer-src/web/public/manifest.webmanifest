@@ -1,0 +1,16 @@
+{
+  "name": "코리안리거 응원 주막",
+  "short_name": "응원 주막",
+  "description": "해외파 한국 선수 경기를 같이 보며 응원하는 3D 주막이에요.",
+  "lang": "ko",
+  "start_url": "/cheer/",
+  "scope": "/cheer/",
+  "display": "standalone",
+  "background_color": "#0b0b0d",
+  "theme_color": "#0b0b0d",
+  "icons": [
+    { "src": "/cheer/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/cheer/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/cheer/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
