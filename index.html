@@ -2971,6 +2971,44 @@ function InternationalBreakHero({ window: intlWindow, followedOrderedNames = [],
 
 const teamLogoCache = {};
 
+// 로고 그림에 투명 여백이 많으면 정사각형 칸에서 다른 팀보다 작게 보인다 — 스완지(AF 76)는
+// 267×150 그림 안에 엠블럼이 135×134 라 절반 크기였다(제보). 불투명한 부분이 그림 긴 변의
+// 80% 미만일 때만 그 부분을 정사각형으로 잘라 쓴다. 여백이 적은 로고는 원본 그대로.
+function trimmedLogoUrl(blob) {
+  const raw = URL.createObjectURL(blob);
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const w = img.naturalWidth, h = img.naturalHeight;
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const d = ctx.getImageData(0, 0, w, h).data;
+        let x0 = w, y0 = h, x1 = -1, y1 = -1;
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+          if (d[(y * w + x) * 4 + 3] <= 24) continue;
+          if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+        }
+        const side = Math.max(x1 - x0 + 1, y1 - y0 + 1);
+        if (x1 < 0 || side >= 0.8 * Math.max(w, h)) { resolve(raw); return; }
+        const out = document.createElement('canvas');
+        out.width = out.height = side;
+        const cx = (x0 + x1 + 1) / 2, cy = (y0 + y1 + 1) / 2;
+        out.getContext('2d').drawImage(img, cx - side / 2, cy - side / 2, side, side, 0, 0, side, side);
+        out.toBlob((b) => {
+          if (!b) { resolve(raw); return; }
+          URL.revokeObjectURL(raw);
+          resolve(URL.createObjectURL(b));
+        }, 'image/png');
+      } catch { resolve(raw); }
+    };
+    img.onerror = () => resolve(raw);
+    img.src = raw;
+  });
+}
+
 function TeamBadge({ code, size=36, logo }) {
   const colors = { TOT:'#132257', MCI:'#6CABDD', PSG:'#003399', Atletico:'#CB3524', ATM:'#CB3524', OL:'#FFFFFF', LAD:'#005A9C', TOR:'#134A8E', FCB:'#DC052D', BVB:'#FDE100', T1:'#C89B3C', GEN:'#EC1C24' };
   const textColors = { MCI:'#132257', OL:'#1B3A6B', BVB:'#1B1B1B' };
@@ -2984,9 +3022,9 @@ function TeamBadge({ code, size=36, logo }) {
     if (teamLogoCache[logo] === '') return;
     fetch(logo, { referrerPolicy: 'no-referrer' })
       .then(r => r.ok ? r.blob() : null)
-      .then(blob => {
-        if (!blob) { teamLogoCache[logo] = ''; return; }
-        const url = URL.createObjectURL(blob);
+      .then(blob => blob ? trimmedLogoUrl(blob) : null)
+      .then(url => {
+        if (!url) { teamLogoCache[logo] = ''; return; }
         teamLogoCache[logo] = url;
         setBlobUrl(url);
       })
