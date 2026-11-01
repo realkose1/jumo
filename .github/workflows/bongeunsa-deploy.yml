@@ -3,10 +3,10 @@ name: bongeunsa-deploy
 # 필요한 저장소 비밀값(Settings → Secrets and variables → Actions):
 #   CLOUDFLARE_API_TOKEN  ("Edit Cloudflare Workers" 템플릿으로 만든 토큰)
 #   CLOUDFLARE_ACCOUNT_ID
-# main에 bongeunsa/ 변경이 들어오면 자동으로, 또는 Actions 탭에서 브랜치를 골라 손으로 돌린다.
+# main(또는 작업 브랜치 claude/bongeunsa)에 bongeunsa/ 변경이 들어오면 자동으로 돈다. main에 들어간 뒤에는 Actions 탭에서 손으로도 돌릴 수 있다.
 on:
   push:
-    branches: [main]
+    branches: [main, claude/bongeunsa]
     paths: ['bongeunsa/**', '.github/workflows/bongeunsa-deploy.yml']
   workflow_dispatch: {}
 concurrency:
