@@ -256,7 +256,7 @@ export class Engine {
       this.seats = new SeatManager(this.scene, this.space.seats);
       this.net = this.createNet();
       if (this.net) {
-        this.labeler = new PeerLabeler(this.net.peers, (label) => this.events.emit('peer-label', label));
+        this.labeler = new PeerLabeler(this.net.peers, (labels) => this.events.emit('peer-labels', labels));
         this.net.peers.setGroundHeight(handle.groundHeight ?? null);
       }
       const avatar = new Avatar({
@@ -309,6 +309,7 @@ export class Engine {
     this.player?.dispose();
     this.net?.dispose();
     this.net = null;
+    this.labeler?.clear();
     this.labeler = null;
     this.seats?.dispose();
     this.sceneHandle?.dispose();

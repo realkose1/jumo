@@ -182,6 +182,11 @@ export class RemotePeers {
     return p ? { x: p.x, z: p.z, yaw: p.yaw } : null;
   }
 
+  /** 지금 방에 있는 사람들 (나가는 중인 사람은 빼고) */
+  *ids(): IterableIterator<PeerId> {
+    for (const p of this.peers.values()) if (!p.leaving) yield p.id;
+  }
+
   /** 이름표를 띄울 머리 위 위치 */
   labelAnchor(id: PeerId, out: THREE.Vector3): THREE.Vector3 | null {
     const p = this.peers.get(id);

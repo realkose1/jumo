@@ -314,6 +314,15 @@ describe('RemotePeers 자리와 동작', () => {
     expect(anchor.y).toBeGreaterThan(1);
     expect(peers.labelAnchor(77, new THREE.Vector3())).toBeNull();
   });
+
+  it('이름표를 띄울 사람 목록(ids)은 나가는 중인 사람을 뺀다', () => {
+    const { peers, info, tick } = setup();
+    peers.reset([info(1), info(2)], {});
+    tick(50);
+    expect([...peers.ids()].sort()).toEqual([1, 2]);
+    peers.remove(1);
+    expect([...peers.ids()]).toEqual([2]);
+  });
 });
 
 describe('RemotePeers 응원방 기능', () => {

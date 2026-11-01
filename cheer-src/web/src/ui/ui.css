@@ -1151,26 +1151,41 @@
   visibility: hidden;
 }
 
-.qs-peer-label {
+/* 다른 손님 머리 위 이름표: 평소엔 어두운 반투명 알약(여럿이 떠도 시끄럽지 않게), 마우스를 올리거나 누른 사람은 노란 알약.
+   한 줄 높이는 ui/net.ts 의 LABEL_H(22px)와 맞춘다 */
+.qs-peer-labels {
   position: fixed;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.qs-peer-label {
+  position: absolute;
   left: 0;
   top: 0;
-  z-index: 5;
-  padding: 2px 10px;
+  padding: 1px 8px;
   border-radius: 999px;
+  background: rgba(11, 11, 13, 0.58);
+  color: var(--qs-ink);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+  opacity: 0;
+  transition:
+    opacity 0.18s var(--qs-ease),
+    background-color 0.18s;
+  will-change: transform, opacity;
+}
+
+.qs-peer-label.is-focus {
+  z-index: 1;
+  padding: 2px 10px;
   background: var(--qs-accent);
   color: var(--qs-accent-ink);
   font-size: 12px;
-  line-height: 1.6;
-  white-space: nowrap;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.18s var(--qs-ease);
-  will-change: transform;
-}
-
-.qs-peer-label.is-visible {
-  opacity: 1;
 }
 
 .qs-modal__titles {
