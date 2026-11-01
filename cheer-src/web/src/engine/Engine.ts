@@ -256,7 +256,13 @@ export class Engine {
       this.seats = new SeatManager(this.scene, this.space.seats);
       this.net = this.createNet();
       if (this.net) {
-        this.labeler = new PeerLabeler(this.net.peers, (labels) => this.events.emit('peer-labels', labels));
+        const client = this.net.client;
+        this.labeler = new PeerLabeler(this.net.peers, (labels) => this.events.emit('peer-labels', labels), {
+          id: () => client.myId,
+          name: () => client.myName,
+          // 시점을 낮춰 카메라가 내 머리 뒤로 오면(내 갓을 감출 때) 내 이름표도 감춘다 — 화면 한가운데를 가린다
+          anchor: (out) => (this.player && !this.player.avatar.isTallHidden() ? this.getHeadAnchor('self', out) : null),
+        });
         this.net.peers.setGroundHeight(handle.groundHeight ?? null);
       }
       const avatar = new Avatar({

@@ -733,6 +733,11 @@ export class Avatar {
     this.applyLook();
   }
 
+  /** 시점이 머리 뒤로 낮아져 갓 같은 높은 소품을 감춘 상태인지 (내 이름표도 이때 감춘다) */
+  isTallHidden(): boolean {
+    return this.tallHidden;
+  }
+
   /** 카메라가 머리 바로 뒤로 내려왔을 때 높이 솟은 소품(갓)을 감춘다. 내 캐릭터에만 쓴다 */
   setTallHidden(on: boolean): void {
     if (on === this.tallHidden) return;
