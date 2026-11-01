@@ -1,47 +1,93 @@
-// 주막 마당 밖 풍경: 달밤 하늘, 겹겹이 이어지는 산 능선, 불 켜진 초가·기와집 마을, 소나무, 달 곁을 흐르는 구름.
+// 주막 마당 밖 풍경: 하늘, 겹겹이 이어지는 산 능선, 초가·기와집 마을, 소나무, 흐르는 구름.
+// 밤에는 달밤(불 켜진 창, 남빛 산), 낮에는 파란 하늘과 푸른 산으로 바뀐다(setDaylight, daylight.ts).
 // 모두 기본 도형과 정점 색이고 재질이 같은 것끼리 합쳐서 그리기 호출은 몇 번 안 된다.
 import * as THREE from 'three';
 import { Batch, seeded } from './batch';
 import { ROOM } from './layout';
+
+/** 낮과 밤 사이 어디쯤인지 (stage.ts 가 해 위치로 정한다) */
+export interface DaylightState {
+  /** 0 밤 ~ 1 낮 */
+  day: number;
+  /** 0~1. 해돋이·해넘이 노을 */
+  twilight: number;
+  /** 장면 속 해 쪽 단위 벡터 (지평선 아래일 수도 있다) */
+  sunDir: THREE.Vector3;
+}
 
 export interface Scenery {
   /** 장면에 넣을 것들 */
   objects: THREE.Object3D[];
   /** 매 프레임: 구름이 천천히 흐른다 */
   update(dt: number, reduced: boolean): void;
+  /** 하늘·산·구름·창 불빛을 낮과 밤 사이로 맞춘다. 해가 조금 움직일 때만 부르면 된다 */
+  setDaylight(state: DaylightState): void;
   dispose(): void;
 }
 
-/** 하늘 돔: 지평선은 달빛에 물든 푸른빛, 위로 갈수록 깊은 남색. 달 쪽은 조금 더 밝다 */
-function buildSkyDome(moonDir: THREE.Vector3): THREE.BufferGeometry {
+const SKY_NIGHT = { zenith: new THREE.Color(0x03050c), mid: new THREE.Color(0x0b1430), horizon: new THREE.Color(0x2a3a62), glow: new THREE.Color(0x46588c) };
+const SKY_DAY = { zenith: new THREE.Color(0x3a74c4), mid: new THREE.Color(0x6aa3da), horizon: new THREE.Color(0xc4dcee) };
+const SUN_HALO = new THREE.Color(0xfff2d2);
+const AFTERGLOW = new THREE.Color(0xff8c4c);
+
+/**
+ * 하늘 돔. 밤: 지평선은 달빛에 물든 푸른빛, 위로 갈수록 깊은 남색, 달 쪽은 조금 더 밝다.
+ * 낮: 지평선은 옅은 하늘색, 위로 갈수록 파랗고, 해 둘레가 하얗게 밝다. 해돋이·해넘이에는 해 쪽 지평선이 주황빛으로 물든다
+ */
+function buildSkyDome(moonDir: THREE.Vector3): { geometry: THREE.BufferGeometry; recolor(state: DaylightState): void } {
   const g = new THREE.SphereGeometry(96, 48, 24);
   const pos = g.getAttribute('position');
   const colors = new Float32Array(pos.count * 3);
-  const zenith = new THREE.Color(0x03050c);
-  const mid = new THREE.Color(0x0b1430);
-  const horizon = new THREE.Color(0x2a3a62);
-  const glow = new THREE.Color(0x46588c);
-  const v = new THREE.Vector3();
-  const c = new THREE.Color();
-  for (let i = 0; i < pos.count; i++) {
-    v.set(pos.getX(i), pos.getY(i), pos.getZ(i)).normalize();
-    const h = Math.max(0, v.y);
-    if (h < 0.18) c.copy(horizon).lerp(mid, h / 0.18);
-    else c.copy(mid).lerp(zenith, Math.min(1, (h - 0.18) / 0.7));
-    if (v.y < 0) c.copy(horizon).multiplyScalar(0.6);
-    // 달 둘레가 밝다
-    const toMoon = Math.max(0, v.dot(moonDir));
-    c.lerp(glow, Math.pow(toMoon, 18) * 0.85);
-    colors[i * 3] = c.r;
-    colors[i * 3 + 1] = c.g;
-    colors[i * 3 + 2] = c.b;
-  }
-  g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  return g;
+  const dirs: THREE.Vector3[] = [];
+  for (let i = 0; i < pos.count; i++) dirs.push(new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i)).normalize());
+  const attr = new THREE.BufferAttribute(colors, 3);
+  g.setAttribute('color', attr);
+  const night = new THREE.Color();
+  const day = new THREE.Color();
+  const sunFlat = new THREE.Vector3();
+  const recolor = ({ day: d, twilight, sunDir }: DaylightState): void => {
+    sunFlat.set(sunDir.x, 0, sunDir.z);
+    if (sunFlat.lengthSq() > 1e-6) sunFlat.normalize();
+    const sunUp = Math.min(1, Math.max(0, (sunDir.y + 0.03) / 0.08)); // 해 둘레 밝음은 해가 떠 있을 때만
+    for (let i = 0; i < dirs.length; i++) {
+      const v = dirs[i]!;
+      const h = Math.max(0, v.y);
+      if (d < 1) {
+        if (h < 0.18) night.copy(SKY_NIGHT.horizon).lerp(SKY_NIGHT.mid, h / 0.18);
+        else night.copy(SKY_NIGHT.mid).lerp(SKY_NIGHT.zenith, Math.min(1, (h - 0.18) / 0.7));
+        if (v.y < 0) night.copy(SKY_NIGHT.horizon).multiplyScalar(0.6);
+        night.lerp(SKY_NIGHT.glow, Math.pow(Math.max(0, v.dot(moonDir)), 18) * 0.85 * (1 - d));
+      }
+      if (d > 0) {
+        if (h < 0.2) day.copy(SKY_DAY.horizon).lerp(SKY_DAY.mid, h / 0.2);
+        else day.copy(SKY_DAY.mid).lerp(SKY_DAY.zenith, Math.min(1, (h - 0.2) / 0.7));
+        if (v.y < 0) day.copy(SKY_DAY.horizon).multiplyScalar(0.85);
+        day.lerp(SUN_HALO, Math.pow(Math.max(0, v.dot(sunDir)), 24) * 0.75 * sunUp);
+      }
+      const c = d <= 0 ? night : d >= 1 ? day : night.lerp(day, d);
+      if (twilight > 0) {
+        // 노을: 해 쪽 지평선 띠가 가장 붉고, 해에서 돌아설수록·위로 갈수록 옅어진다
+        const band = Math.pow(1 - Math.min(1, Math.abs(v.y) / 0.38), 2);
+        const toward = Math.pow(Math.max(0, v.x * sunFlat.x + v.z * sunFlat.z), 2);
+        c.lerp(AFTERGLOW, twilight * band * (0.15 + 0.7 * toward));
+      }
+      colors[i * 3] = c.r;
+      colors[i * 3 + 1] = c.g;
+      colors[i * 3 + 2] = c.b;
+    }
+    attr.needsUpdate = true;
+  };
+  return { geometry: g, recolor };
 }
 
-/** 둥그런 산 능선 한 겹: 반지름 r의 둘레를 따라 높이가 오르내리는 띠. 위 가장자리는 달빛에 조금 밝다 */
-function buildRidge(r: number, base: number, amp: number, seed: number, color: number, rim: number): THREE.BufferGeometry {
+/** 둥그런 산 능선 한 겹: 반지름 r의 둘레를 따라 높이가 오르내리는 띠. 위 가장자리는 달빛(낮엔 햇빛)에 조금 밝다 */
+interface Ridge {
+  geometry: THREE.BufferGeometry;
+  night: Float32Array;
+  day: Float32Array;
+}
+
+function buildRidge(r: number, base: number, amp: number, seed: number, color: number, rim: number, dayColor: number, dayRim: number): Ridge {
   const n = 220;
   const rand = seeded(seed);
   const phases = [rand() * 6.28, rand() * 6.28, rand() * 6.28, rand() * 6.28];
@@ -51,11 +97,16 @@ function buildRidge(r: number, base: number, amp: number, seed: number, color: n
     amp * 0.5;
   const pos: number[] = [];
   const col: number[] = [];
+  const colDay: number[] = [];
   const body = new THREE.Color(color);
   const top = new THREE.Color(rim);
+  const bodyDay = new THREE.Color(dayColor);
+  const topDay = new THREE.Color(dayRim);
   const push = (x: number, y: number, z: number, c: THREE.Color): void => {
     pos.push(x, y, z);
     col.push(c.r, c.g, c.b);
+    const cd = c === top ? topDay : bodyDay;
+    colDay.push(cd.r, cd.g, cd.b);
   };
   for (let i = 0; i < n; i++) {
     const a0 = (i / n) * Math.PI * 2;
@@ -78,7 +129,7 @@ function buildRidge(r: number, base: number, amp: number, seed: number, color: n
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  return g;
+  return { geometry: g, night: new Float32Array(col), day: new Float32Array(colDay) };
 }
 
 /** 소나무: 굽은 줄기와 층층이 얹힌 납작한 솔잎 덩어리 */
@@ -166,18 +217,19 @@ export function buildScenery(moonPos: THREE.Vector3): Scenery {
   // 하늘
   const moonDir = moonPos.clone().normalize();
   const skyMat = own(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
-  const sky = new THREE.Mesh(own(buildSkyDome(moonDir)), skyMat);
+  const skyDome = buildSkyDome(moonDir);
+  const sky = new THREE.Mesh(own(skyDome.geometry), skyMat);
   sky.renderOrder = -10;
   objects.push(sky);
 
-  // 산 능선 세 겹 (먼 산일수록 옅고 푸르다)
+  // 산 능선 세 겹 (먼 산일수록 옅고 푸르다). 낮에는 먼 산은 옅은 쪽빛, 가까운 산은 짙은 솔빛
   const ridgeMat = own(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, fog: false }));
   const ridges = [
-    buildRidge(90, 6, 9, 11, 0x1e2b48, 0x34466e),
-    buildRidge(74, 3, 7, 23, 0x131c31, 0x24324f),
-    buildRidge(58, 0.5, 4.5, 37, 0x0b111f, 0x172138),
+    buildRidge(90, 6, 9, 11, 0x1e2b48, 0x34466e, 0x7f97b6, 0xa3b8d0),
+    buildRidge(74, 3, 7, 23, 0x131c31, 0x24324f, 0x5a7b6e, 0x7a9a86),
+    buildRidge(58, 0.5, 4.5, 37, 0x0b111f, 0x172138, 0x3d5a43, 0x587a55),
   ];
-  for (const g of ridges) objects.push(new THREE.Mesh(own(g), ridgeMat));
+  for (const r of ridges) objects.push(new THREE.Mesh(own(r.geometry), ridgeMat));
 
   // 마을과 소나무 (마당 담 너머)
   const lit = new Batch(91);
@@ -219,11 +271,16 @@ export function buildScenery(moonPos: THREE.Vector3): Scenery {
     mesh.receiveShadow = false;
     objects.push(mesh);
   }
-  if (glowGeo) objects.push(new THREE.Mesh(own(glowGeo), own(new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }))));
+  // 마을 창 불빛 (낮에는 거의 꺼진다)
+  const windowMat = own(new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }));
+  if (glowGeo) objects.push(new THREE.Mesh(own(glowGeo), windowMat));
 
-  // 구름: 달 곁을 천천히 지나간다
+  // 구름: 달(낮엔 해) 곁을 천천히 지나간다. 밤엔 달빛에 푸르스름, 낮엔 하얗고, 노을엔 발그레하다
   const cloudTex = own(cloudTexture());
   const clouds: Array<{ sprite: THREE.Sprite; speed: number; baseX: number; span: number }> = [];
+  const cloudNight = new THREE.Color(0x8a98bf);
+  const cloudDay = new THREE.Color(0xffffff);
+  const cloudGlow = new THREE.Color(0xffb08a);
   const cloudDefs: Array<[number, number, number, number, number]> = [
     // x, y, z, 크기, 빠르기
     [moonPos.x - 14, moonPos.y + 3, moonPos.z + 4, 26, 0.35],
@@ -247,6 +304,22 @@ export function buildScenery(moonPos: THREE.Vector3): Scenery {
       for (const c of clouds) {
         c.sprite.position.x += c.speed * dt;
         if (c.sprite.position.x > c.baseX + c.span / 2) c.sprite.position.x -= c.span;
+      }
+    },
+    setDaylight(state) {
+      const d = state.day;
+      skyDome.recolor(state);
+      for (const r of ridges) {
+        const attr = r.geometry.getAttribute('color') as THREE.BufferAttribute;
+        const out = attr.array as Float32Array;
+        for (let i = 0; i < out.length; i++) out[i] = r.night[i]! + (r.day[i]! - r.night[i]!) * d;
+        attr.needsUpdate = true;
+      }
+      windowMat.color.setScalar(1 - 0.8 * d);
+      for (const c of clouds) {
+        const mat = c.sprite.material;
+        mat.color.copy(cloudNight).lerp(cloudDay, d).lerp(cloudGlow, 0.6 * state.twilight);
+        mat.opacity = 0.38 + 0.4 * d;
       }
     },
     dispose() {
