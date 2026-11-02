@@ -35,6 +35,14 @@ const YIELD_CHECK = 0.3;
 const POPULATION_CHECK = 2.5;
 /** 단골끼리 주문 말풍선이 몰리지 않게: 한 번 주문하면 이만큼은 아무도 주문하지 않는다 */
 const ORDER_GAP = 95;
+/** 내 동작을 따라 하는 단골: 이 거리(m) 안에 있는 사람만 (같은 평상과 옆 평상 가장자리쯤) */
+export const FOLLOW_RADIUS = 4.5;
+/** 내 동작을 따라 할 확률 (단골마다, 누를 때마다 따로 굴린다 — 연타해도 할 수도 안 할 수도 있다) */
+export const FOLLOW_CHANCE = 0.5;
+/** 한 번 따라 한 단골은 이만큼은 다시 따라 하지 않는다 (몸짓이 끝나기 전에 겹치지 않게) */
+const FOLLOW_COOLDOWN = 1.5;
+/** 내 주문을 따라 시키는 것은 이 간격에 한 번 (주모 말풍선이 몰리지 않게) */
+const FOLLOW_ORDER_GAP = 25;
 
 type Target = { kind: 'seat'; seatId: string } | { kind: 'spot'; spot: StandSpot } | { kind: 'leave' };
 
@@ -59,6 +67,8 @@ interface Regular {
   stayLeft: number;
   /** 이번에 앉아서 주문할 때 (초, 없으면 Infinity) */
   orderIn: number;
+  /** 이때까지는 내 동작을 다시 따라 하지 않는다 (clock 기준 초) */
+  followAfter: number;
   pause: number;
 }
 
@@ -189,11 +199,40 @@ export class Regulars {
   cheer(): void {
     for (const r of this.regulars.values()) {
       if (r.target.kind === 'leave') continue;
-      const n = 2 + Math.floor(this.rand() * 2);
+      const n = 1 + Math.floor(this.rand() * 2);
       for (let i = 0; i < n; i++) {
         r.queue.push({ at: this.clock + 1.1 + i * (0.7 + this.rand() * 0.9), act: this.rand() < 0.6 ? 'clap' : 'toast' });
       }
       r.actIn = Math.max(r.actIn, 5);
+    }
+  }
+
+  /**
+   * 내가 박수·건배·주문을 했다: 가까이(FOLLOW_RADIUS) 있는 단골이 반반(FOLLOW_CHANCE)의 확률로 잠깐 뒤 따라 한다.
+   * 박수·건배는 가까운 단골마다 따로 굴리고, 주문은 가장 가까운 한 명만 (FOLLOW_ORDER_GAP에 한 번까지) 굴린다
+   */
+  follow(actionId: string, at: { x: number; z: number }): void {
+    const near = [...this.regulars.values()]
+      .filter((r) => r.target.kind !== 'leave' && r.mode !== 'walk' && this.clock >= r.followAfter)
+      .map((r) => ({ r, d: Math.hypot(r.x - at.x, r.z - at.z) }))
+      .filter((n) => n.d <= FOLLOW_RADIUS)
+      .sort((a, b) => a.d - b.d);
+    if (actionId === 'order') {
+      const first = near[0];
+      if (!first || this.clock - this.lastOrderAt < FOLLOW_ORDER_GAP) return;
+      if (this.rand() >= FOLLOW_CHANCE) return;
+      this.lastOrderAt = this.clock; // 주문 말풍선이 겹치지 않게 미리 잡아 둔다
+      first.r.queue.push({ at: this.clock + this.between(2.2, 3.5), act: 'order!' });
+      first.r.followAfter = this.clock + FOLLOW_COOLDOWN;
+      return;
+    }
+    for (const { r } of near) {
+      if (this.rand() >= FOLLOW_CHANCE) continue;
+      r.queue.push({ at: this.clock + this.between(0.5, 1.4), act: actionId });
+      r.queue.sort((a, b) => a.at - b.at);
+      r.followAfter = this.clock + FOLLOW_COOLDOWN;
+      // 따라 했으니 혼자 하는 응원은 한동안 쉰다
+      r.actIn = Math.max(r.actIn, this.actGap(r) * 0.5);
     }
   }
 
@@ -282,6 +321,7 @@ export class Regulars {
       queue: [],
       stayLeft: this.between(240, 560),
       orderIn: Infinity,
+      followAfter: 0,
       pause: 0,
     };
   }
@@ -582,21 +622,23 @@ export class Regulars {
 
   private actGap(r: Regular): number {
     const live = this.live();
-    if (r.mode === 'seated') return live ? this.between(6, 14) : this.between(14, 30);
-    return live ? this.between(4, 9) : this.between(10, 22);
+    // 너무 잦으면 시끄럽다: 경기 중에도 한 사람이 20~40초에 한 번쯤
+    if (r.mode === 'seated') return live ? this.between(20, 40) : this.between(45, 90);
+    return live ? this.between(15, 30) : this.between(35, 70);
   }
 
   /** 가만히 있을 때의 응원: 경기 중이면 손뼉·건배·환호, 아니면 느긋하게 한 사발 */
   private idleAct(r: Regular): void {
     const roll = this.rand();
+    // 이모지가 뜨는 박수·건배는 절반 아래로, 나머지는 몸짓만 하거나 가만히
     if (this.live()) {
-      if (roll < 0.4) this.doAct(r, 'clap');
-      else if (roll < 0.6) this.doAct(r, 'toast');
-      else this.peers.playMotion(r.id, roll < 0.8 ? 'hop-double' : 'roar');
+      if (roll < 0.25) this.doAct(r, 'clap');
+      else if (roll < 0.4) this.doAct(r, 'toast');
+      else if (roll < 0.75) this.peers.playMotion(r.id, roll < 0.6 ? 'hop-double' : 'roar');
     } else {
-      if (roll < 0.45) this.doAct(r, 'toast');
-      else if (roll < 0.6) this.doAct(r, 'clap');
-      else if (roll < 0.7) this.peers.playMotion(r.id, 'hop');
+      if (roll < 0.25) this.doAct(r, 'toast');
+      else if (roll < 0.33) this.doAct(r, 'clap');
+      else if (roll < 0.45) this.peers.playMotion(r.id, 'hop');
     }
   }
 
@@ -609,6 +651,11 @@ export class Regulars {
   private doAct(r: Regular, act: string, variant?: number): void {
     if (act === 'order?') {
       this.tryOrder(r);
+      return;
+    }
+    if (act === 'order!') {
+      // 내 주문을 따라 시킨다 (간격은 follow에서 이미 잡았다)
+      this.doAct(r, 'order', Math.floor(this.rand() * 8));
       return;
     }
     const motion = this.motions.get(act);
