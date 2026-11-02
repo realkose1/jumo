@@ -12,6 +12,7 @@ import { buildTvView, hasLiveMatch } from './feed';
 import { BudgetLimiter, RemoteCueLimiter } from './limiter';
 import { HYPE_MS, MomentGate, momentDelayMs, planMoment, type MomentPlan } from './moments';
 import { BUBBLE_MS, DISH_DELAY_MS, ORDER_REPLY_DELAY_MS, menuFor, pickReply } from './orders';
+import { Regulars } from './regulars';
 import { FALLBACK_ROOM_NAME, roomName } from './roomName';
 import { ActionTally } from './tally';
 
@@ -41,6 +42,10 @@ const AUTO_SEAT_GIVE_UP_MS = 9000;
 export const NO_FEED_QUIET_MS = 20_000;
 /** 주모 대답이 서로 겹치지 않게: 남의 주문에는 이 간격 안에 한 번만 말풍선 */
 const JUMO_BUBBLE_GAP_MS = 1100;
+/** 단골손님은 방 사람들과 앉은 자리를 받은 뒤에 들인다 (서버가 없으면 조금만, 답이 늦으면 이만큼 기다린다) */
+const REGULARS_SOLO_MS = 1200;
+const REGULARS_FALLBACK_MS = 3500;
+const REGULARS_AFTER_WELCOME_MS = 500;
 
 export class CheerController {
   private readonly engine: Engine;
@@ -65,6 +70,8 @@ export class CheerController {
   private stage: JumakStage | null = null;
   private feed: CheerFeed | null = null;
   private seater: AutoSeater | null = null;
+  /** 주막 단골손님 (사람처럼 돌아다니는 NPC 셋) */
+  private regulars: Regulars | null = null;
   private seatAttempted = false;
   private tallyTimer: number | undefined;
   private hypeTimer: number | undefined;
@@ -97,9 +104,15 @@ export class CheerController {
         if (seatId) this.seater?.onSeated();
       }),
       e.on('seat-denied', ({ seatId }) => this.seater?.onDenied(seatId)),
-      // 서버가 방 사람들과 앉은 자리를 알려 준 직후가 앉기 좋은 때다
-      e.on('self-name', () => this.startAutoSeat()),
-      e.on('reduced-motion-change', ({ enabled }) => this.stage?.setReducedMotion(enabled)),
+      // 서버가 방 사람들과 앉은 자리를 알려 준 직후가 앉기 좋은 때다 (단골손님도 그 뒤에 들인다)
+      e.on('self-name', () => {
+        this.startAutoSeat();
+        this.later(() => this.regulars?.start(), REGULARS_AFTER_WELCOME_MS);
+      }),
+      e.on('reduced-motion-change', ({ enabled }) => {
+        this.stage?.setReducedMotion(enabled);
+        this.regulars?.setReducedMotion(enabled);
+      }),
     );
     if (e.isReady()) this.onReady();
   }
@@ -113,6 +126,8 @@ export class CheerController {
     window.clearInterval(this.tallyTimer);
     window.clearTimeout(this.hypeTimer);
     window.clearTimeout(this.noFeedTimer);
+    this.regulars?.dispose();
+    this.regulars = null;
     this.ui.bubbles.clear();
     this.ui.setHype(false);
   }
@@ -137,6 +152,33 @@ export class CheerController {
     const { status } = this.engine.getNetState();
     if (status === 'online') this.startAutoSeat();
     else this.later(() => this.startAutoSeat(), status === 'connecting' ? AUTO_SEAT_FALLBACK_MS : 350);
+    this.setUpRegulars(status === 'idle' || status === 'offline' ? REGULARS_SOLO_MS : REGULARS_FALLBACK_MS);
+  }
+
+  /** 단골손님: 이 화면에서만 움직이는 사람들. 이름표·이모지·주문 음식이 방 사람들처럼 붙도록 엔진에 붙인다 */
+  private setUpRegulars(startAfterMs: number): void {
+    const stage = this.stage;
+    if (!stage || this.regulars) return;
+    const e = this.engine;
+    const regulars = new Regulars({
+      scene: stage.scene,
+      seats: e.space.seats,
+      outfit: e.space.avatarOutfit,
+      reducedMotion: e.getReducedMotion(),
+      seatOrder: seatPreferenceOrder(e.space.seats, () => 0.5),
+      actions: e.space.actions,
+      // 진짜 사람에게 늘 양보한다: 남이 앉은 자리, 내가 앉은 자리, 내가 앉으러 가는 자리
+      isSeatBlocked: (id) => e.isSeatTaken(id) || e.getSeatId() === id || e.getSeatIntent() === id,
+      mySeat: () => e.getSeatId() ?? e.getSeatIntent(),
+      peerCount: () => e.getPeerCount(),
+      isLive: () => hasLiveMatch(this.feed),
+      act: (id, actionId, v) => this.showOtherAct(id, actionId, v),
+    });
+    this.regulars = regulars;
+    const offTicker = stage.addTicker((dt) => regulars.update(dt));
+    const offCrowd = e.addCrowd(regulars.peers);
+    this.cleanups.push(offTicker, offCrowd);
+    this.later(() => this.regulars?.start(), startAfterMs);
   }
 
   private startAutoSeat(): void {
@@ -202,7 +244,10 @@ export class CheerController {
 
     stage.sound.moment(plan.sound);
     if (plan.banner) stage.flashBanner(plan.banner.text, plan.banner.tone, plan.banner.tone === 'goal' ? BANNER_GOAL_MS : BANNER_INFO_MS);
-    if (plan.celebrate) this.celebrate(0.18);
+    if (plan.celebrate) {
+      this.celebrate(0.18);
+      this.regulars?.cheer();
+    }
     // 다른 탭이나 앱 밖에 가 있는 동안에는 색종이를 터뜨려 봐야 아무도 못 본다
     const visible = typeof document === 'undefined' || document.visibilityState !== 'hidden';
     if (plan.confetti && !reduced && visible) stage.confetti(this.engine.getQuality().tier === 'low' ? 110 : 220);
@@ -243,8 +288,13 @@ export class CheerController {
 
   /** 남의 동작: 합계에는 모두 세고, 소리와 이모지는 조절 장치를 거친다 */
   handlePeerAct(id: number, actionId: string, variant?: number): void {
+    this.tally.add(actionId, performance.now());
+    this.showOtherAct(id, actionId, variant);
+  }
+
+  /** 남(방 사람·단골손님)의 동작을 보이고 들려준다. 단골손님 것은 합계(tally)에 세지 않는다 */
+  private showOtherAct(id: number, actionId: string, variant?: number): void {
     const now = performance.now();
-    this.tally.add(actionId, now);
     const stage = this.stage;
     if (!stage) return;
     if (this.limiter.allowSound(actionId, now)) stage.sound.action(actionId, 'peer');

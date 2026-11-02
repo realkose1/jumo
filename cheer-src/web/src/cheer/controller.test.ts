@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CheerFeed, Moment } from '@shared/cheer';
 import type { Engine } from '../engine/Engine';
@@ -32,10 +33,31 @@ function makeEngine(opts: { ready?: boolean; status?: string; reduced?: boolean;
     serveDish: vi.fn(),
     jumoReply: vi.fn(),
     jumoAnchor: (out: { set(x: number, y: number, z: number): unknown }) => out.set(0, 1.6, 0),
+    scene: new THREE.Scene(),
+    tickers: [] as Array<(dt: number) => void>,
+    addTicker(fn: (dt: number) => void) {
+      this.tickers.push(fn);
+      return () => undefined;
+    },
   };
   const taken = new Set(opts.taken ?? []);
   const engine = {
-    space: { seats: buildSeats() },
+    space: {
+      seats: buildSeats(),
+      avatarOutfit: 'plain',
+      actions: [
+        { id: 'clap', motion: 'clap' },
+        { id: 'toast', motion: 'toast' },
+        { id: 'order', motion: 'roar' },
+      ],
+    },
+    crowds: [] as unknown[],
+    addCrowd(c: unknown) {
+      this.crowds.push(c);
+      return () => undefined;
+    },
+    getSeatIntent: () => null,
+    getPeerCount: () => 0,
     clock: { getServerOffsetMs: () => 0 },
     isReady: () => opts.ready ?? true,
     getSceneApi: () => stage,
