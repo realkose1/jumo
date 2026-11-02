@@ -206,42 +206,74 @@ describe('단골손님', () => {
     expect(quiet.acts.some((a) => a.act === 'order')).toBe(true);
   });
 
-  it('내가 근처에서 박수·건배하면 가까운 단골이 따라 하고, 먼 단골은 안 한다. 연타해도 한 번씩', () => {
-    const { r, acts, run } = setup({ mine: 'b1', seed: 5 });
+  it('내가 근처에서 박수·건배하면 가까운 단골이 반쯤의 확률로 따라 하고, 먼 단골은 안 한다', () => {
+    const { r, acts, run, state } = setup({ mine: 'b1', seed: 5 });
     r.start();
     run(0.2);
-    const seated = r.ids().map((id) => ({ id, s: r.stateOf(id)! })).filter((x) => x.s.mode === 'seated');
     const me = { x: 1.89, z: -2.74 }; // b1
-    const near = seated.filter((x) => Math.hypot(x.s.x - me.x, x.s.z - me.z) <= 4.5).map((x) => x.id);
-    expect(near.length).toBeGreaterThanOrEqual(1);
-    acts.length = 0;
-    for (let i = 0; i < 5; i++) r.follow('toast', me); // 연타
-    run(2);
-    const toasts = acts.filter((a) => a.act === 'toast');
-    for (const a of toasts) expect(near).toContain(a.id);
-    expect(new Set(toasts.map((a) => a.id)).size).toBe(toasts.length);
-    expect(toasts.length).toBeGreaterThanOrEqual(1);
+    let eligible = 0;
+    let followed = 0;
+    for (let i = 0; i < 150; i++) {
+      const near = r.ids().filter((id) => {
+        const st = r.stateOf(id)!;
+        return st.mode !== 'walk' && st.target !== 'leave' && Math.hypot(st.x - me.x, st.z - me.z) <= 4.5;
+      });
+      const t0 = state.t;
+      r.follow('toast', me);
+      run(2);
+      eligible += near.length;
+      const got = acts.filter((a) => a.act === 'toast' && a.t > t0 && near.includes(a.id));
+      expect(new Set(got.map((a) => a.id)).size).toBe(got.length); // 한 번 누르면 한 사람이 한 번까지
+      followed += got.length;
+    }
+    expect(eligible).toBeGreaterThan(80);
+    expect(followed / eligible).toBeGreaterThan(0.35);
+    expect(followed / eligible).toBeLessThan(0.7);
     // 아주 먼 곳에서 하면 아무도 안 따라 한다
-    acts.length = 0;
     run(4);
     acts.length = 0;
-    r.follow('clap', { x: 0, z: 8.5 });
-    run(2);
-    expect(acts.filter((a) => a.act === 'clap')).toHaveLength(0);
+    for (let i = 0; i < 10; i++) {
+      r.follow('clap', { x: 0, z: 8.5 });
+      run(2);
+    }
+    const far = acts.filter((a) => a.act === 'clap' && Math.hypot(r.stateOf(a.id)?.x ?? 99, (r.stateOf(a.id)?.z ?? 99) - 8.5) > 4.5);
+    expect(far.length).toBeLessThanOrEqual(1); // 혼자 하는 박수가 우연히 겹칠 수는 있다
   });
 
-  it('내 주문은 가장 가까운 한 명만 따라 시키고, 25초 안에 다시 시켜도 따라 하지 않는다', () => {
+  it('연타하면 누를 때마다 따로 굴린다: 앞에서 안 따라 했어도 다음 누름에 따라 할 수 있다', () => {
+    const presses: boolean[][] = [];
+    for (let seed = 1; seed <= 20; seed++) {
+      const { r, acts, run, state } = setup({ mine: 'b1', seed });
+      r.start();
+      run(0.2);
+      const got: boolean[] = [];
+      for (let i = 0; i < 3; i++) {
+        const t0 = state.t;
+        r.follow('clap', { x: 1.89, z: -2.74 });
+        run(1.6);
+        got.push(acts.some((a) => a.act === 'clap' && a.t > t0));
+      }
+      presses.push(got);
+    }
+    const flat = presses.flat();
+    expect(flat).toContain(true);
+    expect(flat).toContain(false);
+    // 첫 누름은 아무도 안 따라 했는데 다음 누름에 따라 한 때가 있다
+    expect(presses.some((g) => !g[0] && (g[1] || g[2]))).toBe(true);
+  });
+
+  it('내 주문은 가장 가까운 한 명이 반쯤의 확률로 따라 시키고, 25초에 한 번까지', () => {
     const { r, acts, run } = setup({ mine: 'b1', seed: 5 });
     r.start();
     run(0.2);
-    const me = { x: 1.89, z: -2.74 };
     acts.length = 0;
-    r.follow('order', me);
-    run(5);
-    r.follow('order', me);
-    run(5);
+    for (let i = 0; i < 60; i++) {
+      r.follow('order', { x: 1.89, z: -2.74 });
+      run(5);
+    }
     const orders = acts.filter((a) => a.act === 'order');
-    expect(orders).toHaveLength(1);
+    expect(orders.length).toBeGreaterThan(2);
+    for (let i = 1; i < orders.length; i++) expect(orders[i]!.t - orders[i - 1]!.t).toBeGreaterThanOrEqual(25);
   });
 
   it('혼자 하는 박수·건배는 띄엄띄엄: 경기 중에도 셋이 합쳐 10분에 마흔 번을 넘지 않는다', () => {

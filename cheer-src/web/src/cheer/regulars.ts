@@ -37,8 +37,10 @@ const POPULATION_CHECK = 2.5;
 const ORDER_GAP = 95;
 /** 내 동작을 따라 하는 단골: 이 거리(m) 안에 있는 사람만 (같은 평상과 옆 평상 가장자리쯤) */
 export const FOLLOW_RADIUS = 4.5;
-/** 한 단골이 내 동작을 연달아 따라 하지 않게 (내가 버튼을 연타해도) */
-const FOLLOW_COOLDOWN = 3;
+/** 내 동작을 따라 할 확률 (단골마다, 누를 때마다 따로 굴린다 — 연타해도 할 수도 안 할 수도 있다) */
+export const FOLLOW_CHANCE = 0.5;
+/** 한 번 따라 한 단골은 이만큼은 다시 따라 하지 않는다 (몸짓이 끝나기 전에 겹치지 않게) */
+const FOLLOW_COOLDOWN = 1.5;
 /** 내 주문을 따라 시키는 것은 이 간격에 한 번 (주모 말풍선이 몰리지 않게) */
 const FOLLOW_ORDER_GAP = 25;
 
@@ -206,8 +208,8 @@ export class Regulars {
   }
 
   /**
-   * 내가 박수·건배·주문을 했다: 가까이(FOLLOW_RADIUS) 있는 단골이 잠깐 뒤 따라 한다.
-   * 박수·건배는 가까운 단골 대부분이, 주문은 가장 가까운 한 명만 (FOLLOW_ORDER_GAP에 한 번) 따라 시킨다
+   * 내가 박수·건배·주문을 했다: 가까이(FOLLOW_RADIUS) 있는 단골이 반반(FOLLOW_CHANCE)의 확률로 잠깐 뒤 따라 한다.
+   * 박수·건배는 가까운 단골마다 따로 굴리고, 주문은 가장 가까운 한 명만 (FOLLOW_ORDER_GAP에 한 번까지) 굴린다
    */
   follow(actionId: string, at: { x: number; z: number }): void {
     const near = [...this.regulars.values()]
@@ -218,13 +220,14 @@ export class Regulars {
     if (actionId === 'order') {
       const first = near[0];
       if (!first || this.clock - this.lastOrderAt < FOLLOW_ORDER_GAP) return;
+      if (this.rand() >= FOLLOW_CHANCE) return;
       this.lastOrderAt = this.clock; // 주문 말풍선이 겹치지 않게 미리 잡아 둔다
       first.r.queue.push({ at: this.clock + this.between(2.2, 3.5), act: 'order!' });
       first.r.followAfter = this.clock + FOLLOW_COOLDOWN;
       return;
     }
     for (const { r } of near) {
-      if (this.rand() > 0.85) continue;
+      if (this.rand() >= FOLLOW_CHANCE) continue;
       r.queue.push({ at: this.clock + this.between(0.5, 1.4), act: actionId });
       r.queue.sort((a, b) => a.at - b.at);
       r.followAfter = this.clock + FOLLOW_COOLDOWN;
