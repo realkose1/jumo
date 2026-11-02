@@ -62,6 +62,15 @@ const HW_KEY = 'cheer-feed-hw';
 const KST_MS = 9 * 3600e3;
 
 const SOCCER = PLAYERS.filter((p) => p.sport === 'soccer' && p.afTeamId);
+
+// 주막에는 1군 경기만 건다: 21세 이하·유스·2군(리저브, 'II', 'B' 팀, Jong) 팀이 낀 경기와 유스 리그는 뺀다.
+// 대표팀 경기는 예외 — 아시안게임처럼 U23 대표팀이 뛰는 정식 대회다(앱 transformApiFootballFixture 와 같은 규칙).
+// index.html 의 JUMAK_SECOND_TEAM_RE(앱 주막 입구)와 같은 식이다 — 고치면 같이 고친다.
+const SECOND_TEAM_RE = /(?:^|[\s(])(?:u-?\d{2}|sub-?\d{2}|youth|juniors?|academy|reserves?|primavera)(?=$|[\s)])|\s(?:ii|b)$|^jong\s|\scastilla$|\satl[eè]tic$/i;
+const YOUTH_LEAGUE_RE = /(?:^|[\s(])(?:u-?\d{2}|youth|primavera|reserves?)(?=$|[\s)])|premier league (?:2|cup|international cup)|development league/i;
+function isSecondTeam(name) {
+  return SECOND_TEAM_RE.test(String(name || '').trim());
+}
 const BASEBALL = PLAYERS.filter((p) => p.sport === 'baseball');
 const BY_AF_ID = new Map(PLAYERS.filter((p) => p.afPlayerId).map((p) => [String(p.afPlayerId), p]));
 const TRACKED_TEAM_IDS = new Set([...SOCCER.map((p) => p.afTeamId), ...Object.keys(NATIONAL_TEAMS).map(Number)]);
@@ -246,8 +255,8 @@ function playerRole(p, u, lineup) {
 }
 
 // 패치 fixtures[id] 모양 { s, el, h, a, ko, p, u, fx } → 관측(obs). 우리 경기가 아니면 null.
-// 우리 팀은 AF 팀 id 로만 잡는다(이름 매칭이 아니라 앱의 유스·여자팀 거르기가 필요 없다 —
-// 그래서 박승수의 Newcastle U21 경기도 들어온다). lineup = 이 경기의 명단 판정(loadLineups, 없으면 null).
+// 우리 팀은 AF 팀 id 로만 잡는다(이름 매칭이 아니다). 다만 21세 이하·2군 팀이 낀 경기는 주막에 걸지 않는다
+// (isSecondTeam — 박승수의 Newcastle U21 경기도 빠진다). lineup = 이 경기의 명단 판정(loadLineups, 없으면 null).
 function soccerObs(id, f, stamp, nowMs, lineup = null) {
   const fx = f && f.fx;
   const H = fx?.teams?.home, A = fx?.teams?.away;
@@ -259,6 +268,8 @@ function soccerObs(id, f, stamp, nowMs, lineup = null) {
   const lg = fx.league || {};
   const natH = !!NATIONAL_TEAMS[H.id], natA = !!NATIONAL_TEAMS[A.id];
   const isNat = natH || natA;
+  // 21세 이하·2군 경기는 주막에 걸지 않는다 (박승수의 Newcastle U21 경기, 리저브 리그, EFL 트로피의 U21 팀 상대 등)
+  if (!isNat && (isSecondTeam(H.name) || isSecondTeam(A.name) || YOUTH_LEAGUE_RE.test(lg.name || ''))) return null;
   const pp = f.p && typeof f.p === 'object' ? f.p : null;   // 골 이벤트를 받은 회차에만 온다
   let pl;
   if (isNat) {
@@ -562,6 +573,7 @@ async function loadLineups(patch, nowMs) {
     const H = f.fx?.teams?.home?.id, A = f.fx?.teams?.away?.id;
     if (NATIONAL_TEAMS[H] || NATIONAL_TEAMS[A]) continue;
     if (!SOCCER.some((p) => p.afTeamId === H || p.afTeamId === A)) continue;
+    if (isSecondTeam(f.fx?.teams?.home?.name) || isSecondTeam(f.fx?.teams?.away?.name)) continue;   // 주막에 걸지 않는 경기
     const ko = Date.parse(f.ko || f.fx?.fixture?.date) || 0;
     if (!ko || ko - nowMs > LINEUP_PRE_MS || nowMs - ko > LINEUP_POST_MS) continue;
     ids.push(id);
@@ -704,6 +716,7 @@ async function handler(req, res) {
 module.exports = handler;
 module.exports.buildFeed = buildFeed;
 module.exports.soccerObs = soccerObs;
+module.exports.isSecondTeam = isSecondTeam;
 module.exports.fetchMlbGame = fetchMlbGame;
 module.exports.loadFeed = loadFeed;
 module.exports.farCandidates = farCandidates;
