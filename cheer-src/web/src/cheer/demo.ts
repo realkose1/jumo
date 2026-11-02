@@ -162,7 +162,8 @@ export function startDemo(engine: Engine, controller: CheerController, ui: UIHan
       }, 300 + i * 160);
     });
     // 머리 위 좌표, 모두 같이 신나게, 이름은 데모 쪽 사람들로
-    controller.anchorOf = (who, out) => (who === 'self' ? engine.getHeadAnchor('self', out) : (crowd?.labelAnchor(who, out) ?? null));
+    // 데모 사람들이 아니면(단골손님 등) 엔진에 묻는다
+    controller.anchorOf = (who, out) => (who === 'self' ? engine.getHeadAnchor('self', out) : (crowd?.labelAnchor(who, out) ?? engine.getHeadAnchor(who, out)));
     controller.spotOf = (who) => {
       if (who === 'self' || !crowd) return null;
       const at = crowd.positionOf(who);

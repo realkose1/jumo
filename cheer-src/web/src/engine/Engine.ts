@@ -23,6 +23,9 @@
 //   engine.isSeatTaken(id) / sitAtSeat(id)   자리가 찼는지, 그 자리로 걸어가 앉기
 //   engine.getSpot(who)                서 있는 곳과 앉은 자리 (음식을 놓을 곳)
 //   engine.projectToScreen(p, out)     3D 좌표 -> 화면 픽셀 (말풍선처럼 화면 요소를 3D 위치에 붙일 때)
+//   engine.addCrowd(crowd)             이 화면이 직접 움직이는 사람들(주막 단골손님)을 붙인다. 이름표·머리 위 효과·음식·다 같이 신남에 낀다
+//   engine.getSeatIntent()             내가 앉으러 걸어가는 중인 자리 id (없으면 null)
+//   engine.getPeopleNames()            방 사람들(나 포함)의 이름 (단골손님 이름이 겹치지 않게)
 //   engine.on(type, handler)           이벤트 구독, 해제 함수를 돌려준다 (아래 EngineEventMap)
 import * as THREE from 'three';
 import { ActionController, type ActionEvent } from './actions';
@@ -34,7 +37,7 @@ import { NetSession, type NetEventMap } from './net/session';
 import { getDeviceId } from './net/deviceId';
 import { parseRoomNumber } from './net/room';
 import type { PresenceStatus } from './net/PresenceClient';
-import { PeerLabeler } from './peerLabel';
+import { PeerLabeler, type LabelPeers } from './peerLabel';
 import { Player } from './player';
 import {
   FrameMonitor,
@@ -48,7 +51,20 @@ import { LocalSeatArbiter, SeatManager, type SeatArbiter, type SeatDenial } from
 import { SoundMixer, type SoundState } from './sound';
 import { SpaceStorage } from './storage';
 import { QuietClock } from './time';
-import type { SceneContext, SceneHandle, SpaceDefinition } from './types';
+import type { ActionMotion, SceneContext, SceneHandle, SpaceDefinition } from './types';
+
+/**
+ * 서버가 아니라 이 화면이 직접 움직이는 사람들(예: 주막 단골손님). 엔진에 붙이면 이름표, 머리 위 효과, 음식 놓을 곳,
+ * '다 같이 신남'에 방 사람들처럼 같이 낀다. 사람 수(peer-count)와 자리 판정(isSeatTaken)에는 들지 않는다.
+ * RemotePeers가 그대로 맞는다. 번호는 서버 번호(1부터)와 겹치지 않게 0보다 작은 수를 쓴다.
+ */
+export interface Crowd extends LabelPeers {
+  has(id: number): boolean;
+  pick(ray: THREE.Ray): number | null;
+  positionOf(id: number): { x: number; z: number; yaw: number } | null;
+  seatIdOf(id: number): string | null;
+  playMotionAll(motion: ActionMotion, maxDelay?: number): void;
+}
 
 export interface EngineEventMap extends NetEventMap {
   /** 장면 불러오는 중. progress는 0~1이고 줄어들지 않는다 */
@@ -120,6 +136,13 @@ export class Engine {
   private seats: SeatManager | null = null;
   private net: NetSession | null = null;
   private labeler: PeerLabeler | null = null;
+  private readonly crowds: Crowd[] = [];
+  /** 이름표를 띄울 사람들: 방 사람들(서버) + 붙인 사람들(단골손님) */
+  private readonly everyone: LabelPeers = {
+    ids: () => this.everyoneIds(),
+    labelAnchor: (id, out) => this.crowdOf(id)?.labelAnchor(id, out) ?? null,
+    nameOf: (id) => this.crowdOf(id)?.nameOf(id) ?? null,
+  };
   private hoverPoint: { x: number; y: number } | null = null;
   private readonly presenceUrl: string | null;
   private player: Player | null = null;
@@ -255,16 +278,21 @@ export class Engine {
       this.applySceneCamera(handle);
       this.seats = new SeatManager(this.scene, this.space.seats);
       this.net = this.createNet();
-      if (this.net) {
-        const client = this.net.client;
-        this.labeler = new PeerLabeler(this.net.peers, (labels) => this.events.emit('peer-labels', labels), {
-          id: () => client.myId,
-          name: () => client.myName,
-          // 시점을 낮춰 카메라가 내 머리 뒤로 오면(내 갓을 감출 때) 내 이름표도 감춘다 — 화면 한가운데를 가린다
-          anchor: (out) => (this.player && !this.player.avatar.isTallHidden() ? this.getHeadAnchor('self', out) : null),
-        });
-        this.net.peers.setGroundHeight(handle.groundHeight ?? null);
-      }
+      const client = this.net?.client ?? null;
+      // 서버가 없어도(혼자 모드) 단골손님 이름표는 띄운다. 내 이름표는 서버가 이름을 붙여 줄 때만
+      this.labeler = new PeerLabeler(
+        this.everyone,
+        (labels) => this.events.emit('peer-labels', labels),
+        client
+          ? {
+              id: () => client.myId,
+              name: () => client.myName,
+              // 시점을 낮춰 카메라가 내 머리 뒤로 오면(내 갓을 감출 때) 내 이름표도 감춘다 — 화면 한가운데를 가린다
+              anchor: (out) => (this.player && !this.player.avatar.isTallHidden() ? this.getHeadAnchor('self', out) : null),
+            }
+          : null,
+      );
+      this.net?.peers.setGroundHeight(handle.groundHeight ?? null);
       const avatar = new Avatar({
         detail: 'self',
         outfit: this.space.avatarOutfit,
@@ -381,7 +409,7 @@ export class Engine {
       if (!p) return null;
       return out.set(p.position.x, p.avatar.root.position.y + AVATAR_HEIGHT + HEAD_ANCHOR_RISE, p.position.z);
     }
-    return this.net?.peers.labelAnchor(who, out) ?? null;
+    return this.crowdOf(who)?.labelAnchor(who, out) ?? null;
   }
 
   /** 그 사람이 서 있는 곳과 앉은 자리 (음식을 어디에 놓을지 정할 때). who는 'self' 또는 사람 번호 */
@@ -390,10 +418,41 @@ export class Engine {
       const p = this.player;
       return p ? { x: p.position.x, z: p.position.z, yaw: p.heading, seatId: p.seatId } : null;
     }
-    const peers = this.net?.peers;
+    const peers = this.crowdOf(who);
     const at = peers?.positionOf(who);
-    if (!peers || !at || !peers.has(who)) return null;
+    if (!peers || !at) return null;
     return { x: at.x, z: at.z, yaw: at.yaw, seatId: peers.seatIdOf(who) };
+  }
+
+  /**
+   * 이 화면이 직접 움직이는 사람들을 붙인다(주막 단골손님). 이름표, 머리 위 좌표(getHeadAnchor), 음식 놓을 곳(getSpot),
+   * 다 같이 신남(celebrateAll), 눌러서 이름 보기에 방 사람들처럼 낀다. 떼는 함수를 돌려준다
+   */
+  addCrowd(crowd: Crowd): Unsubscribe {
+    this.crowds.push(crowd);
+    return () => {
+      const i = this.crowds.indexOf(crowd);
+      if (i >= 0) this.crowds.splice(i, 1);
+    };
+  }
+
+  /** 내가 앉으러 걸어가는 중인 자리 (앉았거나 서 있기만 하면 null) */
+  getSeatIntent(): string | null {
+    return this.player?.pendingSeatId ?? null;
+  }
+
+  /** 방 사람들(서버가 이름을 붙여 준 나 포함)의 이름. 붙인 사람들(단골손님)은 빼고 */
+  getPeopleNames(): string[] {
+    const net = this.net;
+    if (!net) return [];
+    const out: string[] = [];
+    const mine = net.client.myName?.ko;
+    if (mine) out.push(mine);
+    for (const id of net.peers.ids()) {
+      const n = net.peers.nameOf(id)?.ko;
+      if (n) out.push(n);
+    }
+    return out;
   }
 
   /** 3D 좌표를 화면(뷰포트) 픽셀로. 카메라 뒤이거나 화면 밖이면 visible이 false다 */
@@ -411,6 +470,7 @@ export class Engine {
     const reduced = this.getReducedMotion();
     this.player?.avatar.playMotion('celebrate', reduced ? 0 : Math.random() * maxDelay);
     this.net?.peers.playMotionAll('celebrate', maxDelay);
+    for (const c of this.crowds) c.playMotionAll('celebrate', maxDelay);
   }
 
   /** 그 자리에 다른 사람이 앉아 있는지 (서버 현황 기준). 자리 id를 모르면 true */
@@ -597,7 +657,7 @@ export class Engine {
     if (!this.player || !this.seats) return;
     const ray = this.rayAt(clientX, clientY);
     // 사람을 눌렀으면 이름만 잠깐 보여준다(걸어가지 않는다)
-    const peerId = this.net?.peers.pick(ray) ?? null;
+    const peerId = this.pickPerson(ray);
     if (peerId !== null) {
       this.labeler?.tap(peerId, performance.now());
       return;
@@ -663,9 +723,32 @@ export class Engine {
 
   /** 마우스를 올려 둔 곳에 사람이 있으면 이름표 대상으로 알린다 */
   private updateHover(): void {
-    if (!this.net || !this.labeler || !this.hoverPoint) return;
+    if (!this.labeler || !this.hoverPoint) return;
     const ray = this.rayAt(this.hoverPoint.x, this.hoverPoint.y);
-    this.labeler.setHover(this.net.peers.pick(ray));
+    this.labeler.setHover(this.pickPerson(ray));
+  }
+
+  /** 그 번호의 사람을 그리는 쪽 (방 사람들 먼저, 그다음 붙인 사람들). 나가는 중이거나 모르면 null */
+  private crowdOf(id: number): Crowd | null {
+    if (this.net?.peers.has(id)) return this.net.peers;
+    for (const c of this.crowds) if (c.has(id)) return c;
+    return null;
+  }
+
+  private *everyoneIds(): IterableIterator<number> {
+    if (this.net) yield* this.net.peers.ids();
+    for (const c of this.crowds) yield* c.ids();
+  }
+
+  /** 누른 곳의 사람 (방 사람들 먼저) */
+  private pickPerson(ray: THREE.Ray): number | null {
+    const id = this.net?.peers.pick(ray) ?? null;
+    if (id !== null) return id;
+    for (const c of this.crowds) {
+      const hit = c.pick(ray);
+      if (hit !== null) return hit;
+    }
+    return null;
   }
 
   private startLoop(): void {

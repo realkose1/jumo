@@ -116,6 +116,11 @@ export class Player {
     return this.seat?.id ?? null;
   }
 
+  /** 앉으러 걸어가는 중인 자리 (없으면 null) */
+  get pendingSeatId(): string | null {
+    return this.pendingSeat?.id ?? null;
+  }
+
   get position(): { x: number; z: number } {
     return { x: this.x, z: this.z };
   }

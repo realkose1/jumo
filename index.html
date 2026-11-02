@@ -5143,8 +5143,19 @@ const JumakCtx = React.createContext(null);
 
 // 라이브 중이거나 킥오프 60분 전부터면 입장을 열어 준다.
 const JUMAK_SOON_MS = 60 * 60 * 1000;
+// 주막에는 1군 경기만: 21세 이하·유스·2군(리저브, 'II', 'B' 팀, Jong) 팀이 낀 경기와 유스 리그는 입구를 열지 않는다.
+// 대표팀 경기(아시안게임 U-23 등)는 예외. api/cheer-feed.js 의 SECOND_TEAM_RE·YOUTH_LEAGUE_RE 와 같은 식이다 — 고치면 같이 고친다.
+const JUMAK_SECOND_TEAM_RE = /(?:^|[\s(])(?:u-?\d{2}|sub-?\d{2}|youth|juniors?|academy|reserves?|primavera)(?=$|[\s)])|\s(?:ii|b)$|^jong\s|\scastilla$|\satl[eè]tic$/i;
+const JUMAK_YOUTH_LEAGUE_RE = /(?:^|[\s(])(?:u-?\d{2}|youth|primavera|reserves?)(?=$|[\s)])|premier league (?:2|cup|international cup)|development league/i;
+function jumakSecondTeam(m) {
+  const kps = (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean);
+  if (kps.some(k => k.isTeam)) return false;   // 대표팀 경기
+  return [m.home?.name, m.away?.name].some(n => JUMAK_SECOND_TEAM_RE.test(String(n || '').trim()))
+    || JUMAK_YOUTH_LEAGUE_RE.test(String(m.competition || ''));
+}
 function jumakPhase(m, nowMs) {
   if (!m || isFinalStatus(m.status) || /POSTPONED|CANCEL/i.test(m.status || '')) return null;
+  if (jumakSecondTeam(m)) return null;
   if (m.live || m.time === 'LIVE') return 'live';
   const t = m.fullDate ? new Date(m.fullDate).getTime() : NaN;
   if (!Number.isFinite(t)) return null;
