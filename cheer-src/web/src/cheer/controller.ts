@@ -276,6 +276,9 @@ export class CheerController {
   /** 내 동작: 언제나 보이고 들린다 */
   handleSelfAction(actionId: string, variant?: number): void {
     this.tally.add(actionId, performance.now());
+    // 가까이 있는 단골손님이 따라 한다
+    const me = this.engine.getSpot('self');
+    if (me) this.regulars?.follow(actionId, me);
     const stage = this.stage;
     if (!stage) return;
     stage.sound.action(actionId, 'self');
