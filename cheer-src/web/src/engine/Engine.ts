@@ -25,6 +25,7 @@
 //   engine.projectToScreen(p, out)     3D 좌표 -> 화면 픽셀 (말풍선처럼 화면 요소를 3D 위치에 붙일 때)
 //   engine.addCrowd(crowd)             이 화면이 직접 움직이는 사람들(주막 단골손님)을 붙인다. 이름표·머리 위 효과·음식·다 같이 신남에 낀다
 //   engine.getSeatIntent()             내가 앉으러 걸어가는 중인 자리 id (없으면 null)
+//   engine.getPeopleNames()            방 사람들(나 포함)의 이름 (단골손님 이름이 겹치지 않게)
 //   engine.on(type, handler)           이벤트 구독, 해제 함수를 돌려준다 (아래 EngineEventMap)
 import * as THREE from 'three';
 import { ActionController, type ActionEvent } from './actions';
@@ -438,6 +439,20 @@ export class Engine {
   /** 내가 앉으러 걸어가는 중인 자리 (앉았거나 서 있기만 하면 null) */
   getSeatIntent(): string | null {
     return this.player?.pendingSeatId ?? null;
+  }
+
+  /** 방 사람들(서버가 이름을 붙여 준 나 포함)의 이름. 붙인 사람들(단골손님)은 빼고 */
+  getPeopleNames(): string[] {
+    const net = this.net;
+    if (!net) return [];
+    const out: string[] = [];
+    const mine = net.client.myName?.ko;
+    if (mine) out.push(mine);
+    for (const id of net.peers.ids()) {
+      const n = net.peers.nameOf(id)?.ko;
+      if (n) out.push(n);
+    }
+    return out;
   }
 
   /** 3D 좌표를 화면(뷰포트) 픽셀로. 카메라 뒤이거나 화면 밖이면 visible이 false다 */

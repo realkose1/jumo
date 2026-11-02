@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
+import { JUMAK_NAMES } from '@shared/spaces/jumak-names';
 import { buildSeats, groundHeight, seatPreferenceOrder } from '../spaces/jumak/layout';
 import { seatEntry } from '../spaces/jumak/walkways';
 import { MAX_REGULARS, MIN_REGULARS, Regulars } from './regulars';
@@ -17,6 +18,7 @@ function seeded(seed: number): () => number {
 
 function setup(o: { peers?: number; live?: boolean; seed?: number; mine?: string } = {}) {
   const me = { seat: o.mine ?? null };
+  const taken = new Set<string>();
   const seats = buildSeats();
   const order = seatPreferenceOrder(seats, () => 0.5);
   const blocked = new Set<string>();
@@ -36,6 +38,7 @@ function setup(o: { peers?: number; live?: boolean; seed?: number; mine?: string
     isSeatBlocked: (id) => blocked.has(id) || id === me.seat,
     mySeat: () => me.seat,
     peerCount: () => state.peers,
+    takenNames: () => taken,
     isLive: () => state.live,
     act: (id, act, v) => acts.push({ t: state.t, id, act, v }),
     random: seeded(o.seed ?? 7),
@@ -49,11 +52,11 @@ function setup(o: { peers?: number; live?: boolean; seed?: number; mine?: string
       each?.();
     }
   };
-  return { r, seats, order, blocked, acts, state, run, me };
+  return { r, seats, order, blocked, acts, state, run, me, taken };
 }
 
 describe('단골손님', () => {
-  it('처음에는 셋: 둘은 맨 앞 두 자리가 아닌 방석에 앉아 있고 하나는 서 있다. 이름 앞에 단골', () => {
+  it('처음에는 셋: 둘은 맨 앞 두 자리가 아닌 방석에 앉아 있고 하나는 서 있다. 이름은 손님 이름 목록에서', () => {
     const { r, order } = setup();
     r.start();
     expect(r.count).toBe(MAX_REGULARS);
@@ -65,8 +68,9 @@ describe('단골손님', () => {
     expect(states.filter((s) => s.mode === 'stand')).toHaveLength(1);
     for (const id of r.ids()) {
       expect(id).toBeLessThan(0); // 서버 번호와 겹치지 않는다
-      expect(r.peers.nameOf(id)?.ko).toMatch(/^단골 /);
+      expect(JUMAK_NAMES).toContain(r.peers.nameOf(id)?.ko);
     }
+    expect(new Set(r.ids().map((id) => r.peers.nameOf(id)?.ko)).size).toBe(r.count);
     // 그리는 쪽에도 앉아 있다
     for (const s of seated) expect(r.peers.seatOwner(s.seatId!)).not.toBeNull();
   });
@@ -115,6 +119,21 @@ describe('단골손님', () => {
     // 그 뒤로도 누구도 그 자리에 앉지 않는다
     run(240);
     for (const id of r.ids()) expect(r.stateOf(id)!.seatId).not.toBe(seatId);
+  });
+
+  it('방 사람이 쓰는 이름은 피하고, 같은 이름의 손님이 들어오면 그 단골이 집에 간다', () => {
+    const { r, taken, run } = setup();
+    for (const n of JUMAK_NAMES.slice(0, JUMAK_NAMES.length - 6)) taken.add(n);
+    r.start();
+    for (const id of r.ids()) expect(taken.has(r.peers.nameOf(id)!.ko)).toBe(false);
+    const twin = r.ids()[0]!;
+    taken.add(r.peers.nameOf(twin)!.ko);
+    run(3);
+    expect(r.stateOf(twin)!.target).toBe('leave');
+    run(120);
+    expect(r.ids()).not.toContain(twin);
+    expect(r.stayingCount).toBe(3);
+    for (const id of r.ids()) expect(taken.has(r.peers.nameOf(id)!.ko)).toBe(false);
   });
 
   it('방이 붐비면 한 명은 집에 가고, 한가해지면 다른 단골이 들어온다', () => {

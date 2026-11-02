@@ -58,6 +58,7 @@ function makeEngine(opts: { ready?: boolean; status?: string; reduced?: boolean;
     },
     getSeatIntent: () => null,
     getPeerCount: () => 0,
+    getPeopleNames: () => [] as string[],
     clock: { getServerOffsetMs: () => 0 },
     isReady: () => opts.ready ?? true,
     getSceneApi: () => stage,

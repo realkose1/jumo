@@ -171,6 +171,7 @@ export class CheerController {
       isSeatBlocked: (id) => e.isSeatTaken(id) || e.getSeatId() === id || e.getSeatIntent() === id,
       mySeat: () => e.getSeatId() ?? e.getSeatIntent(),
       peerCount: () => e.getPeerCount(),
+      takenNames: () => e.getPeopleNames(),
       isLive: () => hasLiveMatch(this.feed),
       act: (id, actionId, v) => this.showOtherAct(id, actionId, v),
     });

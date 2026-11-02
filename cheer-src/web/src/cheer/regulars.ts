@@ -1,10 +1,12 @@
 // 주막 단골손님: 사람처럼 들어와 방석에 앉고, 일어나 마당을 돌아다니고, 박수치고 건배하고, 가끔 주모에게 주문한다.
-// 서버와 상관없이 이 화면에서만 움직이는 사람들이라 사람 수에는 들지 않고, 이름 앞에 '단골'이 붙는다.
+// 서버와 상관없이 이 화면에서만 움직이는 사람들이다. 이름은 손님들과 같은 이름 목록(JUMAK_NAMES)에서, 방에 있는
+// 사람과 겹치지 않게 고른다. 나중에 같은 이름의 손님이 들어오면 그 단골은 집에 가고 다른 단골이 들어온다.
 // 진짜 손님에게 늘 양보한다: 앉은 방석에 누가(나 포함) 앉거나 앉으러 오면 일어나 비켜 주고, 방이 붐비면 한 명은 나간다.
 // 경기 중이면 오래 앉아 TV를 보며 자주 응원하고, 골이 나면 다 같이 뛰고 손뼉 치고 사발을 든다.
 // 시간은 그리기 반복의 dt로만 센다(탭을 가리면 같이 멈춘다). 무작위는 바꿔 끼울 수 있어 시험에서 고정한다.
 import type * as THREE from 'three';
 import type { LocalizedName, PeerInfo } from '@shared/protocol';
+import { JUMAK_NAMES } from '@shared/spaces/jumak-names';
 import { WALK_SPEED, type OutfitSpec } from '../engine/avatar';
 import { RemotePeers } from '../engine/RemotePeers';
 import { SeatManager } from '../engine/seats';
@@ -13,16 +15,10 @@ import { groundHeight } from '../spaces/jumak/layout';
 import { DOORS, STAND_SPOTS, planPath, seatEntry, type Pt, type StandSpot } from '../spaces/jumak/walkways';
 
 /**
- * 단골 다섯 (한 번에 셋까지). 번호는 서버 번호(1부터)와 겹치지 않게 음수이고, 번호가 곧 차림이다(avatar.lookFor, 4가지):
- * 0 갓·옥색 도포·수염, 1 상투·갈색 조끼·수염, 2 갓·쪽빛 도포, 3 상투·먹색 조끼
+ * 단골 다섯 자리 (한 번에 셋까지). 번호는 서버 번호(1부터)와 겹치지 않게 음수이고, 번호가 곧 차림이다(avatar.lookFor, 4가지):
+ * -4 갓·옥색 도포·수염, -3 상투·갈색 조끼·수염, -1 상투·먹색 조끼, -2 갓·쪽빛 도포, -7 상투·갈색 조끼·수염
  */
-export const ROSTER: ReadonlyArray<{ id: number; name: string }> = [
-  { id: -4, name: '김 생원' },
-  { id: -3, name: '박 첨지' },
-  { id: -1, name: '돌쇠' },
-  { id: -2, name: '윤 도령' },
-  { id: -7, name: '최 서방' },
-];
+export const ROSTER: readonly number[] = [-4, -3, -1, -2, -7];
 
 /** 방에 다른 사람이 이만큼 넘게 있으면 단골은 둘만 남는다 */
 export const BUSY_PEERS = 6;
@@ -44,6 +40,7 @@ type Target = { kind: 'seat'; seatId: string } | { kind: 'spot'; spot: StandSpot
 
 interface Regular {
   id: number;
+  name: string;
   x: number;
   z: number;
   yaw: number;
@@ -80,6 +77,10 @@ export interface RegularsOptions {
   mySeat?(): string | null;
   /** 같은 방의 다른 사람 수 (나는 빼고) */
   peerCount(): number;
+  /** 방 사람들(나 포함)이 쓰는 이름. 단골은 이 이름을 피한다 */
+  takenNames?(): Iterable<string>;
+  /** 고를 이름 목록 (기본: 손님 이름 목록 JUMAK_NAMES) */
+  names?: readonly string[];
   /** 경기가 진행 중인가 */
   isLive(): boolean;
   /** 단골의 동작(박수, 건배, 주문): 이모지·소리·주문 말풍선을 띄운다 (몸짓은 여기서 한다) */
@@ -156,7 +157,7 @@ export class Regulars {
     for (let i = 0; i < want; i++) {
       const who = this.nextFromRoster();
       if (!who) break;
-      const r = this.makeRegular(who.id, 0, 0);
+      const r = this.makeRegular(who.id, who.name, 0, 0);
       const seatId = i < want - 1 ? this.pickSeat(r) : null;
       const seat = seatId ? this.seatManager.get(seatId) : undefined;
       if (seat && seatId) {
@@ -241,19 +242,34 @@ export class Regulars {
     return this.opts.peerCount() >= BUSY_PEERS ? MIN_REGULARS : MAX_REGULARS;
   }
 
+  /** 다음에 들어올 단골: 비어 있는 차림 번호와, 방에서 아무도 안 쓰는 이름 */
   private nextFromRoster(): { id: number; name: string } | null {
+    const name = this.pickName();
+    if (!name) return null;
     for (let i = 0; i < ROSTER.length; i++) {
-      const who = ROSTER[(this.rosterTurn + i) % ROSTER.length]!;
-      if (this.regulars.has(who.id) || this.peers.has(who.id)) continue;
+      const id = ROSTER[(this.rosterTurn + i) % ROSTER.length]!;
+      if (this.regulars.has(id) || this.peers.has(id)) continue;
       this.rosterTurn = (this.rosterTurn + i + 1) % ROSTER.length;
-      return who;
+      return { id, name };
     }
     return null;
   }
 
-  private makeRegular(id: number, x: number, z: number): Regular {
+  private takenNames(): Set<string> {
+    return new Set(this.opts.takenNames?.() ?? []);
+  }
+
+  private pickName(): string | null {
+    const taken = this.takenNames();
+    for (const r of this.regulars.values()) taken.add(r.name);
+    const pool = (this.opts.names ?? JUMAK_NAMES).filter((n) => !taken.has(n));
+    return pool.length ? pool[Math.floor(this.rand() * pool.length)]! : null;
+  }
+
+  private makeRegular(id: number, name: string, x: number, z: number): Regular {
     return {
       id,
+      name,
       x,
       z,
       yaw: 0,
@@ -270,10 +286,16 @@ export class Regulars {
     };
   }
 
-  /** 붐비면 한 명은 집에 가고, 한가하면 (조금 뒤에) 다른 단골이 들어온다 */
+  /** 붐비면 한 명은 집에 가고, 한가하면 (조금 뒤에) 다른 단골이 들어온다. 같은 이름의 손님이 오면 그 단골이 비켜 준다 */
   private balance(): void {
     const want = this.targetCount();
     const staying = [...this.regulars.values()].filter((r) => r.target.kind !== 'leave');
+    const taken = this.takenNames();
+    const twin = staying.find((r) => taken.has(r.name));
+    if (twin) {
+      this.leave(twin);
+      return;
+    }
     if (staying.length > want) {
       // 서 있는 사람부터 보낸다 (앉은 사람이 갑자기 일어나는 것보다 자연스럽다)
       const goer = staying.find((r) => r.mode !== 'seated') ?? staying[0]!;
@@ -284,7 +306,7 @@ export class Regulars {
       const who = this.nextFromRoster();
       if (!who) return;
       const door = DOORS[Math.floor(this.rand() * DOORS.length)]!;
-      const r = this.makeRegular(who.id, door.x, door.z);
+      const r = this.makeRegular(who.id, who.name, door.x, door.z);
       r.yaw = Math.atan2(-door.x, 0);
       this.regulars.set(r.id, r);
       this.peers.add({ id: r.id, name: nameOf(who.name), x: r.x, z: r.z, r: r.yaw });
@@ -608,7 +630,7 @@ function sameColumn(seatId: string): string[] {
 }
 
 function nameOf(name: string): LocalizedName {
-  return { ko: `단골 ${name}` };
+  return { ko: name };
 }
 
 function turnToward(from: number, to: number, maxStep: number): number {
