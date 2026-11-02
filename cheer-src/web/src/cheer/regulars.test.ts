@@ -16,8 +16,8 @@ function seeded(seed: number): () => number {
   };
 }
 
-function setup(o: { peers?: number; live?: boolean; seed?: number; mine?: string } = {}) {
-  const me = { seat: o.mine ?? null };
+function setup(o: { peers?: number; live?: boolean; seed?: number; mine?: string; tag?: number } = {}) {
+  const me: { seat: string | null; pos: { x: number; z: number } | null } = { seat: o.mine ?? null, pos: null };
   const taken = new Set<string>();
   const seats = buildSeats();
   const order = seatPreferenceOrder(seats, () => 0.5);
@@ -37,6 +37,8 @@ function setup(o: { peers?: number; live?: boolean; seed?: number; mine?: string
     ],
     isSeatBlocked: (id) => blocked.has(id) || id === me.seat,
     mySeat: () => me.seat,
+    myPosition: () => (me.pos ? { ...me.pos, seatId: me.seat } : null),
+    tagAlongChance: o.tag,
     peerCount: () => state.peers,
     takenNames: () => taken,
     isLive: () => state.live,
@@ -283,6 +285,68 @@ describe('단골손님', () => {
     const n = acts.filter((a) => a.act === 'clap' || a.act === 'toast').length;
     expect(n).toBeGreaterThan(5);
     expect(n).toBeLessThan(40);
+  });
+
+  it('내가 다른 평상으로 옮겨 앉으면 가끔(20%) 단골 하나가 따라와 내 옆에 앉는다', () => {
+    const seatAt = (id: string) => buildSeats().find((s) => s.id === id)!;
+    const sitAt = (me: { seat: string | null; pos: { x: number; z: number } | null }, id: string): void => {
+      me.seat = id;
+      me.pos = { x: seatAt(id).x, z: seatAt(id).z };
+    };
+    // 확률 1이면 언제나, 0이면 한 번도
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      for (const tag of [0, 1]) {
+        const { r, me, run } = setup({ mine: 'b1', seed, tag });
+        sitAt(me, 'b1');
+        r.start();
+        run(50); // 처음 45초는 따라오지 않는다
+        sitAt(me, 'c2');
+        run(4.5);
+        expect(r.tagAlongCount).toBe(tag);
+      }
+    }
+    // 기본 확률: 자리를 여러 번 옮기면 다섯 번에 한 번쯤
+    const { r, me, run } = setup({ mine: 'b1', seed: 8 });
+    sitAt(me, 'b1');
+    r.start();
+    run(50);
+    const hops = ['c2', 'd2', 'a2', 'b2'];
+    for (let i = 0; i < 80; i++) {
+      sitAt(me, hops[i % hops.length]!);
+      run(47);
+    }
+    expect(r.tagAlongCount).toBeGreaterThan(6);
+    expect(r.tagAlongCount).toBeLessThan(30);
+
+    // 따라와서 앉는 자리는 내 평상 옆자리이고, 내 바로 앞·뒤는 아니다
+    const t = setup({ mine: 'b1', seed: 2, tag: 1 });
+    sitAt(t.me, 'b1');
+    t.r.start();
+    t.run(50);
+    sitAt(t.me, 'c2');
+    t.run(40);
+    const onC = t.r.ids().map((id) => t.r.stateOf(id)!).filter((st) => st.mode === 'seated' && st.seatId?.[0] === 'c');
+    expect(onC.length).toBeGreaterThanOrEqual(1);
+    for (const st of onC) expect(['c2', 'c5']).not.toContain(st.seatId);
+  });
+
+  it('서서 옮겨 가면 (따라올 때) 내 곁으로 와서 선다. 걸어가는 동안에는 따라오지 않는다', () => {
+    const { r, me, run } = setup({ seed: 4, tag: 1 });
+    me.pos = { x: 0, z: 0.4 };
+    r.start();
+    run(50);
+    // 뒷마당으로 걸어간다 (걷는 동안은 위치가 계속 바뀐다)
+    for (let i = 0; i < 60; i++) {
+      me.pos = { x: -0.1 * i, z: 0.4 + 0.1 * i };
+      run(1 / 30 * 3);
+    }
+    expect(r.tagAlongCount).toBe(0); // 걷는 동안에는 아직
+    run(25);
+    const near = r.ids().filter((id) => {
+      const st = r.stateOf(id)!;
+      return Math.hypot(st.x - me.pos!.x, st.z - me.pos!.z) < 2.5;
+    });
+    expect(near.length).toBeGreaterThanOrEqual(1);
   });
 
   it('dispose하면 그린 것을 거둔다', () => {
