@@ -5793,7 +5793,7 @@ function applyLiveToStandings(rows, fixtures, leagueId, season, fetchedAt) {
   }
   // prevRank 를 여기서 스냅샷 순위로 고정해 둔다 — 재정렬 후 rank 와 비교해 ▲▼ 를 낸다.
   const byId = new Map(rows.map(r => [r.id, {
-    ...r, prevRank: r.rank, live: false, recent: false, liveScore: null, oppName: null,
+    ...r, prevRank: r.rank, live: false, recent: false, liveScore: null, oppName: null, liveOutcome: null,
   }]));
   let liveCount = 0, recentCount = 0;
 
@@ -5831,6 +5831,8 @@ function applyLiveToStandings(rows, fixtures, leagueId, season, fetchedAt) {
       row.recent = row.recent || (!isLive && isFinal);
       row.liveScore = scoreStr;
       row.oppName = oppName;
+      // 진행 중 경기의 지금 형세 — 순위표에 색 점 하나로만 보여 준다(W 이기는 중·D 비기는 중·L 지는 중)
+      if (isLive) row.liveOutcome = gf > ga ? 'W' : gf === ga ? 'D' : 'L';
     };
     if (homeRow) bump(homeRow, hs, as, awayRow?.name || fx.teams?.away?.name || '');
     if (awayRow) bump(awayRow, as, hs, homeRow?.name || fx.teams?.home?.name || '');
@@ -6225,7 +6227,7 @@ function TeamScreen({ team, onBack, onMatch, onPlayer, liveApiMatches = [] }) {
             <React.Fragment>
               {(liveCount > 0 || recentCount > 0) && (
                 <div style={{ padding:'0 4px 8px', fontSize:11, fontWeight:600, color:'var(--text4)' }}>
-                  {liveCount > 0 ? '🔴 진행 중 경기 반영 · 잠정 순위' : '최근 결과 반영 · 잠정 순위'}
+                  {liveCount > 0 ? '진행 중 경기 반영 · 잠정 순위' : '최근 결과 반영 · 잠정 순위'}
                 </div>
               )}
               <div style={card}>
@@ -6247,7 +6249,6 @@ function TeamScreen({ team, onBack, onMatch, onPlayer, liveApiMatches = [] }) {
                     borderBottom: i === displayRows.length - 1 ? 'none' : '0.5px solid var(--border)',
                     background: me ? 'rgba(245,196,0,0.10)' : 'transparent' }}>
                     <span style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:2, width:32, flexShrink:0 }}>
-                      {r.live && <span aria-hidden style={{ width:5, height:5, borderRadius:'50%', background:'#ff3b30', flexShrink:0 }}/>}
                       <span style={{ ...NUM, fontSize:11, fontWeight:700, color: me ? 'var(--acc)' : 'var(--text4)' }}>{r.rank}</span>
                       {delta !== 0 && (
                         <span style={{ ...NUM, fontSize:9, fontWeight:700, color: delta > 0 ? '#2ecc71' : '#ff3b30' }}>
@@ -6259,12 +6260,13 @@ function TeamScreen({ team, onBack, onMatch, onPlayer, liveApiMatches = [] }) {
                       <TeamBadge code={(r.name || '').slice(0, 3).toUpperCase()} size={16} logo={r.logo}/>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ fontSize:12, fontWeight: me ? 700 : 600, color: me ? 'var(--acc)' : 'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{r.name}</div>
-                        {(r.live || r.recent) && (
-                          <div style={{ fontSize:10, color:'var(--text4)', marginTop:1, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-                            vs {r.oppName} {r.liveScore}{r.live ? ' 진행 중' : ''}
-                          </div>
-                        )}
                       </div>
+                      {/* 진행 중인 팀은 상대·점수 글 대신 색 점 하나(초록 이기는 중·회색 비기는 중·빨강 지는 중) — 제보 */}
+                      {r.live && r.liveOutcome && (
+                        <span role="img" aria-label={`진행 중 · ${r.liveOutcome === 'W' ? '이기는 중' : r.liveOutcome === 'D' ? '비기는 중' : '지는 중'}`}
+                          style={{ width:7, height:7, borderRadius:'50%', flexShrink:0,
+                            background: r.liveOutcome === 'W' ? '#34c759' : r.liveOutcome === 'D' ? '#8e8e93' : '#ff3b30' }}/>
+                      )}
                     </div>
                     <span style={{ ...NUM, fontSize:11, color:'var(--text3)', width:22, textAlign:'center', flexShrink:0 }}>{r.played}</span>
                     <span style={{ ...NUM, fontSize:11, color:'var(--text3)', width:48, textAlign:'center', flexShrink:0 }}>{r.win}-{r.draw}-{r.lose}</span>
