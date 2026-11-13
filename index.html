@@ -4002,6 +4002,9 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
   }, [followed, playerOrder]);
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
   const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+  // 끝난 경기의 '오늘 결과'는 자정이 아니라 킥오프 12시간 안까지 본다. 23:30 에 시작해 새벽 1시에
+  // 끝난 경기는 날짜로는 어제라, 끝나자마자 홈 어디에도 안 보였다(제보: 사우디전). 낮에는 오늘 0시와 같다.
+  const resultsSince = new Date(Math.min(startOfToday.getTime(), now.getTime() - 12 * 3600e3));
   const twelveHoursLater = new Date(now.getTime() + 12 * 60 * 60 * 1000);
   // 예정 경기를 12시간으로만 자르면, 오전에 켰을 때 그날 밤 경기가 통째로 사라진다
   // (제보: 오전 9시 — 20:30 경기 하나만 남고 22:30 이후가 전부 빠짐).
@@ -4061,9 +4064,9 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
       if (m.live || m.time === 'LIVE') return true;
       const matchDate = new Date(m.fullDate);
       const isFinished = isFinalStatus(m.status);
-      const isToday = matchDate >= startOfToday && matchDate <= endOfToday;
+      const isTodayResult = matchDate >= resultsSince && matchDate <= endOfToday;
       const isUpcoming = matchDate > now && matchDate <= upcomingHorizon;
-      return (isFinished && isToday) || isUpcoming;
+      return (isFinished && isTodayResult) || isUpcoming;
     })
     .sort((a, b) => new Date(a.fullDate) - new Date(b.fullDate));
 
@@ -4274,7 +4277,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
       case 4: { // Finished match — 오늘 밖(48h 내 긍정 결과)이면 언제 경기인지 밝힌다.
         const d = new Date(m.fullDate);
         const dayDiff = Math.floor((startOfToday - d) / 86400000) + 1;
-        const when = d >= startOfToday ? '경기 종료' : dayDiff <= 1 ? '어제 경기' : `${d.getMonth() + 1}.${d.getDate()} 경기`;
+        const when = d >= resultsSince ? '경기 종료' : dayDiff <= 1 ? '어제 경기' : `${d.getMonth() + 1}.${d.getDate()} 경기`;
         return { status: when, main: '', sub: '' };
       }
       case 5: // Upcoming
@@ -4578,7 +4581,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
                 <span style={{ fontSize:11, fontWeight:700, color:'rgba(255,255,255,0.7)', letterSpacing:1.5 }}>{(() => {
                   // 오늘 밖(48h 내 긍정 결과)의 경기는 언제 것인지 밝힌다.
                   const d = new Date(highlightMatch.fullDate);
-                  if (!highlightMatch.fullDate || d >= startOfToday) return '경기 종료';
+                  if (!highlightMatch.fullDate || d >= resultsSince) return '경기 종료';
                   const dayDiff = Math.floor((startOfToday - d) / 86400000) + 1;
                   return dayDiff <= 1 ? '어제 경기 종료' : `${d.getMonth() + 1}.${d.getDate()} 경기 종료`;
                 })()}</span>
@@ -4716,7 +4719,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
           const today = pickMatches(m => {
             if (!isFinalStatus(m.status)) return false;
             const d = new Date(m.fullDate);
-            return d >= startOfToday && d <= endOfToday;
+            return d >= resultsSince && d <= endOfToday;
           });
           if (today.length) return today;
 
@@ -4746,7 +4749,7 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
         const finishedToday = remaining.length ? pickMatches(m => {
           if (!isFinalStatus(m.status)) return false;
           const d = new Date(m.fullDate);
-          return d >= startOfToday && d <= endOfToday;
+          return d >= resultsSince && d <= endOfToday;
         }) : [];
         // 진행 중인 경기만 맨 위로 올리고, 나머지는 날짜별 묶음(오늘/내일/…)에
         // 시간순으로 넣는다. 끝난 경기도 '오늘' 안에 함께 둔다 — 따로 '오늘 끝난
@@ -4764,10 +4767,14 @@ function HomeV2({ onMatch, onPlayer, onNotif, tweaks, liveApiMatches = [], isLoa
         const todayStr = now.toDateString();
         const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1);
         const tomorrowStr = tomorrow.toDateString();
+        // 자정을 넘겨 끝난 경기(resultsSince)는 '어제' 머리글로 묶인다
+        const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+        const yesterdayStr = yesterday.toDateString();
         const getDateLabel = d => {
           const s = new Date(d).toDateString();
           if (s === todayStr) return '오늘';
           if (s === tomorrowStr) return '내일';
+          if (s === yesterdayStr) return '어제';
           const dd = new Date(d);
           return `${dd.getMonth()+1}/${dd.getDate()}`;
         };
