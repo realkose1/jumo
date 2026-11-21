@@ -6266,7 +6266,7 @@ function TeamScreen({ team, onBack, onMatch, onPlayer, liveApiMatches = [] }) {
               {displayRows.map((r, i) => {
                 const me = r.id === teamId;
                 // prevRank 는 오버레이가 있을 때만 실려 온다 — 재정렬로 순위가
-                // 바뀐 행에만 ▲▼ 를 보여준다.
+                // 바뀐 행에만 ▲▼ 를 보여준다. 몇 계단인지는 쓰지 않고 오르내림 화살표만(제보)
                 const delta = (r.prevRank != null && r.rank !== r.prevRank) ? r.prevRank - r.rank : 0;
                 return (
                   <div key={r.id || i} style={{ display:'flex', alignItems:'center', gap:8, padding:'9px 12px',
@@ -6275,8 +6275,9 @@ function TeamScreen({ team, onBack, onMatch, onPlayer, liveApiMatches = [] }) {
                     <span style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:2, width:32, flexShrink:0 }}>
                       <span style={{ ...NUM, fontSize:11, fontWeight:700, color: me ? 'var(--acc)' : 'var(--text4)' }}>{r.rank}</span>
                       {delta !== 0 && (
-                        <span style={{ ...NUM, fontSize:9, fontWeight:700, color: delta > 0 ? '#2ecc71' : '#ff3b30' }}>
-                          {delta > 0 ? `▲${delta}` : `▼${-delta}`}
+                        <span role="img" aria-label={delta > 0 ? '순위 오름' : '순위 내림'}
+                          style={{ ...NUM, fontSize:9, fontWeight:700, color: delta > 0 ? '#2ecc71' : '#ff3b30' }}>
+                          {delta > 0 ? '▲' : '▼'}
                         </span>
                       )}
                     </span>
