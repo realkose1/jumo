@@ -5237,6 +5237,22 @@ function JumakChevron() {
 }
 // 홈 '오늘의 경기' 캐러셀 바로 아래 배너. matches 는 캐러셀과 같은 풀(todayMatches).
 // 이름: "<선수> 응원 주막", 둘째 줄: "같이 응원해요 · 상대전 22:00 · 지금 N명".
+// 주막 이름: 지금 보는 경기에 따라. 국가대표 경기면 '국가대표 응원 주막', 해외 소속팀 축구면 '해외 축구 응원 주막',
+// 메이저리그면 '해외 야구 응원 주막', 섞이면 넓은 이름. 주막 간판(cheer-src/web/src/cheer/roomName.ts roomTitleFor)과 같은 규칙이다.
+function jumakTitle(ms) {
+  const kinds = new Set((ms || []).filter(Boolean).map((m) => {
+    if (/⚾/.test(m.sport || '')) return 'baseball';
+    const kps = (m.koreanPlayers || [m.koreanPlayer]).filter(Boolean);
+    return kps.some((k) => k.isTeam) ? 'national' : 'club';
+  }));
+  if (kinds.size <= 1) {
+    const only = [...kinds][0];
+    return only === 'national' ? '국가대표 응원 주막' : only === 'baseball' ? '해외 야구 응원 주막' : '해외 축구 응원 주막';
+  }
+  if (!kinds.has('baseball')) return '축구 응원 주막';
+  if (!kinds.has('national')) return '해외 스포츠 응원 주막';
+  return '응원 주막';
+}
 function JumakHomeBanner({ matches, now }) {
   const sw = useJumakSwitch();
   const ctx = React.useContext(JumakCtx);
@@ -5245,8 +5261,8 @@ function JumakHomeBanner({ matches, now }) {
   // 경기가 겹치면 주막을 나누지 않고 하나로: 이름은 열린 경기들의 선수를 모두, 둘째 줄은 경기 수
   const open = jumakOpenMatches(matches, now.getTime());
   const who = open.all.length > 1 ? jumakWhoAll(open.all) : jumakWho(pick.m);
-  // 간판과 같은 이름. 선수 이름은 붙이지 않는다
-  const title = '해외 축구 응원 주막';
+  // 간판과 같은 이름(보는 경기에 따라 국가대표·해외 축구·해외 야구). 선수 이름은 붙이지 않는다
+  const title = jumakTitle(open.all.length ? open.all : [pick.m]);
   const line = open.all.length > 1
     ? (open.live.length > 0 ? `${open.all.length}경기 함께 보는 중` : `${open.all.length}경기 곧 시작`)
     : jumakMatchLine(pick.m, pick.phase);
@@ -5305,7 +5321,8 @@ function JumakRoomFrame({ matchId, label, onClose, animate }) {
   const closeRef = React.useRef(onClose);
   closeRef.current = onClose;
   const failedRef = React.useRef(false);   // 페이지가 직접 error 를 알렸다(늦은 ready 로 되살리지 않는다)
-  const title = '해외 축구 응원 주막';
+  // 어느 경기로 들어가든 같은 주막이고, 간판 이름(국가대표·해외 축구 등)은 주막 안에서 정해진다
+  const title = '응원 주막';
   React.useEffect(() => {
     let origin = '';
     try { origin = new URL(src).origin; } catch {}
@@ -6249,7 +6266,7 @@ function TeamScreen({ team, onBack, onMatch, onPlayer, liveApiMatches = [] }) {
               {displayRows.map((r, i) => {
                 const me = r.id === teamId;
                 // prevRank 는 오버레이가 있을 때만 실려 온다 — 재정렬로 순위가
-                // 바뀐 행에만 ▲▼ 를 보여준다.
+                // 바뀐 행에만 ▲▼ 를 보여준다. 몇 계단인지는 쓰지 않고 오르내림 화살표만(제보)
                 const delta = (r.prevRank != null && r.rank !== r.prevRank) ? r.prevRank - r.rank : 0;
                 return (
                   <div key={r.id || i} style={{ display:'flex', alignItems:'center', gap:8, padding:'9px 12px',
@@ -6258,8 +6275,9 @@ function TeamScreen({ team, onBack, onMatch, onPlayer, liveApiMatches = [] }) {
                     <span style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:2, width:32, flexShrink:0 }}>
                       <span style={{ ...NUM, fontSize:11, fontWeight:700, color: me ? 'var(--acc)' : 'var(--text4)' }}>{r.rank}</span>
                       {delta !== 0 && (
-                        <span style={{ ...NUM, fontSize:9, fontWeight:700, color: delta > 0 ? '#2ecc71' : '#ff3b30' }}>
-                          {delta > 0 ? `▲${delta}` : `▼${-delta}`}
+                        <span role="img" aria-label={delta > 0 ? '순위 오름' : '순위 내림'}
+                          style={{ ...NUM, fontSize:9, fontWeight:700, color: delta > 0 ? '#2ecc71' : '#ff3b30' }}>
+                          {delta > 0 ? '▲' : '▼'}
                         </span>
                       )}
                     </span>

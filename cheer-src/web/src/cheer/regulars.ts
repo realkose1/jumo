@@ -11,8 +11,8 @@ import { WALK_SPEED, type OutfitSpec } from '../engine/avatar';
 import { RemotePeers } from '../engine/RemotePeers';
 import { SeatManager } from '../engine/seats';
 import type { ActionMotion, SeatDef } from '../engine/types';
-import { groundHeight } from '../spaces/jumak/layout';
-import { DOORS, STAND_SPOTS, planPath, seatEntry, type Pt, type StandSpot } from '../spaces/jumak/walkways';
+import { TV, groundHeight } from '../spaces/jumak/layout';
+import { DOORS, STAND_SPOTS, blocked, planPath, seatEntry, type Pt, type StandSpot } from '../spaces/jumak/walkways';
 
 /**
  * 단골 다섯 자리 (한 번에 셋까지). 번호는 서버 번호(1부터)와 겹치지 않게 음수이고, 번호가 곧 차림이다(avatar.lookFor, 4가지):
@@ -43,6 +43,14 @@ export const FOLLOW_CHANCE = 0.5;
 const FOLLOW_COOLDOWN = 1.5;
 /** 내 주문을 따라 시키는 것은 이 간격에 한 번 (주모 말풍선이 몰리지 않게) */
 const FOLLOW_ORDER_GAP = 25;
+/** 내가 자리를 옮기면 이 확률로 단골 하나가 따라온다 */
+export const TAG_ALONG_CHANCE = 0.2;
+/** 따라오는 일은 이 간격(초)에 한 번까지 (처음 들어와 자동으로 앉을 때도 이만큼은 따라오지 않는다) */
+const TAG_ALONG_GAP = 45;
+/** 이만큼(m) 넘게 옮겨 가서 */
+const MOVED_FAR = 2.5;
+/** 이만큼(초) 가만히 있으면 '옮겼다'로 본다 (걸어가는 중에는 따라오지 않는다) */
+const SETTLE_SECONDS = 1;
 
 type Target = { kind: 'seat'; seatId: string } | { kind: 'spot'; spot: StandSpot } | { kind: 'leave' };
 
@@ -69,6 +77,8 @@ interface Regular {
   orderIn: number;
   /** 이때까지는 내 동작을 다시 따라 하지 않는다 (clock 기준 초) */
   followAfter: number;
+  /** 나를 따라 옮겨 갈 곳과 떠날 때 (잠깐 머뭇거리다 일어난다) */
+  tagAlong: { at: number; target: Target } | null;
   pause: number;
 }
 
@@ -85,6 +95,10 @@ export interface RegularsOptions {
   isSeatBlocked(seatId: string): boolean;
   /** 내가 앉은(또는 앉으러 가는) 자리. 단골 하나는 대개 내 평상에 같이 앉는다 — 휴대폰 세로 화면에는 TV와 내 평상만 보인다 */
   mySeat?(): string | null;
+  /** 내가 서 있거나 앉은 곳. 내가 자리를 옮기면 가끔(TAG_ALONG_CHANCE) 단골 하나가 따라온다 */
+  myPosition?(): { x: number; z: number; seatId: string | null } | null;
+  /** 따라올 확률 (시험용, 기본 TAG_ALONG_CHANCE) */
+  tagAlongChance?: number;
   /** 같은 방의 다른 사람 수 (나는 빼고) */
   peerCount(): number;
   /** 방 사람들(나 포함)이 쓰는 이름. 단골은 이 이름을 피한다 */
@@ -116,6 +130,13 @@ export class Regulars {
   private arriveIn = 0;
   private lastOrderAt = -Infinity;
   private rosterTurn = 0;
+  /** 내가 마지막으로 자리 잡은 곳과, 지금 가만히 있은 시간 */
+  private myAnchor: { x: number; z: number; seatId: string | null } | null = null;
+  private myLast: { x: number; z: number } | null = null;
+  private myStill = 0;
+  private tagAlongAfter = TAG_ALONG_GAP;
+  /** 나를 따라온 횟수 (시험용) */
+  tagAlongCount = 0;
 
   constructor(options: RegularsOptions) {
     this.opts = options;
@@ -258,6 +279,7 @@ export class Regulars {
       this.populationIn = POPULATION_CHECK;
       this.balance();
     }
+    this.watchMe(dt);
     const moves: Array<[number, number, number, number]> = [];
     for (const r of [...this.regulars.values()]) {
       this.step(r, dt);
@@ -322,6 +344,7 @@ export class Regulars {
       stayLeft: this.between(240, 560),
       orderIn: Infinity,
       followAfter: 0,
+      tagAlong: null,
       pause: 0,
     };
   }
@@ -372,7 +395,63 @@ export class Regulars {
     }
   }
 
+  /** 내가 다른 데로 옮겨 가 자리를 잡았는지 본다 (2.5m 넘게 가서 1초 가만히, 또는 다른 방석에 앉음) */
+  private watchMe(dt: number): void {
+    const p = this.opts.myPosition?.() ?? null;
+    if (!p) return;
+    const last = this.myLast;
+    this.myStill = last && Math.hypot(p.x - last.x, p.z - last.z) < 0.03 ? this.myStill + dt : 0;
+    this.myLast = { x: p.x, z: p.z };
+    const anchor = this.myAnchor;
+    if (!anchor) {
+      this.myAnchor = { ...p };
+      return;
+    }
+    const moved = Math.hypot(p.x - anchor.x, p.z - anchor.z) > MOVED_FAR || (p.seatId !== null && p.seatId !== anchor.seatId);
+    if (!moved || this.myStill < SETTLE_SECONDS) return;
+    this.myAnchor = { ...p };
+    this.userMoved(anchor, p);
+  }
+
+  /** 내가 자리를 옮겼다: 가끔 (원래 곁에 있던) 단골 하나가 머뭇거리다 따라온다. 앉았으면 내 옆 방석, 서 있으면 내 곁 */
+  private userMoved(from: Pt, to: { x: number; z: number; seatId: string | null }): void {
+    if (this.clock < this.tagAlongAfter) return;
+    if (this.rand() >= (this.opts.tagAlongChance ?? TAG_ALONG_CHANCE)) return;
+    const dist = (r: Regular, p: Pt): number => Math.hypot(r.x - p.x, r.z - p.z);
+    const candidates = [...this.regulars.values()].filter(
+      (r) => r.target.kind !== 'leave' && !r.tagAlong && dist(r, to) > 3 && !(r.target.kind === 'spot' && r.target.spot.counter),
+    );
+    if (!candidates.length) return;
+    // 원래 내 곁에 있던 단골이 먼저
+    candidates.sort((a, b) => dist(a, from) - dist(b, from));
+    const r = candidates[0]!;
+    let target: Target | null = null;
+    if (to.seatId) {
+      const seatId = this.pickSeat(r, true);
+      if (seatId && seatId[0] === to.seatId[0]) target = { kind: 'seat', seatId };
+    }
+    if (!target) {
+      const spot = besideSpot(to);
+      if (spot) target = { kind: 'spot', spot };
+    }
+    if (!target) return;
+    this.tagAlongAfter = this.clock + TAG_ALONG_GAP;
+    this.tagAlongCount += 1;
+    r.tagAlong = { at: this.clock + this.between(0.8, 2.5), target };
+  }
+
   private step(r: Regular, dt: number): void {
+    // 나를 따라 옮겨 간다 (머뭇거린 뒤)
+    if (r.tagAlong && this.clock >= r.tagAlong.at) {
+      const { target } = r.tagAlong;
+      r.tagAlong = null;
+      const free = target.kind !== 'seat' || this.seatFree(target.seatId, r);
+      if (free && r.target.kind !== 'leave') {
+        if (r.mode === 'seated') this.standUp(r);
+        r.queue.length = 0;
+        this.goTo(r, target);
+      }
+    }
     // 몰아서 할 동작 (골 직후)
     while (r.queue.length && r.queue[0]!.at <= this.clock) {
       const q = r.queue.shift()!;
@@ -569,7 +648,11 @@ export class Regulars {
 
   private seatFree(seatId: string, self: Regular | null): boolean {
     if (this.opts.isSeatBlocked(seatId)) return false;
-    for (const o of this.regulars.values()) if (o !== self && o.seatId === seatId) return false;
+    for (const o of this.regulars.values()) {
+      if (o === self) continue;
+      // 앉았거나 앉으러 가는 자리, 나를 따라 옮겨 가려고 맡아 둔 자리
+      if (o.seatId === seatId || (o.tagAlong?.target.kind === 'seat' && o.tagAlong.target.seatId === seatId)) return false;
+    }
     return this.peers.seatOwner(seatId) === null || this.peers.seatOwner(seatId) === self?.id;
   }
 
@@ -578,7 +661,7 @@ export class Regulars {
    * 아니면 맨 앞 두 자리(새로 온 손님이 앉을 곳)는 비워 두고, 그다음 자리들 중에서. 없으면 아무 빈자리나.
    * 내 바로 앞자리(TV를 가린다)와 바로 뒷자리(내 뒤의 카메라를 가린다)에는 앉지 않는다
    */
-  private pickSeat(r: Regular): string | null {
+  private pickSeat(r: Regular, besideMe = false): string | null {
     const order = this.opts.seatOrder;
     const mine = this.opts.mySeat?.() ?? null;
     const avoid = new Set<string | null>([r.seatId, mine, ...(mine ? sameColumn(mine) : [])]);
@@ -593,7 +676,8 @@ export class Regulars {
       const sameRow = neighbors.filter((id) => rowOf(id) === row);
       const beside = sameRow.filter((id) => Math.abs(col(id) - col(mine)) === 1);
       const list = beside.length ? beside : sameRow.length ? sameRow : neighbors;
-      if (list.length && (!someone || this.rand() < 0.2)) return list[Math.floor(this.rand() * list.length)]!;
+      if (list.length && (besideMe || !someone || this.rand() < 0.2)) return list[Math.floor(this.rand() * list.length)]!;
+      if (besideMe) return null;
     }
     const near = order.slice(2, 16).filter(ok);
     const pool = near.length ? near : order.filter(ok);
@@ -662,6 +746,19 @@ export class Regulars {
     if (motion) this.peers.playMotion(r.id, motion);
     this.opts.act(r.id, act, variant);
   }
+}
+
+/** 서 있는 나의 곁(1.3m쯤): 평상·부뚜막에 걸리지 않는 첫 곳. TV 쪽을 바라본다 */
+function besideSpot(me: Pt): StandSpot | null {
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2 + 0.6;
+    for (const d of [1.3, 1.8]) {
+      const x = me.x + Math.sin(a) * d;
+      const z = me.z + Math.cos(a) * d;
+      if (!blocked(x, z)) return { id: 'beside-me', x, z, facing: Math.atan2(TV.x - x, TV.z - z) };
+    }
+  }
+  return null;
 }
 
 /** 0 앞줄(1~3), 1 뒷줄(4~6) */

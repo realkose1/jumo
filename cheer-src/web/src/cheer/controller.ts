@@ -170,6 +170,10 @@ export class CheerController {
       // 진짜 사람에게 늘 양보한다: 남이 앉은 자리, 내가 앉은 자리, 내가 앉으러 가는 자리
       isSeatBlocked: (id) => e.isSeatTaken(id) || e.getSeatId() === id || e.getSeatIntent() === id,
       mySeat: () => e.getSeatId() ?? e.getSeatIntent(),
+      myPosition: () => {
+        const s = e.getSpot('self');
+        return s ? { x: s.x, z: s.z, seatId: s.seatId } : null;
+      },
       peerCount: () => e.getPeerCount(),
       takenNames: () => e.getPeopleNames(),
       isLive: () => hasLiveMatch(this.feed),

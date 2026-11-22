@@ -84,3 +84,39 @@ describe('roomPlayerNames', () => {
     expect(roomName(feed([], next), 'n')).toBe('해외 축구 응원 주막');
   });
 });
+
+describe('간판 이름은 보는 경기에 따라', () => {
+  const nat = (state: CheerMatch['state'], ko: number, home = '카타르', away = '대한민국'): CheerMatch => ({
+    ...match(state, ko, ['대한민국']),
+    comp: '친선',
+    home: { name: home, score: 0 },
+    away: { name: away, score: 1 },
+  });
+  const mlb = (state: CheerMatch['state'], ko: number): CheerMatch => ({ ...match(state, ko, ['이정후']), sport: 'baseball' });
+
+  it('국가대표 경기면 국가대표 응원 주막 (U-23, 올림픽 대표팀도)', () => {
+    expect(roomName(feed([nat('live', 1)]))).toBe('국가대표 응원 주막');
+    expect(roomName(feed([nat('pre', 1, '대한민국 U-23', '일본 U-23')]))).toBe('국가대표 응원 주막');
+    expect(roomName(feed([nat('live', 1, '올림픽 대표팀', '호주')]))).toBe('국가대표 응원 주막');
+  });
+
+  it('해외 소속팀 축구는 해외 축구, 메이저리그는 해외 야구', () => {
+    expect(roomName(feed([match('live', 1, ['이강인'])]))).toBe('해외 축구 응원 주막');
+    expect(roomName(feed([mlb('live', 1)]))).toBe('해외 야구 응원 주막');
+  });
+
+  it('섞이면 넓은 이름', () => {
+    expect(roomName(feed([nat('live', 1), match('pre', 2, ['이강인'])]))).toBe('축구 응원 주막');
+    expect(roomName(feed([match('live', 1, ['이강인']), mlb('pre', 2)]))).toBe('해외 스포츠 응원 주막');
+    expect(roomName(feed([nat('live', 1), mlb('pre', 2)]))).toBe('응원 주막');
+  });
+
+  it('진행 중·곧 시작 경기를 먼저 보고, 없으면 막 끝난 경기, 그다음 다음 경기', () => {
+    // 국가대표 경기는 끝났고 해외 축구가 곧 시작: 해외 축구
+    expect(roomName(feed([nat('final', 1), match('pre', 2, ['이강인'])]))).toBe('해외 축구 응원 주막');
+    // 국가대표 경기가 막 끝났고 다른 경기는 없다: 아직 국가대표
+    expect(roomName(feed([nat('final', 1)]))).toBe('국가대표 응원 주막');
+    // 경기가 없고 다음 경기가 국가대표
+    expect(roomName(feed([], nat('pre', 9)))).toBe('국가대표 응원 주막');
+  });
+});

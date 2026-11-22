@@ -256,11 +256,42 @@ function hasBatchim(str) {
   return (ch - 0xAC00) % 28 !== 0;
 }
 const josa = (str, withBatchim, withoutBatchim) => (hasBatchim(str) ? withBatchim : withoutBatchim);
+/** 라인업 발표: 같은 경기의 다른 우리 선수 팀 명단을 킥오프 이만큼 전까지 기다려 한 알림으로 모은다 */
+const LINEUP_HOLD_MS = 45 * 60 * 1000;
 // e.g. "손흥민, 황희찬가" / "이강인이" — attaches 이/가 after the last listed name.
 const namesWithJosa = (names) => {
   const joined = names.join(', ');
   return joined + josa(names[names.length - 1], '이', '가');
 };
+
+// 라인업 발표 알림 글. 한 사람이면 예전 그대로, 같은 경기의 우리 선수 여럿(코리안 더비·같은 팀 동료)이
+// 한 번에 정해졌으면 한 알림에 모은다. entries: [{ name, status: 'start' | 'bench' | 'out' }]
+const LINEUP_LABEL = { start: '선발', bench: '벤치 출발', out: '명단 제외' };
+function lineupBody(vs, entries) {
+  if (entries.length === 1) {
+    const { name, status } = entries[0];
+    const j = josa(name, '이', '가');
+    return status === 'start' ? `${vs} — ${name}${j} 선발로 나섭니다.`
+      : status === 'bench' ? `${vs} — ${name}${j} 벤치에서 출발합니다.`
+      : `${vs} — ${name}${j} 이번 경기 명단에 포함되지 않았습니다.`;
+  }
+  const groups = ['start', 'bench', 'out']
+    .map((s) => [s, entries.filter((e) => e.status === s).map((e) => e.name)])
+    .filter(([, names]) => names.length);
+  if (groups.length === 1) {
+    const [s, names] = groups[0];
+    const tail = s === 'start' ? '모두 선발로 나섭니다.' : s === 'bench' ? '모두 벤치에서 출발합니다.' : '모두 이번 경기 명단에 포함되지 않았습니다.';
+    return `${vs} — ${names.join('·')} ${tail}`;
+  }
+  return `${vs} — ${groups.map(([s, names]) => `${names.join('·')} ${LINEUP_LABEL[s]}`).join(', ')}`;
+}
+// 한 기기가 받을 라인업 알림: 그 기기가 팔로우하는 선수만 모은다. 양쪽 팀 선수가 함께면 '코리안 더비'
+function lineupAlertFor(ev, playerIds) {
+  const mine = ev.lineup.filter((e) => playerIds.includes(e.id));
+  const list = mine.length ? mine : ev.lineup;
+  const derby = new Set(list.map((e) => e.side)).size > 1;
+  return { title: derby ? '⚽ 코리안 더비 라인업 발표' : '⚽ 라인업 발표', body: lineupBody(ev.vs, list) };
+}
 
 // ── APNs (token-based, ES256 JWT over HTTP/2) ───────────────────────────────
 function apnsJWT() {
@@ -835,6 +866,7 @@ async function collectSoccer(events, liveStates, patch = null) {
             // af-lineup-done 마커까지 찍혀 정정되지 않았다). → 상대팀 데이터는 아예
             // 보지 않고, 선수 자신의 팀(own) 항목이 채워졌을 때만 판정한다.
             let allDecided = true;
+            const decided = [];
             for (const p of involved) {
               const own = teams.find((t) => t.team?.id === p.afTeamId);
               if (!own || !(own.startXI || []).length) { allDecided = false; continue; } // 우리 팀 명단 아직 미발표
@@ -843,12 +875,21 @@ async function collectSoccer(events, liveStates, patch = null) {
               const inXI = (own.startXI || []).some(hit);
               const onBench = (own.substitutes || []).some(hit);
               if (!inXI && !onBench && !(own.substitutes || []).length) { allDecided = false; continue; } // 벤치 명단 아직 미발표
-              const j = josa(p.name, '이', '가');
-              const body = inXI ? `${vs} — ${p.name}${j} 선발로 나섭니다.`
-                : onBench ? `${vs} — ${p.name}${j} 벤치에서 출발합니다.`
-                : `${vs} — ${p.name}${j} 이번 경기 명단에 포함되지 않았습니다.`;
-              events.push({ key: `af-lineup-${fid}-${p.id}`, players: [p.id], matchId: String(fid),
-                kind: 'lineup', title: '⚽ 라인업 발표', body });
+              decided.push({ p, status: inXI ? 'start' : onBench ? 'bench' : 'out' });
+            }
+            // 같은 경기의 우리 선수(코리안 더비 등)는 한 알림에 모아 보낸다. 상대 팀 명단이 아직이면
+            // 킥오프 LINEUP_HOLD_MS 전까지는 먼저 정해진 선수 알림도 기다렸다가 같이 보낸다(그 뒤엔 정해진 만큼 먼저).
+            // 기다리는 동안 라인업 조회는 원래도 남은 선수 때문에 계속하던 것이라 AF 호출이 늘지 않는다.
+            const hold = !allDecided && decided.length && til > LINEUP_HOLD_MS;
+            if (!hold) {
+              for (const { p, status } of decided) {
+                const side = p.afTeamId === fx.teams?.home?.id ? 'home' : 'away';
+                const lineup = { id: p.id, name: p.name, status, side };
+                // 키는 선수마다(이미 보낸 선수는 다시 안 보낸다). 보낼 때 같은 group 끼리 한 알림으로 합친다
+                events.push({ key: `af-lineup-${fid}-${p.id}`, players: [p.id], matchId: String(fid),
+                  kind: 'lineup', group: `af-lineup-${fid}`, vs, lineup,
+                  title: '⚽ 라인업 발표', body: lineupBody(vs, [lineup]) });
+              }
             }
             // 전원 판정이 끝났을 때만 감시를 끝낸다. 보류된 선수는 다음 실행에서 다시 본다.
             if (allDecided) events.push({ key: `af-lineup-done-${fid}`, players: [] }); // 감시 종료 마커(무발송)
@@ -1319,7 +1360,17 @@ module.exports = async (req, res) => {
   const seenKey = new Set();
   const uniqueEvents = events.filter((ev) => ev.key && !seenKey.has(ev.key) && seenKey.add(ev.key));
   const inserted = await sbInsertLogBulk(uniqueEvents.map((ev) => ev.key));
-  const fresh = uniqueEvents.filter((ev) => inserted.has(ev.key));
+  // 같은 경기 라인업(group)은 이번에 새로 정해진 선수끼리 한 알림으로 합친다 (코리안 더비에 알림 두 개가 따로 가지 않게)
+  const fresh = [];
+  const groups = new Map();
+  for (const ev of uniqueEvents.filter((e) => inserted.has(e.key))) {
+    if (!ev.group) { fresh.push(ev); continue; }
+    const g = groups.get(ev.group);
+    if (g) { g.players.push(...ev.players); g.lineup.push(ev.lineup); continue; }
+    const merged = { ...ev, players: [...ev.players], lineup: [ev.lineup] };
+    groups.set(ev.group, merged);
+    fresh.push(merged);
+  }
   if (!fresh.length) return res.status(200).json({ checked: events.length, sent: 0, liveSent });
 
   // Load all device tokens once.
@@ -1359,7 +1410,9 @@ module.exports = async (req, res) => {
       //  앱이 제목·본문의 팀명으로 폴백 매칭한다.)
       const payload = { aps: { alert: { title: ev.title, body: ev.body }, sound: 'default' }, data: { key: ev.key, matchId: ev.matchId || null } };
       for (const t of targets) {
-        const r = await sendOne(client, t.token, payload, jwt);
+        // 라인업은 기기마다 그 기기가 팔로우하는 선수만 모아 쓴다 (둘 다 팔로우하면 한 알림에 둘 다)
+        const alert = ev.lineup ? lineupAlertFor(ev, t.player_ids) : null;
+        const r = await sendOne(client, t.token, alert ? { ...payload, aps: { ...payload.aps, alert } } : payload, jwt);
         if (r.status === 200) sent++; else failed++;
       }
     }
@@ -1369,6 +1422,8 @@ module.exports = async (req, res) => {
 };
 
 module.exports.nationalMatchEvents = nationalMatchEvents;
+module.exports.lineupBody = lineupBody;
+module.exports.lineupAlertFor = lineupAlertFor;
 module.exports.isStaleEvent = isStaleEvent;
 module.exports.minuteKey = minuteKey;
 module.exports.stableKey = stableKey;
